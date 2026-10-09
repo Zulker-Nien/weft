@@ -53,6 +53,20 @@ function createBrowserPane({ getWindow, getAppView, token, onContents }) {
     views.set(key, view);
     const wc = view.webContents;
     onContents?.(wc);
+    // A focused page swallows keys the board never sees, so Escape is replayed into the board too,
+    // where it closes the newest layer as usual. A fullscreen video keeps it to leave fullscreen.
+    let fullscreen = false;
+    wc.on("enter-html-full-screen", () => (fullscreen = true));
+    wc.on("leave-html-full-screen", () => (fullscreen = false));
+    wc.on("before-input-event", (_e, input) => {
+      if (input.type !== "keyDown" || input.key !== "Escape" || fullscreen) return;
+      if (input.shift || input.control || input.alt || input.meta) return;
+      const board = getAppView()?.webContents;
+      if (!board || board.isDestroyed()) return;
+      board.focus();
+      board.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+      board.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+    });
     // Pop-ups open in the same card's view instead of new windows.
     wc.setWindowOpenHandler(({ url }) => {
       wc.loadURL(url).catch(() => {});
