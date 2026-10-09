@@ -27,6 +27,8 @@ General: `?` or ⌘/ help, `n` new thread, `/` filter, `,` settings, `c` copilot
 Board: `j`/`k` or ↓/↑ between cards, `h`/`l` or ←/→ between columns, Home/End first and last card, Enter or `o` open the focused card, `a` jump to a card that needs you, `[`/`]` previous and next project, `s` cycle sort.
 Thread: `r` reply in the open thread, Shift+`A` archive or unarchive it (plain `a` stays "needs you").
 
+Holding Shift (outside a text field) shows a ⇧ shift key cap in the bottom-left corner (`components/ShiftKey.tsx`), so Shift shortcuts feel armed.
+
 ## Gotchas
 
 - Enter opens a card only when the card itself has focus, so it still presses a button inside one.

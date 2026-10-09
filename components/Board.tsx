@@ -20,6 +20,7 @@ import ProjectBar, { folderName, SORTS, type ProjectSummary, type SortKey } from
 import SettingsDialog from "./SettingsDialog";
 import ShortcutsDialog from "./ShortcutsDialog";
 import StatusStrip from "./StatusStrip";
+import ShiftKey from "./ShiftKey";
 import ThreadPanel from "./ThreadPanel";
 
 const CLOSED_BROWSER: BrowserState = {
@@ -961,6 +962,7 @@ export default function Board() {
       )}
       {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
       {showHelp && <ShortcutsDialog onClose={() => setShowHelp(false)} />}
+      <ShiftKey />
       {showPalette && <CommandPalette items={paletteItems()} findPrompts={findPrompts} onClose={() => setShowPalette(false)} />}
       {login && <LoginDialog login={login} onClose={() => setLogin(null)} />}
 

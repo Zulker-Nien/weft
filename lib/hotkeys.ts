@@ -72,7 +72,7 @@ function matches(combo: Combo, e: KeyboardEvent, mac: boolean) {
 
 const TEXT_INPUTS = new Set(["text", "search", "email", "url", "tel", "password", "number", "date", "time", ""]);
 
-function isTyping(target: EventTarget | null) {
+export function isTyping(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
   if (target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return true;
