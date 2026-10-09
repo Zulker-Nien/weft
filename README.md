@@ -1,6 +1,6 @@
 # Weft
 
-A board for your AI coding threads. Weft is a Trello-style board where each card is an AI CLI
+A board for your AI. Weft is a Trello-style board where each card is an AI CLI
 thread (Claude Code or puku-cli), with a browser pane on the side that you and the agents can both
 use, and a copilot in its own small window that can see and run the board.
 

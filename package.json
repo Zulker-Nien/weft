@@ -2,7 +2,7 @@
   "name": "threadboard",
   "productName": "Weft",
   "version": "0.1.0",
-  "description": "A board for your AI coding threads",
+  "description": "A board for your AI",
   "author": "Alex Miller <fotoflo@gmail.com>",
   "private": true,
   "main": "electron/main.cjs",

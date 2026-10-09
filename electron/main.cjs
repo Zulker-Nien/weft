@@ -29,7 +29,7 @@ const { startServer } = require("./server.cjs");
 const { loadWindowState, trackWindowState } = require("./window-state.cjs");
 
 const APP_NAME = "Weft";
-const TAGLINE = "A board for your AI coding threads";
+const TAGLINE = "A board for your AI";
 const ASSETS = path.join(__dirname, "assets");
 const PRELOAD = path.join(__dirname, "preload.cjs");
 const TOKEN = crypto.randomBytes(24).toString("hex");
