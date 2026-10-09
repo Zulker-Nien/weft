@@ -1,7 +1,7 @@
 import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { resolveFolder } from "./folders";
-import { formatCost, shortToolName } from "./format";
+import { formatCost, shortToolName, titleFromPrompt } from "./format";
 import { touchProject } from "./settings";
 import { createCard, getCard, getThread, listCards, updateCard } from "./store";
 import type { Card, ThreadItem } from "./types";
@@ -135,12 +135,12 @@ export function boardMcpServer(actions: BoardActions) {
           folder: z.string().describe("Project folder, absolute or ~/..."),
           title: z.string().optional(),
           cli: z.enum(["claude", "puku"]).optional(),
-          permission_mode: z.enum(["default", "acceptEdits", "auto"]).optional(),
+          permission_mode: z.enum(["default", "acceptEdits", "auto", "bypassPermissions"]).optional(),
         },
         (args) =>
           attempt(() => {
             const card = createCard({
-              title: args.title?.trim() || args.prompt.split("\n")[0].slice(0, 60),
+              title: args.title?.trim() || titleFromPrompt(args.prompt),
               prompt: args.prompt,
               cwd: resolveFolder(args.folder),
               backend: args.cli ?? "claude",

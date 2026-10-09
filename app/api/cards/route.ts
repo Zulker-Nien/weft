@@ -2,6 +2,7 @@ import os from "node:os";
 import { connection } from "next/server";
 import { prewarm } from "@/lib/copilot";
 import { resolveFolder } from "@/lib/folders";
+import { titleFromPrompt } from "@/lib/format";
 import { fail, guard } from "@/lib/guard";
 import { sendMessage } from "@/lib/runner";
 import { touchProject } from "@/lib/settings";
@@ -9,7 +10,7 @@ import { createCard, getCard, listCards } from "@/lib/store";
 import type { Backend, PermissionMode } from "@/lib/types";
 
 const BACKENDS: Backend[] = ["claude", "puku"];
-const MODES: PermissionMode[] = ["default", "acceptEdits", "auto"];
+const MODES: PermissionMode[] = ["default", "acceptEdits", "auto", "bypassPermissions"];
 
 export async function GET(req: Request) {
   const denied = guard(req, { write: false });
@@ -28,14 +29,14 @@ export async function POST(req: Request) {
     const body = (await req.json()) as Record<string, unknown>;
     const prompt = String(body.prompt ?? "").trim();
     if (!prompt) throw new Error("Write a prompt for this thread.");
-    const title = String(body.title ?? "").trim() || prompt.split("\n")[0].slice(0, 60);
+    const title = String(body.title ?? "").trim() || titleFromPrompt(prompt);
 
     const cwd = resolveFolder(body.cwd);
 
     const backend = BACKENDS.includes(body.backend as Backend) ? (body.backend as Backend) : "claude";
     const permissionMode = MODES.includes(body.permissionMode as PermissionMode)
       ? (body.permissionMode as PermissionMode)
-      : "default";
+      : "bypassPermissions";
 
     const card = createCard({ title, prompt, cwd, backend, permissionMode });
     touchProject(cwd);

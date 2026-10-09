@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { query, type PermissionResult, type Query, type SDKMessage, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
+import { messageContent } from "./attachments";
 import { COPILOT_PROMPT, SAFE_BOARD_TOOLS, boardMcpServer, describeBoardTool } from "./board-tools";
 import { BROWSER_PROMPT, browserMcpServer } from "./browser-tools";
 import { publish } from "./bus";
@@ -37,7 +38,8 @@ class Inbox implements AsyncIterable<SDKUserMessage> {
 
   push(text: string) {
     if (this.closed) throw new Error("This thread's CLI is closing. Send your message again.");
-    this.queue.push({ type: "user", message: { role: "user", content: text }, parent_tool_use_id: null });
+    // Images pasted into the text go along as image blocks (see lib/attachments.ts).
+    this.queue.push({ type: "user", message: { role: "user", content: messageContent(text) }, parent_tool_use_id: null });
     this.wake?.();
   }
 
@@ -235,7 +237,8 @@ export function ensureSpare(cwd: string, backend: Backend = "claude") {
     close(oldest);
   }
   try {
-    spares.set(key, open({ cwd, backend, permissionMode: "default", copilot: false }, null));
+    // New cards default to bypassPermissions, so most take over a spare without a mode switch.
+    spares.set(key, open({ cwd, backend, permissionMode: "bypassPermissions", copilot: false }, null));
   } catch {}
 }
 
@@ -490,6 +493,8 @@ async function drive(session: Session, executable: string | undefined) {
         abortController: session.abort,
         includePartialMessages: true,
         permissionMode: spec.permissionMode,
+        // So a card can switch to bypassPermissions later, including a spare it takes over.
+        allowDangerouslySkipPermissions: !spec.copilot,
         pathToClaudeCodeExecutable: executable,
         systemPrompt: {
           type: "preset",

@@ -52,6 +52,31 @@ On launch and every minute after, Weft picks up your Claude Code sessions (the o
 Weft's own threads run with a clean environment (no variables inherited from a Claude session it
 was started from) and are marked as SDK sessions, so they don't show up in the Claude app's list.
 
+## Writing a prompt
+
+The new-thread dialog (⌘N) and every card's reply box use the same editor:
+
+- **Markdown, formatted as you type.** `## ` makes a heading, `- ` a list, ⌘B/⌘I bold and italic;
+  the bar has the rest. The Markdown button shows the raw Markdown, which is what the agent gets.
+  Pasted Markdown is formatted too.
+- **Images and videos go where you paste or drop them**, not in a tray on top. They're saved to
+  `~/.weft/attachments` and written into the prompt as `![name](path)`. Images also reach the agent
+  as images at that spot (shrunk with `sips` if over the API's 5 MB limit); videos and other files
+  go as paths the agent can open.
+- **The mic dictates** on this Mac with whisper.cpp: click it, talk, click again, and the text lands
+  at the cursor (Esc throws the recording away). It needs `brew install whisper-cpp ffmpeg` and a
+  model; it uses superwhisper's or Homebrew's models, or the one in `WEFT_WHISPER_MODEL`. In a
+  normal browser tab without whisper it falls back to the browser's speech recognition.
+- **Drafts are kept** per card and for the new-thread dialog until sent, so closing it loses nothing.
+- In a reply, Enter sends and Shift+Enter starts a new line (Enter in a list or code block starts a
+  new line too). In the new-thread dialog, ⌘↵ starts the thread.
+
+The folder picker lists your recent projects, the git repos in `~/dev` and other usual code folders
+(with their branch), and your GitHub repos from `gh`. Picking a GitHub repo that isn't on this Mac
+clones it into `~/dev`. You can also paste a path or browse for a folder. Cards are titled from the
+prompt's first line, and new threads default to YOLO (`bypassPermissions`: every tool runs without
+asking); the menu next to the CLI switch changes that per thread.
+
 ## How cards move
 
 | Column    | How a card gets there |

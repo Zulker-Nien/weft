@@ -1,0 +1,17 @@
+import { fail, guard } from "@/lib/guard";
+import { cloneRepo } from "@/lib/repos";
+import { listProjects, touchProject } from "@/lib/settings";
+
+// Clones a GitHub repo into ~/dev (or finds the clone that's already here) and adds it to the recent projects.
+export async function POST(req: Request) {
+  const denied = guard(req);
+  if (denied) return denied;
+  try {
+    const body = (await req.json()) as Record<string, unknown>;
+    const folder = await cloneRepo(String(body.fullName ?? "").trim());
+    touchProject(folder);
+    return Response.json({ path: folder, projects: listProjects() });
+  } catch (err) {
+    return fail(err);
+  }
+}

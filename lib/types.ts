@@ -11,7 +11,8 @@ export const COPILOT_ID = "copilot";
 
 export type Column = (typeof COLUMNS)[number]["id"];
 export type Backend = "claude" | "puku";
-export type PermissionMode = "default" | "acceptEdits" | "auto";
+// bypassPermissions is "YOLO": every tool runs without asking.
+export type PermissionMode = "default" | "acceptEdits" | "auto" | "bypassPermissions";
 
 // A question the agent asked with its AskUserQuestion tool.
 export interface Question {
@@ -131,3 +132,25 @@ export type BoardEvent =
   | { type: "delta"; cardId: string; text: string }
   | { type: "login"; login: LoginView }
   | { type: "projects"; projects: Project[] };
+
+// A folder the new-thread picker offers: a recent project, a git repo found on disk, or both.
+export interface LocalRepo {
+  path: string;
+  name: string;
+  git: boolean;
+  branch?: string;
+  // "owner/name" when origin is on GitHub.
+  github?: string;
+  // When the repo last changed (ms), and when it was last used for a card, if it's a recent project.
+  activity: number;
+  recentAt?: number;
+}
+
+export interface GithubRepo {
+  fullName: string;
+  description?: string;
+  private: boolean;
+  pushedAt: number;
+  // Set when it's already cloned on this machine.
+  localPath?: string;
+}

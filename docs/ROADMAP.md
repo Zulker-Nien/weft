@@ -42,7 +42,10 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `P1` **Markdown rendering** — render assistant messages as Markdown with syntax-highlighted code blocks and copy buttons.
 - `P1` **Queue a reply while running** — the reply box is disabled while a turn runs ("Working. Stop it to reply."); let you queue the next message instead.
 - `P1` **Import existing CLI sessions** — list sessions from the CLIs' project folders and turn any of them into a card that resumes it.
-- `P1` **Images in prompts and replies** — paste or drop screenshots into the new-card dialog and reply box, sent to the agent as images.
+- `Now` **Images in prompts and replies** — paste or drop images and videos into the new-thread dialog and reply box, inline where they go; images reach the agent as image blocks, videos as file paths.
+- `Now` **Composer** — the new-thread dialog and reply box share a Markdown editor (formatting bar, ⌘B/⌘I, raw Markdown view), local dictation with whisper.cpp, and saved drafts.
+- `Now` **Repo picker** — the new-thread folder field lists recent projects, git repos on this Mac with their branch, and GitHub repos through `gh`, cloning one into `~/dev` when picked.
+- `P2` **Dictation hotkey and live text** — a shortcut to start the mic, and words appearing while you talk instead of after.
 - `P1` **Fork a thread** — start a new card from a thread's current session, to try a second approach without losing the first.
 - `P1` **Card templates** — saved prompts with folder, CLI, and permission mode ("fix lint", "add tests for X", "review my diff"), picked from the new-card dialog.
 - `P1` **Full tool output** — tool results are clipped to 4,000 characters and summaries to 100; add "show full output" that reads the CLI's own transcript.

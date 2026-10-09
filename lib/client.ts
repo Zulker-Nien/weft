@@ -1,4 +1,17 @@
-import type { Backend, Card, CliStatus, Column, LoginView, PermissionMode, Project, SettingsView, ThreadItem } from "./types";
+import type { MediaKind } from "./media";
+import type {
+  Backend,
+  Card,
+  CliStatus,
+  Column,
+  GithubRepo,
+  LocalRepo,
+  LoginView,
+  PermissionMode,
+  Project,
+  SettingsView,
+  ThreadItem,
+} from "./types";
 
 export interface BrowserState {
   visible: boolean;
@@ -49,12 +62,56 @@ declare global {
 }
 
 export interface NewCardInput {
-  title: string;
+  // Left out, the server names the card from its prompt.
+  title?: string;
   prompt: string;
   cwd: string;
   backend: Backend;
   permissionMode: PermissionMode;
   start: boolean;
+}
+
+export interface UploadedAttachment {
+  name: string;
+  path: string;
+  url: string;
+  kind: MediaKind;
+  bytes: number;
+}
+
+// Uploads a pasted or dropped file as-is. XHR rather than fetch, for upload progress (0 to 1).
+function upload(file: Blob, name: string, onProgress?: (fraction: number) => void) {
+  return new Promise<UploadedAttachment>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/attachments");
+    xhr.setRequestHeader("x-threadboard", "1");
+    xhr.setRequestHeader("x-filename", encodeURIComponent(name));
+    xhr.setRequestHeader("content-type", file.type || "application/octet-stream");
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress?.(e.loaded / e.total);
+    };
+    xhr.onload = () => {
+      let data: { error?: string } & Partial<UploadedAttachment> = {};
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch {}
+      if (xhr.status >= 200 && xhr.status < 300 && data.path) resolve(data as UploadedAttachment);
+      else reject(new Error(data.error ?? `Upload failed (${xhr.status}).`));
+    };
+    xhr.onerror = () => reject(new Error("Upload failed."));
+    xhr.send(file);
+  });
+}
+
+async function transcribe(audio: Blob) {
+  const res = await fetch("/api/transcribe", {
+    method: "POST",
+    headers: { "x-threadboard": "1", "content-type": audio.type || "audio/webm" },
+    body: audio,
+  });
+  const data = (await res.json()) as { text?: string; error?: string };
+  if (!res.ok) throw new Error(data.error ?? res.statusText);
+  return data.text ?? "";
 }
 
 async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -93,6 +150,12 @@ export const api = {
   // Starts a CLI ahead of time: a card's own, or a spare in a project folder.
   warm: (body: { cardId?: string; cwd?: string; backend?: Backend }) => call<{ ok: true }>("POST", "/api/warm", body),
   thread: (id: string) => call<{ items: ThreadItem[] }>("GET", `/api/cards/${id}/thread`),
+  uploadAttachment: upload,
+  dictation: () => call<{ available: boolean; reason?: string; model?: string }>("GET", "/api/transcribe"),
+  transcribe,
+  repos: (fresh = false) => call<{ repos: LocalRepo[] }>("GET", `/api/repos${fresh ? "?fresh=1" : ""}`),
+  githubRepos: (fresh = false) => call<{ repos: GithubRepo[] }>("GET", `/api/repos/github${fresh ? "?fresh=1" : ""}`),
+  cloneRepo: (fullName: string) => call<{ path: string; projects: Project[] }>("POST", "/api/repos/clone", { fullName }),
 };
 
 // A thread snapshot with the live items that arrived while it loaded, which are newer than it.

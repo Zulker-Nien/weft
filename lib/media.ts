@@ -1,0 +1,48 @@
+// Pasted and dropped files are saved to Weft's attachments folder, and a message refers to each one
+// where it was pasted as Markdown image syntax: ![name](/Users/me/.weft/attachments/shot-1a2b3c4d.png).
+// These helpers are shared by the server and the board UI, so nothing here touches the file system.
+
+export type MediaKind = "image" | "video" | "file";
+
+// Images the Claude API accepts as image blocks.
+export const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp"]);
+export const VIDEO_EXTENSIONS = new Set(["mp4", "mov", "m4v", "webm"]);
+
+// "<slug>-<id>.<ext>", as saveAttachment names files.
+export const ATTACHMENT_NAME = /^[a-z0-9][a-z0-9_-]*\.[a-z0-9]{1,8}$/;
+
+// The attachment refs in a message: ![name](path) or ![name](<path with spaces>).
+export const MEDIA_REF = /!\[([^\]\n]*)\]\((?:<([^>\n]+)>|([^)\s]+))\)/g;
+
+export function extensionOf(src: string) {
+  const base = src.split(/[?#]/)[0];
+  const dot = base.lastIndexOf(".");
+  return dot > base.lastIndexOf("/") ? base.slice(dot + 1).toLowerCase() : "";
+}
+
+export function mediaKind(src: string): MediaKind {
+  const ext = extensionOf(src);
+  if (IMAGE_EXTENSIONS.has(ext) || ext === "svg") return "image";
+  if (VIDEO_EXTENSIONS.has(ext)) return "video";
+  return "file";
+}
+
+// The attachment's file name, when src is a path in an attachments folder.
+export function attachmentName(src: string) {
+  const match = /\/attachments\/([^/]+)$/.exec(src);
+  return match && ATTACHMENT_NAME.test(match[1]) ? match[1] : null;
+}
+
+// Where the board loads an attachment from: "/…/.weft/attachments/x.png" -> "/api/attachments/x.png".
+// Web URLs pass through; any other path can't be shown.
+export function mediaUrl(src: string) {
+  const name = attachmentName(src);
+  if (name) return `/api/attachments/${name}`;
+  return /^https?:\/\//.test(src) ? src : null;
+}
+
+// The Markdown for one attachment. Angle brackets keep a path with spaces in one piece.
+export function mediaMarkdown(name: string, path: string) {
+  const alt = name.replace(/[[\]\n]/g, " ").trim() || "attachment";
+  return `![${alt}](${/\s/.test(path) ? `<${path}>` : path})`;
+}

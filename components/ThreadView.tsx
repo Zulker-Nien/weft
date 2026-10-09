@@ -5,6 +5,7 @@ import { formatCost, isLive, shortToolName } from "@/lib/format";
 import type { Card, ThreadItem } from "@/lib/types";
 import Icon, { Spinner } from "./Icon";
 import QuestionForm from "./QuestionForm";
+import ReplyBox from "./ReplyBox";
 
 // Links open in the side browser pane when running in the desktop app.
 function Linkified({ text }: { text: string }) {
@@ -101,9 +102,6 @@ export default function ThreadView({
   empty?: ReactNode;
   placeholder?: string;
 }) {
-  const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   // The request already answered here, so a second click can't answer it (or the next one) again.
   const [answeredId, setAnsweredId] = useState<string | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -124,23 +122,9 @@ export default function ThreadView({
     onAnswer(allow);
   }
 
-  async function submit() {
-    const text = draft.trim();
-    if (!text) {
-      setError("Write a message first.");
-      return;
-    }
-    if (live) return;
-    setSending(true);
-    try {
-      await onSend(text);
-      setDraft("");
-      stick.current = true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSending(false);
-    }
+  async function send(text: string) {
+    await onSend(text);
+    stick.current = true;
   }
 
   return (
@@ -214,35 +198,7 @@ export default function ThreadView({
         </div>
       )}
 
-      <div className="border-t border-line p-3">
-        <div className="flex items-end gap-2">
-          <textarea
-            value={draft}
-            onChange={(e) => {
-              setDraft(e.target.value);
-              setError(null);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void submit();
-              }
-            }}
-            rows={2}
-            placeholder={live ? "Working. Stop it to reply." : placeholder}
-            className="min-h-[44px] flex-1 resize-none rounded-md border border-line-strong bg-canvas px-3 py-2 text-[13px] text-ink outline-none placeholder:text-faint focus:border-accent"
-          />
-          <button
-            onClick={() => void submit()}
-            disabled={live || sending}
-            aria-label="Send"
-            className="flex h-[44px] w-[44px] items-center justify-center rounded-md bg-accent text-on-accent hover:opacity-90 disabled:opacity-40"
-          >
-            {sending ? <Spinner size={14} /> : <Icon name="send" size={16} />}
-          </button>
-        </div>
-        {error && <p className="mt-1.5 text-[12px] text-danger">{error}</p>}
-      </div>
+      <ReplyBox key={card.id} cardId={card.id} live={live} placeholder={placeholder} onSend={send} />
     </>
   );
 }
