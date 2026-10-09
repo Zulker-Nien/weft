@@ -1,6 +1,7 @@
 import { firstMessage, messagesForMove } from "@/lib/automations";
+import { resolveFolder } from "@/lib/folders";
 import { fail, guard } from "@/lib/guard";
-import { endSession, isBusy, queueMessages, sendMessage } from "@/lib/runner";
+import { archiveWhenIdle, endSession, isBusy, queueMessages, sendMessage } from "@/lib/runner";
 import { dismissSession } from "@/lib/settings";
 import { deleteCard, getCard, updateCard } from "@/lib/store";
 import { COLUMNS, type Column } from "@/lib/types";
@@ -17,9 +18,20 @@ export async function PATCH(req: Request, { params }: Ctx) {
   try {
     const card = getCard(id);
     if (!card) return fail("No such card.", 404);
-    const body = (await req.json()) as { column?: Column; title?: string };
+    const body = (await req.json()) as { column?: Column; title?: string; cwd?: string; archived?: boolean };
 
     if (body.title !== undefined) updateCard(id, { title: String(body.title).trim() || card.title });
+
+    if (body.archived !== undefined) {
+      if (card.role === "copilot") throw new Error("The copilot isn't on the board.");
+      updateCard(id, { archived: Boolean(body.archived) });
+    }
+
+    // Re-points a thread whose folder moved or was renamed.
+    if (body.cwd !== undefined) {
+      if (isBusy(id)) throw new Error("Stop the thread before moving its folder.");
+      updateCard(id, { cwd: resolveFolder(body.cwd), error: undefined });
+    }
 
     if (body.column && body.column !== card.column) {
       if (!COLUMNS.some((c) => c.id === body.column)) throw new Error("Unknown column.");
@@ -32,6 +44,9 @@ export async function PATCH(req: Request, { params }: Ctx) {
         updateCard(id, { column: body.column });
         // Your own move runs that column's automations (Settings), such as weft:done for Done.
         queueMessages(id, messagesForMove(card, body.column));
+        // Done files the card away once its automations (weft:done) have run.
+        if (body.column === "done") archiveWhenIdle(id);
+        else updateCard(id, { archived: false });
       } else {
         throw new Error("Cards move to Needs you on their own.");
       }

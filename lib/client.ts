@@ -5,6 +5,7 @@ import type {
   Card,
   CliStatus,
   Column,
+  DevServerStatus,
   GithubRepo,
   LocalRepo,
   LoginView,
@@ -33,7 +34,12 @@ export interface ShellBridge {
   // process.platform, e.g. "darwin".
   platform: string;
   browser: {
-    open(url: string): Promise<unknown>;
+    // key is the card whose browser to load into; each card has its own, and the open card's is on screen.
+    open(url: string, key?: string): Promise<unknown>;
+    // Shows a card's browser, or the board's own with no card open.
+    setActive(key: string | null): void;
+    // Closes the browsers of cards not in keys.
+    prune(keys: string[]): void;
     getState(): Promise<BrowserState>;
     setVisible(visible: boolean): void;
     setBounds(rect: { x: number; y: number; width: number; height: number }): void;
@@ -70,6 +76,7 @@ export interface NewCardInput {
   cwd: string;
   backend: Backend;
   permissionMode: PermissionMode;
+  model?: string;
   start: boolean;
 }
 
@@ -132,12 +139,16 @@ export const api = {
   create: (input: NewCardInput) => call<{ card: Card }>("POST", "/api/cards", input),
   move: (id: string, column: Column) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { column }),
   rename: (id: string, title: string) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { title }),
+  archive: (id: string, archived: boolean) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { archived }),
   remove: (id: string) => call("DELETE", `/api/cards/${id}`),
   send: (id: string, text: string) => call<{ card: Card }>("POST", `/api/cards/${id}/messages`, { text }),
   // pendingId is the request the user saw; the server refuses the answer if another is in front.
   answer: (id: string, allow: boolean, answers?: Record<string, string>, pendingId?: string) =>
     call("POST", `/api/cards/${id}/permission`, { allow, answers, pendingId }),
   stop: (id: string) => call("POST", `/api/cards/${id}/stop`),
+  devStatus: (id: string) => call<{ status: DevServerStatus }>("GET", `/api/cards/${id}/dev`),
+  devAction: (id: string, action: "start" | "restart" | "stop") =>
+    call<{ status: DevServerStatus }>("POST", `/api/cards/${id}/dev`, { action }),
   copilot: () => call<{ card: Card }>("GET", "/api/copilot"),
   resetCopilot: () => call<{ card: Card }>("POST", "/api/copilot/reset"),
   settings: () => call<SettingsView>("GET", "/api/settings"),

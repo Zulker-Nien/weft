@@ -270,6 +270,15 @@ export default function Board() {
     };
   }, []);
 
+  // Each card has its own browser: show the open card's, and close those of cards that are gone.
+  useEffect(() => {
+    window.threadboard?.browser.setActive(selectedId);
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (cards.length) window.threadboard?.browser.prune(cards.map((c) => c.id));
+  }, [cards]);
+
   useEffect(() => {
     window.threadboard?.setBadge(cards.filter((c) => c.column === "needs_you").length);
   }, [cards]);
@@ -794,6 +803,11 @@ export default function Board() {
             }}
             onAnswer={(allow, answers) => api.answer(selected.id, allow, answers, selected.pending?.id).catch(notify)}
             onStop={() => api.stop(selected.id).catch(notify)}
+            onArchive={() => {
+              const archived = !selected.archived;
+              if (archived) select(null);
+              api.archive(selected.id, archived).catch(notify);
+            }}
             onDelete={() => {
               select(null);
               api.remove(selected.id).catch(notify);

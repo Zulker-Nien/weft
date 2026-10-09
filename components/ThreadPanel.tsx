@@ -4,7 +4,9 @@ import { folderName, isLive } from "@/lib/format";
 import type { Card, ThreadItem } from "@/lib/types";
 import { BackendBadge } from "./CardView";
 import Icon from "./Icon";
+import ReviewPanel from "./ReviewPanel";
 import SkillMenu from "./SkillMenu";
+import StatusStrip from "./StatusStrip";
 import ThreadView from "./ThreadView";
 
 export default function ThreadPanel({
@@ -14,6 +16,7 @@ export default function ThreadPanel({
   onSend,
   onAnswer,
   onStop,
+  onArchive,
   onDelete,
   onClose,
 }: {
@@ -23,6 +26,7 @@ export default function ThreadPanel({
   onSend: (text: string) => Promise<void>;
   onAnswer: (allow: boolean, answers?: Record<string, string>) => void;
   onStop: () => void;
+  onArchive: () => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
@@ -60,6 +64,15 @@ export default function ThreadPanel({
           </button>
         )}
         <button
+          onClick={onArchive}
+          disabled={live}
+          title={card.archived ? "Unarchive card" : "Archive card"}
+          aria-label={card.archived ? "Unarchive card" : "Archive card"}
+          className="rounded-md p-1.5 text-muted hover:bg-sunken hover:text-ink disabled:opacity-40"
+        >
+          <Icon name="archive" size={15} />
+        </button>
+        <button
           onClick={() => {
             if (window.confirm(`Delete “${card.title}”? Its CLI transcript stays on disk.`)) onDelete();
           }}
@@ -79,6 +92,8 @@ export default function ThreadPanel({
         </button>
       </header>
 
+      <StatusStrip stats={card.stats} />
+
       {card.source === "claude-code" &&
         (card.openElsewhere ? (
           <p className="flex items-center gap-1.5 border-b border-warn/40 bg-warn-soft px-4 py-1.5 text-[11.5px] text-warn">
@@ -91,7 +106,15 @@ export default function ThreadPanel({
           </p>
         ))}
 
-      <ThreadView card={card} items={items} streaming={streaming} onSend={onSend} onAnswer={onAnswer} />
+      <ThreadView
+        card={card}
+        items={items}
+        streaming={streaming}
+        onSend={onSend}
+        onAnswer={onAnswer}
+        footer={card.column === "review" && <ReviewPanel card={card} items={items} onSend={onSend} />}
+        replaceReply={card.column === "review" && Boolean(card.review)}
+      />
     </aside>
   );
 }
