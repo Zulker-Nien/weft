@@ -26,11 +26,13 @@ function writeDraft(cardId: string, markdown: string) {
 // dictation), sized for a reply. Enter sends; Shift+Enter starts a new line.
 export default function ReplyBox({
   cardId,
+  cwd,
   live,
   placeholder,
   onSend,
 }: {
   cardId: string;
+  cwd: string;
   // A turn is running or waiting on a permission answer, so a reply can't go yet.
   live: boolean;
   placeholder: string;
@@ -79,6 +81,7 @@ export default function ReplyBox({
       <Composer
         ref={composer}
         variant="reply"
+        cwd={cwd}
         initial={initial}
         placeholder={live ? "Working. Stop it to reply, or write the next message for when it's done." : placeholder}
         onSubmit={() => void submit()}

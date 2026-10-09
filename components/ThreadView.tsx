@@ -1,87 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { formatCost, isLive, shortToolName } from "@/lib/format";
+import { isLive } from "@/lib/format";
 import type { Card, ThreadItem } from "@/lib/types";
 import Icon, { Spinner } from "./Icon";
+import Markdown from "./Markdown";
 import QuestionForm from "./QuestionForm";
 import ReplyBox from "./ReplyBox";
-
-// Links open in the side browser pane when running in the desktop app.
-function Linkified({ text }: { text: string }) {
-  const parts: ReactNode[] = text.split(/(https?:\/\/[^\s)>\]"'`]+)/g).map((part, i) =>
-    i % 2 === 1 ? (
-      <a key={i} href={part} target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2">
-        {part}
-      </a>
-    ) : (
-      part
-    ),
-  );
-  return <>{parts}</>;
-}
-
-function Item({ item }: { item: ThreadItem }) {
-  switch (item.kind) {
-    case "user":
-      return (
-        <div className="ml-10 whitespace-pre-wrap rounded-lg bg-accent-soft px-3 py-2 text-[13.5px] leading-relaxed text-ink">
-          {item.text}
-        </div>
-      );
-    case "assistant":
-      return (
-        <div className="whitespace-pre-wrap text-[13.5px] leading-relaxed text-ink">
-          <Linkified text={item.text} />
-        </div>
-      );
-    case "tool":
-      return (
-        <details className="rounded-md border border-line bg-sunken">
-          <summary className="flex cursor-pointer list-none items-center gap-2 px-2.5 py-1.5 text-[12px]">
-            <Icon name="wrench" size={12} className="text-faint" />
-            <span className="shrink-0 font-mono font-medium text-ink">{shortToolName(item.name)}</span>
-            <span className="min-w-0 flex-1 truncate font-mono text-muted">{item.summary}</span>
-            {item.result === undefined ? (
-              <span className="text-faint"><Spinner size={10} /></span>
-            ) : item.isError ? (
-              <span className="text-danger">failed</span>
-            ) : null}
-          </summary>
-          {item.result && (
-            <pre className="max-h-72 overflow-auto whitespace-pre-wrap border-t border-line px-2.5 py-2 font-mono text-[11.5px] leading-snug text-muted">
-              {item.result}
-            </pre>
-          )}
-        </details>
-      );
-    case "permission":
-      return (
-        <div className="flex items-start gap-2 text-[12px]">
-          <Icon name="lock" size={12} className={`mt-0.5 ${item.decision ? "text-faint" : "text-warn"}`} />
-          <span className="min-w-0 flex-1 text-muted">{item.title}</span>
-          <span
-            className={
-              item.decision === "allow" ? "text-ok" : item.decision === "deny" ? "text-danger" : "text-warn"
-            }
-          >
-            {item.answer ? `Answered: ${item.answer}` : item.decision === "allow" ? "Allowed" : item.decision === "deny" ? "Denied" : "Waiting for you"}
-          </span>
-        </div>
-      );
-    case "result": {
-      const cost = formatCost(item.costUsd);
-      return (
-        <div className="flex items-center gap-2 py-1 text-[11px] text-faint">
-          <div className="h-px flex-1 bg-line" />
-          {item.isError ? <span className="text-danger">{item.text}</span> : <span>{item.text === "Stopped" ? "Stopped" : "Turn finished"}</span>}
-          {cost && <span>· {cost} so far</span>}
-          <div className="h-px flex-1 bg-line" />
-        </div>
-      );
-    }
-  }
-}
+import { ThreadMessage, ToolRun, groupThread } from "./ThreadItems";
 
 // A thread's messages, its pending permission request, and the reply box.
 // The parent supplies a flex column for it to fill.
@@ -107,7 +33,7 @@ export default function ThreadView({
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const live = isLive(card);
-  const visible = items.filter(Boolean);
+  const entries = groupThread(items);
   const answered = answeredId !== null && answeredId === card.pending?.id;
 
   // Follow new output unless the user has scrolled up to read.
@@ -115,6 +41,17 @@ export default function ThreadView({
     const el = scroller.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [items, streaming, card.pending]);
+
+  // Images load after the text and push it up; keep following the bottom while they do.
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const follow = () => {
+      if (stick.current) el.scrollTop = el.scrollHeight;
+    };
+    el.addEventListener("load", follow, true);
+    return () => el.removeEventListener("load", follow, true);
+  }, []);
 
   function answer(allow: boolean) {
     if (!card.pending || answered) return;
@@ -137,16 +74,15 @@ export default function ThreadView({
         }}
         className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4"
       >
-        {visible.length === 0 && !live && empty}
-        {visible.map((item, i) => (
-          <Item key={i} item={item} />
-        ))}
-        {streaming && (
-          <div className="whitespace-pre-wrap text-[13.5px] leading-relaxed text-ink">
-            {streaming}
-            <span className="ml-0.5 animate-pulse text-accent">▍</span>
-          </div>
+        {entries.length === 0 && !live && empty}
+        {entries.map((entry) =>
+          entry.kind === "tools" ? (
+            <ToolRun key={entry.key} calls={entry.calls} live={live} />
+          ) : (
+            <ThreadMessage key={entry.key} item={entry.item} />
+          ),
         )}
+        {streaming && <Markdown text={streaming} streaming />}
         {card.column === "running" && !streaming && (
           <div className="flex items-center gap-2 text-[12px] text-muted">
             <Spinner size={12} /> Working…
@@ -198,7 +134,7 @@ export default function ThreadView({
         </div>
       )}
 
-      <ReplyBox key={card.id} cardId={card.id} live={live} placeholder={placeholder} onSend={send} />
+      <ReplyBox key={card.id} cardId={card.id} cwd={card.cwd} live={live} placeholder={placeholder} onSend={send} />
     </>
   );
 }

@@ -6,7 +6,9 @@ import { Placeholder } from "@tiptap/extensions";
 import { Markdown } from "@tiptap/markdown";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import { api } from "@/lib/client";
+import type { SkillInfo } from "@/lib/types";
 import { mediaMarkdown } from "@/lib/media";
+import { currentBinding, formatBinding, matches } from "@/lib/shortcuts";
 import { useDictation } from "@/lib/use-dictation";
 import Icon, { Spinner, type IconName } from "./Icon";
 import { Media, insertFiles, pendingMedia } from "./MediaNode";
@@ -24,6 +26,81 @@ export interface ComposerHandle {
 
 // Plain text that looks like Markdown is parsed as Markdown when pasted.
 const LOOKS_LIKE_MARKDOWN = /^(#{1,6}\s|\s*[-*+]\s|\s*\d+[.)]\s|>\s|```)|\*\*[^*\n]+\*\*|\[[^\]\n]+\]\([^)\n]+\)/m;
+
+// "/name" typed at the start of a word, right before the cursor.
+const SLASH = /(^|\s)\/([\w:.-]*)$/;
+
+interface SlashQuery {
+  query: string;
+  from: number;
+  to: number;
+}
+
+function slashAtCursor(e: Editor): SlashQuery | null {
+  const { selection } = e.state;
+  if (!selection.empty || e.isActive("codeBlock")) return null;
+  const { $from } = selection;
+  const match = SLASH.exec($from.parent.textBetween(0, $from.parentOffset, undefined, "\ufffc"));
+  if (!match) return null;
+  return { query: match[2], from: $from.pos - match[2].length - 1, to: $from.pos };
+}
+
+function rankSkills(skills: SkillInfo[], query: string) {
+  const q = query.toLowerCase();
+  if (!q) return skills;
+  const starts = skills.filter((s) => s.name.toLowerCase().startsWith(q));
+  const rest = skills.filter(
+    (s) => !starts.includes(s) && (s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q)),
+  );
+  return [...starts, ...rest];
+}
+
+function SkillTypeahead({
+  skills,
+  active,
+  above,
+  onPick,
+  onHover,
+}: {
+  skills: SkillInfo[];
+  active: number;
+  above: boolean;
+  onPick: (skill: SkillInfo) => void;
+  onHover: (i: number) => void;
+}) {
+  const list = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    list.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
+  }, [active]);
+  return (
+    <div
+      ref={list}
+      role="listbox"
+      aria-label="Skills"
+      className={`absolute z-40 max-h-[260px] overflow-y-auto rounded-lg border border-line bg-panel p-1 shadow-lg ${
+        above ? "inset-x-0 bottom-full mb-1.5" : "inset-x-2 bottom-11"
+      }`}
+    >
+      {skills.map((skill, i) => (
+        <button
+          key={skill.name}
+          type="button"
+          role="option"
+          aria-selected={i === active}
+          onMouseDown={(e) => e.preventDefault()}
+          onMouseEnter={() => onHover(i)}
+          onClick={() => onPick(skill)}
+          className={`block w-full rounded-md px-2.5 py-1.5 text-left ${i === active ? "bg-sunken" : ""}`}
+        >
+          <span className="block font-mono text-[12.5px] text-ink">/{skill.name}</span>
+          {skill.description && (
+            <span className="line-clamp-1 text-[11.5px] leading-snug text-muted">{skill.description}</span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function seconds(total: number) {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
@@ -111,7 +188,7 @@ function MicButton({ dictation }: { dictation: ReturnType<typeof useDictation> }
       disabled={state === "transcribing"}
       aria-label={recording ? "Stop dictation" : "Dictate"}
       aria-pressed={recording}
-      title={recording ? "Stop and insert the text (Esc cancels)" : "Dictate"}
+      title={recording ? "Stop and insert the text (Esc cancels)" : `Dictate (${formatBinding(currentBinding("dictation"))})`}
       className={`relative flex items-center gap-1.5 rounded-full px-2 py-1.5 text-[12px] ${
         recording ? "bg-danger text-white" : "text-muted hover:bg-sunken hover:text-ink"
       } disabled:opacity-60`}
@@ -150,8 +227,13 @@ const Composer = forwardRef<
     sizeClass: string;
     // Classes for the outer frame, e.g. "flex-1" to fill a dialog.
     className?: string;
+    // The folder the thread works in; typing "/" suggests the skills available there.
+    cwd?: string;
   }
->(function Composer({ initial = "", placeholder, autoFocus, variant, onSubmit, onChange, actions, sizeClass, className = "" }, ref) {
+>(function Composer(
+  { initial = "", placeholder, autoFocus, variant, onSubmit, onChange, actions, sizeClass, className = "", cwd },
+  ref,
+) {
   const [source, setSource] = useState<string | null>(null);
   const [showFormat, setShowFormat] = useState(variant === "dialog");
   const [dragging, setDragging] = useState(false);
@@ -233,6 +315,36 @@ const Composer = forwardRef<
     editorRef.current = editor;
   }, [editor]);
 
+  // Typing "/" offers the skills for this folder; they load the first time it's needed.
+  const slash = useEditorState({ editor, selector: ({ editor: e }) => (e ? slashAtCursor(e) : null) });
+  const [skills, setSkills] = useState<SkillInfo[]>([]);
+  // The highlighted row belongs to one query; a new query starts back at the top.
+  const [highlight, setHighlight] = useState<{ query: string | null; i: number }>({ query: null, i: 0 });
+  const activeSkill = highlight.query === (slash?.query ?? null) ? highlight.i : 0;
+  const setActiveSkill = (next: number | ((i: number) => number)) =>
+    setHighlight({ query: slash?.query ?? null, i: typeof next === "function" ? next(activeSkill) : next });
+  const [dismissedAt, setDismissedAt] = useState<number | null>(null);
+  const wantsSkills = slash !== null;
+  useEffect(() => {
+    if (!wantsSkills) return;
+    let ignore = false;
+    api.skills(cwd).then(
+      (r) => !ignore && setSkills(r.skills),
+      () => {},
+    );
+    return () => {
+      ignore = true;
+    };
+  }, [wantsSkills, cwd]);
+  if (!slash && dismissedAt !== null) setDismissedAt(null);
+  const suggestions = slash && slash.from !== dismissedAt ? rankSkills(skills, slash.query).slice(0, 30) : [];
+  const typeaheadOpen = source === null && suggestions.length > 0;
+
+  function pickSkill(skill: SkillInfo) {
+    if (!editor || !slash) return;
+    editor.chain().focus().insertContentAt({ from: slash.from, to: slash.to }, `/${skill.name} `).run();
+  }
+
   // The placeholder can change (a reply box while its thread works); redraw it when it does.
   useEffect(() => {
     placeholderRef.current = placeholder;
@@ -307,6 +419,27 @@ const Composer = forwardRef<
 
   return (
     <div
+      // Capture, so the key is claimed before the editor or textarea can type its macOS character
+      // (Option+' is "æ"). Matching on e.code is what makes that work.
+      onKeyDownCapture={(e) => {
+        if (typeaheadOpen && slash && !e.nativeEvent.isComposing) {
+          const last = suggestions.length - 1;
+          const key = e.key;
+          if (key === "ArrowDown" || key === "ArrowUp" || key === "Enter" || key === "Tab" || key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation();
+            if (key === "ArrowDown") setActiveSkill((i) => (i >= last ? 0 : i + 1));
+            else if (key === "ArrowUp") setActiveSkill((i) => (i <= 0 ? last : i - 1));
+            else if (key === "Escape") setDismissedAt(slash.from);
+            else pickSkill(suggestions[Math.min(activeSkill, last)]);
+            return;
+          }
+        }
+        if (e.nativeEvent.isComposing || !matches(e, currentBinding("dictation"))) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (!e.repeat) dictation.toggle();
+      }}
       onKeyDown={(e) => {
         if (e.key === "Escape" && dictation.state === "recording") {
           e.stopPropagation();
@@ -320,6 +453,16 @@ const Composer = forwardRef<
         dragging ? "border-accent bg-accent-soft" : "border-line-strong"
       } ${className}`}
     >
+      {typeaheadOpen && (
+        <SkillTypeahead
+          skills={suggestions}
+          active={Math.min(activeSkill, suggestions.length - 1)}
+          above={variant === "reply"}
+          onPick={pickSkill}
+          onHover={setActiveSkill}
+        />
+      )}
+
       {showFormat && editor && source === null && (
         <div className="flex shrink-0 items-center border-b border-line px-1.5 py-1">
           <FormatBar editor={editor} />

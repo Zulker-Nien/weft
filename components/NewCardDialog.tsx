@@ -1,16 +1,55 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { api, type NewCardInput } from "@/lib/client";
 import type { Backend, PermissionMode } from "@/lib/types";
 import Composer, { type ComposerHandle } from "./Composer";
 import Icon from "./Icon";
 import RepoPicker from "./RepoPicker";
+import { useEscape } from "@/lib/use-escape";
 
 const LAST_CWD = "threadboard.cwd";
 const LAST_BACKEND = "threadboard.backend";
 // What you were writing, kept if the dialog closes before the thread is created.
 const DRAFT = "weft.newThreadDraft";
+const RECT = "weft.newThreadRect";
+
+type Rect = { x: number; y: number; w: number; h: number };
+const MIN_W = 480;
+const MIN_H = 360;
+
+// Keeps the dialog inside the window, shrinking it first if the window is smaller than its size.
+function fit(r: Rect): Rect {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const w = Math.min(Math.max(r.w, Math.min(MIN_W, vw)), vw);
+  const h = Math.min(Math.max(r.h, Math.min(MIN_H, vh)), vh);
+  return { w, h, x: Math.min(Math.max(r.x, 0), vw - w), y: Math.min(Math.max(r.y, 0), vh - h) };
+}
+
+function initialRect(): Rect {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  try {
+    const saved = JSON.parse(localStorage.getItem(RECT) ?? "null");
+    if (saved && ["x", "y", "w", "h"].every((k) => Number.isFinite(saved[k]))) return fit(saved);
+  } catch {}
+  const w = Math.min(920, vw - 48);
+  const h = Math.min(820, vh - 48);
+  return fit({ w, h, x: (vw - w) / 2, y: (vh - h) / 2 });
+}
+
+// Edge/corner handles: which sides each one moves.
+const HANDLES: { n: string; l?: 1; r?: 1; t?: 1; b?: 1; cls: string; cursor: string }[] = [
+  { n: "t", t: 1, cls: "left-2 right-2 top-0 h-1.5", cursor: "ns-resize" },
+  { n: "b", b: 1, cls: "bottom-0 left-2 right-2 h-1.5", cursor: "ns-resize" },
+  { n: "l", l: 1, cls: "bottom-2 left-0 top-2 w-1.5", cursor: "ew-resize" },
+  { n: "r", r: 1, cls: "bottom-2 right-0 top-2 w-1.5", cursor: "ew-resize" },
+  { n: "tl", t: 1, l: 1, cls: "left-0 top-0 h-3 w-3", cursor: "nwse-resize" },
+  { n: "tr", t: 1, r: 1, cls: "right-0 top-0 h-3 w-3", cursor: "nesw-resize" },
+  { n: "bl", b: 1, l: 1, cls: "bottom-0 left-0 h-3 w-3", cursor: "nesw-resize" },
+  { n: "br", b: 1, r: 1, cls: "bottom-0 right-0 h-3 w-3", cursor: "nwse-resize" },
+];
 
 function remembered(key: string) {
   try {
@@ -57,16 +96,71 @@ export default function NewCardDialog({
   const [permissionMode, setPermissionMode] = useState<PermissionMode>("bypassPermissions");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [rect, setRect] = useState<Rect | null>(null);
+  const rectRef = useRef<Rect | null>(null);
   const composer = useRef<ComposerHandle>(null);
   const draftTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  // The prompt is saved as a draft as it's typed, so closing keeps it.
+  useEscape(true, onClose);
 
   useEffect(() => () => clearTimeout(draftTimer.current), []);
+
+  function place(r: Rect) {
+    rectRef.current = r;
+    setRect(r);
+  }
+
+  // Measured after mount: window size isn't known during server render.
+  useEffect(() => {
+    place(initialRect());
+    const onResize = () => rectRef.current && place(fit(rectRef.current));
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // Drags the whole dialog (move) or the sides given (resize); the pointer is captured so it can leave the handle.
+  function startDrag(e: ReactPointerEvent<HTMLElement>, sides: { l?: 1; r?: 1; t?: 1; b?: 1 } | "move") {
+    const start = rectRef.current;
+    if (!start || e.button !== 0) return;
+    e.preventDefault();
+    const el = e.currentTarget;
+    el.setPointerCapture(e.pointerId);
+    const sx = e.clientX;
+    const sy = e.clientY;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const move = (ev: PointerEvent) => {
+      const dx = Math.min(Math.max(ev.clientX, 0), vw) - sx;
+      const dy = Math.min(Math.max(ev.clientY, 0), vh) - sy;
+      let { x, y, w, h } = start;
+      if (sides === "move") {
+        x = Math.min(Math.max(x + dx, 0), vw - w);
+        y = Math.min(Math.max(y + dy, 0), vh - h);
+      } else {
+        if (sides.r) w = Math.min(Math.max(start.w + dx, MIN_W), vw - start.x);
+        if (sides.b) h = Math.min(Math.max(start.h + dy, MIN_H), vh - start.y);
+        if (sides.l) {
+          x = Math.min(Math.max(start.x + dx, 0), start.x + start.w - MIN_W);
+          w = start.x + start.w - x;
+        }
+        if (sides.t) {
+          y = Math.min(Math.max(start.y + dy, 0), start.y + start.h - MIN_H);
+          h = start.y + start.h - y;
+        }
+      }
+      place(fit({ x, y, w, h }));
+    };
+    const end = () => {
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", end);
+      el.removeEventListener("pointercancel", end);
+      remember(RECT, JSON.stringify(rectRef.current));
+    };
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", end);
+    el.addEventListener("pointercancel", end);
+  }
 
   function saveDraft(markdown: string) {
     setError(null);
@@ -112,14 +206,28 @@ export default function NewCardDialog({
   const mode = MODES.find((m) => m.id === permissionMode) ?? MODES[0];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-6" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-50 bg-black/40" onMouseDown={onClose}>
       <div
         role="dialog"
         aria-labelledby="new-thread-title"
         onMouseDown={(e) => e.stopPropagation()}
-        className="flex h-[min(820px,calc(100vh-24px))] w-full max-w-[920px] flex-col rounded-xl border border-line bg-panel shadow-2xl sm:h-[min(820px,calc(100vh-48px))]"
+        style={rect ? { left: rect.x, top: rect.y, width: rect.w, height: rect.h } : { visibility: "hidden" }}
+        className="absolute flex flex-col rounded-xl border border-line bg-panel shadow-2xl"
       >
-        <div className="flex shrink-0 items-center justify-between px-5 pb-2 pt-4">
+        {HANDLES.map(({ n, cls, cursor, ...sides }) => (
+          <div
+            key={n}
+            aria-hidden
+            onPointerDown={(e) => startDrag(e, sides)}
+            style={{ cursor, touchAction: "none" }}
+            className={`absolute z-10 ${cls}`}
+          />
+        ))}
+        <div
+          onPointerDown={(e) => !(e.target as HTMLElement).closest("button") && startDrag(e, "move")}
+          style={{ touchAction: "none" }}
+          className="flex shrink-0 cursor-move select-none items-center justify-between px-5 pb-2 pt-4"
+        >
           <h2 id="new-thread-title" className="text-[15px] font-medium text-ink">
             New thread
           </h2>
@@ -132,6 +240,7 @@ export default function NewCardDialog({
           <Composer
             ref={composer}
             variant="dialog"
+            cwd={cwd}
             autoFocus
             initial={initial}
             onChange={saveDraft}
