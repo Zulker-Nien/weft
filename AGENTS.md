@@ -1,3 +1,5 @@
+Read SOUL.md first: it says who Weft is, what it values, and where things live.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 ## This is NOT the Next.js you know

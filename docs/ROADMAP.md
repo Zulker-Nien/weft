@@ -99,6 +99,8 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 
 ## Copilot and orchestration
 
+- `Done` **Threads can hand off work** — every board thread has `mcp__board__list_cards` (read-only) and `mcp__board__create_card` (starts in its own folder by default, records `parentId`); no move, stop, archive or read of other cards.
+- `P3` **Show spawned cards** — use `parentId` to show which card started another on the board.
 - `P1` **Copilot event feed** — the copilot is only told things when you ask; send it card finished / failed / needs-you events so it can act on them.
 - `P1` **Away digest** — "what happened while I was away": a short per-card summary of results since you last looked.
 - `P2` **Spec to cards** — paste a spec; the copilot proposes a set of cards with folders and order, and creates them after you approve.
@@ -165,7 +167,8 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `P2` **Unread dots** — a dot on cards with new output you haven't opened.
 - `P2` **Notification rules** — choose per project which events notify you, plus quiet hours.
 - `P2` **Answer from the notification** — Allow and Deny buttons on the notification itself.
-- `P2` **Sounds** — a short distinct sound for "needs you" and for "finished", with mute.
+- `Now` **Sounds** — a chime when a card moves to Running, Needs you, Review, or Done, or hits an error; moves you make stay quiet, and Settings has on/off, volume, and a toggle and preview per chime. The sounds are CC0 vibraphone samples in `public/sounds/`.
+- `Now` **Unseen highlight** — a card that moves to Needs you, Review, or Done without you (the same moves that chime) gets an accent tint and a pulsing dot until you open it.
 - `P3` **Batched notifications** — hold notifications during focus time and deliver them every N minutes.
 
 ## Remote and mobile access
@@ -227,7 +230,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `P2` **Data folder in settings** — choose where the board is stored from settings instead of the `THREADBOARD_DATA` variable.
 - `P2` **Shortcuts sheet** — `?` lists every keyboard shortcut, including ⌘J and ⌘⇧B.
 - `P2` **Export and import settings** — move the thread prompt, templates, and rules to another machine as one file.
-- `P3` **Theme** — light, dark, or follow the system.
+- `Now` **Theme** — light, dark, or follow the system, from Settings → Appearance; the desktop window chrome follows it too.
 
 ## Packaging, updates and distribution
 
@@ -242,7 +245,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 
 ## Testing and quality
 
-- `P1` **Unit tests for the core** — BOARD STATUS parsing, store reload rules (running cards become Review on restart), and cost accounting across resumed sessions.
+- `P1` **Unit tests for the core** — *started: `npm test` (Vitest) covers BOARD STATUS parsing, review tours, the API guard, automations and format helpers.* Still to do: store reload rules (running cards become Review on restart), and cost accounting across resumed sessions.
 - `P1` **Runner tests with a fake CLI** — a stub executable that emits scripted SDK messages, to test permission queues, stop, idle close, and resume without spending tokens.
 - `P2` **CI** — lint, typecheck, and tests on every push.
 - `P2` **End-to-end tests** — drive the Electron app: create a card, start it, allow a request, reply, drag it to Done.

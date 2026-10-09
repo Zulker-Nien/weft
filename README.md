@@ -10,9 +10,11 @@ cloth.
 ## Run it
 
 ```bash
+git clone https://github.com/aimhuge/weft.git && cd weft
 npm install
 npm run desktop     # Electron app: board + side browser
 npm run dev         # board only, in a normal browser at http://127.0.0.1:3456 (no browser pane)
+npm test            # unit tests (Vitest), about a second; npm run lint for ESLint
 ```
 
 The first `npm run desktop` downloads the Electron binary. Don't run `dev` and `desktop` at the
@@ -24,6 +26,8 @@ same time; Next.js allows one dev server per project folder.
   alive. ⌘Q quits. Opening Weft again just brings the existing window forward.
 - **⌃⌥Space** opens the copilot from any app. In the app: ⌘N new thread, ⌘J copilot, ⇧⌘B
   browser pane, ⌘F find cards, ⌘, settings, ⌘1 board, ⌘2 copilot.
+- **Pop out**: the expand button in a thread's header lifts the thread and its browser into one large
+  overlay over the board; Esc or the same button puts them back on the side.
 - **Menu bar icon**: shows how many cards need you and lists them; click one to open it.
 - **Dock**: the Needs you count on the icon, and New Thread and Copilot in its menu.
 - **Links**: `weft://new?prompt=…&folder=…&start=1` creates a card (in your most recent project
@@ -45,7 +49,8 @@ On launch and every minute after, Weft picks up your Claude Code sessions (the o
 - Opening a card shows the conversation, read from the session file.
 - Replying continues the same session. If the session is open in the Claude app or a terminal,
   or changed outside Weft in the last 10 minutes, Weft continues it as a copy instead, so two
-  apps never write to one session.
+  apps never write to one session. "Click here to continue" in the thread's banner stops that
+  outside Claude CLI, so the next reply continues the same session in Weft.
 - Deleting a picked-up card hides that session for good. Sessions in temporary folders (tests,
   tool runs) are skipped.
 
@@ -148,7 +153,8 @@ background and pops up a login window with the login page link, the CLI's output
 pasting a code. If the CLI needs a real terminal, it opens Terminal with the login command instead.
 Once `auth status` reports you're logged in, the thread runs again. Settings shows each CLI's
 login status. The app also sends a desktop notification when a card needs you or finishes while
-it isn't focused, and shows the Needs you count on the dock icon.
+it isn't focused, and shows the Needs you count on the dock icon. A card that moves to Needs you,
+Review or Done without you keeps an accent tint and a pulsing dot until you open it.
 
 ## Copilot
 
@@ -167,7 +173,8 @@ copilot opens as a pop-up at `/copilot`.
 - `lib/runner.ts` runs each thread with the Claude Agent SDK (`query()` with streaming input, one
   CLI process per thread), streams messages to the board, and routes permission prompts to the card. For puku-cli it points the SDK at the
   `puku-cli` binary (`pathToClaudeCodeExecutable`).
-- `lib/board-tools.ts` gives the copilot its board tools; `lib/copilot.ts` keeps its thread, which
+- `lib/board-tools.ts` gives the copilot its board tools, and every board thread a small `board`
+  server with just `list_cards` and `create_card` (a card made this way records its `parentId`); `lib/copilot.ts` keeps its thread, which
   has the fixed id `copilot` and is left off the board.
 - `plugin/` is Weft's own skills, loaded into every board thread with the SDK's `plugins` option;
   `lib/skills.ts` lists them with yours and a project's. `lib/automations.ts` turns the Settings
@@ -188,6 +195,11 @@ again; a stale dev build cache causes this.
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the feature list.
 
+## Contributing and license
+
+Issues and PRs are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
+Weft is released under the [Apache License 2.0](LICENSE).
+
 ## Known gaps
 
 - A card in a folder with no spare (or with a different CLI) still waits for its CLI to start the
@@ -198,7 +210,8 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for the feature list.
 - Only Claude Code sessions are picked up; puku-cli sessions (`~/.puku-cli/projects`) aren't yet.
 - Picked-up cards open with the last 400 items of the conversation, and show the conversation as
   it was last read from disk, not live, until you reply in Weft.
-- There are no automated tests yet.
+- Automated tests are thin: `npm test` runs a Vitest suite over the pure helpers in `lib/` (status parser,
+  review tour, API guard, automations, formatting). The runner, store and UI have none yet, and there is no CI.
 - No git worktree per card yet, so parallel cards in the same repo share a working tree.
 - Assistant messages show as plain text, not rendered Markdown.
 - One browser pane is shared by all cards.
