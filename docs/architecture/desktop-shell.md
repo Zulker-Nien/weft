@@ -93,6 +93,8 @@ A native `WebContentsView` overlaid on the board. Lazily created on first
   view once a page has loaded.
 - `setWindowOpenHandler` denies pop-ups and reopens them inside the same view. Links the
   board and the copilot window try to open in new windows are sent to this pane too.
+- A focused page swallows keys the board never sees, so `before-input-event` replays a plain Escape
+  into the board (which closes its newest layer via `useEscape`). Fullscreen pages keep it.
 - `normalizeUrl(raw)` accepts `https?/file/about:` schemes, prepends `http://` to
   bare `localhost`/`127.0.0.1`/`[::1]`, rejects other schemes, and prepends
   `https://` to bare hostnames.
