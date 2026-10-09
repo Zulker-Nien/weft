@@ -47,8 +47,11 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   puku-cli via `pathToClaudeCodeExecutable`.
 - `lib/status.ts` + `lib/settings.ts`: the BOARD STATUS protocol (thread prompt and its parser).
 - `lib/review.ts`, `lib/devserver.ts`: `weft-review` tour blocks and the card's dev server.
-- `plugin/skills/*`: my own skills (`/weft:done`, `/weft:commit`, `/weft:preview`);
+- `plugin/skills/*`: my own skills (`/weft:done`, `/weft:commit`, `/weft:preview`, `/weft:setup-done`,
+  which installs tests, docs and strict lint on a project before `/done`; `/weft:done` also keeps this file current);
   `lib/skills.ts` lists skills, `lib/automations.ts` turns "When … run …" rules into turns.
+- `lib/coverage.ts` + `app/api/coverage`: read `coverage/coverage-summary.json` (`npm run coverage`) for the
+  header pie, `components/CoverageBadge.tsx`.
 - `lib/copilot.ts` + `lib/board-tools.ts`: the copilot thread and its `mcp__board__*` tools.
 - `lib/browser-tools.ts`: `mcp__browser__*` tools every thread gets.
 - `lib/import.ts`, `lib/search.ts`: pick up `~/.claude/projects` sessions as cards; search index.
