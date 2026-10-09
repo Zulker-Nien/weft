@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { stepUrl } from "@/lib/review";
 import { api } from "@/lib/client";
+import { mediaMarkdown, mediaUrl } from "@/lib/media";
 import type { Card, DevServerStatus, ReviewPlan, ThreadItem } from "@/lib/types";
 import Icon from "./Icon";
 
@@ -35,8 +36,13 @@ function lastLocalUrl(items: ThreadItem[]): string | undefined {
     const text = item.kind === "assistant" ? item.text : item.kind === "tool" ? `${item.summary} ${item.result ?? ""}` : "";
     for (const origin of text.match(LOCAL_URL) ?? []) counts.set(origin, (counts.get(origin) ?? 0) + 1);
   }
+  // Weft's own address isn't the card's app, even when the card is working on Weft.
+  const self = typeof window === "undefined" ? "" : window.location.origin.replace("localhost", "127.0.0.1");
   let best: string | undefined;
-  for (const [origin, n] of counts) if (!best || n >= (counts.get(best) ?? 0)) best = origin;
+  for (const [origin, n] of counts) {
+    if (origin.replace("localhost", "127.0.0.1") === self) continue;
+    if (!best || n >= (counts.get(best) ?? 0)) best = origin;
+  }
   return best && `${best}/`;
 }
 
@@ -145,6 +151,9 @@ function Tour({
   const [index, setIndex] = useState(0);
   const [approved, setApproved] = useState<Set<number>>(new Set());
   const [note, setNote] = useState("");
+  // Images pasted into the feedback box, uploaded and sent along as Markdown below the note.
+  const [images, setImages] = useState<{ name: string; path: string }[]>([]);
+  const [uploading, setUploading] = useState(0);
   const [sending, setSending] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -162,15 +171,33 @@ function Tour({
   function go(to: number) {
     setIndex(Math.max(0, Math.min(steps.length - 1, to)));
     setNote("");
+    setImages([]);
   }
 
+  async function attach(files: File[]) {
+    setUploading((n) => n + files.length);
+    for (const file of files) {
+      try {
+        const saved = await api.uploadAttachment(file, file.name || "pasted-image.png");
+        setImages((prev) => [...prev, { name: file.name || saved.name, path: saved.path }]);
+      } catch (err) {
+        window.alert(err instanceof Error ? err.message : String(err));
+      } finally {
+        setUploading((n) => n - 1);
+      }
+    }
+  }
+
+  const canSend = (note.trim() || images.length > 0) && !uploading && !sending;
+
   async function sendFeedback() {
-    const text = note.trim();
-    if (!text || sending) return;
+    if (!canSend) return;
+    const text = [note.trim(), ...images.map((img) => mediaMarkdown(img.name, img.path))].filter(Boolean).join("\n");
     setSending(true);
     try {
       await onSend(`Review feedback on step ${index + 1} of ${steps.length}, “${step.title}”:\n${text}`);
       setNote("");
+      setImages([]);
     } finally {
       setSending(false);
     }
@@ -220,6 +247,13 @@ function Tour({
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
+            onPaste={(e) => {
+              const files = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
+              if (files.length && !e.clipboardData.getData("text/plain").trim()) {
+                e.preventDefault();
+                void attach(files);
+              }
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
@@ -227,9 +261,31 @@ function Tour({
               }
             }}
             rows={2}
-            placeholder="Anything wrong or missing here? (⌘↵ to send)"
+            placeholder="Anything wrong or missing here? Paste a screenshot to show it. (⌘↵ to send)"
             className="mt-2 w-full resize-none rounded-md border border-line-strong bg-panel px-2.5 py-1.5 text-[12.5px] text-ink outline-none focus:border-accent"
           />
+          {(images.length > 0 || uploading > 0) && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {images.map((img, i) => (
+                <div key={img.path} className="group relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={mediaUrl(img.path) ?? ""}
+                    alt={img.name}
+                    className="h-12 w-auto max-w-[96px] rounded border border-line-strong object-cover"
+                  />
+                  <button
+                    onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
+                    aria-label={`Remove ${img.name}`}
+                    className="absolute -right-1.5 -top-1.5 hidden rounded-full border border-line-strong bg-panel p-0.5 text-ink group-hover:block"
+                  >
+                    <Icon name="x" size={10} />
+                  </button>
+                </div>
+              ))}
+              {uploading > 0 && <span className="text-[11.5px] text-muted">uploading…</span>}
+            </div>
+          )}
           <div className="mt-2 flex items-center gap-2">
             <button
               onClick={() => go(index - 1)}
@@ -241,7 +297,7 @@ function Tour({
             </button>
             <button
               onClick={() => void sendFeedback()}
-              disabled={!note.trim() || sending}
+              disabled={!canSend}
               className="rounded-md border border-line-strong px-2.5 py-1 text-[12.5px] text-ink hover:bg-sunken disabled:opacity-40"
             >
               Send feedback

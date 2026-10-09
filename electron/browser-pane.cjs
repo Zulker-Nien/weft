@@ -35,7 +35,10 @@ function createBrowserPane({ getWindow, getAppView, token, onContents }) {
       view.setBounds(bounds);
       // Until a page loads, the board shows its own placeholder instead of a blank view.
       const hasPage = Boolean(view.webContents.getURL());
-      view.setVisible(key === active && visible && hasPage && bounds.width > 0 && bounds.height > 0);
+      const onScreen = key === active && visible && hasPage && bounds.width > 0 && bounds.height > 0;
+      view.setVisible(onScreen);
+      // Only the page on screen plays sound; background cards' pages keep running but stay silent.
+      view.webContents.setAudioMuted(!onScreen);
     }
   }
 
@@ -113,11 +116,28 @@ function createBrowserPane({ getWindow, getAppView, token, onContents }) {
     return `https://${url}`;
   }
 
+  // Weft's own server, with localhost and 127.0.0.1 treated as one host.
+  function isSelf(url) {
+    const key = (u) => {
+      const { protocol, hostname, port } = new URL(u);
+      return `${protocol}//${hostname === "localhost" ? "127.0.0.1" : hostname}:${port}`;
+    };
+    try {
+      const own = getAppView()?.webContents.getURL();
+      return Boolean(own) && key(own) === key(url);
+    } catch {
+      return false;
+    }
+  }
+
   // Loads a page in a card's browser. Opening in the card on screen shows the pane; another card's
   // browser (an agent working in the background) loads without taking over the screen.
   // From the board itself (activate), the card's browser is brought on screen.
   async function open(raw, key = active, activate = false) {
     const url = normalizeUrl(raw);
+    // Weft inside its own pane is a confusing hall of mirrors; a card working on Weft should run
+    // its own dev server on another port.
+    if (isSelf(url)) throw new Error(`${url} is Weft itself; open the card's own dev server instead`);
     if (activate) active = key;
     const v = ensure(key);
     if (key === active) setVisible(true);
