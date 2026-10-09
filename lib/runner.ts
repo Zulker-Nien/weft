@@ -17,6 +17,7 @@ import { extractReview, REVIEW_PROMPT } from "./review";
 import { extractStatus, type BoardStatus } from "./status";
 import { appendThread, getCard, getThread, replaceThreadItem, updateCard } from "./store";
 import { adoptLocalMedia, toolResult } from "./thread-media";
+import * as turnRules from "./turn";
 import { columnAfterTurn, eventWindow, modelStats, readQuestions, readResult, turnCost, usageWindow } from "./turn";
 import type { Backend, Card, CardStats, Effort, PermissionMode, Question } from "./types";
 
@@ -123,9 +124,14 @@ const MAX_TIMER_MS = 2 ** 31 - 1;
 
 // A fingerprint of this module's code. In development a code change reloads the module, but sessions
 // the old code started keep running it, so idle ones are replaced instead of reused. It's derived from
-// the code (not random) because each API route can load its own copy of this module.
+// the code (not random) because each API route can load its own copy of this module. The pure turn
+// rules in turn.ts count too: a session started before they changed would still run the old ones.
 const BUILD = createHash("sha1")
-  .update([drive, handle, askUser, settle, sendMessage].map(String).join("\n"))
+  .update(
+    [drive, handle, handleAssistant, handleToolResults, handleResult, askUser, settle, sendMessage, ...Object.values(turnRules)]
+      .map(String)
+      .join("\n"),
+  )
   .digest("hex");
 
 function close(session: Session) {
@@ -640,98 +646,109 @@ function handle(id: string, session: Session, msg: SDKMessage) {
 
     case "assistant":
       // Subagent turns stay out of the card's thread; their final report arrives as a tool result.
-      if (msg.parent_tool_use_id) break;
-      {
-        const u = msg.message.usage;
-        if (u) session.contextTokens = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
-      }
-      for (const block of msg.message.content) {
-        if (block.type === "text") {
-          const { text: withReview, status } = extractStatus(block.text);
-          const { text, review } = extractReview(withReview);
-          if (review) safeUpdate(id, { review });
-          if (status) {
-            session.status = status;
-            safeUpdate(id, { stage: status.stage, remaining: status.remaining });
-          }
-          if (text.trim()) {
-            appendThread(id, { kind: "assistant", text: adoptLocalMedia(text, session.spec.cwd), at: Date.now() });
-            safeUpdate(id, { lastLine: firstLine(text) });
-          }
-        } else if (block.type === "tool_use") {
-          const input = (block.input ?? {}) as Record<string, unknown>;
-          const summary = summarizeInput(input);
-          const action = toolAction(block.name, input);
-          const index = appendThread(id, { kind: "tool", id: block.id, name: block.name, summary, action, at: Date.now() });
-          session.toolIndex.set(block.id, index);
-          safeUpdate(id, { lastLine: `${shortToolName(block.name)} ${summary}`.trim() });
-        }
-      }
+      if (!msg.parent_tool_use_id) handleAssistant(id, session, msg);
       break;
 
-    case "user": {
-      const content = msg.message.content;
-      if (!Array.isArray(content)) break;
-      for (const block of content) {
-        if (block.type !== "tool_result") continue;
-        const index = session.toolIndex.get(block.tool_use_id);
-        if (index === undefined) continue;
-        const item = getThread(id)[index];
-        if (item?.kind !== "tool") continue;
-        replaceThreadItem(id, index, { ...item, ...toolResult(block.content), isError: Boolean(block.is_error) });
-      }
+    case "user":
+      handleToolResults(id, session, msg);
       break;
+
+    case "result":
+      handleResult(id, session, msg);
+      break;
+  }
+}
+
+// The agent's reply: its text goes to the thread (status and review blocks lifted onto the card), and
+// each tool call gets a thread item its result fills in later.
+function handleAssistant(id: string, session: Session, msg: Extract<SDKMessage, { type: "assistant" }>) {
+  const u = msg.message.usage;
+  if (u) session.contextTokens = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
+  for (const block of msg.message.content) {
+    if (block.type === "text") {
+      const { text: withReview, status } = extractStatus(block.text);
+      const { text, review } = extractReview(withReview);
+      if (review) safeUpdate(id, { review });
+      if (status) {
+        session.status = status;
+        safeUpdate(id, { stage: status.stage, remaining: status.remaining });
+      }
+      if (text.trim()) {
+        appendThread(id, { kind: "assistant", text: adoptLocalMedia(text, session.spec.cwd), at: Date.now() });
+        safeUpdate(id, { lastLine: firstLine(text) });
+      }
+    } else if (block.type === "tool_use") {
+      const input = (block.input ?? {}) as Record<string, unknown>;
+      const summary = summarizeInput(input);
+      const action = toolAction(block.name, input);
+      const index = appendThread(id, { kind: "tool", id: block.id, name: block.name, summary, action, at: Date.now() });
+      session.toolIndex.set(block.id, index);
+      safeUpdate(id, { lastLine: `${shortToolName(block.name)} ${summary}`.trim() });
     }
+  }
+}
 
-    case "result": {
-      const stopped = session.stopping;
-      const parsed = readResult({
-        subtype: msg.subtype,
-        result: msg.subtype === "success" ? msg.result : undefined,
-        isError: msg.is_error,
-        stopped,
-      });
-      const { summary, isError } = parsed;
-      session.busy = false;
-      session.stopping = false;
+// Tool results fill in the tool items the assistant message added.
+function handleToolResults(id: string, session: Session, msg: Extract<SDKMessage, { type: "user" }>) {
+  const content = msg.message.content;
+  if (!Array.isArray(content)) return;
+  for (const block of content) {
+    if (block.type !== "tool_result") continue;
+    const index = session.toolIndex.get(block.tool_use_id);
+    if (index === undefined) continue;
+    const item = getThread(id)[index];
+    if (item?.kind !== "tool") continue;
+    replaceThreadItem(id, index, { ...item, ...toolResult(block.content), isError: Boolean(block.is_error) });
+  }
+}
 
-      if (isError && isNotLoggedInError(summary)) {
-        appendThread(id, { kind: "result", text: summary, isError: true, at: Date.now() });
-        needLogin(id, session.spec.backend, summary);
-        break;
-      }
+// The turn ended: settle the card (column, cost, stats), then archive it or send what was queued.
+function handleResult(id: string, session: Session, msg: Extract<SDKMessage, { type: "result" }>) {
+  const stopped = session.stopping;
+  const parsed = readResult({
+    subtype: msg.subtype,
+    result: msg.subtype === "success" ? msg.result : undefined,
+    isError: msg.is_error,
+    stopped,
+  });
+  const { summary, isError } = parsed;
+  session.busy = false;
+  session.stopping = false;
 
-      const status = parsed.status ?? session.status;
-      const cost = turnCost(getCard(id)?.costUsd ?? 0, msg.total_cost_usd, session.costBase);
-      session.costBase = cost.base;
-      const costUsd = cost.costUsd;
-      appendThread(id, { kind: "result", text: summary, costUsd, isError, at: Date.now() });
-      safeUpdate(id, {
-        sessionId: msg.session_id,
-        column: columnAfterTurn(stopped, isError, status),
-        pending: null,
-        costUsd,
-        turns: (getCard(id)?.turns ?? 0) + 1,
-        lastActivity: Date.now(),
-        lastWeftTurn: Date.now(),
-        stats: turnStats(id, session, msg.modelUsage),
-        lastLine: firstLine(summary) || "Done",
-        error: isError ? summary : undefined,
-        ...(status ? { stage: status.stage, remaining: status.remaining } : {}),
-      });
-      scheduleIdle(session);
-      if (archiveAfter.has(id) && (stopped || isError)) archiveAfter.delete(id);
-      else if (archiveAfter.has(id) && !queued.has(id) && status?.column !== "needs_you") {
-        archiveAfter.delete(id);
-        safeUpdate(id, { column: "done", archived: true });
-      }
-      if (queued.has(id)) {
-        if (stopped || isError) queued.delete(id);
-        // Once the drive loop has handled this result, so the next turn starts on a settled card.
-        else if (status?.column !== "needs_you") setTimeout(() => sendQueued(id), 0);
-      }
-      break;
-    }
+  if (isError && isNotLoggedInError(summary)) {
+    appendThread(id, { kind: "result", text: summary, isError: true, at: Date.now() });
+    needLogin(id, session.spec.backend, summary);
+    return;
+  }
+
+  const status = parsed.status ?? session.status;
+  const cost = turnCost(getCard(id)?.costUsd ?? 0, msg.total_cost_usd, session.costBase);
+  session.costBase = cost.base;
+  const costUsd = cost.costUsd;
+  appendThread(id, { kind: "result", text: summary, costUsd, isError, at: Date.now() });
+  safeUpdate(id, {
+    sessionId: msg.session_id,
+    column: columnAfterTurn(stopped, isError, status),
+    pending: null,
+    costUsd,
+    turns: (getCard(id)?.turns ?? 0) + 1,
+    lastActivity: Date.now(),
+    lastWeftTurn: Date.now(),
+    stats: turnStats(id, session, msg.modelUsage),
+    lastLine: firstLine(summary) || "Done",
+    error: isError ? summary : undefined,
+    ...(status ? { stage: status.stage, remaining: status.remaining } : {}),
+  });
+  scheduleIdle(session);
+  if (archiveAfter.has(id) && (stopped || isError)) archiveAfter.delete(id);
+  else if (archiveAfter.has(id) && !queued.has(id) && status?.column !== "needs_you") {
+    archiveAfter.delete(id);
+    safeUpdate(id, { column: "done", archived: true });
+  }
+  if (queued.has(id)) {
+    if (stopped || isError) queued.delete(id);
+    // Once the drive loop has handled this result, so the next turn starts on a settled card.
+    else if (status?.column !== "needs_you") setTimeout(() => sendQueued(id), 0);
   }
 }
 
