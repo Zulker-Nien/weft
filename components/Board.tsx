@@ -884,6 +884,13 @@ export default function Board() {
             items={thread}
             streaming={streaming}
             onSend={async (text) => {
+              // /done wraps the thread up on its own, so the thread closes as it's sent.
+              // A failed send shows on the board, since the thread isn't there to show it.
+              if (/^\/(weft:)?done(-quick)?(\s|$)/.test(text.trim())) {
+                select(null);
+                api.send(selected.id, text).catch(notify);
+                return;
+              }
               await api.send(selected.id, text);
             }}
             onAnswer={(allow, answers) => api.answer(selected.id, allow, answers, selected.pending?.id).catch(notify)}

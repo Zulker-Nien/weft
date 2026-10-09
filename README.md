@@ -27,7 +27,7 @@ same time; Next.js allows one dev server per project folder.
 - **⌃⌥Space** opens the copilot from any app. In the app: ⌘N new thread, ⌘J copilot, ⇧⌘B
   browser pane, ⌘F find cards, ⌘, settings, ⌘1 board, ⌘2 copilot.
 - **Pop out**: the expand button in a thread's header lifts the thread and its browser into one large
-  overlay over the board; Esc or the same button puts them back on the side.
+  overlay over the board; Esc or the same button puts them back on the side. Sending `/done` closes the thread.
 - **Menu bar icon**: shows how many cards need you and lists them; click one to open it.
 - **Dock**: the Needs you count on the icon, and New Thread and Copilot in its menu.
 - **Links**: `weft://new?prompt=…&folder=…&start=1` creates a card (in your most recent project
