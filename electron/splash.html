@@ -7,20 +7,24 @@
     <style>
       :root {
         --bg: #f4f3ef;
+        --bg2: #ebe8e0;
         --ink: #1c1b18;
         --muted: #64625c;
         --faint: #96948c;
         --line: rgb(20 20 15 / 0.12);
         --accent: #d9774b;
+        --accent2: #6b72a8;
         --danger: #b93434;
       }
       @media (prefers-color-scheme: dark) {
         :root {
-          --bg: #131312;
+          --bg: #15151a;
+          --bg2: #0d0d10;
           --ink: #ecebe6;
           --muted: #a3a19a;
           --faint: #75736d;
           --line: rgb(255 255 245 / 0.12);
+          --accent2: #8f97d6;
           --danger: #f08080;
         }
       }
@@ -29,18 +33,50 @@
         height: 100%;
         margin: 0;
       }
+      /* A cinematic still behind everything, always on the dark palette so text reads. */
       body {
-        background: var(--bg);
+        --ink: #f4efe6;
+        --muted: #d9d0c3;
+        --faint: #b9afa2;
+        --line: rgb(255 250 240 / 0.2);
+        --danger: #f08080;
+        background: #1a1520;
         color: var(--ink);
         font: 14px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: center;
+        padding-top: 9vh;
+        box-sizing: border-box;
+        overflow: hidden;
+        position: relative;
         -webkit-app-region: drag;
         -webkit-user-select: none;
         user-select: none;
       }
+      /* The Weft speeder at dusk (Nano Banana 2), with a slow push in. */
+      body::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: url(assets/splash-speeder.jpg) center 62% / cover no-repeat;
+        animation: push 24s ease-out both;
+        pointer-events: none;
+      }
+      /* Darken the sky behind the title and the edges, like a letterboxed frame. */
+      body::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(180deg, rgb(10 8 20 / 0.55) 0%, rgb(10 8 20 / 0.15) 45%, transparent 60%, rgb(10 8 12 / 0.45) 100%),
+          radial-gradient(ellipse 90% 80% at 50% 50%, transparent 55%, rgb(0 0 0 / 0.45));
+        pointer-events: none;
+      }
       main {
+        position: relative;
+        z-index: 1;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -49,33 +85,64 @@
         max-width: 420px;
         padding: 0 24px;
       }
-      img {
-        width: 96px;
-        height: 96px;
-        animation: rise 0.5s ease-out both;
+      /* The steel weave emblem, floating in the sky. */
+      .mark {
+        position: relative;
+        width: 124px;
+        height: 124px;
+        animation: rise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+      }
+      .mark::before {
+        content: "";
+        position: absolute;
+        inset: -30%;
+        border-radius: 50%;
+        background: radial-gradient(closest-side, rgb(255 214 160 / 0.28), transparent);
+        filter: blur(6px);
+      }
+      .mark img {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        filter: drop-shadow(0 14px 18px rgb(0 0 0 / 0.45));
+        animation: float 6s ease-in-out infinite alternate;
       }
       h1 {
-        margin: 0;
-        font-size: 22px;
-        font-weight: 600;
-        letter-spacing: -0.01em;
+        margin: 8px 0 0;
+        font-size: 36px;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        background: linear-gradient(100deg, var(--ink) 30%, var(--accent) 60%, var(--accent2));
+        background-size: 200% 100%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        animation: rise 0.7s 0.1s cubic-bezier(0.2, 0.8, 0.2, 1) both, sheen 6s ease-in-out infinite alternate;
       }
       .tagline {
-        margin: -10px 0 0;
+        margin: -6px 0 0;
         color: var(--muted);
+        animation: rise 0.7s 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
       }
-      .status {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        color: var(--faint);
-        font-size: 12.5px;
-        min-height: 20px;
+      .version {
+        display: none;
+        padding: 2px 10px;
+        border: 0.5px solid var(--line);
+        border-radius: 999px;
+        background: rgb(127 127 127 / 0.08);
+        color: var(--muted);
+        font: 500 11.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace;
+        letter-spacing: 0.02em;
+        animation: rise 0.7s 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+      }
+      .version.on {
+        display: inline-block;
       }
       .thread {
-        width: 120px;
-        height: 2px;
-        border-radius: 2px;
+        width: 160px;
+        height: 3px;
+        margin-top: 10px;
+        border-radius: 3px;
         background: var(--line);
         overflow: hidden;
         position: relative;
@@ -84,10 +151,15 @@
         content: "";
         position: absolute;
         inset: 0;
-        width: 40%;
-        border-radius: 2px;
-        background: var(--accent);
-        animation: weave 1.2s ease-in-out infinite;
+        width: 45%;
+        border-radius: 3px;
+        background: linear-gradient(90deg, transparent, var(--accent), var(--accent2));
+        animation: weave 1.3s ease-in-out infinite;
+      }
+      .status {
+        color: var(--faint);
+        font-size: 12.5px;
+        min-height: 20px;
       }
       .error {
         display: none;
@@ -126,22 +198,45 @@
           transform: translateX(-100%);
         }
         100% {
-          transform: translateX(250%);
+          transform: translateX(230%);
         }
       }
       @keyframes rise {
         from {
           opacity: 0;
-          transform: translateY(6px) scale(0.97);
+          transform: translateY(10px) scale(0.96);
+        }
+      }
+      @keyframes float {
+        to {
+          transform: translateY(-6px);
+        }
+      }
+      @keyframes sheen {
+        to {
+          background-position: 100% 0;
+        }
+      }
+      @keyframes push {
+        from {
+          transform: scale(1.08);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation: none !important;
         }
       }
     </style>
   </head>
   <body>
     <main>
-      <img src="assets/icon.png" alt="" onerror="this.style.visibility='hidden'" />
+      <div class="mark"><img src="assets/emblem.png" alt="" onerror="this.style.visibility='hidden'" /></div>
       <h1>Weft</h1>
       <p class="tagline">A board for your AI coding threads</p>
+      <span class="version" id="version"></span>
       <div class="thread" aria-hidden="true"></div>
       <div class="status" id="status">Starting…</div>
       <div class="error" id="error"></div>
@@ -152,6 +247,12 @@
       </div>
     </main>
     <script>
+      const v = new URLSearchParams(location.search).get("v");
+      if (v) {
+        const el = document.getElementById("version");
+        el.textContent = "v" + v;
+        el.classList.add("on");
+      }
       // Called by the main process.
       window.setStatus = (text) => {
         document.body.classList.remove("failed");
