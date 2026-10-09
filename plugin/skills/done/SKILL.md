@@ -45,6 +45,7 @@ Phase                   Time     Count
 -----------------------------------------------
 Architecture docs       12s      2 updated, 1 created
 Bug fix docs             5s      1 created (or "no bug fix")
+SOUL.md                  4s      1 updated (or "no change", "no SOUL.md")
 Lint fix                18s      3 errors fixed, 0 remaining
 File sizes              5s       42 files, 1 over 500 lines
 Tests + coverage        8s       12 passed, 0 failed, 42% lines
@@ -162,6 +163,24 @@ The reports are leads, not facts, and the Puku models are weaker than you:
   task with a narrower prompt.
 - **Tests.** A failure report tells you where to look. Fixing it is your job.
 
+### Phase 4.5: SOUL.md (you, after the batch is verified)
+
+Do this yourself, not in the batch: you hold the why, and the file-size and test results
+it may cite come from the batch. If the project has no `SOUL.md`, skip silently and say in the
+report that `/weft:setup-done` can create one.
+
+Update `SOUL.md` only when this session changed something it states:
+- the file map (key files or modules added, renamed or removed);
+- values or conventions;
+- hotspot file sizes (use the Phase 3 numbers when they ran);
+- the "Known gaps" list (a gap closed or newly found), and refresh its "verified" date;
+- test or CI status.
+
+Routine changes (bug fixes, copy, styling, small features inside existing modules) do NOT
+touch it. Keep edits minimal: first person ("I am Weft"), the file's own terse style, current
+state only, no history or changelog. Verify every path, name and number you write against the
+code before saving. Report `SOUL.md` as "no change" when nothing qualified.
+
 ---
 
 #### Agent: Architecture Docs (Phase 1)
@@ -264,11 +283,12 @@ Wait for all parallel agents to complete, then:
      - Tests: 12 passed, 0 failed (or "no test runner")
      - Coverage: Stmts 45% | Lines 42% (if available)
      - Docs: 2 updated, 1 created
+     - SOUL.md: updated file map and known gaps (or "no change")
      - Areas: src/app/workshop, src/app/page.tsx
 
      Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
      ```
-3. Run `${CLAUDE_SKILL_DIR}/commit.sh "commit message" file1 file2 ...` with every file this commit should hold, and nothing else: your session files, the docs and lint fixes the agents made (after you verified them), plus any test fixes you made.
+3. Run `${CLAUDE_SKILL_DIR}/commit.sh "commit message" file1 file2 ...` with every file this commit should hold, and nothing else: your session files, the docs and lint fixes the agents made (after you verified them), `SOUL.md` if Phase 4.5 changed it, plus any test fixes you made.
 4. The script runs `git add` on each path (a pathspec commit can't see a new file until it's tracked), then `git commit -- <those paths>`, so the commit holds exactly those files and nothing else that happens to be staged. Several sessions can share one working tree and so one index; a bare `git commit` would take what they staged too. The `git status` it prints afterwards may still show other sessions' work. That's expected: leave it alone, don't commit or reset it.
 
 ### Phase 6: Report (sequential)
@@ -285,6 +305,7 @@ Wait for all parallel agents to complete, then:
 - Keep docs concise — aim for quick reference, not exhaustive documentation
 - Don't document trivial changes (typo fixes, formatting)
 - Match the style of existing docs in `docs/architecture/`
+- SOUL.md is edited only for the triggers in Phase 4.5, never for routine changes
 - Only fix lint errors in files you changed this session — don't go on a codebase-wide cleanup
 - NEVER use `--no-verify`, `--amend`, or force push
 - NEVER run a bare `git commit` or `git reset`. Both act on the whole index, which other sessions may share; commit and unstage by explicit path
