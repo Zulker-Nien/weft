@@ -259,7 +259,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `P2` **Move without dragging** — a keyboard and menu way to move cards between columns, since drag-and-drop is the only way today.
 - `P2` **Screen reader announcements** — a live region that reads out card moves and new permission requests.
 - `P2` **Focus return** — focus goes back to the card after closing its thread panel or a dialog.
-- `P2` **Resizable thread panel** — drag to resize the thread panel like the browser pane, and remember both widths.
+- `P2` **Resizable thread panel** — drag the divider between the thread and its browser in the full-screen overlay, and remember the split.
 - `P2` **Clear error messages** — plain explanations with a fix for common failures: CLI not on PATH, folder missing, logged out, port in use.
 - `P2` **Contrast and motion** — check the column colors against contrast guidelines and respect reduced-motion settings.
 - `P3` **Text size** — a setting for card and thread text size.

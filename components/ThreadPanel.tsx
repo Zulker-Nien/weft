@@ -21,8 +21,6 @@ export default function ThreadPanel({
   onDelete,
   onClose,
   onRename,
-  expanded,
-  onToggleExpanded,
 }: {
   card: Card;
   items: ThreadItem[];
@@ -35,14 +33,12 @@ export default function ThreadPanel({
   onDelete: () => void;
   onClose: () => void;
   onRename: (title: string) => void;
-  expanded: boolean;
-  onToggleExpanded: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const live = isLive(card);
 
   return (
-    <aside className={`flex shrink-0 flex-col bg-panel ${expanded ? "w-[44%] min-w-[380px]" : "w-[460px] border-l border-line"}`}>
+    <aside className="flex w-[44%] min-w-[380px] shrink-0 flex-col bg-panel last:flex-1">
       <header className="flex items-start gap-3 border-b border-line px-4 py-3">
         <div className="min-w-0 flex-1">
           {editing ? (
@@ -119,14 +115,6 @@ export default function ThreadPanel({
           className="rounded-md p-1.5 text-muted hover:bg-sunken hover:text-danger"
         >
           <Icon name="trash" size={15} />
-        </button>
-        <button
-          onClick={onToggleExpanded}
-          title={expanded ? "Back to the side panel" : "Pop out the thread and browser together"}
-          aria-label={expanded ? "Collapse thread" : "Expand thread"}
-          className="rounded-md p-1.5 text-muted hover:bg-sunken hover:text-ink"
-        >
-          <Icon name={expanded ? "collapse" : "expand"} size={15} />
         </button>
         <button
           onClick={onClose}

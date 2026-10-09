@@ -137,7 +137,6 @@ export default function Board() {
   const [browser, setBrowser] = useState<BrowserState>(CLOSED_BROWSER);
   const [webBrowserOpen, setWebBrowserOpen] = useState(false);
   const [browserWidth, setBrowserWidth] = useState(560);
-  const [popped, setPopped] = useState(false);
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [copilotNeedsYou, setCopilotNeedsYou] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -215,6 +214,11 @@ export default function Board() {
 
   const select = useCallback(
     (id: string | null) => {
+      // A card always opens full screen, with its browser beside the thread; closing it hides the browser.
+      if (Boolean(id) !== Boolean(selectedRef.current)) {
+        if (window.threadboard) window.threadboard.browser.setVisible(Boolean(id));
+        else setWebBrowserOpen(Boolean(id));
+      }
       selectedRef.current = id;
       setSelectedId(id);
       if (id) setUnseen((prev) => (prev.has(id) ? without(prev, id) : prev));
@@ -708,18 +712,11 @@ export default function Board() {
   }
 
   // Escape closes the newest open layer. The board's own panels sit under any dialog opened over them,
-  // and an unsent reply isn't thrown away with its thread panel.
+  // and an unsent reply isn't thrown away with its thread. The open card's browser closes with the card.
   useEscape(Boolean(selectedId), (e) => {
     if (!keepTypedText(e)) select(null);
   });
-  useEscape(browserOpen, toggleBrowser);
-
-  // Pops the open thread and its browser into one large overlay, and back.
-  function toggleExpanded() {
-    if (!popped && window.threadboard && !browser.visible) window.threadboard.browser.setVisible(true);
-    setPopped(!popped);
-  }
-  useEscape(popped && Boolean(selectedId), () => setPopped(false));
+  useEscape(browserOpen && !selectedId, toggleBrowser);
 
   // The desktop app gives the copilot its own window; in a browser tab it opens as a pop-up.
   function toggleCopilot() {
@@ -873,10 +870,8 @@ export default function Board() {
           })}
         </main>
 
-        {popped && selected && (
-          <div className="fixed inset-0 z-30 bg-black/40" onClick={() => setPopped(false)} aria-hidden="true" />
-        )}
-        <div className={popped && selected ? "fixed inset-4 z-40 flex overflow-hidden rounded-xl border border-line-strong bg-panel shadow-2xl" : "contents"}>
+        {selected && <div className="fixed inset-0 z-30 bg-black/40" onClick={() => select(null)} aria-hidden="true" />}
+        <div className={selected ? "fixed inset-4 z-40 flex overflow-hidden rounded-xl border border-line-strong bg-panel shadow-2xl" : "contents"}>
         {selected && (
           <ThreadPanel
             key={selected.id}
@@ -903,8 +898,6 @@ export default function Board() {
             }}
             onClose={() => select(null)}
             onRename={(title) => api.rename(selected.id, title).catch(notify)}
-            expanded={popped}
-            onToggleExpanded={toggleExpanded}
           />
         )}
 
@@ -916,7 +909,7 @@ export default function Board() {
             width={browserWidth}
             onWidth={setBrowserWidth}
             onClose={toggleBrowser}
-            expanded={popped && Boolean(selected)}
+            expanded={Boolean(selected)}
           />
         )}
         </div>
