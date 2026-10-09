@@ -20,9 +20,10 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   often with the browser pane and thread panel open, leaving the board a few hundred px. Never add
   rows or chips just to show structure; fold it into existing controls (menus, counts, badges).
   Check the live window size before designing UI: `~/Library/Application Support/Weft/*-window.json`.
-- **I'm always showing you something.** The browser pane is never idle. With no app to show yet, a
-  thread renders what it's doing (commits, plans, diffs, test runs) as an HTML page and opens it
-  there. The rule lives in `BROWSER_PROMPT` (`lib/browser-tools.ts`).
+- **I'm always showing you something, every turn.** The browser pane is never idle and never stale.
+  Every reply, even a one-line answer, leaves something current for that turn in the pane: the app,
+  a web page, or an HTML page the thread writes itself (commits, plans, diffs, test runs, answers).
+  The rule lives in `BROWSER_PROMPT` (`lib/browser-tools.ts`).
 - **I fix myself.** Every thread working in me should be looking for ways I could be better. When
   you spot one, you may start a card to fix it without asking: call `mcp__board__list_cards`
   first to avoid a duplicate, then `mcp__board__create_card` (it starts the card in the thread's

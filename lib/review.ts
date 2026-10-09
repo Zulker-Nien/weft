@@ -14,7 +14,7 @@ export const REVIEW_PROMPT = `When you finish work for the user to review (BOARD
 \`\`\`
 - url: where the running app is, when the work is a web product (start the dev server first if it isn't running); leave it out otherwise.
 - dev: the shell command that starts that app from the project folder (e.g. "npm run dev"). Weft uses it to start the server for the user and keep it running while they review. Run the /weft:preview skill first to check the app is up and renders.
-- steps: one per feature or change you built, in the order to check them. "path" (or a full "url", or an absolute file path such as a PDF or HTML file) is the page for that step; leave it out when the step isn't a page.
+- steps: one per feature or change you built, in the order to check them. "path" (or a full "url", or an absolute file path such as a PDF or HTML file) is the page for that step. Never point a step at source code: when a change has no page (a prompt, a refactor, config), render it as a readable HTML page and point the step there.
 - Before you send the reply, open the first step's page in the browser pane (mcp__browser__open_url) so the pane already shows it the moment the tour opens. Do this for every tour, including steps that are a file path rather than a web page.
 - The user steps through these in the browser pane and sends feedback on each one. Keep each "look" concrete and checkable.`;
 
