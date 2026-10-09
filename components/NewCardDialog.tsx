@@ -296,20 +296,6 @@ export default function NewCardDialog({
         <div className="flex shrink-0 flex-wrap items-center gap-2 px-5 pt-3">
           <RepoPicker value={cwd} home={home} onChange={chooseFolder} />
 
-          <div className="flex rounded-md border border-line-strong p-0.5" role="group" aria-label="CLI">
-            {BACKENDS.map((b) => (
-              <button
-                key={b.id}
-                type="button"
-                onClick={() => setBackend(b.id)}
-                aria-pressed={backend === b.id}
-                className={`rounded px-2.5 py-1 text-[12px] ${backend === b.id ? "bg-sunken font-medium text-ink" : "text-muted hover:text-ink"}`}
-              >
-                {b.label}
-              </button>
-            ))}
-          </div>
-
           {backend === "claude" && (
             <label className="relative flex items-center gap-1.5 rounded-md border border-line-strong py-1.5 pl-2.5 pr-1.5 text-[12px] text-ink">
               <span className="sr-only">Model</span>
@@ -373,6 +359,19 @@ export default function NewCardDialog({
         </div>
 
         <div className="flex shrink-0 items-center gap-3 px-5 pb-4 pt-3">
+          <div className="flex rounded-md border border-line-strong p-0.5" role="group" aria-label="CLI">
+            {BACKENDS.map((b) => (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => setBackend(b.id)}
+                aria-pressed={backend === b.id}
+                className={`rounded px-2.5 py-1 text-[12px] ${backend === b.id ? "bg-sunken font-medium text-ink" : "text-muted hover:text-ink"}`}
+              >
+                {b.label}
+              </button>
+            ))}
+          </div>
           <p className="min-w-0 flex-1 truncate text-[12px]">
             {error ? (
               <span className="text-danger">{error}</span>

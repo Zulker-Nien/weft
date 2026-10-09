@@ -545,7 +545,8 @@ async function drive(session: Session, executable: string | undefined) {
         model: spec.model,
         effort: spec.effort,
         // So a card can switch to bypassPermissions later, including a spare it takes over.
-        allowDangerouslySkipPermissions: !spec.copilot,
+        // Puku-cli's CLI doesn't accept this flag, so only forward it to the Claude Code binary.
+        allowDangerouslySkipPermissions: spec.backend === "claude" && !spec.copilot ? true : undefined,
         pathToClaudeCodeExecutable: executable,
         // Weft's own skills (plugin/skills), so board threads can run /weft:done and the like.
         plugins: !spec.copilot && fs.existsSync(PLUGIN_DIR) ? [{ type: "local", path: PLUGIN_DIR }] : undefined,

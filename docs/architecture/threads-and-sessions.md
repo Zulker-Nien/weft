@@ -31,6 +31,10 @@ every API route shares it), and returns the running `Session`. `drive()` (`lib/r
   `askUser` so the card can prompt the user
 - `pathToClaudeCodeExecutable`: `pukuPath` (looked up via `/usr/bin/which puku-cli`)
   for the puku backend, `undefined` for Claude Code
+- `allowDangerouslySkipPermissions`: `true` for non-copilot Claude Code cards
+  (so a card can switch to `bypassPermissions` later, including a spare it takes
+  over); omitted for the puku backend because puku-cli's CLI rejects the flag,
+  and omitted for the copilot card
 
 ### Warm sessions and keep-alive
 
