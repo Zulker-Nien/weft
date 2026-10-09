@@ -181,9 +181,18 @@ and every `SYNC_EVERY_MS` (60s) it calls `runSync()`:
   newer last message or a new title from outside Weft updates the card (and moves it) unless
   Weft has that thread open (`warm`); cards Weft created, and cards that continued a session
   as a copy (`forkedFrom`), are left alone.
-- `openElsewhere` is set from `openSessionIds()` — `/bin/ps` parsed for
-  `--resume=<uuid>` / `--session-id=<uuid>`, ignoring Weft's own children
-  (`Number(match[2]) === process.pid`).
+- `openElsewhere` comes from `openSessions()`: `/bin/ps` parsed for
+  `--resume=<uuid>` / `--session-id=<uuid>`, plus Claude Code's own list of running sessions in
+  `~/.claude/sessions/<pid>.json` (the only place a session the Claude app started fresh shows
+  up). Entries whose pid isn't running, and Weft's own children, are ignored.
+- Live sessions move on their own. That list reports each session as `busy`, `idle`, or
+  `waiting`; `liveColumn()` puts busy ones in Running and waiting ones (a question or permission
+  prompt in the other app) in Needs you, with a status line saying so. Without a report, an
+  unfinished turn at the end of the session file (`midTurn()`: a prompt, tool call, or tool result
+  after the last final reply) counts if the session is open or changed in the last two minutes.
+  `checkLive()` re-checks every 5 seconds between full syncs, re-reading only changed files.
+  `liveCards` remembers which cards the sync moved, so it moves them back when the turn ends and
+  leaves cards the user put in those columns alone.
 
 When a card is opened, `loadTranscript(card)` calls `getSessionMessages(sessionId)`
 and replaces its thread with `transcriptToThread()` from `lib/transcript.ts`, keeping the
@@ -192,7 +201,10 @@ last 400 items. That function drops user messages the person didn't type (`is_me
 strips embedded `<system-reminder>` and `<user-prompt-submit-hook>` sections, turns
 `<bash-input>` into `! …`, shows slash commands the user typed but not completed local
 commands (like `/clear`) or their output, and attaches each `tool_result` to its `tool_use`
-by id. `transcriptAt` records what was read, so unchanged sessions aren't re-read. A card
+by id. Images go through `lib/thread-media.ts` into the attachments folder: screenshots in
+tool results become the tool item's `images`, images pasted into Claude Code become inline
+`![…](path)` refs in the user's text, and local files the agent shows with `![…](path)` are
+copied in and the ref rewritten. `transcriptAt` records what was read, so unchanged sessions aren't re-read. A card
 Weft has open (`warm`) keeps its own live thread.
 
 `activeElsewhere()` in `lib/runner.ts` decides whether writing to a picked-up session
@@ -207,3 +219,13 @@ by two apps.
 `CLAUDE_CODE_*`, `CLAUDE_AGENT_SDK_*`, and related variables inherited from a Claude session
 Weft was launched from, and sets `CLAUDE_CODE_ENTRYPOINT=sdk-ts`, so Weft's own sessions
 don't appear in the Claude app's session list.
+
+## Review tour
+
+A thread that finishes work for review ends its reply with a fenced `weft-review` JSON block (the instruction is `REVIEW_PROMPT` in `lib/review.ts`, appended to every board thread's system prompt in `drive()`). `lib/runner.ts` strips the block from the visible text and saves the parsed plan on `card.review`. While the card is in Review, `components/ReviewPanel.tsx` shows the plan above the thread: one step at a time with what to look for, "Looks good, next" and previous/next buttons, and a feedback box that sends the note to the thread as a reply. When the plan has a `url`, each step opens its page in the browser pane (desktop app only). A new plan from the thread restarts the tour.
+
+## Prompt search
+
+The command palette (Cmd+K) searches the prompts the user wrote. `lib/search.ts` keeps a SQLite FTS5 index (`~/.weft/search.db`, via `node:sqlite`; the type shim is `node-sqlite.d.ts`) with one row per typed prompt. It indexes every Claude Code session file from `sessionFiles()` in `lib/import.ts` (keyed `session:<id>`) and every Weft thread file in `~/.weft/threads` (keyed `card:<id>`). `typedPromptOf()` in `lib/transcript.ts` picks the typed text out of a raw `.jsonl` record, with the same filtering as `transcriptToThread`. Session files are append-only, so the `sources` table stores a byte offset per file and each pass reads only the new lines; thread files are re-read when their mtime changes. `startSearchIndex()` (called from `prewarm()`) runs a pass at start and then every minute.
+
+The index covers everything, but `searchPrompts()` only returns prompts from cards on the board: it maps each card to its `card:` and `session:` keys, passes them to the query as a JSON list, and leaves out the copilot. Results are ranked by bm25, de-duplicated per card (a Weft-run card is in the index under both keys), and capped at 2 prompts per card and 20 cards. Every query word must match and the last is a prefix. `GET /api/search?q=` returns `{ hits, indexing }`; `indexing` is true until the first pass over the sessions has finished. Snippets mark matched words with `\u0001`/`\u0002`, which `CommandPalette` renders in bold under a "Prompts" group. Choosing a hit opens its card.

@@ -1,5 +1,9 @@
 import type { SessionMessage } from "@anthropic-ai/claude-agent-sdk";
+import { toolAction } from "./format";
+import { MEDIA_REF, attachmentName } from "./media";
+import { extractReview } from "./review";
 import { extractStatus } from "./status";
+import { adoptLocalMedia, pastedImages, toolResult } from "./thread-media";
 import type { ThreadItem } from "./types";
 
 // Turns a Claude Code session's transcript (from getSessionMessages) into thread items, so a session
@@ -64,6 +68,19 @@ function typedText(raw: string, localCommand: boolean): string | undefined {
   return text;
 }
 
+// The text the user typed in one line of a session's .jsonl file (empty for anything else), for the search index.
+export function typedPromptOf(record: Record<string, unknown>): string {
+  if (record.type !== "user" || record.isSidechain || record.isMeta || record.isCompactSummary) return "";
+  if (NOT_TYPED.has((record.origin as { kind?: string } | undefined)?.kind ?? "")) return "";
+  const content = (record.message as { content?: unknown } | undefined)?.content;
+  return blocksOf(content)
+    .flatMap((b) => {
+      const text = b.type === "text" ? typedText(b.text ?? "", Boolean(record.isCompletedLocalCommand)) : undefined;
+      return text ? [text] : [];
+    })
+    .join("\n\n");
+}
+
 function summarize(input: Record<string, unknown>) {
   for (const key of ["command", "file_path", "path", "pattern", "url", "query", "selector", "description", "prompt"]) {
     const value = input[key];
@@ -71,13 +88,6 @@ function summarize(input: Record<string, unknown>) {
   }
   const json = JSON.stringify(input);
   return json === "{}" ? "" : clip(json, 100);
-}
-
-function resultText(content: unknown): string {
-  if (typeof content === "string") return clip(content, 4000);
-  if (!Array.isArray(content)) return "";
-  const parts = content.map((b: Block) => (b.type === "text" ? (b.text ?? "") : `[${b.type}]`));
-  return clip(parts.join("\n"), 4000);
 }
 
 function clip(text: string, max: number) {
@@ -89,8 +99,15 @@ function blocksOf(content: unknown): Block[] {
   return Array.isArray(content) ? content.filter((b): b is Block => typeof b === "object" && b !== null) : [];
 }
 
-export function transcriptToThread(messages: SessionMessage[], options?: { maxItems?: number }): ThreadItem[] {
+// True when text refers to a file in the attachments folder, as messages sent from Weft do.
+function hasAttachmentRef(text: string) {
+  return [...text.matchAll(MEDIA_REF)].some((m) => attachmentName(m[2] ?? m[3]));
+}
+
+// cwd resolves relative paths in the images the agent shows.
+export function transcriptToThread(messages: SessionMessage[], options?: { maxItems?: number; cwd?: string }): ThreadItem[] {
   const maxItems = options?.maxItems ?? 400;
+  const cwd = options?.cwd ?? process.cwd();
   const items: ThreadItem[] = [];
   // Each tool call's index in items, so its result (in a later user message) can be attached.
   const tools = new Map<string, number>();
@@ -105,14 +122,15 @@ export function transcriptToThread(messages: SessionMessage[], options?: { maxIt
     if (msg.type === "assistant") {
       for (const block of blocks) {
         if (block.type === "text") {
-          const { text } = extractStatus(block.text ?? "");
+          const { text } = extractReview(extractStatus(block.text ?? "").text);
           // The CLI's filler after an interrupted turn.
           if (message.model === "<synthetic>" && text.trim() === "No response requested.") continue;
-          if (text.trim()) items.push({ kind: "assistant", text, at });
+          if (text.trim()) items.push({ kind: "assistant", text: adoptLocalMedia(text, cwd), at });
         } else if (block.type === "tool_use" && block.id) {
           const input = (block.input ?? {}) as Record<string, unknown>;
           tools.set(block.id, items.length);
-          items.push({ kind: "tool", id: block.id, name: block.name ?? "tool", summary: summarize(input), at });
+          const name = block.name ?? "tool";
+          items.push({ kind: "tool", id: block.id, name, summary: summarize(input), action: toolAction(name, input), at });
         }
       }
       continue;
@@ -124,7 +142,7 @@ export function transcriptToThread(messages: SessionMessage[], options?: { maxIt
       const index = tools.get(block.tool_use_id);
       const item = index === undefined ? undefined : items[index];
       if (index === undefined || item?.kind !== "tool") continue;
-      items[index] = { ...item, result: resultText(block.content), isError: Boolean(block.is_error) };
+      items[index] = { ...item, ...toolResult(block.content), isError: Boolean(block.is_error) };
     }
 
     const fromCli = msg.is_meta || msg.isCompactSummary || NOT_TYPED.has(msg.origin?.kind ?? "");
@@ -133,7 +151,12 @@ export function transcriptToThread(messages: SessionMessage[], options?: { maxIt
       const text = b.type === "text" ? typedText(b.text ?? "", Boolean(msg.isCompletedLocalCommand)) : undefined;
       return text ? [text] : [];
     });
-    if (!texts.length && blocks.some((b) => b.type === "image")) texts.push("[Image]");
+    // Images pasted into Claude Code arrive as image blocks; ones sent from Weft are already in the
+    // text as attachment refs, with an image block after each.
+    if (!texts.some(hasAttachmentRef)) {
+      const images = pastedImages(blocks);
+      if (images.length) texts.unshift(images.join("\n"));
+    }
     if (texts.length) items.push({ kind: "user", text: texts.join("\n\n"), at });
   }
 

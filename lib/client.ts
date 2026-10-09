@@ -131,6 +131,7 @@ export const api = {
   list: () => call<{ cards: Card[]; home: string }>("GET", "/api/cards"),
   create: (input: NewCardInput) => call<{ card: Card }>("POST", "/api/cards", input),
   move: (id: string, column: Column) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { column }),
+  rename: (id: string, title: string) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { title }),
   remove: (id: string) => call("DELETE", `/api/cards/${id}`),
   send: (id: string, text: string) => call<{ card: Card }>("POST", `/api/cards/${id}/messages`, { text }),
   // pendingId is the request the user saw; the server refuses the answer if another is in front.
@@ -151,6 +152,9 @@ export const api = {
     call<{ login: LoginView | null }>("POST", "/api/login", { backend, action, text }),
   // Starts a CLI ahead of time: a card's own, or a spare in a project folder.
   warm: (body: { cardId?: string; cwd?: string; backend?: Backend }) => call<{ ok: true }>("POST", "/api/warm", body),
+  // Prompts the user wrote, in cards on the board. Matched words in each snippet sit between \u0001 and \u0002.
+  searchPrompts: (q: string) =>
+    call<{ hits: { cardId: string; at: number; snippet: string }[]; indexing: boolean }>("GET", `/api/search?q=${encodeURIComponent(q)}`),
   thread: (id: string) => call<{ items: ThreadItem[] }>("GET", `/api/cards/${id}/thread`),
   // Weft's skills and yours; with cwd, that folder's too.
   skills: (cwd?: string) =>

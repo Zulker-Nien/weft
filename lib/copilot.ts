@@ -1,5 +1,6 @@
 import os from "node:os";
 import { startSessionSync } from "./import";
+import { startSearchIndex } from "./search";
 import { endSession, ensureSpare, warmUp } from "./runner";
 import { listProjects } from "./settings";
 import { clearThread, createCard, getCard, listCards, updateCard } from "./store";
@@ -49,6 +50,7 @@ export function prewarm() {
   g.__threadboardPrewarmed = true;
   // Pick up the user's existing Claude Code sessions as cards, and keep them in sync.
   startSessionSync();
+  startSearchIndex();
   ensureCopilot();
   warmUp(COPILOT_ID);
   const recent = listProjects()[0]?.path ?? listCards().find((c) => c.role !== "copilot")?.cwd;

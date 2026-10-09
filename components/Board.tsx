@@ -3,14 +3,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { api, mergeThread, type BrowserState, type MenuAction, type NewCardInput } from "@/lib/client";
 import { COLUMNS, type BoardEvent, type Card, type Column, type LoginView, type Project, type ThreadItem } from "@/lib/types";
+import { useShortcutListener, useShortcuts } from "@/lib/hotkeys";
+import { setTheme, THEMES } from "@/lib/theme";
 import { useBoardEvents } from "@/lib/use-events";
+import { keepTypedText, useEscape } from "@/lib/use-escape";
 import BrowserPane from "./BrowserPane";
 import CardView from "./CardView";
+import CommandPalette, { type PaletteItem } from "./CommandPalette";
 import Icon from "./Icon";
 import LoginDialog from "./LoginDialog";
 import NewCardDialog from "./NewCardDialog";
-import ProjectBar, { type ProjectSummary, type SortKey } from "./ProjectBar";
+import ProjectBar, { folderName, SORTS, type ProjectSummary, type SortKey } from "./ProjectBar";
 import SettingsDialog from "./SettingsDialog";
+import ShortcutsDialog from "./ShortcutsDialog";
 import ThreadPanel from "./ThreadPanel";
 
 const CLOSED_BROWSER: BrowserState = {
@@ -129,7 +134,10 @@ export default function Board() {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("newest");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [showPalette, setShowPalette] = useState(false);
   const [login, setLogin] = useState<LoginView | null>(null);
   // Columns showing all their cards, for the project and filter they were expanded under.
   const [expanded, setExpanded] = useState<{ view: string; columns: Column[] }>({ view: "", columns: [] });
@@ -282,12 +290,9 @@ export default function Board() {
           else if (payload) select(payload);
           break;
         }
-        case "find": {
-          const input = document.querySelector<HTMLInputElement>('input[placeholder="Filter cards"]');
-          input?.focus();
-          input?.select();
+        case "find":
+          focusFilter();
           break;
-        }
       }
     };
   });
@@ -304,6 +309,7 @@ export default function Board() {
     const groups = new Map<Column, Card[]>(COLUMNS.map((c) => [c.id, []]));
     for (const card of cards) {
       if (project && card.cwd !== project) continue;
+      if (card.archived && !showArchived) continue;
       if (needle) {
         const haystack = [card.title, card.prompt, card.lastLine, card.stage, card.remaining].join(" ").toLowerCase();
         if (!haystack.includes(needle)) continue;
@@ -312,7 +318,8 @@ export default function Board() {
     }
     for (const list of groups.values()) list.sort(SORTERS[sort]);
     return groups;
-  }, [cards, project, query, sort]);
+  }, [cards, project, query, sort, showArchived]);
+  const archivedCount = cards.filter((c) => c.archived && (!project || c.cwd === project)).length;
 
   // Recent projects: saved ones plus every folder a card runs in, most recently active first.
   const projectSummaries = useMemo<ProjectSummary[]>(() => {
@@ -337,6 +344,262 @@ export default function Board() {
   const browserOpen = desktop ? browser.visible : webBrowserOpen;
   const waiting = cards.filter((c) => c.column === "needs_you").length;
   const running = cards.filter((c) => c.column === "running").length;
+
+  // Shortcuts that act on the board stand down while a dialog or the project menu is up.
+  const boardKeys = !(showNew || showSettings || showHelp || showPalette || Boolean(login) || menuOpen);
+
+  function focusFilter() {
+    const input = document.querySelector<HTMLInputElement>('input[placeholder="Filter cards"]');
+    input?.focus();
+    input?.select();
+  }
+
+  // Moves keyboard focus between the rendered cards. dx steps to the next column that has cards, dy up or
+  // down the current one, and "first" and "last" jump within it. With nothing focused it starts at the
+  // open card, or else the first card on the board.
+  function moveFocus(move: { dx?: number; dy?: number; edge?: "first" | "last" }) {
+    const inColumn = (id: string) => [...document.querySelectorAll<HTMLElement>(`[data-column="${id}"] [data-card-id]`)];
+    const current =
+      document.activeElement?.closest<HTMLElement>("[data-card-id]") ??
+      (selectedId ? inColumn(selected?.column ?? "").find((el) => el.dataset.cardId === selectedId) : undefined);
+    const ids = COLUMNS.map((c) => c.id);
+    const column = current?.closest<HTMLElement>("[data-column]")?.dataset.column as Column | undefined;
+    if (!current || !column) {
+      const first = ids.map(inColumn).find((list) => list.length > 0);
+      first?.[0].focus();
+      return;
+    }
+    const list = inColumn(column);
+    const row = list.indexOf(current);
+    if (move.dx) {
+      for (let i = ids.indexOf(column) + move.dx; i >= 0 && i < ids.length; i += move.dx) {
+        const next = inColumn(ids[i]);
+        if (next.length) {
+          next[Math.min(row, next.length - 1)].focus();
+          return;
+        }
+      }
+      return;
+    }
+    const target = move.edge === "first" ? 0 : move.edge === "last" ? list.length - 1 : row + (move.dy ?? 0);
+    list[Math.max(0, Math.min(list.length - 1, target))]?.focus();
+  }
+
+  // Steps through the project filter: "All projects", then each project in the bar's order.
+  function stepProject(by: number) {
+    const options = [null, ...projectSummaries.map((p) => p.path)];
+    const at = Math.max(0, options.indexOf(project));
+    chooseProject(options[(at + by + options.length) % options.length]);
+  }
+
+  function stepSort() {
+    const keys = Object.keys(SORTERS) as SortKey[];
+    chooseSort(keys[(keys.indexOf(sort) + 1) % keys.length]);
+  }
+
+  function jumpToNeedsYou() {
+    const list = [...document.querySelectorAll<HTMLElement>('[data-column="needs_you"] [data-card-id]')];
+    if (!list.length) return false;
+    const at = list.findIndex((el) => el.contains(document.activeElement));
+    list[(at + 1) % list.length].focus();
+  }
+
+  // Enter only opens a card that has focus itself, so it still presses a button inside one.
+  function openFocused(e: KeyboardEvent) {
+    const el = document.activeElement?.closest<HTMLElement>("[data-card-id]");
+    const card = cards.find((c) => c.id === el?.dataset.cardId);
+    if (!card || (e.key === "Enter" && e.target !== el)) return false;
+    openCard(card);
+  }
+
+  // Everything the command palette offers: the board's actions, the projects, and every card.
+  function paletteItems(): PaletteItem[] {
+    const command = (id: string, label: string, icon: PaletteItem["icon"], run: () => void, keys?: string, keywords?: string) =>
+      ({ id: `cmd-${id}`, group: "Commands", label, icon, run, keys, keywords }) satisfies PaletteItem;
+    const commands: PaletteItem[] = [
+      command("new", "New thread", "plus", openNew, "n"),
+      command("filter", "Filter cards", "search", focusFilter, "/"),
+      command("copilot", "Toggle the copilot", "sparkles", toggleCopilot, "c"),
+      command("browser", "Toggle the browser", "globe", toggleBrowser, "b"),
+      command("settings", "Open settings", "sliders", () => setShowSettings(true), ","),
+      command("help", "Show keyboard shortcuts", "zap", () => setShowHelp(true), "?", "hotkeys keys"),
+      command("needs-you", "Jump to a card that needs you", "alert", () => void jumpToNeedsYou(), "a", "waiting"),
+      ...SORTS.map((s) => command(`sort-${s.id}`, `Sort: ${s.label}`, "list", () => chooseSort(s.id), undefined, "order")),
+      ...THEMES.map((t) => command(`theme-${t.id}`, `Theme: ${t.label}`, "sun", () => setTheme(t.id), undefined, "appearance dark light")),
+    ];
+    if (selected) {
+      commands.unshift(
+        command("reply", "Reply in the open thread", "send", () => {
+          document.querySelector<HTMLElement>('aside [contenteditable="true"], aside textarea')?.focus();
+        }, "r"),
+        command("close", "Close the open thread", "x", () => select(null), "Escape"),
+        ...(selected.column === "running" ? [command("stop", "Stop the open thread", "stop", () => api.stop(selected.id).catch(notify))] : []),
+        ...COLUMNS.filter((c) => c.id !== selected.column).map((c) =>
+          command(`move-${c.id}`, `Move the open thread to ${c.label}`, "forward", () => api.move(selected.id, c.id).catch(notify)),
+        ),
+      );
+    }
+    const projectItems = [null, ...projectSummaries.map((p) => p.path)].map((path): PaletteItem => ({
+      id: `project-${path ?? "all"}`,
+      group: "Projects",
+      label: path ? folderName(path) : "All projects",
+      detail: path ? (home && path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path) : undefined,
+      keywords: "project folder",
+      icon: "folder",
+      run: () => chooseProject(path),
+    }));
+    const cardItems = cards
+      .filter((c) => c.role !== "copilot")
+      .toSorted(SORTERS.active)
+      .map((card): PaletteItem => ({
+        id: `card-${card.id}`,
+        group: "Cards",
+        label: card.title,
+        detail: COLUMNS.find((c) => c.id === card.column)?.label,
+        keywords: [card.prompt, card.lastLine, card.stage, card.remaining, folderName(card.cwd)].filter(Boolean).join(" "),
+        icon: "file",
+        run: () => openCard(card),
+      }));
+    return [...commands, ...projectItems, ...cardItems];
+  }
+
+  // The prompts the user wrote that match a query, as palette items that open their card.
+  async function findPrompts(query: string): Promise<PaletteItem[]> {
+    const { hits } = await api.searchPrompts(query);
+    return hits.flatMap((hit, i): PaletteItem[] => {
+      const card = cards.find((c) => c.id === hit.cardId);
+      if (!card) return [];
+      return [
+        {
+          id: `prompt-${hit.cardId}-${i}`,
+          group: "Prompts",
+          label: card.title,
+          detail: COLUMNS.find((c) => c.id === card.column)?.label,
+          snippet: hit.snippet.replace(/\s+/g, " "),
+          icon: "file",
+          run: () => openCard(card),
+        },
+      ];
+    });
+  }
+
+  useShortcuts([
+    {
+      id: "palette",
+      keys: ["mod+k"],
+      description: "Command palette: search cards and run commands",
+      group: "General",
+      enabled: !(showNew || showSettings || showHelp || Boolean(login)),
+      handler: () => setShowPalette((open) => !open),
+    },
+    {
+      id: "help",
+      keys: ["?", "mod+/"],
+      description: "Show keyboard shortcuts",
+      group: "General",
+      enabled: !(showNew || showSettings || showPalette || Boolean(login)),
+      handler: () => setShowHelp((open) => !open),
+    },
+    { id: "new-thread", keys: ["n"], description: "New thread", group: "General", enabled: boardKeys, handler: openNew },
+    { id: "filter", keys: ["/"], description: "Filter cards", group: "General", enabled: boardKeys, handler: focusFilter },
+    {
+      id: "settings",
+      keys: [","],
+      description: "Open settings",
+      group: "General",
+      enabled: boardKeys,
+      handler: () => setShowSettings(true),
+    },
+    { id: "copilot", keys: ["c"], description: "Toggle the copilot", group: "General", enabled: boardKeys, handler: toggleCopilot },
+    { id: "browser", keys: ["b"], description: "Toggle the browser", group: "General", enabled: boardKeys, handler: toggleBrowser },
+    {
+      id: "card-down",
+      keys: ["j", "ArrowDown"],
+      description: "Next card in the column",
+      group: "Board",
+      enabled: boardKeys,
+      handler: () => moveFocus({ dy: 1 }),
+    },
+    {
+      id: "card-up",
+      keys: ["k", "ArrowUp"],
+      description: "Previous card in the column",
+      group: "Board",
+      enabled: boardKeys,
+      handler: () => moveFocus({ dy: -1 }),
+    },
+    {
+      id: "column-right",
+      keys: ["l", "ArrowRight"],
+      description: "Move to the next column",
+      group: "Board",
+      enabled: boardKeys,
+      handler: () => moveFocus({ dx: 1 }),
+    },
+    {
+      id: "column-left",
+      keys: ["h", "ArrowLeft"],
+      description: "Move to the previous column",
+      group: "Board",
+      enabled: boardKeys,
+      handler: () => moveFocus({ dx: -1 }),
+    },
+    {
+      id: "card-first",
+      keys: ["Home"],
+      description: "First card in the column",
+      group: "Board",
+      enabled: boardKeys,
+      handler: () => moveFocus({ edge: "first" }),
+    },
+    {
+      id: "card-last",
+      keys: ["End"],
+      description: "Last card in the column",
+      group: "Board",
+      enabled: boardKeys,
+      handler: () => moveFocus({ edge: "last" }),
+    },
+    {
+      id: "card-open",
+      keys: ["Enter", "o"],
+      description: "Open the focused card",
+      group: "Board",
+      enabled: boardKeys,
+      handler: openFocused,
+    },
+    {
+      id: "needs-you",
+      keys: ["a"],
+      description: "Jump to a card that needs you",
+      group: "Board",
+      enabled: boardKeys,
+      handler: jumpToNeedsYou,
+    },
+    { id: "project-next", keys: ["]"], description: "Next project", group: "Board", enabled: boardKeys, handler: () => stepProject(1) },
+    {
+      id: "project-previous",
+      keys: ["["],
+      description: "Previous project",
+      group: "Board",
+      enabled: boardKeys,
+      handler: () => stepProject(-1),
+    },
+    { id: "sort", keys: ["s"], description: "Change the sort order", group: "Board", enabled: boardKeys, handler: stepSort },
+    {
+      id: "reply",
+      keys: ["r"],
+      description: "Reply in the open thread",
+      group: "Thread",
+      enabled: boardKeys,
+      handler: () => {
+        const input = document.querySelector<HTMLElement>('aside [contenteditable="true"], aside textarea');
+        if (!input) return false;
+        input.focus();
+      },
+    },
+  ]);
+  useShortcutListener();
 
   function chooseProject(path: string | null) {
     setProject(path);
@@ -366,6 +629,13 @@ export default function Board() {
     if (window.threadboard) window.threadboard.browser.setVisible(!browser.visible);
     else setWebBrowserOpen((open) => !open);
   }
+
+  // Escape closes the newest open layer. The board's own panels sit under any dialog opened over them,
+  // and an unsent reply isn't thrown away with its thread panel.
+  useEscape(Boolean(selectedId), (e) => {
+    if (!keepTypedText(e)) select(null);
+  });
+  useEscape(browserOpen, toggleBrowser);
 
   // The desktop app gives the copilot its own window; in a browser tab it opens as a pop-up.
   function toggleCopilot() {
@@ -453,6 +723,7 @@ export default function Board() {
             return (
               <section
                 key={column.id}
+                data-column={column.id}
                 onDragOver={(e) => {
                   e.preventDefault();
                   setDragOver(column.id);
@@ -465,7 +736,14 @@ export default function Board() {
                   <h2 className={`text-[12.5px] font-medium ${column.id === "needs_you" && list.length ? "text-warn" : "text-ink"}`}>
                     {column.label}
                   </h2>
-                  <span className="text-[11.5px] text-faint">{list.length}</span>
+                  <span className="flex items-center gap-2 text-[11.5px] text-faint">
+                    {column.id === "done" && archivedCount > 0 && (
+                      <button onClick={() => setShowArchived((v) => !v)} className="hover:text-ink" aria-pressed={showArchived}>
+                        {showArchived ? "Hide" : "Show"} {archivedCount} archived
+                      </button>
+                    )}
+                    {list.length}
+                  </span>
                 </div>
                 <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
                   {shown.map((card) => (
@@ -477,6 +755,7 @@ export default function Board() {
                       onOpen={() => openCard(card)}
                       onAnswer={(allow) => api.answer(card.id, allow, undefined, card.pending?.id).catch(notify)}
                       onStop={() => api.stop(card.id).catch(notify)}
+                      onRename={(title) => api.rename(card.id, title).catch(notify)}
                     />
                   ))}
                   {shown.length < list.length && (
@@ -527,7 +806,7 @@ export default function Board() {
           <BrowserPane
             desktop={desktop}
             state={browser}
-            obscured={showNew || showSettings || Boolean(login) || menuOpen}
+            obscured={showNew || showSettings || showPalette || Boolean(login) || menuOpen}
             width={browserWidth}
             onWidth={setBrowserWidth}
             onClose={toggleBrowser}
@@ -539,6 +818,8 @@ export default function Board() {
         <NewCardDialog home={home} defaultCwd={project ?? undefined} onClose={() => setShowNew(false)} onCreate={create} />
       )}
       {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
+      {showHelp && <ShortcutsDialog onClose={() => setShowHelp(false)} />}
+      {showPalette && <CommandPalette items={paletteItems()} findPrompts={findPrompts} onClose={() => setShowPalette(false)} />}
       {login && <LoginDialog login={login} onClose={() => setLogin(null)} />}
 
       {toast && (
