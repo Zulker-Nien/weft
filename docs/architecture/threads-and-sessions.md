@@ -252,7 +252,7 @@ While the card is in Review, `components/ReviewPanel.tsx` sits at the bottom of 
 
 The browser pane keeps one page per card (`views` in `electron/browser-pane.cjs`, keyed by card id; `"board"` when no card is open). `Board` calls `browser.setActive(selectedId)`, so opening a card shows its page (if it has one) and closing the card hides the pane. `browser.open(url, cardId)` from the board activates that card's browser; agent tools (`browserMcpServer(() => session.cardId)` in `lib/browser-tools.ts`) pass the card id to the control server and load into their own card's browser without taking over the screen. `browser.prune` closes the browsers of deleted cards.
 
-`BROWSER_PROMPT` also tells every thread to always be showing something there: with no app page yet, it renders its work (commits, plans, diffs, test runs) as an HTML file under `/tmp/weft-show/` and opens it with `open_url`.
+`BROWSER_PROMPT` also tells every thread to show something current there on every turn, quick answers included: with no app page yet, it renders its work (commits, plans, diffs, test runs) as an HTML file under `/tmp/weft-show/` and opens it with `open_url`.
 
 ## Prompt search
 
