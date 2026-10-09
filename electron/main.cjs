@@ -14,6 +14,7 @@ const {
   ipcMain,
   nativeImage,
   nativeTheme,
+  session,
   shell,
   webContents,
 } = require("electron");
@@ -21,6 +22,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { registerAboutBridge, showAboutWindow } = require("./about.cjs");
 const { createBrowserPane } = require("./browser-pane.cjs");
 const { fixPath } = require("./env.cjs");
 const { startServer } = require("./server.cjs");
@@ -72,6 +74,25 @@ app.on("open-url", (event, url) => {
 
 function background() {
   return nativeTheme.shouldUseDarkColors ? "#131312" : "#f4f3ef";
+}
+
+// The board keeps the user's Appearance choice in a cookie (lib/theme.ts). Following it here gives
+// the window background, menus, and the startup screen the same theme as the board.
+const THEME_COOKIE = "weft-theme";
+
+function setThemeSource(value) {
+  nativeTheme.themeSource = value === "light" || value === "dark" ? value : "system";
+}
+
+async function followThemeChoice() {
+  const { cookies } = session.defaultSession;
+  const [saved] = await cookies.get({ name: THEME_COOKIE }).catch(() => []);
+  setThemeSource(saved?.value);
+  cookies.on("changed", (_event, cookie, cause, removed) => {
+    // Rewriting the cookie first reports the old value as removed; wait for the new one.
+    if (cookie.name !== THEME_COOKIE || (removed && cause === "overwrite")) return;
+    setThemeSource(removed ? undefined : cookie.value);
+  });
 }
 
 function dataDir() {
@@ -302,13 +323,15 @@ function focusedContents() {
 }
 
 function buildMenu() {
+  // Not `role: "about"`: the native panel shows text and nothing else; ours is a window (about.cjs).
+  const aboutItem = { label: `About ${APP_NAME}`, click: showAboutWindow };
   const template = [
     ...(mac
       ? [
           {
             label: APP_NAME,
             submenu: [
-              { role: "about" },
+              aboutItem,
               { type: "separator" },
               {
                 label: "Settings…",
@@ -417,6 +440,7 @@ function buildMenu() {
       submenu: [
         { label: "Open Logs Folder", click: () => shell.openPath(app.getPath("logs")) },
         { label: "Open Data Folder", click: () => shell.openPath(dataDir()) },
+        ...(mac ? [] : [{ type: "separator" }, aboutItem]),
       ],
     },
   ];
@@ -515,7 +539,8 @@ function setupDock() {
 
 // ---- IPC from the board and copilot ----
 
-ipcMain.handle("browser:open", (_e, url) => pane.open(url));
+// A page that won't load (a dev server that isn't running) is shown in the pane; it isn't an error for the board.
+ipcMain.handle("browser:open", (_e, url) => pane.open(url).catch((err) => ({ error: String(err.message || err) })));
 ipcMain.handle("browser:state", () => pane.state());
 ipcMain.on("browser:visible", (_e, visible) => pane.setVisible(Boolean(visible)));
 ipcMain.on("browser:bounds", (_e, rect) => pane.setBounds(rect));
@@ -549,7 +574,8 @@ ipcMain.on("splash:action", async (_e, action) => {
 
 app.whenReady().then(async () => {
   if (!primary) return;
-  app.setAboutPanelOptions({ applicationName: APP_NAME, applicationVersion: app.getVersion(), copyright: TAGLINE });
+  await followThemeChoice();
+  registerAboutBridge({ tagline: TAGLINE, dataDir, getServer: () => server });
   if (app.isPackaged) app.setAsDefaultProtocolClient(PROTOCOL);
   buildMenu();
   setupDock();

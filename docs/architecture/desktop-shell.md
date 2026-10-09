@@ -28,6 +28,10 @@ lives in `electron/server.cjs`.
 - `createCopilot()` creates a second `BrowserWindow` (note: not a `BaseWindow` with a
   child view — it has its own webContents) that loads `${server.url}/copilot`. Same
   close-to-hide behavior so the conversation survives.
+- `followThemeChoice()` runs before any window opens. It reads the board's
+  `weft-theme` cookie (set from Settings → Appearance; see `lib/theme.ts`) from the
+  default session and sets `nativeTheme.themeSource` to match, then keeps watching
+  the cookie. Window backgrounds, native menus, and the splash screen follow it.
 - `COPILOT_SHORTCUT = "Control+Alt+Space"` is registered with `globalShortcut` at
   startup. If the OS refuses it, a warning is logged.
 - The application menu, the context menu (`attachContextMenu`), the tray
@@ -136,6 +140,25 @@ and `showError()` are called via `webContents.executeJavaScript()`. On a fatal
 startup error, the splash shows an error line and three buttons wired to
 `splashAction`: `retry` (re-runs `boot()` or calls `server.restart()`), `logs`
 (`shell.openPath(app.getPath("logs"))`), `quit`.
+
+## About window (`about.cjs`, `about.html`, `about.js`, `about-preload.cjs`)
+
+Weft ▸ About Weft (the app menu on macOS, the bottom of Help elsewhere) opens the shell's own
+window instead of the native panel, which can only show text. `showAboutWindow()` keeps one
+instance and focuses it if it is already open. The page is a bundled `file://` file with a
+`script-src 'self'` CSP, so it opens even when the server is down. It is a sandboxed,
+fixed-size window on its own `about` session, and navigation and `window.open` are denied.
+`about.js` renders everything with `textContent`.
+
+`registerAboutBridge({ tagline, dataDir, getServer })` (called from `app.whenReady`) answers three
+`weft-about:*` ipc channels, each checking that the caller is the About window:
+- `info`: version, arch, packaged or not, Electron/Chromium/Node versions, data folder, the app's
+  PID, and the server's port and PID from `server.port` / `server.pid`.
+- `open`: `"data"` or `"logs"` only; the page never passes a path.
+- `copy`: writes the page's plain-text twin to the clipboard (capped at 20k characters).
+
+`server.cjs` exposes `port` and a `pid` getter (the current supervised process; it changes on
+restart). In dev that PID is `next dev`'s launcher, not necessarily the process holding the port.
 
 ## Packaging
 

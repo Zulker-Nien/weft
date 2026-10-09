@@ -131,7 +131,12 @@ async function startServer({ preferredPort, env, onStatus, onFatal }) {
 
   return {
     url,
+    port,
     logPath,
+    // The supervised process; changes when it restarts. In dev this is `next dev`'s launcher.
+    get pid() {
+      return proc?.pid;
+    },
     stop() {
       stopping = true;
       proc?.kill();
