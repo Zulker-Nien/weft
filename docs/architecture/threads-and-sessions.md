@@ -220,6 +220,15 @@ by two apps.
 Weft was launched from, and sets `CLAUDE_CODE_ENTRYPOINT=sdk-ts`, so Weft's own sessions
 don't appear in the Claude app's session list.
 
+## Status strip
+
+`components/StatusStrip.tsx` shows a thread's numbers under the reply box (`ReplyBox`) and under the composer in `NewCardDialog`: project folder and branch, model, context left, tokens, changed lines, and the plan's 5-hour and weekly quota with reset times. The data is `card.stats` (`CardStats` in `lib/types.ts`), written by `lib/runner.ts`:
+
+- After each turn, `turnStats()` fills the model, tokens and context fill from the result's `modelUsage` and the last main-agent request's usage, and `changedLines()` / `gitBranch()` read `git diff HEAD --numstat` and the branch from the folder.
+- `refreshLimits()` calls the SDK's experimental `usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET` at CLI init and after each result to get the 5hr/7d windows (null on API-key logins). `rate_limit_event` messages update the same fields when they carry a utilization. A failure leaves the limits blank.
+- Quota is account-wide, so the new-thread dialog takes it from the most recently updated card (`latestLimits()` in `Board.tsx`).
+- Native `title` tooltips don't show in the desktop app, so `Tip` draws its own bubble in a portal, clamped to the window.
+
 ## Review tour
 
 A thread that finishes work for review ends its reply with a fenced `weft-review` JSON block (the instruction is `REVIEW_PROMPT` in `lib/review.ts`, appended to every board thread's system prompt in `drive()`). `lib/runner.ts` strips the block from the visible text and saves the parsed plan on `card.review`. While the card is in Review, `components/ReviewPanel.tsx` shows the plan above the thread: one step at a time with what to look for, "Looks good, next" and previous/next buttons, and a feedback box that sends the note to the thread as a reply. When the plan has a `url`, each step opens its page in the browser pane (desktop app only). A new plan from the thread restarts the tour.

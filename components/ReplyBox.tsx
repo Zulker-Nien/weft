@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import Composer, { type ComposerHandle } from "./Composer";
 import Icon, { Spinner } from "./Icon";
+import StatusStrip from "./StatusStrip";
+import type { CardStats } from "@/lib/types";
 
 // What you were writing to a card, kept per card until it's sent.
 const draftKey = (cardId: string) => `weft.reply.${cardId}`;
@@ -27,12 +29,14 @@ function writeDraft(cardId: string, markdown: string) {
 export default function ReplyBox({
   cardId,
   cwd,
+  stats,
   live,
   placeholder,
   onSend,
 }: {
   cardId: string;
   cwd: string;
+  stats?: CardStats;
   // A turn is running or waiting on a permission answer, so a reply can't go yet.
   live: boolean;
   placeholder: string;
@@ -41,17 +45,30 @@ export default function ReplyBox({
   const [initial] = useState(() => readDraft(cardId));
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Messages written while the thread was working; they go out together once the turn ends.
+  const [queue, setQueue] = useState<string[]>([]);
+  const wasLive = useRef(live);
   const composer = useRef<ComposerHandle>(null);
   const draftTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => () => clearTimeout(draftTimer.current), []);
 
+  // The turn just ended: send what was queued as one message.
+  useEffect(() => {
+    const ended = wasLive.current && !live;
+    wasLive.current = live;
+    if (!ended || queue.length === 0) return;
+    const text = queue.join("\n\n");
+    setQueue([]);
+    onSend(text).catch((err) => {
+      setQueue((q) => [text, ...q]);
+      setError(err instanceof Error ? err.message : String(err));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live]);
+
   async function submit() {
     if (sending) return;
-    if (live) {
-      setError("This thread is still working. Send this when it's done, or stop it first.");
-      return;
-    }
     let text: string;
     try {
       text = composer.current?.read() ?? "";
@@ -61,6 +78,13 @@ export default function ReplyBox({
     }
     if (!text) {
       setError("Write a message first.");
+      return;
+    }
+    if (live) {
+      setQueue((q) => [...q, text]);
+      clearTimeout(draftTimer.current);
+      writeDraft(cardId, "");
+      composer.current?.clear();
       return;
     }
     setSending(true);
@@ -78,12 +102,33 @@ export default function ReplyBox({
 
   return (
     <div className="border-t border-line p-3">
+      {queue.length > 0 && (
+        <ul className="mb-2 flex flex-col gap-1">
+          {queue.map((text, i) => (
+            <li
+              key={i}
+              className="flex items-center gap-2 rounded-md bg-sunken px-2.5 py-1.5 text-[12.5px] text-muted"
+            >
+              <span className="shrink-0 text-[11px] uppercase tracking-wide">Queued</span>
+              <span className="min-w-0 flex-1 truncate">{text}</span>
+              <button
+                type="button"
+                onClick={() => setQueue((q) => q.filter((_, j) => j !== i))}
+                aria-label="Remove queued message"
+                className="shrink-0 hover:text-ink"
+              >
+                <Icon name="x" size={12} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       <Composer
         ref={composer}
         variant="reply"
         cwd={cwd}
         initial={initial}
-        placeholder={live ? "Working. Stop it to reply, or write the next message for when it's done." : placeholder}
+        placeholder={live ? "Working. Write the next message and it'll send when this turn is done." : placeholder}
         onSubmit={() => void submit()}
         onChange={(markdown) => {
           setError(null);
@@ -95,15 +140,16 @@ export default function ReplyBox({
           <button
             type="button"
             onClick={() => void submit()}
-            disabled={live || sending}
+            disabled={sending}
             aria-label="Send"
-            title={live ? "Wait for the turn to finish, or stop it" : "Send (Enter)"}
+            title={live ? "Queue until the turn finishes (Enter)" : "Send (Enter)"}
             className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent text-on-accent hover:opacity-90 disabled:opacity-40"
           >
             {sending ? <Spinner size={13} /> : <Icon name="send" size={15} />}
           </button>
         }
       />
+      <StatusStrip stats={stats} cwd={cwd} className="mt-1.5 px-1" />
       {error && <p className="mt-1.5 text-[12px] text-danger">{error}</p>}
     </div>
   );

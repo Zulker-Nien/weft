@@ -2,14 +2,16 @@
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { api, type NewCardInput } from "@/lib/client";
-import type { Backend, PermissionMode } from "@/lib/types";
+import type { Backend, CardStats, PermissionMode } from "@/lib/types";
 import Composer, { type ComposerHandle } from "./Composer";
 import Icon from "./Icon";
 import RepoPicker from "./RepoPicker";
+import StatusStrip from "./StatusStrip";
 import { useEscape } from "@/lib/use-escape";
 
 const LAST_CWD = "threadboard.cwd";
 const LAST_BACKEND = "threadboard.backend";
+const LAST_MODEL = "weft.model";
 // What you were writing, kept if the dialog closes before the thread is created.
 const DRAFT = "weft.newThreadDraft";
 const RECT = "weft.newThreadRect";
@@ -71,6 +73,15 @@ const BACKENDS: { id: Backend; label: string }[] = [
   { id: "puku", label: "puku-cli" },
 ];
 
+const MODELS = [
+  { id: "claude-fable-5-1", label: "Fable 5.1" },
+  { id: "claude-opus-5-5", label: "Opus 5.5" },
+  { id: "claude-sonnet-5-5", label: "Sonnet 5.5" },
+  { id: "claude-haiku-5-5", label: "Haiku 5.5" },
+];
+
+const DEFAULT_MODEL = "claude-opus-5-5";
+
 const MODES: { id: PermissionMode; label: string; hint: string }[] = [
   { id: "bypassPermissions", label: "YOLO", hint: "Runs every tool without asking" },
   { id: "auto", label: "Auto", hint: "A classifier approves or asks" },
@@ -81,18 +92,25 @@ const MODES: { id: PermissionMode; label: string; hint: string }[] = [
 export default function NewCardDialog({
   home,
   defaultCwd,
+  limits,
   onClose,
   onCreate,
 }: {
   home: string;
   // The selected project, if any; otherwise the last folder used.
   defaultCwd?: string;
+  // Plan rate limits from the most recent thread, since they apply to every thread.
+  limits?: Pick<CardStats, "fiveHour" | "sevenDay">;
   onClose: () => void;
   onCreate: (input: NewCardInput) => Promise<void>;
 }) {
   const [initial] = useState(() => remembered(DRAFT) ?? "");
   const [cwd, setCwd] = useState(() => defaultCwd ?? remembered(LAST_CWD) ?? home);
   const [backend, setBackend] = useState<Backend>(() => (remembered(LAST_BACKEND) as Backend | null) ?? "claude");
+  const [model, setModel] = useState(() => {
+    const saved = remembered(LAST_MODEL);
+    return MODELS.some((m) => m.id === saved) ? saved! : DEFAULT_MODEL;
+  });
   const [permissionMode, setPermissionMode] = useState<PermissionMode>("bypassPermissions");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -191,11 +209,12 @@ export default function NewCardDialog({
     }
     setBusy(true);
     try {
-      await onCreate({ prompt, cwd, backend, permissionMode, start });
+      await onCreate({ prompt, cwd, backend, permissionMode, model: backend === "claude" ? model : undefined, start });
       clearTimeout(draftTimer.current);
       remember(DRAFT, null);
       remember(LAST_CWD, cwd);
       remember(LAST_BACKEND, backend);
+      remember(LAST_MODEL, model);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -249,6 +268,7 @@ export default function NewCardDialog({
             sizeClass="h-full min-h-[180px]"
             className="flex-1"
           />
+          <StatusStrip cwd={cwd} stats={{ model: backend === "claude" ? model : undefined, ...limits }} className="mt-1.5 px-1" />
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2 px-5 pt-3">
@@ -267,6 +287,24 @@ export default function NewCardDialog({
               </button>
             ))}
           </div>
+
+          {backend === "claude" && (
+            <label className="relative flex items-center gap-1.5 rounded-md border border-line-strong py-1.5 pl-2.5 pr-1.5 text-[12px] text-ink">
+              <span className="sr-only">Model</span>
+              <select
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                className="cursor-pointer appearance-none bg-transparent pr-4 font-medium outline-none"
+              >
+                {MODELS.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+              <Icon name="chevronDown" size={12} className="pointer-events-none absolute right-1.5" />
+            </label>
+          )}
 
           <label
             className={`relative flex items-center gap-1.5 rounded-md border py-1.5 pl-2.5 pr-1.5 text-[12px] ${

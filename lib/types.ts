@@ -31,6 +31,53 @@ export interface PendingPermission {
   questions?: Question[];
 }
 
+// One plan rate-limit window: how much is used (0-100) and when it resets (unix seconds).
+export interface LimitWindow {
+  used: number;
+  resetsAt?: number;
+}
+
+// What the thread panel's status strip shows (see components/StatusStrip.tsx).
+export interface CardStats {
+  model?: string;
+  // The folder's git branch, when it is a repo.
+  branch?: string;
+  // Share of the model's context window the last turn filled, 0-100.
+  contextUsed?: number;
+  tokens?: number;
+  // Lines added and removed in the folder's working tree (git diff against HEAD).
+  added?: number;
+  removed?: number;
+  fiveHour?: LimitWindow;
+  sevenDay?: LimitWindow;
+}
+
+// A thread's tour of what it built, for the user to step through in Review (see lib/review.ts).
+export interface ReviewStep {
+  title: string;
+  // What to try and what should happen.
+  look?: string;
+  // The page for this step: a path on the plan's url, or a full URL.
+  path?: string;
+}
+
+export interface ReviewPlan {
+  // Where the running web app is; without it the steps are read-only.
+  url?: string;
+  // The shell command that starts that app (run in the card's folder), so Weft can start it and keep it up.
+  dev?: string;
+  steps: ReviewStep[];
+}
+
+export interface DevServerStatus {
+  state: "stopped" | "starting" | "running" | "failed";
+  command?: string;
+  // Whether the plan's url answers right now, whoever started it.
+  reachable: boolean;
+  // The last lines the server printed.
+  log: string;
+}
+
 export interface Card {
   id: string;
   title: string;
@@ -38,10 +85,15 @@ export interface Card {
   cwd: string;
   backend: Backend;
   permissionMode: PermissionMode;
+  // Chosen when the thread was made; left out, the CLI's own default.
+  model?: string;
   column: Column;
+  // Filed away after its Done automations finished; the board hides it until "Show archived".
+  archived?: boolean;
   sessionId?: string;
   lastLine?: string;
   costUsd?: number;
+  stats?: CardStats;
   turns?: number;
   error?: string;
   pending?: PendingPermission | null;
@@ -52,6 +104,8 @@ export interface Card {
   // From the thread's own BOARD STATUS line (see lib/status.ts).
   stage?: string;
   remaining?: string;
+  // From the thread's weft-review block; replaced each time it sends a new one.
+  review?: ReviewPlan;
   // Set on cards picked up from existing Claude Code sessions (see lib/import.ts).
   source?: "claude-code";
   // When the session last changed (its last message), and when its transcript was last read into the thread.
@@ -75,8 +129,12 @@ export type ThreadItem =
       id: string;
       name: string;
       summary: string;
+      // What the call did, from format.ts toolAction (missing on threads saved before it existed).
+      action?: string;
       at: number;
       result?: string;
+      // URLs of images the tool returned, like a screenshot.
+      images?: string[];
       isError?: boolean;
     }
   | {

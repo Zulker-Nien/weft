@@ -6,7 +6,6 @@ import { BackendBadge } from "./CardView";
 import Icon from "./Icon";
 import ReviewPanel from "./ReviewPanel";
 import SkillMenu from "./SkillMenu";
-import StatusStrip from "./StatusStrip";
 import ThreadView from "./ThreadView";
 
 export default function ThreadPanel({
@@ -91,8 +90,6 @@ export default function ThreadPanel({
           <Icon name="x" size={15} />
         </button>
       </header>
-
-      <StatusStrip stats={card.stats} />
 
       {card.source === "claude-code" &&
         (card.openElsewhere ? (

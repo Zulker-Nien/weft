@@ -1,20 +1,22 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
-import { query, type PermissionResult, type Query, type SDKMessage, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
+import { query, type ModelUsage, type PermissionResult, type Query, type SDKMessage, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { messageContent } from "./attachments";
 import { COPILOT_PROMPT, SAFE_BOARD_TOOLS, boardMcpServer, describeBoardTool } from "./board-tools";
 import { BROWSER_PROMPT, browserMcpServer } from "./browser-tools";
 import { publish } from "./bus";
-import { shortToolName } from "./format";
+import { shortToolName, toolAction } from "./format";
 import { cliEnv } from "./env";
 import { isOpenElsewhere } from "./import";
 import { isNotLoggedInError, startLogin } from "./login";
 import { keepAliveMinutes, threadPrompt } from "./settings";
 import { PLUGIN_DIR } from "./skills";
+import { extractReview, REVIEW_PROMPT } from "./review";
 import { extractStatus, type BoardStatus } from "./status";
 import { appendThread, getCard, getThread, replaceThreadItem, updateCard } from "./store";
-import type { Backend, Card, PermissionMode, Question } from "./types";
+import { adoptLocalMedia, toolResult } from "./thread-media";
+import type { Backend, Card, CardStats, LimitWindow, PermissionMode, Question } from "./types";
 
 // Spare CLIs started ahead of time, one per recent project folder, so a new card doesn't wait.
 const MAX_SPARES = 3;
@@ -64,6 +66,7 @@ interface Spec {
   cwd: string;
   backend: Backend;
   permissionMode: PermissionMode;
+  model?: string;
   sessionId?: string;
   // Continue the session as a copy instead of writing to it.
   forkSession?: boolean;
@@ -89,6 +92,8 @@ interface Session {
   idle?: ReturnType<typeof setTimeout>;
   // What this CLI process's cumulative cost totals are added to (see the result handler).
   costBase?: number;
+  // Tokens the last main-agent request sent in, which is how full the context window is.
+  contextTokens?: number;
   // Set once the drive loop has finished; the CLI is gone.
   ended?: boolean;
   done: Promise<void>;
@@ -99,6 +104,7 @@ const g = globalThis as unknown as {
   __threadboardSpares?: Map<string, Session>;
   __threadboardLoginWaiters?: Map<Backend, Set<string>>;
   __weftQueued?: Map<string, string[]>;
+  __weftArchiveAfter?: Set<string>;
 };
 const sessions = (g.__threadboardSessions ??= new Map<string, Session>());
 const spares = (g.__threadboardSpares ??= new Map<string, Session>());
@@ -106,6 +112,8 @@ const spares = (g.__threadboardSpares ??= new Map<string, Session>());
 const loginWaiters = (g.__threadboardLoginWaiters ??= new Map<Backend, Set<string>>());
 // Messages waiting to run on a card one turn at a time, such as the skills of board automations.
 const queued = (g.__weftQueued ??= new Map<string, string[]>());
+// Cards moved to Done: archived once the queued Done skills have all run.
+const archiveAfter = (g.__weftArchiveAfter ??= new Set<string>());
 
 // setTimeout fires at once for anything longer than this.
 const MAX_TIMER_MS = 2 ** 31 - 1;
@@ -173,6 +181,7 @@ function specFor(card: Card): Spec {
     cwd: card.cwd,
     backend: card.backend,
     permissionMode: card.permissionMode,
+    model: card.model,
     sessionId: card.sessionId,
     copilot: card.role === "copilot",
   };
@@ -262,6 +271,10 @@ function adoptSpare(card: Card): Session | undefined {
     spare.spec.permissionMode = card.permissionMode;
     void spare.query?.setPermissionMode(card.permissionMode).catch(() => {});
   }
+  if (card.model && card.model !== spare.spec.model) {
+    spare.spec.model = card.model;
+    void spare.query?.setModel(card.model).catch(() => {});
+  }
   safeUpdate(card.id, { warm: true });
   scheduleIdle(spare);
   setTimeout(() => ensureSpare(card.cwd, card.backend), 0);
@@ -284,7 +297,7 @@ export function sendMessage(cardId: string, text: string, { echo = true } = {}) 
   session ??= adoptSpare(card) ?? open(specFor(card), cardId);
 
   if (echo) appendThread(cardId, { kind: "user", text, at: Date.now() });
-  updateCard(cardId, { column: "running", error: undefined, pending: null, lastLine: "Thinking…" });
+  updateCard(cardId, { column: "running", archived: false, error: undefined, pending: null, lastLine: "Thinking…" });
   clearTimeout(session.idle);
   session.busy = true;
   session.status = undefined;
@@ -297,6 +310,13 @@ export function queueMessages(cardId: string, texts: string[]) {
   if (!texts.length) return;
   queued.set(cardId, [...(queued.get(cardId) ?? []), ...texts]);
   sendQueued(cardId);
+}
+
+// Archives the card in Done once the messages queued for it have run (now, if there are none). A
+// stopped or failed turn leaves it in Done, unarchived.
+export function archiveWhenIdle(cardId: string) {
+  if (queued.has(cardId) || isBusy(cardId)) archiveAfter.add(cardId);
+  else updateCard(cardId, { archived: true });
 }
 
 function sendQueued(cardId: string) {
@@ -519,6 +539,7 @@ async function drive(session: Session, executable: string | undefined) {
         abortController: session.abort,
         includePartialMessages: true,
         permissionMode: spec.permissionMode,
+        model: spec.model,
         // So a card can switch to bypassPermissions later, including a spare it takes over.
         allowDangerouslySkipPermissions: !spec.copilot,
         pathToClaudeCodeExecutable: executable,
@@ -527,11 +548,11 @@ async function drive(session: Session, executable: string | undefined) {
         systemPrompt: {
           type: "preset",
           preset: "claude_code",
-          append: spec.copilot ? `${BROWSER_PROMPT}\n\n${COPILOT_PROMPT}` : `${BROWSER_PROMPT}\n\n${threadPrompt()}`,
+          append: spec.copilot ? `${BROWSER_PROMPT}\n\n${COPILOT_PROMPT}` : `${BROWSER_PROMPT}\n\n${threadPrompt()}\n\n${REVIEW_PROMPT}`,
         },
         mcpServers: spec.copilot
-          ? { browser: browserMcpServer(), board: boardMcpServer(boardActions) }
-          : { browser: browserMcpServer() },
+          ? { browser: browserMcpServer(() => session.cardId ?? undefined), board: boardMcpServer(boardActions) }
+          : { browser: browserMcpServer(() => session.cardId ?? undefined) },
         canUseTool: (toolName, input, opts) => {
           if (isTrustedTool(toolName, opts.mcpServer?.source)) {
             return Promise.resolve({ behavior: "allow", updatedInput: input });
@@ -594,8 +615,20 @@ function closeWhenIdle(cardId: string, session: Session) {
 function handle(id: string, session: Session, msg: SDKMessage) {
   switch (msg.type) {
     case "system":
-      if (msg.subtype === "init") safeUpdate(id, { sessionId: msg.session_id });
+      if (msg.subtype === "init") {
+        safeUpdate(id, { sessionId: msg.session_id });
+        void refreshLimits(id, session);
+      }
       break;
+
+    case "rate_limit_event": {
+      const info = msg.rate_limit_info;
+      if (info.utilization === undefined) break;
+      const window: LimitWindow = { used: Math.round(info.utilization * 100), resetsAt: info.resetsAt };
+      if (info.rateLimitType === "five_hour") updateStats(id, { fiveHour: window });
+      else if (info.rateLimitType === "seven_day") updateStats(id, { sevenDay: window });
+      break;
+    }
 
     case "stream_event": {
       if (msg.parent_tool_use_id) break;
@@ -609,21 +642,28 @@ function handle(id: string, session: Session, msg: SDKMessage) {
     case "assistant":
       // Subagent turns stay out of the card's thread; their final report arrives as a tool result.
       if (msg.parent_tool_use_id) break;
+      {
+        const u = msg.message.usage;
+        if (u) session.contextTokens = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
+      }
       for (const block of msg.message.content) {
         if (block.type === "text") {
-          const { text, status } = extractStatus(block.text);
+          const { text: withReview, status } = extractStatus(block.text);
+          const { text, review } = extractReview(withReview);
+          if (review) safeUpdate(id, { review });
           if (status) {
             session.status = status;
             safeUpdate(id, { stage: status.stage, remaining: status.remaining });
           }
           if (text.trim()) {
-            appendThread(id, { kind: "assistant", text, at: Date.now() });
+            appendThread(id, { kind: "assistant", text: adoptLocalMedia(text, session.spec.cwd), at: Date.now() });
             safeUpdate(id, { lastLine: firstLine(text) });
           }
         } else if (block.type === "tool_use") {
           const input = (block.input ?? {}) as Record<string, unknown>;
           const summary = summarize(block.name, input);
-          const index = appendThread(id, { kind: "tool", id: block.id, name: block.name, summary, at: Date.now() });
+          const action = toolAction(block.name, input);
+          const index = appendThread(id, { kind: "tool", id: block.id, name: block.name, summary, action, at: Date.now() });
           session.toolIndex.set(block.id, index);
           safeUpdate(id, { lastLine: `${shortToolName(block.name)} ${summary}`.trim() });
         }
@@ -639,7 +679,7 @@ function handle(id: string, session: Session, msg: SDKMessage) {
         if (index === undefined) continue;
         const item = getThread(id)[index];
         if (item?.kind !== "tool") continue;
-        replaceThreadItem(id, index, { ...item, result: resultText(block.content), isError: Boolean(block.is_error) });
+        replaceThreadItem(id, index, { ...item, ...toolResult(block.content), isError: Boolean(block.is_error) });
       }
       break;
     }
@@ -647,7 +687,9 @@ function handle(id: string, session: Session, msg: SDKMessage) {
     case "result": {
       const stopped = session.stopping;
       const ok = msg.subtype === "success";
-      const parsed = ok ? extractStatus(msg.result) : { text: `Ended early: ${msg.subtype.replace(/_/g, " ")}` };
+      const parsed = ok
+        ? (({ text, status }) => ({ text: extractReview(text).text, status }))(extractStatus(msg.result))
+        : { text: `Ended early: ${msg.subtype.replace(/_/g, " ")}`, status: undefined };
       const summary = stopped ? "Stopped" : parsed.text;
       const isError = !stopped && msg.is_error;
       session.busy = false;
@@ -674,11 +716,17 @@ function handle(id: string, session: Session, msg: SDKMessage) {
         turns: (getCard(id)?.turns ?? 0) + 1,
         lastActivity: Date.now(),
         lastWeftTurn: Date.now(),
+        stats: turnStats(id, session, msg.modelUsage),
         lastLine: firstLine(summary) || "Done",
         error: isError ? summary : undefined,
         ...(status ? { stage: status.stage, remaining: status.remaining } : {}),
       });
       scheduleIdle(session);
+      if (archiveAfter.has(id) && (stopped || isError)) archiveAfter.delete(id);
+      else if (archiveAfter.has(id) && !queued.has(id) && status?.column !== "needs_you") {
+        archiveAfter.delete(id);
+        safeUpdate(id, { column: "done", archived: true });
+      }
       if (queued.has(id)) {
         if (stopped || isError) queued.delete(id);
         // Once the drive loop has handled this result, so the next turn starts on a settled card.
@@ -689,6 +737,56 @@ function handle(id: string, session: Session, msg: SDKMessage) {
   }
 }
 
+// The plan's 5-hour and weekly usage, asked of the CLI so it shows before any rate-limit event.
+async function refreshLimits(id: string, session: Session) {
+  try {
+    const usage = await session.query?.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true });
+    const limits = usage?.rate_limits;
+    if (!limits) return;
+    const toWindow = (w?: { utilization: number | null; resets_at: string | null } | null): LimitWindow | undefined =>
+      w?.utilization == null ? undefined : { used: Math.round(w.utilization), resetsAt: w.resets_at ? Date.parse(w.resets_at) / 1000 : undefined };
+    updateStats(id, { fiveHour: toWindow(limits.five_hour), sevenDay: toWindow(limits.seven_day) });
+  } catch {}
+}
+
+function updateStats(id: string, patch: Partial<CardStats>) {
+  safeUpdate(id, { stats: { ...getCard(id)?.stats, ...patch } });
+}
+
+// The status strip's numbers after a turn: model, context fill, tokens, and the folder's changed lines.
+function turnStats(id: string, session: Session, modelUsage: Record<string, ModelUsage>): CardStats {
+  const models = Object.entries(modelUsage ?? {});
+  const [model, main] = models.sort((a, b) => b[1].costUSD - a[1].costUSD)[0] ?? [];
+  const tokens = models.reduce((sum, [, u]) => sum + u.inputTokens + u.outputTokens, 0);
+  const contextUsed =
+    main?.contextWindow && session.contextTokens ? Math.min(100, Math.round((session.contextTokens / main.contextWindow) * 100)) : undefined;
+  return { ...getCard(id)?.stats, model, contextUsed, tokens: tokens || undefined, ...changedLines(session.spec.cwd), branch: gitBranch(session.spec.cwd) };
+}
+
+function gitBranch(cwd: string) {
+  try {
+    return execFileSync("git", ["-C", cwd, "--no-optional-locks", "rev-parse", "--abbrev-ref", "HEAD"], { encoding: "utf8", timeout: 3000 }).trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function changedLines(cwd: string) {
+  try {
+    const out = execFileSync("git", ["-C", cwd, "--no-optional-locks", "diff", "HEAD", "--numstat"], { encoding: "utf8", timeout: 3000 });
+    let added = 0;
+    let removed = 0;
+    for (const line of out.split("\n")) {
+      const [a, r] = line.split("\t");
+      added += Number(a) || 0;
+      removed += Number(r) || 0;
+    }
+    return { added, removed };
+  } catch {
+    return { added: undefined, removed: undefined };
+  }
+}
+
 function summarize(name: string, input: Record<string, unknown>) {
   for (const key of ["command", "file_path", "path", "pattern", "url", "query", "selector", "description", "prompt"]) {
     const value = input[key];
@@ -696,13 +794,6 @@ function summarize(name: string, input: Record<string, unknown>) {
   }
   const json = JSON.stringify(input);
   return json === "{}" ? "" : clip(json, 100);
-}
-
-function resultText(content: unknown): string {
-  if (typeof content === "string") return clip(content, 4000);
-  if (!Array.isArray(content)) return "";
-  const parts = content.map((b: { type?: string; text?: string }) => (b.type === "text" ? (b.text ?? "") : `[${b.type}]`));
-  return clip(parts.join("\n"), 4000);
 }
 
 function firstLine(text: string) {

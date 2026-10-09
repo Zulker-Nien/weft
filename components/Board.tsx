@@ -611,6 +611,12 @@ export default function Board() {
   useShortcutListener();
 
   function chooseProject(path: string | null) {
+    // A new project starts clean: close the open thread and its browser.
+    if (path !== project) {
+      select(null);
+      if (window.threadboard) window.threadboard.browser.setVisible(false);
+      else setWebBrowserOpen(false);
+    }
     setProject(path);
     writePrefs({ project: path, sort });
     // Have a CLI ready in that folder for the next new thread.
@@ -829,7 +835,7 @@ export default function Board() {
       </div>
 
       {showNew && (
-        <NewCardDialog home={home} defaultCwd={project ?? undefined} onClose={() => setShowNew(false)} onCreate={create} />
+        <NewCardDialog home={home} defaultCwd={project ?? undefined} limits={latestLimits(cards)} onClose={() => setShowNew(false)} onCreate={create} />
       )}
       {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
       {showHelp && <ShortcutsDialog onClose={() => setShowHelp(false)} />}
@@ -847,4 +853,11 @@ export default function Board() {
       )}
     </div>
   );
+}
+
+// The newest plan rate limits any thread has seen; they're account-wide.
+function latestLimits(cards: Card[]) {
+  const withLimits = cards.filter((c) => c.stats?.fiveHour || c.stats?.sevenDay);
+  const latest = withLimits.sort((a, b) => b.updatedAt - a.updatedAt)[0]?.stats;
+  return latest && { fiveHour: latest.fiveHour, sevenDay: latest.sevenDay };
 }

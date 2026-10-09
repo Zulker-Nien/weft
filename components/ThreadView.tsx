@@ -19,6 +19,8 @@ export default function ThreadView({
   onAnswer,
   empty,
   placeholder = "Reply to continue this thread",
+  footer,
+  replaceReply = false,
 }: {
   card: Card;
   items: ThreadItem[];
@@ -27,6 +29,9 @@ export default function ThreadView({
   onAnswer: (allow: boolean, answers?: Record<string, string>) => void;
   empty?: ReactNode;
   placeholder?: string;
+  // Shown above the reply box, or in its place with replaceReply.
+  footer?: ReactNode;
+  replaceReply?: boolean;
 }) {
   // The request already answered here, so a second click can't answer it (or the next one) again.
   const [answeredId, setAnsweredId] = useState<string | null>(null);
@@ -134,7 +139,10 @@ export default function ThreadView({
         </div>
       )}
 
-      <ReplyBox key={card.id} cardId={card.id} cwd={card.cwd} live={live} placeholder={placeholder} onSend={send} />
+      {footer}
+      {!replaceReply && (
+        <ReplyBox key={card.id} cardId={card.id} cwd={card.cwd} stats={card.stats} live={live} placeholder={placeholder} onSend={send} />
+      )}
     </>
   );
 }
