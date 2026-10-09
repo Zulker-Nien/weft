@@ -3,17 +3,10 @@
 import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { useEscape } from "@/lib/use-escape";
 import { api } from "@/lib/client";
+import type { ProjectSummary, SortKey } from "@/lib/board-view";
 import Icon from "./Icon";
 
-export type SortKey = "newest" | "active" | "oldest" | "cost";
-
-export interface ProjectSummary {
-  path: string; // absolute folder path
-  lastActivity: number; // ms timestamp, used for ordering (already sorted most recent first)
-  cards: number; // total cards in that folder
-  running: number; // cards in the Running column
-  needsYou: number; // cards in the Needs you column
-}
+export type { ProjectSummary, SortKey };
 
 // How many of the most recent projects get a chip; the rest are under "More".
 const RECENT_CHIPS = 6;

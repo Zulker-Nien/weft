@@ -6,7 +6,17 @@ import { worktreeParent } from "@/lib/format";
 import { COLUMNS, type BoardEvent, type Card, type Column, type LoginView, type Project, type ThreadItem } from "@/lib/types";
 import { useShortcutListener, useShortcuts } from "@/lib/hotkeys";
 import { setTheme, THEMES } from "@/lib/theme";
-import { playChime, preloadChimes, type ChimeKind } from "@/lib/chimes";
+import { playChime, preloadChimes } from "@/lib/chimes";
+import {
+  cardChangeEffects,
+  groupByColumn,
+  latestLimits,
+  SORTERS,
+  stepThrough,
+  summarizeProjects,
+  type ProjectSummary,
+  type SortKey,
+} from "@/lib/board-view";
 import { useBoardEvents } from "@/lib/use-events";
 import { keepTypedText, useEscape } from "@/lib/use-escape";
 import BrowserPane from "./BrowserPane";
@@ -16,7 +26,7 @@ import CoverageBadge from "./CoverageBadge";
 import Icon from "./Icon";
 import LoginDialog from "./LoginDialog";
 import NewCardDialog from "./NewCardDialog";
-import ProjectBar, { folderName, SORTS, type ProjectSummary, type SortKey } from "./ProjectBar";
+import ProjectBar, { folderName, SORTS } from "./ProjectBar";
 import SettingsDialog from "./SettingsDialog";
 import ShortcutsDialog from "./ShortcutsDialog";
 import StatusStrip from "./StatusStrip";
@@ -40,17 +50,6 @@ const EMPTY_HINT: Record<Column, string> = {
   done: "Drag reviewed threads here",
 };
 
-// When a card's thread last moved. A card picked up from Claude Code carries its session's last message
-// time; its updatedAt also changes when the board only reads the transcript.
-const activeAt = (card: Card) => card.lastActivity ?? card.updatedAt;
-
-const SORTERS: Record<SortKey, (a: Card, b: Card) => number> = {
-  newest: (a, b) => b.createdAt - a.createdAt,
-  active: (a, b) => activeAt(b) - activeAt(a),
-  oldest: (a, b) => a.createdAt - b.createdAt,
-  cost: (a, b) => (b.costUsd ?? 0) - (a.costUsd ?? 0),
-};
-
 // Cards shown per column until "Show more"; picking up Claude Code sessions can put hundreds in one.
 const COLUMN_LIMIT = 40;
 
@@ -65,17 +64,11 @@ function readPrefs(): { project?: string | null; sort?: SortKey } {
   }
 }
 
-// Columns whose arrival marks a card unseen: the ones that want you to look.
-const UNSEEN_COLUMNS: Column[] = ["needs_you", "review", "done"];
-
 function without(set: ReadonlySet<string>, id: string) {
   const next = new Set(set);
   next.delete(id);
   return next;
 }
-
-// A move you just made yourself doesn't chime; only changes the board or an agent makes do.
-const OWN_MOVE_MS = 3000;
 
 function writePrefs(prefs: { project: string | null; sort: SortKey }) {
   try {
@@ -248,21 +241,24 @@ export default function Board() {
           }
           {
             const { id, column, error } = event.card;
-            const previous = columns.current.get(id);
+            const effects = cardChangeEffects({
+              previous: columns.current.get(id),
+              column,
+              previousError: errors.current.get(id),
+              error,
+              own: ownMoves.current.get(id),
+              now: Date.now(),
+              open: selectedRef.current === id,
+            });
             columns.current.set(id, column);
-            const previousError = errors.current.get(id);
             errors.current.set(id, error);
-            if (previous && previous !== column) {
+            if (effects.moved) {
               announce(event.card, () => select(id));
-              const own = ownMoves.current.get(id);
               ownMoves.current.delete(id);
-              const mine = own?.column === column && Date.now() - own.at < OWN_MOVE_MS;
-              if (!mine && column !== "backlog") playChime(column as ChimeKind);
-              if (!mine && UNSEEN_COLUMNS.includes(column) && selectedRef.current !== id) {
-                setUnseen((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
-              }
             }
-            if (previous && error && error !== previousError) playChime("error");
+            if (effects.chime) playChime(effects.chime);
+            if (effects.markUnseen) setUnseen((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
+            if (effects.errorChime) playChime("error");
           }
           resolveFolders([event.card.cwd]);
           setCards((prev) => {
@@ -389,42 +385,16 @@ export default function Board() {
   const view = `${project ?? ""}\n${query.trim()}`;
   const expandedColumns = expanded.view === view ? expanded.columns : [];
 
-  const byColumn = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    const groups = new Map<Column, Card[]>(COLUMNS.map((c) => [c.id, []]));
-    for (const card of cards) {
-      if (project && rootOf(card.cwd) !== project) continue;
-      if (card.archived && !showArchived) continue;
-      if (needle) {
-        const haystack = [card.title, card.prompt, card.lastLine, card.stage, card.remaining].join(" ").toLowerCase();
-        if (!haystack.includes(needle)) continue;
-      }
-      groups.get(card.column)?.push(card);
-    }
-    for (const list of groups.values()) list.sort(SORTERS[sort]);
-    return groups;
-  }, [cards, project, query, sort, showArchived, rootOf]);
+  const byColumn = useMemo(
+    () => groupByColumn(cards, { project, query, sort, showArchived }, rootOf),
+    [cards, project, query, sort, showArchived, rootOf],
+  );
   const archivedCount = cards.filter((c) => c.archived && (!project || rootOf(c.cwd) === project)).length;
 
-  // Recent projects: saved ones plus every folder a card runs in, most recently active first. Worktrees
-  // count toward their main repo and never get a chip of their own.
-  const projectSummaries = useMemo<ProjectSummary[]>(() => {
-    const byPath = new Map<string, ProjectSummary>();
-    const summary = (path: string) => {
-      let s = byPath.get(path);
-      if (!s) byPath.set(path, (s = { path, lastActivity: 0, cards: 0, running: 0, needsYou: 0 }));
-      return s;
-    };
-    for (const p of projects) summary(rootOf(p.path)).lastActivity = Math.max(summary(rootOf(p.path)).lastActivity, p.lastUsedAt);
-    for (const card of cards) {
-      const s = summary(rootOf(card.cwd));
-      s.cards += 1;
-      s.lastActivity = Math.max(s.lastActivity, activeAt(card));
-      if (card.column === "running") s.running += 1;
-      if (card.column === "needs_you") s.needsYou += 1;
-    }
-    return [...byPath.values()].sort((a, b) => b.lastActivity - a.lastActivity);
-  }, [projects, cards, rootOf]);
+  const projectSummaries = useMemo<ProjectSummary[]>(
+    () => summarizeProjects(projects, cards, rootOf),
+    [projects, cards, rootOf],
+  );
 
   const selected = cards.find((c) => c.id === selectedId) ?? null;
   const browserOpen = desktop ? browser.visible : webBrowserOpen;
@@ -473,14 +443,11 @@ export default function Board() {
 
   // Steps through the project filter: "All projects", then each project in the bar's order.
   function stepProject(by: number) {
-    const options = [null, ...projectSummaries.map((p) => p.path)];
-    const at = Math.max(0, options.indexOf(project));
-    chooseProject(options[(at + by + options.length) % options.length]);
+    chooseProject(stepThrough([null, ...projectSummaries.map((p) => p.path)], project, by));
   }
 
   function stepSort() {
-    const keys = Object.keys(SORTERS) as SortKey[];
-    chooseSort(keys[(keys.indexOf(sort) + 1) % keys.length]);
+    chooseSort(stepThrough(Object.keys(SORTERS) as SortKey[], sort, 1));
   }
 
   function jumpToNeedsYou() {
@@ -987,11 +954,4 @@ function openLink(e: React.MouseEvent, url: string) {
   if (!window.threadboard) return;
   e.preventDefault();
   window.threadboard.openExternal(url);
-}
-
-// The newest plan rate limits any thread has seen; they're account-wide.
-function latestLimits(cards: Card[]) {
-  const withLimits = cards.filter((c) => c.stats?.fiveHour || c.stats?.sevenDay);
-  const latest = withLimits.sort((a, b) => b.updatedAt - a.updatedAt)[0]?.stats;
-  return latest && { fiveHour: latest.fiveHour, sevenDay: latest.sevenDay };
 }
