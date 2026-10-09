@@ -130,6 +130,9 @@ Settings → Skills and automations holds rules of the form "When … run …":
 - **you move a card to Review / Done**: the skill runs in the card's thread as its own turn, as if
   you'd typed `/<skill>`. Several rules for one move run one after another; a turn that's stopped
   or fails drops the rest, and one that ends needing you waits for your reply.
+- **a prompt matches**: a case-insensitive regex (e.g. `vercel|deploy`) is tested against each
+  message you send in a thread. On a match the skill runs as its own turn right after, once per
+  thread per skill. An invalid pattern never matches, and Settings refuses to save one.
 
 A new install starts with one rule: moving a card to Done runs `/weft:done`. Moves only run
 skills on cards that have already run (and, for picked-up sessions, that Weft has run), and only
