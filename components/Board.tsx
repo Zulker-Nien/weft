@@ -846,7 +846,6 @@ export default function Board() {
                       onOpen={() => openCard(card)}
                       onAnswer={(allow) => api.answer(card.id, allow, undefined, card.pending?.id).catch(notify)}
                       onStop={() => api.stop(card.id).catch(notify)}
-                      onRename={(title) => api.rename(card.id, title).catch(notify)}
                     />
                   ))}
                   {shown.length < list.length && (
@@ -896,6 +895,7 @@ export default function Board() {
               api.remove(selected.id).catch(notify);
             }}
             onClose={() => select(null)}
+            onRename={(title) => api.rename(selected.id, title).catch(notify)}
             expanded={popped}
             onToggleExpanded={toggleExpanded}
           />

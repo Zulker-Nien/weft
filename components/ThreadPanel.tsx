@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { folderName, isLive } from "@/lib/format";
 import type { Card, ThreadItem } from "@/lib/types";
 import { BackendBadge } from "./CardView";
@@ -19,6 +20,7 @@ export default function ThreadPanel({
   onArchive,
   onDelete,
   onClose,
+  onRename,
   expanded,
   onToggleExpanded,
 }: {
@@ -32,16 +34,47 @@ export default function ThreadPanel({
   onArchive: () => void;
   onDelete: () => void;
   onClose: () => void;
+  onRename: (title: string) => void;
   expanded: boolean;
   onToggleExpanded: () => void;
 }) {
+  const [editing, setEditing] = useState(false);
   const live = isLive(card);
 
   return (
     <aside className={`flex shrink-0 flex-col bg-panel ${expanded ? "w-[44%] min-w-[380px]" : "w-[460px] border-l border-line"}`}>
       <header className="flex items-start gap-3 border-b border-line px-4 py-3">
         <div className="min-w-0 flex-1">
-          <h2 className="line-clamp-2 text-[14px] font-medium leading-snug text-ink">{card.title}</h2>
+          {editing ? (
+            <input
+              autoFocus
+              defaultValue={card.title}
+              onFocus={(e) => e.currentTarget.select()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.currentTarget.blur();
+                if (e.key === "Escape") {
+                  // Cancels the rename only; the thread stays open.
+                  e.preventDefault();
+                  e.currentTarget.value = card.title;
+                  e.currentTarget.blur();
+                }
+              }}
+              onBlur={(e) => {
+                const title = e.currentTarget.value.trim();
+                setEditing(false);
+                if (title && title !== card.title) onRename(title);
+              }}
+              className="w-full rounded border border-accent bg-panel px-1 py-0.5 text-[14px] font-medium leading-snug text-ink outline-none"
+            />
+          ) : (
+            <h2
+              title="Click to rename"
+              onClick={() => setEditing(true)}
+              className="line-clamp-2 cursor-text rounded text-[14px] font-medium leading-snug text-ink hover:bg-sunken"
+            >
+              {card.title}
+            </h2>
+          )}
           <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted">
             <BackendBadge backend={card.backend} />
             <span className="truncate" title={card.cwd}>{folderName(card.cwd)}</span>

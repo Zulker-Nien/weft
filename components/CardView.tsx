@@ -49,7 +49,6 @@ export default function CardView({
   onOpen,
   onAnswer,
   onStop,
-  onRename,
 }: {
   card: Card;
   now: number;
@@ -59,9 +58,7 @@ export default function CardView({
   onOpen: () => void;
   onAnswer: (allow: boolean) => void;
   onStop: () => void;
-  onRename: (title: string) => void;
 }) {
-  const [editing, setEditing] = useState(false);
   // The request already answered here, so a second click can't answer it (or the next one) again.
   const [answeredId, setAnsweredId] = useState<string | null>(null);
   const live = isLive(card);
@@ -86,7 +83,7 @@ export default function CardView({
     <div
       role="button"
       tabIndex={0}
-      draggable={!live && !editing}
+      draggable={!live}
       onDragStart={(e) => {
         e.dataTransfer.setData("text/plain", card.id);
         e.dataTransfer.effectAllowed = "move";
@@ -98,39 +95,7 @@ export default function CardView({
       {unseen && (
         <span title="New since you last looked" className="absolute right-1.5 top-1.5 size-2 animate-pulse rounded-full bg-accent" />
       )}
-      {editing ? (
-        <input
-          autoFocus
-          defaultValue={card.title}
-          onFocus={(e) => e.currentTarget.select()}
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => {
-            e.stopPropagation();
-            if (e.key === "Enter") e.currentTarget.blur();
-            if (e.key === "Escape") {
-              e.currentTarget.value = card.title;
-              e.currentTarget.blur();
-            }
-          }}
-          onBlur={(e) => {
-            const title = e.currentTarget.value.trim();
-            setEditing(false);
-            if (title && title !== card.title) onRename(title);
-          }}
-          className="w-full rounded border border-accent bg-card px-1 py-0.5 text-[13px] font-medium leading-snug text-ink outline-none"
-        />
-      ) : (
-        <div
-          title="Click to rename"
-          onClick={(e) => {
-            e.stopPropagation();
-            setEditing(true);
-          }}
-          className="line-clamp-2 cursor-text text-[13px] font-medium leading-snug text-ink"
-        >
-          {card.title}
-        </div>
-      )}
+      <div className="line-clamp-2 text-[13px] font-medium leading-snug text-ink">{card.title}</div>
       <div className="mt-1.5 flex min-w-0 items-center gap-1.5 text-[11px] text-muted">
         <BackendBadge backend={card.backend} />
         {card.source === "claude-code" && (
