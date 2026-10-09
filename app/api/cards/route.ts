@@ -1,5 +1,6 @@
 import os from "node:os";
 import { connection } from "next/server";
+import { firstMessage } from "@/lib/automations";
 import { prewarm } from "@/lib/copilot";
 import { resolveFolder } from "@/lib/folders";
 import { titleFromPrompt } from "@/lib/format";
@@ -40,7 +41,7 @@ export async function POST(req: Request) {
 
     const card = createCard({ title, prompt, cwd, backend, permissionMode });
     touchProject(cwd);
-    if (body.start) sendMessage(card.id, prompt);
+    if (body.start) sendMessage(card.id, firstMessage(card));
     return Response.json({ card: getCard(card.id) });
   } catch (err) {
     return fail(err);

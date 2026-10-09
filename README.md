@@ -85,7 +85,7 @@ asking); the menu next to the CLI switch changes that per thread.
 | Running   | You drag it from Backlog, press "Start now", or reply in its thread |
 | Needs you | The agent asks permission for a tool; Allow or Deny on the card |
 | Review    | The turn finishes (or fails, or you stop it) |
-| Done      | You drag it there |
+| Done      | You drag it there, and its Done automations run (by default `/weft:done`) |
 
 Replying to a card continues the same CLI session, so the agent keeps its context.
 
@@ -107,6 +107,33 @@ reply with a line like `BOARD STATUS: column=review | stage=First shot | remaini
 The board strips that line, moves the card to the column the thread reports (Needs you, Review, or
 Done), and shows the stage and what's left on the card. When a thread asks a question with its
 AskUserQuestion tool, the card shows the question and its options instead of Allow and Deny.
+
+## Skills and automations
+
+Weft ships its own skills in `plugin/`, a Claude Code plugin named `weft` that every board thread
+loads, so they run as `/weft:<name>`:
+
+- `/weft:done` wraps up a thread: architecture docs, lint, tests, then a commit of the files the
+  thread changed. A copy of the `done` skill from `fotoflo/claude-skills`.
+- `/weft:commit` commits the thread's changes with a conventional message (the `commit` skill,
+  without its Vercel preview deploy).
+
+Settings → Skills and automations holds rules of the form "When … run …":
+
+- **a thread starts**: the skill is named in the thread's first message ("Start by using the /x
+  skill"), so it runs with the task in view.
+- **you move a card to Review / Done**: the skill runs in the card's thread as its own turn, as if
+  you'd typed `/<skill>`. Several rules for one move run one after another; a turn that's stopped
+  or fails drops the rest, and one that ends needing you waits for your reply.
+
+A new install starts with one rule: moving a card to Done runs `/weft:done`. Moves only run
+skills on cards that have already run (and, for picked-up sessions, that Weft has run), and only
+your own moves count: the copilot's moves and a thread reporting `column=done` don't, so the done
+skill can't trigger itself. The rule's skill can be one of Weft's, one of yours in
+`~/.claude/skills`, or a project's own (it then only runs in projects that have it).
+
+Each card's **Skills** button lists the skills its thread can run (Weft's, the project's, and
+yours) and sends the one you pick.
 
 ## Projects, filter, and sort
 
@@ -142,6 +169,9 @@ copilot opens as a pop-up at `/copilot`.
   `puku-cli` binary (`pathToClaudeCodeExecutable`).
 - `lib/board-tools.ts` gives the copilot its board tools; `lib/copilot.ts` keeps its thread, which
   has the fixed id `copilot` and is left off the board.
+- `plugin/` is Weft's own skills, loaded into every board thread with the SDK's `plugins` option;
+  `lib/skills.ts` lists them with yours and a project's. `lib/automations.ts` turns the Settings
+  rules into messages, and `queueMessages()` in `lib/runner.ts` runs them one turn at a time.
 - `lib/browser-tools.ts` gives every thread `mcp__browser__*` tools (open_url, read_page,
   screenshot, click, type_text) that drive the side pane. They're allowed without a prompt.
 - `app/api/*` is the backend: cards, threads, permissions, and a server-sent events stream

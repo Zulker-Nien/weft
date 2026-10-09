@@ -96,11 +96,37 @@ export interface Project {
   lastUsedAt: number;
 }
 
+// When an automation runs its skill: as a thread starts, or when you move a card to Review or Done.
+export type AutomationTrigger = "start" | "review" | "done";
+
+export const AUTOMATION_TRIGGERS: { id: AutomationTrigger; label: string }[] = [
+  { id: "start", label: "a thread starts" },
+  { id: "review", label: "you move a card to Review" },
+  { id: "done", label: "you move a card to Done" },
+];
+
+// "When <on>, run the skill <skill>" (see lib/automations.ts).
+export interface Automation {
+  id: string;
+  on: AutomationTrigger;
+  // What follows the slash, e.g. "weft:done" for Weft's own skill or "done" for one in ~/.claude/skills.
+  skill: string;
+}
+
+export interface SkillInfo {
+  // What follows the slash when running it.
+  name: string;
+  description: string;
+  // weft: ships with Weft (plugin/skills); user: ~/.claude/skills; project: <folder>/.claude/skills.
+  source: "weft" | "user" | "project";
+}
+
 export interface SettingsView {
   threadPrompt: string;
   defaultThreadPrompt: string;
   // Minutes a thread's CLI stays open with no messages before it closes; 0 keeps it open.
   keepAliveMinutes: number;
+  automations: Automation[];
   projects: Project[];
 }
 

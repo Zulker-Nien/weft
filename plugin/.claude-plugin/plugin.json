@@ -1,0 +1,6 @@
+{
+  "name": "weft",
+  "description": "Skills that ship with Weft. Every board thread loads them, so they run as /weft:<name>.",
+  "version": "0.1.0",
+  "author": { "name": "Alex Miller" }
+}

@@ -62,7 +62,14 @@ function command(port) {
       bin: fs.existsSync(helper) ? helper : process.execPath,
       args: [serverJs],
       cwd: path.dirname(serverJs),
-      env: { ELECTRON_RUN_AS_NODE: "1", NODE_ENV: "production", PORT: String(port), HOSTNAME: "127.0.0.1" },
+      env: {
+        ELECTRON_RUN_AS_NODE: "1",
+        NODE_ENV: "production",
+        PORT: String(port),
+        HOSTNAME: "127.0.0.1",
+        // Weft's own skills (plugin/ in the repo), shipped next to the server; see lib/skills.ts.
+        WEFT_PLUGIN_DIR: path.join(process.resourcesPath, "plugin"),
+      },
     };
   }
   const nextBin = path.join(ROOT, "node_modules", "next", "dist", "bin", "next");

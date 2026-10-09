@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/client";
-import type { Backend, CliStatus, SettingsView } from "@/lib/types";
+import type { Automation, Backend, CliStatus, SettingsView } from "@/lib/types";
+import AutomationSettings from "./AutomationSettings";
 import Icon, { Spinner } from "./Icon";
 
 const KEEP_ALIVE: { minutes: number; label: string }[] = [
@@ -41,6 +42,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [keepAlive, setKeepAlive] = useState(0);
+  const [rules, setRules] = useState<Automation[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -79,6 +81,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
         setSettings(s);
         setPrompt(s.threadPrompt);
         setKeepAlive(s.keepAliveMinutes);
+        setRules(s.automations);
       },
       (err) => {
         if (!ignore) setLoadError(message(err));
@@ -117,16 +120,20 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const isDefaultPrompt = settings !== null && prompt.trim() === settings.defaultThreadPrompt.trim();
   const promptChanged = settings !== null && prompt.trim() !== settings.threadPrompt.trim();
   const keepAliveChanged = settings !== null && keepAlive !== settings.keepAliveMinutes;
+  // A rule left without a skill is dropped rather than refused.
+  const rulesToSave = rules.filter((r) => r.skill.trim());
+  const rulesChanged = settings !== null && JSON.stringify(rulesToSave) !== JSON.stringify(settings.automations);
   const keepAliveOptions = KEEP_ALIVE.some((o) => o.minutes === keepAlive)
     ? KEEP_ALIVE
     : [...KEEP_ALIVE, { minutes: keepAlive, label: `${keepAlive} minutes` }];
 
   async function save() {
     if (!settings) return;
-    const patch: { threadPrompt?: string; keepAliveMinutes?: number } = {};
+    const patch: { threadPrompt?: string; keepAliveMinutes?: number; automations?: Automation[] } = {};
     // Saving the default text clears the custom prompt, so later default changes still apply.
     if (promptChanged) patch.threadPrompt = isDefaultPrompt ? "" : prompt;
     if (keepAliveChanged) patch.keepAliveMinutes = keepAlive;
+    if (rulesChanged) patch.automations = rulesToSave;
     if (Object.keys(patch).length === 0) {
       onClose();
       return;
@@ -230,6 +237,14 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
                     ))}
                   </select>
                 </section>
+
+                <AutomationSettings
+                  rules={rules}
+                  onChange={(next) => {
+                    setRules(next);
+                    setSaveError(null);
+                  }}
+                />
               </>
             )}
 

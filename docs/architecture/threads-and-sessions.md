@@ -24,6 +24,9 @@ every API route shares it), and returns the running `Session`. `drive()` (`lib/r
 - `systemPrompt.preset: "claude_code"` with `BROWSER_PROMPT` + either `threadPrompt()`
   (board threads) or `COPILOT_PROMPT` (the copilot)
 - `mcpServers`: copilot gets `browser` and `board`; board threads get just `browser`
+- `plugins`: board threads load `plugin/` (`PLUGIN_DIR` in `lib/skills.ts`), Weft's own skills,
+  so `/weft:done` and `/weft:commit` work in every thread. The packaged app ships the folder in
+  `Resources/plugin` and passes `WEFT_PLUGIN_DIR` (`electron/server.cjs`)
 - `canUseTool`: trusted tools auto-allow (`isTrustedTool`); everything else is routed to
   `askUser` so the card can prompt the user
 - `pathToClaudeCodeExecutable`: `pukuPath` (looked up via `/usr/bin/which puku-cli`)
@@ -62,6 +65,19 @@ sendMessage].map(String).join("\n")`. Each API route can load its own copy of
 time. Idle sessions whose `build` doesn't match are replaced on next use (`currentSession()`,
 `warmUp()`, `ensureSpare()`), which is how dev-mode code reloads swap out stale CLIs. A busy
 session is never replaced mid-turn.
+
+### Queued messages (automations)
+
+`queueMessages(cardId, texts)` (`lib/runner.ts`) runs each text as its own turn, in order. It
+sends the first right away when the card is idle; the `result` handler sends the next once the
+turn ends, unless the turn was stopped or failed (the queue is dropped) or ended in `needs_you`
+(the queue waits for the turn after your reply). A CLI that dies mid-turn drops it too.
+
+Board automations use it: `messagesForMove()` (`lib/automations.ts`) returns `/<skill>` messages
+for your own moves to Review or Done, which `PATCH /api/cards/[id]` queues. "A thread starts"
+rules don't queue anything; `firstMessage()` appends "Start by using the /x skill" to the card's
+prompt, used by every path that starts a Backlog card (`POST /api/cards`, the PATCH to running,
+the copilot's `start_card`). The copilot's `move_card` never runs automations.
 
 ## Permissions and questions
 

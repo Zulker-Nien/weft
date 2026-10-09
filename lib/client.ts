@@ -1,5 +1,6 @@
 import type { MediaKind } from "./media";
 import type {
+  Automation,
   Backend,
   Card,
   CliStatus,
@@ -10,6 +11,7 @@ import type {
   PermissionMode,
   Project,
   SettingsView,
+  SkillInfo,
   ThreadItem,
 } from "./types";
 
@@ -138,7 +140,7 @@ export const api = {
   copilot: () => call<{ card: Card }>("GET", "/api/copilot"),
   resetCopilot: () => call<{ card: Card }>("POST", "/api/copilot/reset"),
   settings: () => call<SettingsView>("GET", "/api/settings"),
-  saveSettings: (patch: { threadPrompt?: string; keepAliveMinutes?: number }) =>
+  saveSettings: (patch: { threadPrompt?: string; keepAliveMinutes?: number; automations?: Automation[] }) =>
     call<SettingsView>("PATCH", "/api/settings", patch),
   addProject: (path: string) => call<{ path: string; projects: Project[] }>("POST", "/api/projects", { path }),
   newProject: (parent: string, name: string) =>
@@ -150,6 +152,9 @@ export const api = {
   // Starts a CLI ahead of time: a card's own, or a spare in a project folder.
   warm: (body: { cardId?: string; cwd?: string; backend?: Backend }) => call<{ ok: true }>("POST", "/api/warm", body),
   thread: (id: string) => call<{ items: ThreadItem[] }>("GET", `/api/cards/${id}/thread`),
+  // Weft's skills and yours; with cwd, that folder's too.
+  skills: (cwd?: string) =>
+    call<{ skills: SkillInfo[] }>("GET", `/api/skills${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ""}`),
   uploadAttachment: upload,
   dictation: () => call<{ available: boolean; reason?: string; model?: string }>("GET", "/api/transcribe"),
   transcribe,

@@ -4,6 +4,7 @@ import { folderName, isLive } from "@/lib/format";
 import type { Card, ThreadItem } from "@/lib/types";
 import { BackendBadge } from "./CardView";
 import Icon from "./Icon";
+import SkillMenu from "./SkillMenu";
 import ThreadView from "./ThreadView";
 
 export default function ThreadPanel({
@@ -49,6 +50,7 @@ export default function ThreadPanel({
             </div>
           )}
         </div>
+        <SkillMenu cwd={card.cwd} disabled={live} onRun={(skill) => onSend(`/${skill}`)} />
         {live && (
           <button
             onClick={onStop}

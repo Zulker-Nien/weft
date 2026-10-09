@@ -69,6 +69,13 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "plugin",
+        "to": "plugin",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "protocols": [

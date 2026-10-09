@@ -1,5 +1,6 @@
 import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
+import { firstMessage } from "./automations";
 import { resolveFolder } from "./folders";
 import { formatCost, shortToolName, titleFromPrompt } from "./format";
 import { touchProject } from "./settings";
@@ -156,7 +157,7 @@ export function boardMcpServer(actions: BoardActions) {
           if (card.column !== "backlog") {
             throw new Error(`“${card.title}” is in ${card.column}, not Backlog. Use send_message to continue it.`);
           }
-          actions.start(card.id, card.prompt);
+          actions.start(card.id, firstMessage(card));
           return `Started “${card.title}”.`;
         }),
       ),
@@ -173,7 +174,7 @@ export function boardMcpServer(actions: BoardActions) {
       ),
       tool(
         "move_card",
-        "Move a card to Backlog, Review, or Done. Running and Needs you follow the thread itself.",
+        "Move a card to Backlog, Review, or Done. Running and Needs you follow the thread itself. Unlike the user's own moves, this doesn't run the board's automations; to run a skill on a card, send_message it /<skill> (for example /weft:done).",
         { card_id: z.string(), column: z.enum(["backlog", "review", "done"]) },
         ({ card_id, column }) =>
           attempt(() => {

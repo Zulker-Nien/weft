@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { publish } from "./bus";
 import { DATA_DIR } from "./store";
-import type { Project, SettingsView } from "./types";
+import type { Automation, Project, SettingsView } from "./types";
 
 // Appended to every board thread's system prompt (not the copilot's). The user can edit it in
 // Settings; lib/status.ts parses the BOARD STATUS line it asks for, so keep that format.
@@ -19,9 +19,14 @@ If another instruction also asks for a final status line, put the BOARD STATUS l
 
 const MAX_PROJECTS = 40;
 
+// What a new install starts with: moving a card to Done wraps it up with Weft's done skill.
+const DEFAULT_AUTOMATIONS: Automation[] = [{ id: "default-done", on: "done", skill: "weft:done" }];
+
 interface Settings {
   threadPrompt?: string;
   keepAliveMinutes?: number;
+  // Unset means the defaults; an empty list means the user removed them all.
+  automations?: Automation[];
   projects: Project[];
   // Claude Code sessions whose cards were deleted, so syncing doesn't bring them back.
   dismissedSessions?: string[];
@@ -36,6 +41,7 @@ function settings(): Settings {
     g.__threadboardSettings = {
       threadPrompt: saved.threadPrompt,
       keepAliveMinutes: saved.keepAliveMinutes,
+      automations: saved.automations,
       projects: saved.projects ?? [],
       dismissedSessions: saved.dismissedSessions ?? [],
     };
@@ -66,6 +72,15 @@ export function keepAliveMinutes() {
 export function setKeepAliveMinutes(minutes: number) {
   // At most a week; 0 means until the app quits.
   settings().keepAliveMinutes = Math.min(7 * 24 * 60, Math.max(0, Math.round(minutes)));
+  save();
+}
+
+export function automations(): Automation[] {
+  return settings().automations ?? DEFAULT_AUTOMATIONS;
+}
+
+export function setAutomations(list: Automation[]) {
+  settings().automations = list;
   save();
 }
 
@@ -106,6 +121,7 @@ export function settingsView(): SettingsView {
     threadPrompt: threadPrompt(),
     defaultThreadPrompt: DEFAULT_THREAD_PROMPT,
     keepAliveMinutes: keepAliveMinutes(),
+    automations: automations(),
     projects: listProjects(),
   };
 }

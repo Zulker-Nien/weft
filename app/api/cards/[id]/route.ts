@@ -1,5 +1,6 @@
+import { firstMessage, messagesForMove } from "@/lib/automations";
 import { fail, guard } from "@/lib/guard";
-import { endSession, isBusy, sendMessage } from "@/lib/runner";
+import { endSession, isBusy, queueMessages, sendMessage } from "@/lib/runner";
 import { dismissSession } from "@/lib/settings";
 import { deleteCard, getCard, updateCard } from "@/lib/store";
 import { COLUMNS, type Column } from "@/lib/types";
@@ -26,9 +27,11 @@ export async function PATCH(req: Request, { params }: Ctx) {
       if (isBusy(id)) throw new Error("Stop the thread before moving it.");
       if (body.column === "running") {
         if (card.column !== "backlog") throw new Error("Reply in the thread to run it again.");
-        sendMessage(id, card.prompt);
+        sendMessage(id, firstMessage(card));
       } else if (MANUAL.includes(body.column)) {
         updateCard(id, { column: body.column });
+        // Your own move runs that column's automations (Settings), such as weft:done for Done.
+        queueMessages(id, messagesForMove(card, body.column));
       } else {
         throw new Error("Cards move to Needs you on their own.");
       }

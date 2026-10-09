@@ -269,7 +269,7 @@ Ideas that came out of building and testing the projects bar, board status, warm
 - `P1` **Needs-you inbox** — one keyboard-driven queue of every waiting question and permission request across cards (a to allow, d to deny, 1–4 to pick an answer), so clearing ten blocked cards takes seconds.
 - `P1` **Answer from the notification** — Allow, Deny, and the options of a question as buttons on the macOS notification itself, so a blocked card can move without switching to the app.
 - `P1` **Lean thread profile** — choose which MCP servers, plugins, and hooks load in board threads (per project), since they are most of a CLI's 4–50s start time and memory.
-- `P1` **Stage automations** — rules like "when a card reaches Done, run the tests and commit", "when it reaches Review, open the diff", or "when it needs you for over 10 minutes, ping me on Slack".
+- `Now` **Stage automations** — rules that run a skill when a thread starts or you move a card to Review or Done (Done runs `/weft:done` by default). Still to come: per-project rules, a "needs you for over 10 minutes" trigger, and non-skill actions like opening the diff or pinging Slack.
 - `P1` **Dev server watcher** — notice when a thread starts a server or prints a localhost URL and offer to open it in the browser pane, tied to that card.
 - `P2` **Board status health** — flag threads that stop writing the BOARD STATUS line (instructions ignored or overridden) and nudge them once, so cards don't sit in Review by default.
 - `P2` **Copilot policies** — plain-English standing rules the copilot applies to permission requests ("allow read-only commands in deckcp, ask me about anything that pushes"), with a log of what it allowed.

@@ -11,6 +11,7 @@ import { cliEnv } from "./env";
 import { isOpenElsewhere } from "./import";
 import { isNotLoggedInError, startLogin } from "./login";
 import { keepAliveMinutes, threadPrompt } from "./settings";
+import { PLUGIN_DIR } from "./skills";
 import { extractStatus, type BoardStatus } from "./status";
 import { appendThread, getCard, getThread, replaceThreadItem, updateCard } from "./store";
 import type { Backend, Card, PermissionMode, Question } from "./types";
@@ -97,11 +98,14 @@ const g = globalThis as unknown as {
   __threadboardSessions?: Map<string, Session>;
   __threadboardSpares?: Map<string, Session>;
   __threadboardLoginWaiters?: Map<Backend, Set<string>>;
+  __weftQueued?: Map<string, string[]>;
 };
 const sessions = (g.__threadboardSessions ??= new Map<string, Session>());
 const spares = (g.__threadboardSpares ??= new Map<string, Session>());
 // Cards waiting for a CLI login to finish, to run again afterwards.
 const loginWaiters = (g.__threadboardLoginWaiters ??= new Map<Backend, Set<string>>());
+// Messages waiting to run on a card one turn at a time, such as the skills of board automations.
+const queued = (g.__weftQueued ??= new Map<string, string[]>());
 
 // setTimeout fires at once for anything longer than this.
 const MAX_TIMER_MS = 2 ** 31 - 1;
@@ -285,6 +289,28 @@ export function sendMessage(cardId: string, text: string, { echo = true } = {}) 
   session.busy = true;
   session.status = undefined;
   session.inbox.push(text);
+}
+
+// Runs each message as its own turn, in order, starting now if the card is idle. A turn that's
+// stopped or fails drops the rest; one that ends needing you waits for your reply's turn to end.
+export function queueMessages(cardId: string, texts: string[]) {
+  if (!texts.length) return;
+  queued.set(cardId, [...(queued.get(cardId) ?? []), ...texts]);
+  sendQueued(cardId);
+}
+
+function sendQueued(cardId: string) {
+  if (isBusy(cardId)) return;
+  const queue = queued.get(cardId) ?? [];
+  const text = queue.shift();
+  if (!queue.length) queued.delete(cardId);
+  if (!text) return;
+  try {
+    sendMessage(cardId, text);
+  } catch (err) {
+    queued.delete(cardId);
+    safeUpdate(cardId, { error: err instanceof Error ? err.message : String(err) });
+  }
 }
 
 // Ends the current turn but keeps the thread's CLI open.
@@ -496,6 +522,8 @@ async function drive(session: Session, executable: string | undefined) {
         // So a card can switch to bypassPermissions later, including a spare it takes over.
         allowDangerouslySkipPermissions: !spec.copilot,
         pathToClaudeCodeExecutable: executable,
+        // Weft's own skills (plugin/skills), so board threads can run /weft:done and the like.
+        plugins: !spec.copilot && fs.existsSync(PLUGIN_DIR) ? [{ type: "local", path: PLUGIN_DIR }] : undefined,
         systemPrompt: {
           type: "preset",
           preset: "claude_code",
@@ -544,6 +572,8 @@ async function drive(session: Session, executable: string | undefined) {
       const latest = getCard(cardId);
       if (latest) {
         const live = latest.column === "running" || Boolean(latest.pending);
+        // The CLI ended mid-turn, so whatever was queued after that turn doesn't run.
+        if (live) queued.delete(cardId);
         updateCard(cardId, {
           warm: false,
           ...(live ? { column: "review" as const, pending: null, lastLine: "Stopped" } : {}),
@@ -649,6 +679,11 @@ function handle(id: string, session: Session, msg: SDKMessage) {
         ...(status ? { stage: status.stage, remaining: status.remaining } : {}),
       });
       scheduleIdle(session);
+      if (queued.has(id)) {
+        if (stopped || isError) queued.delete(id);
+        // Once the drive loop has handled this result, so the next turn starts on a settled card.
+        else if (status?.column !== "needs_you") setTimeout(() => sendQueued(id), 0);
+      }
       break;
     }
   }
