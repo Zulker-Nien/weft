@@ -39,6 +39,7 @@ function useUpload(id: string | null) {
 function kindOfFile(file: File): MediaKind {
   if (/^image\/(png|jpe?g|gif|webp|svg\+xml)$/.test(file.type)) return "image";
   if (file.type.startsWith("video/")) return "video";
+  if (file.type.startsWith("audio/")) return "audio";
   return mediaKind(file.name);
 }
 
@@ -46,7 +47,7 @@ function kindOfFile(file: File): MediaKind {
 function nameOf(file: File, kind: MediaKind) {
   if (file.name && file.name !== "image.png") return file.name;
   const ext = file.type.split("/")[1]?.replace("jpeg", "jpg").replace(/\+.*/, "") || "png";
-  return `${kind === "video" ? "pasted-video" : "pasted-image"}.${ext}`;
+  return `${kind === "video" ? "pasted-video" : kind === "audio" ? "pasted-audio" : "pasted-image"}.${ext}`;
 }
 
 // Inserts a node for each file (at pos, or the cursor) and uploads them.
@@ -123,6 +124,11 @@ function MediaView({ node, selected, deleteNode }: NodeViewProps) {
         <img src={url} alt={name} draggable={false} className="block max-h-72 max-w-full rounded-lg object-contain" />
       ) : kind === "video" && url ? (
         <video src={url} controls preload="metadata" className="block max-h-72 max-w-full rounded-lg bg-black" />
+      ) : kind === "audio" && url ? (
+        <span className="flex flex-col gap-1 px-3 py-2">
+          <span className="max-w-[260px] truncate text-[12.5px] text-ink">{name}</span>
+          <audio src={url} controls preload="metadata" className="h-8 w-[260px] max-w-full" />
+        </span>
       ) : (
         <span className="flex items-center gap-2 px-3 py-2 text-[12.5px] text-ink">
           <Icon name="file" size={14} className="text-muted" />

@@ -39,6 +39,8 @@ const PROTOCOL = "weft";
 const mac = process.platform === "darwin";
 
 app.setName(APP_NAME);
+// The board plays a chime when a card changes column, often before you've clicked anything.
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 
 let win;
 let appView;
@@ -117,15 +119,20 @@ function onSplash() {
   return appView && appView.webContents.getURL().startsWith("file:");
 }
 
+// The version rides in the query string: the splash is a bare file:// page with no bridge.
+function loadSplash() {
+  return appView.webContents.loadFile(path.join(__dirname, "splash.html"), { query: { v: app.getVersion() } });
+}
+
 async function showSplash(status) {
-  if (!onSplash()) await appView.webContents.loadFile(path.join(__dirname, "splash.html"));
+  if (!onSplash()) await loadSplash();
   await appView.webContents.executeJavaScript(`setStatus(${JSON.stringify(status)})`).catch(() => {});
 }
 
 async function showFailure(message) {
   showMain();
   const detail = server?.logPath ? ` Details are in ${server.logPath}.` : "";
-  if (!onSplash()) await appView.webContents.loadFile(path.join(__dirname, "splash.html"));
+  if (!onSplash()) await loadSplash();
   await appView.webContents.executeJavaScript(`showError(${JSON.stringify(message + detail)})`).catch(() => {});
 }
 
@@ -545,7 +552,12 @@ ipcMain.handle("browser:state", () => pane.state());
 ipcMain.on("browser:visible", (_e, visible) => pane.setVisible(Boolean(visible)));
 ipcMain.on("browser:active", (_e, key) => pane.setActive(key));
 ipcMain.on("browser:prune", (_e, keys) => pane.prune(Array.isArray(keys) ? keys : []));
-ipcMain.on("browser:bounds", (_e, rect) => pane.setBounds(rect));
+// The board measures in its own CSS pixels; once it's zoomed (View > Zoom In/Out) those no longer
+// match window pixels, so scale by its zoom factor or the native view lands off its placeholder.
+ipcMain.on("browser:bounds", (e, rect) => {
+  const z = e.sender.getZoomFactor();
+  pane.setBounds({ x: rect.x * z, y: rect.y * z, width: rect.width * z, height: rect.height * z });
+});
 ipcMain.on("browser:back", () => pane.back());
 ipcMain.on("browser:forward", () => pane.forward());
 ipcMain.on("browser:reload", () => pane.reload());

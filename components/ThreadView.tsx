@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { api } from "@/lib/client";
 import { isLive } from "@/lib/format";
 import type { Card, ThreadItem } from "@/lib/types";
 import Icon, { Spinner } from "./Icon";
@@ -141,7 +142,7 @@ export default function ThreadView({
 
       {footer}
       {!replaceReply && (
-        <ReplyBox key={card.id} cardId={card.id} cwd={card.cwd} stats={card.stats} live={live} placeholder={placeholder} onSend={send} />
+        <ReplyBox key={card.id} cardId={card.id} cwd={card.cwd} live={live} placeholder={placeholder} onSend={send} onStop={() => api.stop(card.id).then(() => {})} />
       )}
     </>
   );

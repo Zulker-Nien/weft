@@ -6,6 +6,15 @@ import { AUTOMATION_TRIGGERS, type Automation, type AutomationTrigger, type Skil
 import Icon, { Spinner } from "./Icon";
 import { SKILL_SOURCES } from "./SkillMenu";
 
+function validPattern(source: string) {
+  try {
+    new RegExp(source, "i");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const FIELD =
   "rounded-md border border-line-strong bg-canvas px-2.5 py-[7px] text-[12.5px] text-ink outline-none focus:border-accent";
 
@@ -41,8 +50,9 @@ export default function AutomationSettings({
       <div className="flex flex-col gap-0.5">
         <h3 className="text-[13px] font-medium text-ink">Skills and automations</h3>
         <p className="text-[12.5px] text-muted">
-          Run a skill in a card&apos;s thread when the thread starts or when you move the card. Moves only run skills on
-          cards that have already run, and only your own moves count, not the copilot&apos;s or a thread&apos;s own status.
+          Run a skill in a card&apos;s thread when the thread starts, when you move the card, or when a prompt you send
+          matches a pattern (once per thread). Moves only run skills on cards that have already run, and only your own
+          moves count, not the copilot&apos;s or a thread&apos;s own status.
         </p>
       </div>
 
@@ -50,6 +60,9 @@ export default function AutomationSettings({
         {rules.length === 0 && <p className="text-[12.5px] text-faint">No automations. Cards only run what you send them.</p>}
         {rules.map((rule) => {
           const skill = rule.skill.trim().replace(/^\//, "");
+          const matches = rule.on === "prompt-matches";
+          // Settings can't import lib/automations (it reads ~/.weft), so the pattern is checked here.
+          const badPattern = matches && Boolean(rule.pattern?.trim()) && !validPattern(rule.pattern ?? "");
           const unknown = skills !== null && skill !== "" && !known.has(skill);
           return (
             <div key={rule.id} className="flex flex-col gap-1">
@@ -67,6 +80,18 @@ export default function AutomationSettings({
                     </option>
                   ))}
                 </select>
+                {matches && (
+                  <input
+                    value={rule.pattern ?? ""}
+                    spellCheck={false}
+                    placeholder="vercel|deploy"
+                    aria-label="Pattern"
+                    aria-invalid={badPattern}
+                    title={badPattern ? "Not a valid regular expression" : "Regular expression, ignoring case"}
+                    onChange={(e) => update(rule.id, { pattern: e.target.value })}
+                    className={`${FIELD} min-w-0 flex-1 font-mono ${badPattern ? "border-danger" : ""}`}
+                  />
+                )}
                 <span className="shrink-0">run</span>
                 <input
                   value={rule.skill}

@@ -2,11 +2,12 @@
 // where it was pasted as Markdown image syntax: ![name](/Users/me/.weft/attachments/shot-1a2b3c4d.png).
 // These helpers are shared by the server and the board UI, so nothing here touches the file system.
 
-export type MediaKind = "image" | "video" | "file";
+export type MediaKind = "image" | "video" | "audio" | "file";
 
 // Images the Claude API accepts as image blocks.
 export const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp"]);
 export const VIDEO_EXTENSIONS = new Set(["mp4", "mov", "m4v", "webm"]);
+export const AUDIO_EXTENSIONS = new Set(["mp3", "wav", "m4a", "aac", "ogg", "oga", "flac", "opus"]);
 
 // "<slug>-<id>.<ext>", as saveAttachment names files.
 export const ATTACHMENT_NAME = /^[a-z0-9][a-z0-9_-]*\.[a-z0-9]{1,8}$/;
@@ -24,6 +25,7 @@ export function mediaKind(src: string): MediaKind {
   const ext = extensionOf(src);
   if (IMAGE_EXTENSIONS.has(ext) || ext === "svg") return "image";
   if (VIDEO_EXTENSIONS.has(ext)) return "video";
+  if (AUDIO_EXTENSIONS.has(ext)) return "audio";
   return "file";
 }
 

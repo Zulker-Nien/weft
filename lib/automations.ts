@@ -9,6 +9,16 @@ function skillsFor(trigger: AutomationTrigger) {
   return [...new Set(automations().filter((rule) => rule.on === trigger).map((rule) => rule.skill))];
 }
 
+// A rule's pattern as a case-insensitive regex; one that's empty or doesn't compile never matches.
+export function patternRegex(source: string | undefined): RegExp | null {
+  if (!source?.trim()) return null;
+  try {
+    return new RegExp(source, "i");
+  } catch {
+    return null;
+  }
+}
+
 // A thread's first message: its prompt, plus the skills the "a thread starts" rules name. They go in
 // as an instruction instead of /<skill> turns of their own, so each skill sees the task it's for and
 // the prompt runs once.
@@ -29,4 +39,14 @@ export function messagesForMove(card: Card, column: Column): string[] {
   // A session picked up from Claude Code that Weft hasn't run belongs to the app that started it.
   if (card.source === "claude-code" && !card.lastWeftTurn) return [];
   return skillsFor(column).map((skill) => `/${skill}`);
+}
+
+// The skills a "prompt matches" rule wants for a prompt you send, minus the ones this thread has
+// already run: each fires once per thread, like a hook that injects its context on the first keyword.
+export function skillsForPrompt(card: Card, prompt: string): string[] {
+  const ran = new Set(card.promptSkills);
+  const matched = automations()
+    .filter((rule) => rule.on === "prompt-matches" && patternRegex(rule.pattern)?.test(prompt))
+    .map((rule) => rule.skill);
+  return [...new Set(matched)].filter((skill) => !ran.has(skill));
 }

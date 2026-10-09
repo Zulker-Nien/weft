@@ -45,6 +45,7 @@ export default function CardView({
   card,
   now,
   selected,
+  unseen = false,
   onOpen,
   onAnswer,
   onStop,
@@ -53,6 +54,8 @@ export default function CardView({
   card: Card;
   now: number;
   selected: boolean;
+  // Moved here while you weren't looking; cleared when you open it.
+  unseen?: boolean;
   onOpen: () => void;
   onAnswer: (allow: boolean) => void;
   onStop: () => void;
@@ -66,7 +69,9 @@ export default function CardView({
   const needsLogin = card.column === "needs_you" && !card.pending && /^Log in to /.test(card.lastLine ?? "");
   const border = selected
     ? "border-accent ring-1 ring-accent"
-    : card.column === "needs_you"
+    : unseen
+      ? "border-accent/70 ring-1 ring-accent/40 card-unseen"
+      : card.column === "needs_you"
       ? "border-warn/60"
       : "border-line hover:border-line-strong";
   const cost = formatCost(card.costUsd);
@@ -88,8 +93,11 @@ export default function CardView({
       }}
       data-card-id={card.id}
       onClick={onOpen}
-      className={`rounded-lg border bg-card px-3 py-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent ${border} ${live ? "" : "cursor-grab active:cursor-grabbing"}`}
+      className={`relative rounded-lg border bg-card px-3 py-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent ${border} ${live ? "" : "cursor-grab active:cursor-grabbing"}`}
     >
+      {unseen && (
+        <span title="New since you last looked" className="absolute right-1.5 top-1.5 size-2 animate-pulse rounded-full bg-accent" />
+      )}
       {editing ? (
         <input
           autoFocus

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { useEscape } from "@/lib/use-escape";
 import { api } from "@/lib/client";
 import type { SkillInfo } from "@/lib/types";
 import Icon, { Spinner } from "./Icon";
@@ -24,6 +25,7 @@ export default function SkillMenu({
   onRun: (skill: string) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
+  useEscape(open, () => setOpen(false));
   const [load, setLoad] = useState<Load>({ kind: "loading" });
   const [filter, setFilter] = useState("");
   const [running, setRunning] = useState<string | null>(null);
@@ -41,13 +43,10 @@ export default function SkillMenu({
     const onDown = (e: MouseEvent) => {
       if (!menuRef.current?.contains(e.target as Node)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     window.addEventListener("mousedown", onDown);
-    window.addEventListener("keydown", onKey);
     return () => {
       ignore = true;
       window.removeEventListener("mousedown", onDown);
-      window.removeEventListener("keydown", onKey);
     };
   }, [open, cwd]);
 

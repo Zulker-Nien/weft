@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { api, type NewCardInput } from "@/lib/client";
-import type { Backend, CardStats, PermissionMode } from "@/lib/types";
+import type { Backend, CardStats, Effort, PermissionMode } from "@/lib/types";
 import Composer, { type ComposerHandle } from "./Composer";
 import Icon from "./Icon";
 import RepoPicker from "./RepoPicker";
@@ -12,6 +12,7 @@ import { useEscape } from "@/lib/use-escape";
 const LAST_CWD = "threadboard.cwd";
 const LAST_BACKEND = "threadboard.backend";
 const LAST_MODEL = "weft.model";
+const LAST_EFFORT = "weft.effort";
 // What you were writing, kept if the dialog closes before the thread is created.
 const DRAFT = "weft.newThreadDraft";
 const RECT = "weft.newThreadRect";
@@ -82,6 +83,16 @@ const MODELS = [
 
 const DEFAULT_MODEL = "claude-opus-5-5";
 
+// "" leaves it to the model's own default.
+const EFFORTS: { id: Effort | ""; label: string }[] = [
+  { id: "", label: "Default effort" },
+  { id: "low", label: "Low effort" },
+  { id: "medium", label: "Medium effort" },
+  { id: "high", label: "High effort" },
+  { id: "xhigh", label: "Extra high effort" },
+  { id: "max", label: "Max effort" },
+];
+
 const MODES: { id: PermissionMode; label: string; hint: string }[] = [
   { id: "bypassPermissions", label: "YOLO", hint: "Runs every tool without asking" },
   { id: "auto", label: "Auto", hint: "A classifier approves or asks" },
@@ -92,6 +103,7 @@ const MODES: { id: PermissionMode; label: string; hint: string }[] = [
 export default function NewCardDialog({
   home,
   defaultCwd,
+  recentCwd,
   limits,
   onClose,
   onCreate,
@@ -99,23 +111,34 @@ export default function NewCardDialog({
   home: string;
   // The selected project, if any; otherwise the last folder used.
   defaultCwd?: string;
+  // Folder of the most recently active card outside home, used when nothing else is remembered.
+  recentCwd?: string;
   // Plan rate limits from the most recent thread, since they apply to every thread.
   limits?: Pick<CardStats, "fiveHour" | "sevenDay">;
   onClose: () => void;
   onCreate: (input: NewCardInput) => Promise<void>;
 }) {
   const [initial] = useState(() => remembered(DRAFT) ?? "");
-  const [cwd, setCwd] = useState(() => defaultCwd ?? remembered(LAST_CWD) ?? home);
+  const [cwd, setCwd] = useState(() => {
+    // Home isn't a project, so only fall back to it when nothing better is known.
+    const last = remembered(LAST_CWD);
+    return defaultCwd ?? (last && last !== home ? last : undefined) ?? recentCwd ?? last ?? home;
+  });
   const [backend, setBackend] = useState<Backend>(() => (remembered(LAST_BACKEND) as Backend | null) ?? "claude");
   const [model, setModel] = useState(() => {
     const saved = remembered(LAST_MODEL);
     return MODELS.some((m) => m.id === saved) ? saved! : DEFAULT_MODEL;
   });
+  const [effort, setEffort] = useState<Effort | "">(() => {
+    const saved = remembered(LAST_EFFORT);
+    return EFFORTS.find((e) => e.id === saved)?.id ?? "";
+  });
   const [permissionMode, setPermissionMode] = useState<PermissionMode>("bypassPermissions");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [rect, setRect] = useState<Rect | null>(null);
-  const rectRef = useRef<Rect | null>(null);
+  // Measured on first render: the dialog only mounts on a click, never during server render.
+  const [rect, setRect] = useState<Rect | null>(initialRect);
+  const rectRef = useRef<Rect | null>(rect);
   const composer = useRef<ComposerHandle>(null);
   const draftTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -129,9 +152,7 @@ export default function NewCardDialog({
     setRect(r);
   }
 
-  // Measured after mount: window size isn't known during server render.
   useEffect(() => {
-    place(initialRect());
     const onResize = () => rectRef.current && place(fit(rectRef.current));
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
@@ -209,12 +230,13 @@ export default function NewCardDialog({
     }
     setBusy(true);
     try {
-      await onCreate({ prompt, cwd, backend, permissionMode, model: backend === "claude" ? model : undefined, start });
+      await onCreate({ prompt, cwd, backend, permissionMode, model: backend === "claude" ? model : undefined, effort: (backend === "claude" && effort) || undefined, start });
       clearTimeout(draftTimer.current);
       remember(DRAFT, null);
       remember(LAST_CWD, cwd);
       remember(LAST_BACKEND, backend);
       remember(LAST_MODEL, model);
+      remember(LAST_EFFORT, effort || null);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -299,6 +321,27 @@ export default function NewCardDialog({
                 {MODELS.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.label}
+                  </option>
+                ))}
+              </select>
+              <Icon name="chevronDown" size={12} className="pointer-events-none absolute right-1.5" />
+            </label>
+          )}
+
+          {backend === "claude" && (
+            <label
+              className="relative flex items-center gap-1.5 rounded-md border border-line-strong py-1.5 pl-2.5 pr-1.5 text-[12px] text-ink"
+              title="How hard the model thinks before answering"
+            >
+              <span className="sr-only">Effort</span>
+              <select
+                value={effort}
+                onChange={(e) => setEffort(e.target.value as Effort | "")}
+                className="cursor-pointer appearance-none bg-transparent pr-4 font-medium outline-none"
+              >
+                {EFFORTS.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.label}
                   </option>
                 ))}
               </select>

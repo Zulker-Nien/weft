@@ -1,10 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { CHIMES, CHIME_KINDS, type ChimePrefs, chimePrefs, previewChime, setChimePrefs } from "@/lib/chimes";
 import { api } from "@/lib/client";
+import { SHORTCUTS, bindingFromEvent, currentBinding, formatBinding, setBinding } from "@/lib/shortcuts";
+import { THEMES, type Theme, savedTheme, setTheme } from "@/lib/theme";
 import type { Automation, Backend, CliStatus, SettingsView } from "@/lib/types";
 import AutomationSettings from "./AutomationSettings";
-import Icon, { Spinner } from "./Icon";
+import Icon, { type IconName, Spinner } from "./Icon";
+import { useEscape } from "@/lib/use-escape";
+
+const THEME_ICONS: Record<Theme, IconName> = { system: "monitor", light: "sun", dark: "moon" };
 
 const KEEP_ALIVE: { minutes: number; label: string }[] = [
   { minutes: 0, label: "Until the app quits" },
@@ -37,6 +43,118 @@ function statusLine(s: CliStatus | undefined): { text: string; dot: string } {
   return { text: "Not logged in", dot: "bg-warn" };
 }
 
+// Click, then press the new combination. Escape cancels; Reset goes back to the default.
+function ShortcutRow({ id, label }: { id: string; label: string }) {
+  const [binding, setLocal] = useState(() => currentBinding(id));
+  const [capturing, setCapturing] = useState(false);
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-[200px] shrink-0 text-[13px] text-ink">{label}</span>
+      <button
+        type="button"
+        onClick={() => setCapturing(true)}
+        onBlur={() => setCapturing(false)}
+        onKeyDown={(e) => {
+          if (!capturing) return;
+          e.preventDefault();
+          e.stopPropagation();
+          if (e.key === "Escape") return setCapturing(false);
+          const next = bindingFromEvent(e.nativeEvent);
+          if (!next) return;
+          setBinding(id, next);
+          setLocal(next);
+          setCapturing(false);
+        }}
+        className="min-w-[96px] rounded-md border border-line-strong px-2.5 py-1 text-[12.5px] text-ink hover:bg-sunken"
+      >
+        {capturing ? "Press keys…" : formatBinding(binding)}
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setBinding(id, null);
+          setLocal(currentBinding(id));
+        }}
+        className="text-[12px] text-muted hover:text-ink"
+      >
+        Reset
+      </button>
+    </div>
+  );
+}
+
+// Chimes when a card changes column. Like Appearance, every change saves right away.
+function SoundSettings({ titleClass, hintClass }: { titleClass: string; hintClass: string }) {
+  // The dialog only mounts in the browser, so the cookie is there to read.
+  const [prefs, setPrefs] = useState<ChimePrefs>(chimePrefs);
+
+  function update(next: ChimePrefs) {
+    setChimePrefs(next);
+    setPrefs(next);
+  }
+
+  return (
+    <section className="flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col gap-0.5">
+          <h3 className={titleClass}>Sounds</h3>
+          <p className={hintClass}>A short chime when a card changes column. Moves you make yourself stay quiet.</p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={prefs.on}
+          aria-label="Sounds"
+          onClick={() => update({ ...prefs, on: !prefs.on })}
+          className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${prefs.on ? "bg-accent" : "bg-line-strong"}`}
+        >
+          <span
+            className={`absolute top-0.5 h-4 w-4 rounded-full bg-panel shadow transition-[left] ${prefs.on ? "left-[18px]" : "left-0.5"}`}
+          />
+        </button>
+      </div>
+      <div className={`flex flex-col gap-2 ${prefs.on ? "" : "opacity-50"}`}>
+        <label className="flex items-center gap-3">
+          <span className="w-[200px] shrink-0 text-[13px] text-ink">Volume</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={5}
+            value={prefs.volume}
+            disabled={!prefs.on}
+            onChange={(e) => update({ ...prefs, volume: Number(e.target.value) })}
+            className="w-[180px] accent-accent"
+          />
+          <span className="w-8 text-right text-[12px] tabular-nums text-muted">{prefs.volume}</span>
+        </label>
+        {CHIME_KINDS.map((kind) => (
+          <div key={kind} className="flex items-center gap-3">
+            <label className="flex w-[200px] shrink-0 items-center gap-2 text-[13px] text-ink">
+              <input
+                type="checkbox"
+                checked={prefs.kinds[kind]}
+                disabled={!prefs.on}
+                onChange={(e) => update({ ...prefs, kinds: { ...prefs.kinds, [kind]: e.target.checked } })}
+                className="accent-accent"
+              />
+              {CHIMES[kind].label}
+            </label>
+            <span className="min-w-0 flex-1 text-[12.5px] text-muted">{CHIMES[kind].hint}</span>
+            <button
+              type="button"
+              onClick={() => previewChime(kind)}
+              className="shrink-0 rounded-md border border-line-strong px-2.5 py-1 text-[12px] text-ink hover:bg-sunken"
+            >
+              Play
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [settings, setSettings] = useState<SettingsView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -45,6 +163,8 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [rules, setRules] = useState<Automation[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // The dialog only mounts in the browser, so the cookie is there to read.
+  const [theme, setThemeChoice] = useState<Theme>(savedTheme);
 
   const [login, setLogin] = useState<LoginStatus>({ kind: "loading" });
   const [starting, setStarting] = useState<Backend | null>(null);
@@ -52,11 +172,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [startError, setStartError] = useState<Partial<Record<Backend, string>>>({});
   const timers = useRef(new Map<Backend, ReturnType<typeof setTimeout>>());
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useEscape(true, onClose);
 
   useEffect(() => {
     const pending = timers.current;
@@ -179,6 +295,42 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
             {loadError !== null && (
               <p className="text-[12.5px] text-danger">Couldn&apos;t load settings: {loadError}</p>
             )}
+
+            <section className="flex flex-col gap-2">
+              <div className="flex flex-col gap-0.5">
+                <h3 className={sectionTitle}>Appearance</h3>
+                <p className={sectionHint}>Changes right away. System follows your computer&apos;s setting.</p>
+              </div>
+              <div role="radiogroup" aria-label="Appearance" className="flex w-fit gap-0.5 rounded-md border border-line-strong p-0.5">
+                {THEMES.map((t) => (
+                  <button
+                    key={t.id}
+                    role="radio"
+                    aria-checked={theme === t.id}
+                    onClick={() => {
+                      setTheme(t.id);
+                      setThemeChoice(t.id);
+                    }}
+                    className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-[12.5px] ${theme === t.id ? "bg-accent-soft text-accent" : "text-muted hover:bg-sunken hover:text-ink"}`}
+                  >
+                    <Icon name={THEME_ICONS[t.id]} size={13} />
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <SoundSettings titleClass={sectionTitle} hintClass={sectionHint} />
+
+            <section className="flex flex-col gap-2">
+              <div className="flex flex-col gap-0.5">
+                <h3 className={sectionTitle}>Shortcuts</h3>
+                <p className={sectionHint}>Click a shortcut, then press the keys you want. Use at least one of Option, Control, or Command.</p>
+              </div>
+              {SHORTCUTS.map((s) => (
+                <ShortcutRow key={s.id} id={s.id} label={s.label} />
+              ))}
+            </section>
 
             {settings !== null && (
               <>

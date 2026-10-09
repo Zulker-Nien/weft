@@ -15,6 +15,8 @@ BOARD STATUS: column=<needs_you|review|done> | stage=<stage> | remaining=<what's
 - stage: one of Planning, Pre-build refactoring, First shot, Going deeper, Polishing, Post-build refactoring, Cleaning up, Done.
 - remaining: what's still open on the task, two to five words per item, comma-separated, or none.
 
+You also have mcp__board__list_cards (read-only) and mcp__board__create_card (prompt, title, folder defaulting to yours, start defaulting to true) to hand work to a new thread. Check list_cards before creating a self-fix card so you don't duplicate one.
+
 If another instruction also asks for a final status line, put the BOARD STATUS line just before it.`;
 
 const MAX_PROJECTS = 40;

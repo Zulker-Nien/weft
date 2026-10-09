@@ -5,7 +5,7 @@ import { resolveFolder } from "./folders";
 import { formatCost, shortToolName, titleFromPrompt } from "./format";
 import { touchProject } from "./settings";
 import { createCard, getCard, getThread, listCards, updateCard } from "./store";
-import type { Card, ThreadItem } from "./types";
+import type { Backend, Card, PermissionMode, ThreadItem } from "./types";
 
 // What the board tools need from the runner, passed in to avoid a circular import.
 export interface BoardActions {
@@ -100,6 +100,84 @@ async function attempt(run: () => string | Promise<string>) {
 
 const COLUMN = z.enum(["backlog", "running", "needs_you", "review", "done"]);
 
+interface NewBoardCard {
+  prompt: string;
+  folder: string;
+  title?: string;
+  cli?: Backend;
+  permissionMode: PermissionMode;
+  // The card whose thread asked for this one.
+  parentId?: string;
+}
+
+// The one place a card is made on behalf of a thread, whether it is the copilot's or a board thread's.
+export function createBoardCard(args: NewBoardCard): Card {
+  const card = createCard({
+    title: args.title?.trim() || titleFromPrompt(args.prompt),
+    prompt: args.prompt,
+    cwd: resolveFolder(args.folder),
+    backend: args.cli ?? "claude",
+    permissionMode: args.permissionMode,
+    parentId: args.parentId,
+  });
+  touchProject(card.cwd);
+  return card;
+}
+
+function listCardsTool() {
+  return tool(
+    "list_cards",
+    "List the threads on the board with their column, folder, CLI, latest activity, and anything waiting on the user.",
+    { column: COLUMN.optional() },
+    ({ column }) =>
+      attempt(() => {
+        const cards = listCards().filter((c) => c.role !== "copilot" && (!column || c.column === column));
+        return cards.length ? cards.map(describeCard).join("\n\n") : `No cards${column ? ` in ${column}` : ""}.`;
+      }),
+  );
+}
+
+// What every board thread gets: look at the board and hand work off, nothing that touches other cards.
+// The card is read when the tool runs, since a spare CLI only gets its card later.
+export function threadBoardMcpServer(
+  getCardId: () => string | undefined,
+  actions: Pick<BoardActions, "start">,
+) {
+  return createSdkMcpServer({
+    name: "board",
+    version: "0.1.0",
+    alwaysLoad: true,
+    tools: [
+      listCardsTool(),
+      tool(
+        "create_card",
+        "Hand work to a new thread on the board, started right away unless start is false. Its prompt must be self-contained: the thread knows nothing else. Call list_cards first so you don't duplicate a card that already exists.",
+        {
+          prompt: z.string(),
+          title: z.string().optional(),
+          folder: z.string().optional().describe("Project folder; defaults to this thread's own folder"),
+          start: z.boolean().optional().describe("Run it now (default true); false leaves it in Backlog"),
+        },
+        ({ prompt, title, folder, start }) =>
+          attempt(() => {
+            const parent = getCardId() ? getCard(getCardId()!) : undefined;
+            const card = createBoardCard({
+              prompt,
+              title,
+              folder: folder ?? parent?.cwd ?? "",
+              // Same trust level as the thread that asked.
+              permissionMode: parent?.permissionMode ?? "default",
+              parentId: parent?.id,
+            });
+            if (start === false) return `Created ${card.id} in Backlog: ${card.title}`;
+            actions.start(card.id, firstMessage(card));
+            return `Created and started ${card.id}: ${card.title}`;
+          }),
+      ),
+    ],
+  });
+}
+
 // A fresh server per query: an MCP server instance serves one connection.
 export function boardMcpServer(actions: BoardActions) {
   return createSdkMcpServer({
@@ -107,16 +185,7 @@ export function boardMcpServer(actions: BoardActions) {
     version: "0.1.0",
     alwaysLoad: true,
     tools: [
-      tool(
-        "list_cards",
-        "List the threads on the board with their column, folder, CLI, latest activity, and anything waiting on the user.",
-        { column: COLUMN.optional() },
-        ({ column }) =>
-          attempt(() => {
-            const cards = listCards().filter((c) => c.role !== "copilot" && (!column || c.column === column));
-            return cards.length ? cards.map(describeCard).join("\n\n") : `No cards${column ? ` in ${column}` : ""}.`;
-          }),
-      ),
+      listCardsTool(),
       tool(
         "read_thread",
         "Read a thread's conversation: user messages, agent replies, tool calls, and permission requests.",
@@ -140,14 +209,7 @@ export function boardMcpServer(actions: BoardActions) {
         },
         (args) =>
           attempt(() => {
-            const card = createCard({
-              title: args.title?.trim() || titleFromPrompt(args.prompt),
-              prompt: args.prompt,
-              cwd: resolveFolder(args.folder),
-              backend: args.cli ?? "claude",
-              permissionMode: args.permission_mode ?? "default",
-            });
-            touchProject(card.cwd);
+            const card = createBoardCard({ ...args, permissionMode: args.permission_mode ?? "default" });
             return `Created ${card.id} in Backlog: ${card.title}`;
           }),
       ),

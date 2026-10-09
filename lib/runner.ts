@@ -3,7 +3,8 @@ import fs from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { query, type ModelUsage, type PermissionResult, type Query, type SDKMessage, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { messageContent } from "./attachments";
-import { COPILOT_PROMPT, SAFE_BOARD_TOOLS, boardMcpServer, describeBoardTool } from "./board-tools";
+import { skillsForPrompt } from "./automations";
+import { COPILOT_PROMPT, SAFE_BOARD_TOOLS, boardMcpServer, describeBoardTool, threadBoardMcpServer } from "./board-tools";
 import { BROWSER_PROMPT, browserMcpServer } from "./browser-tools";
 import { publish } from "./bus";
 import { shortToolName, toolAction } from "./format";
@@ -16,7 +17,7 @@ import { extractReview, REVIEW_PROMPT } from "./review";
 import { extractStatus, type BoardStatus } from "./status";
 import { appendThread, getCard, getThread, replaceThreadItem, updateCard } from "./store";
 import { adoptLocalMedia, toolResult } from "./thread-media";
-import type { Backend, Card, CardStats, LimitWindow, PermissionMode, Question } from "./types";
+import type { Backend, Card, CardStats, Effort, LimitWindow, PermissionMode, Question } from "./types";
 
 // Spare CLIs started ahead of time, one per recent project folder, so a new card doesn't wait.
 const MAX_SPARES = 3;
@@ -67,6 +68,7 @@ interface Spec {
   backend: Backend;
   permissionMode: PermissionMode;
   model?: string;
+  effort?: Effort;
   sessionId?: string;
   // Continue the session as a copy instead of writing to it.
   forkSession?: boolean;
@@ -182,6 +184,7 @@ function specFor(card: Card): Spec {
     backend: card.backend,
     permissionMode: card.permissionMode,
     model: card.model,
+    effort: card.effort,
     sessionId: card.sessionId,
     copilot: card.role === "copilot",
   };
@@ -275,6 +278,10 @@ function adoptSpare(card: Card): Session | undefined {
     spare.spec.model = card.model;
     void spare.query?.setModel(card.model).catch(() => {});
   }
+  if (card.effort && card.effort !== spare.spec.effort) {
+    spare.spec.effort = card.effort;
+    void spare.query?.applyFlagSettings({ effortLevel: card.effort }).catch(() => {});
+  }
   safeUpdate(card.id, { warm: true });
   scheduleIdle(spare);
   setTimeout(() => ensureSpare(card.cwd, card.backend), 0);
@@ -302,6 +309,18 @@ export function sendMessage(cardId: string, text: string, { echo = true } = {}) 
   session.busy = true;
   session.status = undefined;
   session.inbox.push(text);
+}
+
+// A message you typed: sent now, then the skills that "a prompt matches" rules want for it follow as
+// their own turns, once per thread per skill.
+export function sendUserMessage(cardId: string, text: string) {
+  const card = getCard(cardId);
+  if (!card) throw new Error("No such card.");
+  sendMessage(cardId, text);
+  const skills = skillsForPrompt(card, text);
+  if (!skills.length) return;
+  updateCard(cardId, { promptSkills: [...(card.promptSkills ?? []), ...skills] });
+  queueMessages(cardId, skills.map((skill) => `/${skill}`));
 }
 
 // Runs each message as its own turn, in order, starting now if the card is idle. A turn that's
@@ -517,7 +536,7 @@ function askUser(
   });
 }
 
-// This app's own tools (the browser pane, and the copilot's read-only board tools) skip the prompt.
+// This app's own tools (the browser pane, and the board tools: list_cards, create_card, and the copilot's others) skip the prompt.
 function isTrustedTool(toolName: string, source?: string) {
   if (source !== "sdk") return false;
   if (toolName.startsWith("mcp__browser__")) return true;
@@ -540,6 +559,7 @@ async function drive(session: Session, executable: string | undefined) {
         includePartialMessages: true,
         permissionMode: spec.permissionMode,
         model: spec.model,
+        effort: spec.effort,
         // So a card can switch to bypassPermissions later, including a spare it takes over.
         allowDangerouslySkipPermissions: !spec.copilot,
         pathToClaudeCodeExecutable: executable,
@@ -552,7 +572,10 @@ async function drive(session: Session, executable: string | undefined) {
         },
         mcpServers: spec.copilot
           ? { browser: browserMcpServer(() => session.cardId ?? undefined), board: boardMcpServer(boardActions) }
-          : { browser: browserMcpServer(() => session.cardId ?? undefined) },
+          : {
+              browser: browserMcpServer(() => session.cardId ?? undefined),
+              board: threadBoardMcpServer(() => session.cardId ?? undefined, boardActions),
+            },
         canUseTool: (toolName, input, opts) => {
           if (isTrustedTool(toolName, opts.mcpServer?.source)) {
             return Promise.resolve({ behavior: "allow", updatedInput: input });

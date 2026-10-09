@@ -4,6 +4,7 @@ import { useEffect, useEffectEvent, useRef, useState, type SubmitEvent } from "r
 import { api } from "@/lib/client";
 import type { Backend, LoginView } from "@/lib/types";
 import Icon, { Spinner } from "./Icon";
+import { useEscape } from "@/lib/use-escape";
 
 const NAMES: Record<Backend, string> = { claude: "Claude Code", puku: "puku-cli" };
 
@@ -51,11 +52,7 @@ export default function LoginDialog({ login, onClose }: { login: LoginView; onCl
 
   const close = useEffectEvent(onClose);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  useEscape(true, onClose);
 
   // Done closes itself after a moment; a cancelled login has nothing left to show.
   useEffect(() => {

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import { worktreeParent } from "./format";
 import { listProjects } from "./settings";
 import type { GithubRepo, LocalRepo } from "./types";
 
@@ -47,6 +48,21 @@ function branchOf(dir: string) {
 export function githubSlug(url: string) {
   const match = /github\.com[:/]+([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/.exec(url.trim());
   return match ? `${match[1]}/${match[2]}` : undefined;
+}
+
+const roots = ((globalThis as unknown as { __weftRoots?: Map<string, string> }).__weftRoots ??= new Map());
+
+// The project a folder belongs to: the main repo for a git worktree (live ones through their commondir,
+// deleted ones through a .claude/worktrees path), otherwise the folder itself. Cached per folder.
+export function projectRoot(cwd: string) {
+  let root = roots.get(cwd);
+  if (root) return root;
+  const dir = gitDir(cwd);
+  const common = dir ? readText(path.join(dir, "commondir")).trim() : "";
+  const commonDir = common && dir ? path.resolve(dir, common) : "";
+  root = path.basename(commonDir) === ".git" ? path.dirname(commonDir) : (worktreeParent(cwd) ?? cwd);
+  roots.set(cwd, root);
+  return root;
 }
 
 function originOf(dir: string) {

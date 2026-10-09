@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { BrowserState } from "@/lib/client";
+import { useAnyOverlay } from "@/lib/overlay";
 import Icon, { Spinner } from "./Icon";
 
 const HIDDEN = { x: 0, y: 0, width: 0, height: 0 };
@@ -12,6 +13,7 @@ export default function BrowserPane({
   desktop,
   state,
   obscured,
+  expanded,
   width,
   onWidth,
   onClose,
@@ -19,6 +21,7 @@ export default function BrowserPane({
   desktop: boolean;
   state: BrowserState;
   obscured: boolean;
+  expanded: boolean;
   width: number;
   onWidth: (width: number) => void;
   onClose: () => void;
@@ -26,7 +29,8 @@ export default function BrowserPane({
   const holder = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState<string | null>(null);
   const [resizing, setResizing] = useState(false);
-  const hide = obscured || resizing;
+  const overlay = useAnyOverlay();
+  const hide = obscured || overlay || resizing;
 
   useEffect(() => {
     const bridge = window.threadboard;
@@ -45,7 +49,7 @@ export default function BrowserPane({
       window.removeEventListener("resize", report);
       bridge.browser.setBounds(HIDDEN);
     };
-  }, [hide]);
+  }, [hide, expanded]);
 
   function go(raw: string) {
     const url = raw.trim();
@@ -72,12 +76,17 @@ export default function BrowserPane({
   const nav = "rounded-md p-1.5 text-muted hover:bg-sunken hover:text-ink disabled:opacity-30 disabled:hover:bg-transparent";
 
   return (
-    <section className="relative flex shrink-0 flex-col border-l border-line bg-panel" style={{ width }}>
-      <div
-        onPointerDown={startResize}
-        className="absolute inset-y-0 -left-1 z-10 w-2 cursor-col-resize hover:bg-accent/30"
-        aria-hidden="true"
-      />
+    <section
+      className={`relative flex flex-col border-l border-line bg-panel ${expanded ? "min-w-0 flex-1" : "shrink-0"}`}
+      style={expanded ? undefined : { width }}
+    >
+      {!expanded && (
+        <div
+          onPointerDown={startResize}
+          className="absolute inset-y-0 -left-1 z-10 w-2 cursor-col-resize hover:bg-accent/30"
+          aria-hidden="true"
+        />
+      )}
       <div className="flex items-center gap-1 border-b border-line px-2 py-1.5">
         <button className={nav} disabled={!state.canGoBack} onClick={() => window.threadboard?.browser.back()} aria-label="Back">
           <Icon name="back" size={15} />

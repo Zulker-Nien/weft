@@ -14,6 +14,8 @@ export type Backend = "claude" | "puku";
 // bypassPermissions is "YOLO": every tool runs without asking.
 export type PermissionMode = "default" | "acceptEdits" | "auto" | "bypassPermissions";
 
+export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
+
 // A question the agent asked with its AskUserQuestion tool.
 export interface Question {
   question: string;
@@ -87,9 +89,14 @@ export interface Card {
   permissionMode: PermissionMode;
   // Chosen when the thread was made; left out, the CLI's own default.
   model?: string;
+  effort?: Effort;
   column: Column;
   // Filed away after its Done automations finished; the board hides it until "Show archived".
   archived?: boolean;
+  // Skills a "prompt-matches" automation has already run in this thread, so each runs once.
+  promptSkills?: string[];
+  // The card whose thread started this one, via the board tools.
+  parentId?: string;
   sessionId?: string;
   lastLine?: string;
   costUsd?: number;
@@ -154,13 +161,15 @@ export interface Project {
   lastUsedAt: number;
 }
 
-// When an automation runs its skill: as a thread starts, or when you move a card to Review or Done.
-export type AutomationTrigger = "start" | "review" | "done";
+// When an automation runs its skill: as a thread starts, when you move a card to Review or Done, or
+// when a prompt you send matches the rule's pattern.
+export type AutomationTrigger = "start" | "review" | "done" | "prompt-matches";
 
 export const AUTOMATION_TRIGGERS: { id: AutomationTrigger; label: string }[] = [
   { id: "start", label: "a thread starts" },
   { id: "review", label: "you move a card to Review" },
   { id: "done", label: "you move a card to Done" },
+  { id: "prompt-matches", label: "a prompt matches" },
 ];
 
 // "When <on>, run the skill <skill>" (see lib/automations.ts).
@@ -169,6 +178,8 @@ export interface Automation {
   on: AutomationTrigger;
   // What follows the slash, e.g. "weft:done" for Weft's own skill or "done" for one in ~/.claude/skills.
   skill: string;
+  // Regex source, matched case-insensitively; only the "prompt-matches" trigger reads it.
+  pattern?: string;
 }
 
 export interface SkillInfo {

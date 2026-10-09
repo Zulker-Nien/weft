@@ -16,6 +16,13 @@ export function folderName(cwd: string) {
   return cwd.split("/").filter(Boolean).pop() ?? cwd;
 }
 
+// "/me/app/.claude/worktrees/eager-x/src" -> "/me/app": the repo a Claude Code worktree folder belongs to,
+// read off the path alone, so it works for worktrees that have since been deleted.
+export function worktreeParent(cwd: string) {
+  const match = /^(.+?)\/\.claude\/worktrees\/[^/]+(?:\/|$)/.exec(cwd);
+  return match ? match[1] : undefined;
+}
+
 export function formatCost(usd?: number) {
   if (!usd) return null;
   return usd < 0.01 ? "<$0.01" : `$${usd.toFixed(2)}`;

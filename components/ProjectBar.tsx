@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
+import { useEscape } from "@/lib/use-escape";
 import { api } from "@/lib/client";
 import Icon from "./Icon";
 
@@ -17,7 +18,7 @@ export interface ProjectSummary {
 // How many of the most recent projects get a chip; the rest are under "More".
 const RECENT_CHIPS = 6;
 
-const SORTS: { id: SortKey; label: string }[] = [
+export const SORTS: { id: SortKey; label: string }[] = [
   { id: "newest", label: "Newest first" },
   { id: "active", label: "Recently active" },
   { id: "oldest", label: "Oldest first" },
@@ -35,7 +36,7 @@ const SUBMIT =
   "shrink-0 rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-on-accent hover:opacity-90 disabled:opacity-50";
 
 // "/Users/me/dev/app/" -> "app"
-function folderName(folder: string) {
+export function folderName(folder: string) {
   const trimmed = folder.replace(/\/+$/, "");
   return trimmed.slice(trimmed.lastIndexOf("/") + 1) || folder;
 }
@@ -95,6 +96,7 @@ export default function ProjectBar({
   onMenuOpenChange?: (open: boolean) => void; // called when the dropdown opens/closes (the board hides a native browser overlay while it's open)
 }) {
   const [open, setOpen] = useState(false);
+  useEscape(open, () => setOpen(false));
   const [form, setForm] = useState<Form>("none");
   const [folder, setFolder] = useState("");
   const [name, setName] = useState("");
@@ -115,14 +117,9 @@ export default function ProjectBar({
     const onMouseDown = (e: MouseEvent) => {
       if (!menuRef.current?.contains(e.target as Node)) setOpen(false);
     };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
     document.addEventListener("mousedown", onMouseDown);
-    document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("mousedown", onMouseDown);
-      document.removeEventListener("keydown", onKeyDown);
       menuChanged(false);
     };
   }, [open]);
@@ -388,7 +385,10 @@ export default function ProjectBar({
           value={query}
           onChange={(e) => onQuery(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Escape" && query) onQuery("");
+            if (e.key === "Escape" && query) {
+              e.preventDefault();
+              onQuery("");
+            }
           }}
           placeholder="Filter cards"
           aria-label="Filter cards"

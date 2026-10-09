@@ -7,6 +7,8 @@ const fs = require("node:fs");
 const net = require("node:net");
 const path = require("node:path");
 
+const { freePort } = require("./free-port.cjs");
+
 const ROOT = path.join(__dirname, "..");
 const MAX_LOG_BYTES = 5 * 1024 * 1024;
 const MAX_RESTARTS = 3;
@@ -85,6 +87,11 @@ function command(port) {
 // Starts the server and supervises it. onStatus(text) reports restarts; onFatal(message) fires after
 // repeated crashes. Returns { url, stop, restart, logPath }.
 async function startServer({ preferredPort, env, onStatus, onFatal }) {
+  // From source the board always lives on one port: evict any stale server (and its build folder)
+  // instead of wandering to another port, so two servers never share `.next`.
+  if (!app.isPackaged) {
+    freePort(preferredPort, process.env.THREADBOARD_PROD ? undefined : process.env.THREADBOARD_DIST || ".next");
+  }
   const port = await pickPort(preferredPort);
   const url = `http://127.0.0.1:${port}`;
   const logPath = logFile();

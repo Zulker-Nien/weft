@@ -21,6 +21,8 @@ export interface ComposerHandle {
   // The prompt as Markdown, or throws if an upload is still running or failed.
   read(): string;
   clear(): void;
+  // Replace the content with Markdown and focus the end.
+  write(markdown: string): void;
   isEmpty(): boolean;
 }
 
@@ -413,6 +415,10 @@ const Composer = forwardRef<
     clear: () => {
       if (source !== null) setSource("");
       editor?.commands.clearContent(true);
+    },
+    write: (markdown) => {
+      if (source !== null) setSource(markdown);
+      else editor?.chain().setContent(markdown, { contentType: "markdown" }).focus("end").run();
     },
     isEmpty: () => (source !== null ? !source.trim() : (editor?.isEmpty ?? true)),
   }));

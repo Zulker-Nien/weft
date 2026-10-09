@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
+import pkg from "./package.json";
 
 const nextConfig: NextConfig = {
+  env: { NEXT_PUBLIC_APP_VERSION: pkg.version },
   // `npm run app` builds into its own folder so it never collides with a running dev server.
   distDir: process.env.THREADBOARD_DIST || ".next",
   // `npm run dist` builds a self-contained server that the packaged Weft.app runs.

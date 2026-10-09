@@ -15,9 +15,12 @@ export default function ThreadPanel({
   onSend,
   onAnswer,
   onStop,
+  onRelease,
   onArchive,
   onDelete,
   onClose,
+  expanded,
+  onToggleExpanded,
 }: {
   card: Card;
   items: ThreadItem[];
@@ -25,14 +28,17 @@ export default function ThreadPanel({
   onSend: (text: string) => Promise<void>;
   onAnswer: (allow: boolean, answers?: Record<string, string>) => void;
   onStop: () => void;
+  onRelease: () => void;
   onArchive: () => void;
   onDelete: () => void;
   onClose: () => void;
+  expanded: boolean;
+  onToggleExpanded: () => void;
 }) {
   const live = isLive(card);
 
   return (
-    <aside className="flex w-[460px] shrink-0 flex-col border-l border-line bg-panel">
+    <aside className={`flex shrink-0 flex-col bg-panel ${expanded ? "w-[44%] min-w-[380px]" : "w-[460px] border-l border-line"}`}>
       <header className="flex items-start gap-3 border-b border-line px-4 py-3">
         <div className="min-w-0 flex-1">
           <h2 className="line-clamp-2 text-[14px] font-medium leading-snug text-ink">{card.title}</h2>
@@ -82,6 +88,14 @@ export default function ThreadPanel({
           <Icon name="trash" size={15} />
         </button>
         <button
+          onClick={onToggleExpanded}
+          title={expanded ? "Back to the side panel" : "Pop out the thread and browser together"}
+          aria-label={expanded ? "Collapse thread" : "Expand thread"}
+          className="rounded-md p-1.5 text-muted hover:bg-sunken hover:text-ink"
+        >
+          <Icon name={expanded ? "collapse" : "expand"} size={15} />
+        </button>
+        <button
           onClick={onClose}
           title="Close"
           aria-label="Close thread"
@@ -95,7 +109,14 @@ export default function ThreadPanel({
         (card.openElsewhere ? (
           <p className="flex items-center gap-1.5 border-b border-warn/40 bg-warn-soft px-4 py-1.5 text-[11.5px] text-warn">
             <Icon name="alert" size={12} />
-            Open in the Claude app right now. Close it there to continue here.
+            <span className="min-w-0 flex-1">Open in the Claude app or a terminal right now.</span>
+            <button
+              onClick={onRelease}
+              title="Stop the Claude CLI that has this thread open, so replies continue here"
+              className="shrink-0 rounded px-1.5 py-0.5 font-medium underline underline-offset-2 hover:bg-warn/15"
+            >
+              Click here to continue
+            </button>
           </p>
         ) : (
           <p className="border-b border-line px-4 py-1.5 text-[11.5px] text-muted">

@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
+/* Light by default; <html data-theme="dark"> switches. A script in app/layout.tsx sets data-theme
+   from the user's choice, or from the OS when they pick System (lib/theme.ts). */
 :root {
+  color-scheme: light;
   --canvas: #f4f3ef;
   --panel: #ffffff;
   --card: #ffffff;
@@ -25,31 +28,30 @@
   --puku-soft: rgb(122 82 209 / 0.13);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --canvas: #131312;
-    --panel: #1b1b19;
-    --card: #222220;
-    --sunken: #181816;
-    --line: rgb(255 255 245 / 0.08);
-    --line-strong: rgb(255 255 245 / 0.17);
-    --ink: #ecebe6;
-    --muted: #a3a19a;
-    --faint: #75736d;
-    --accent: #6ea0f5;
-    --accent-soft: rgb(110 160 245 / 0.14);
-    --on-accent: #0d1a30;
-    --warn: #f0b64e;
-    --warn-soft: rgb(240 182 78 / 0.14);
-    --ok: #69c788;
-    --ok-soft: rgb(105 199 136 / 0.12);
-    --danger: #f08080;
-    --danger-soft: rgb(240 128 128 / 0.12);
-    --claude: #e8916b;
-    --claude-soft: rgb(232 145 107 / 0.15);
-    --puku: #ac91f0;
-    --puku-soft: rgb(172 145 240 / 0.15);
-  }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #131312;
+  --panel: #1b1b19;
+  --card: #222220;
+  --sunken: #181816;
+  --line: rgb(255 255 245 / 0.08);
+  --line-strong: rgb(255 255 245 / 0.17);
+  --ink: #ecebe6;
+  --muted: #a3a19a;
+  --faint: #75736d;
+  --accent: #6ea0f5;
+  --accent-soft: rgb(110 160 245 / 0.14);
+  --on-accent: #0d1a30;
+  --warn: #f0b64e;
+  --warn-soft: rgb(240 182 78 / 0.14);
+  --ok: #69c788;
+  --ok-soft: rgb(105 199 136 / 0.12);
+  --danger: #f08080;
+  --danger-soft: rgb(240 128 128 / 0.12);
+  --claude: #e8916b;
+  --claude-soft: rgb(232 145 107 / 0.15);
+  --puku: #ac91f0;
+  --puku-soft: rgb(172 145 240 / 0.15);
 }
 
 @theme inline {
@@ -250,4 +252,33 @@ button:disabled {
   height: 0;
   color: var(--faint);
   pointer-events: none;
+}
+
+/* Messages in a thread keep single line breaks, as they were typed. */
+.md-thread p {
+  white-space: pre-line;
+}
+
+.md-thread img,
+.md-thread video {
+  display: block;
+}
+
+/* The caret after the text an agent is still writing. */
+.md-streaming > :last-child::after {
+  content: "▍";
+  margin-left: 0.1em;
+  color: var(--accent);
+  animation: md-caret 1s ease-in-out infinite;
+}
+
+@keyframes md-caret {
+  50% {
+    opacity: 0.2;
+  }
+}
+
+/* A card that moved while you weren't looking: tinted until you open it. */
+.card-unseen {
+  background-color: color-mix(in srgb, var(--accent) 8%, var(--card, transparent));
 }

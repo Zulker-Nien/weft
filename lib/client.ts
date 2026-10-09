@@ -6,6 +6,7 @@ import type {
   CliStatus,
   Column,
   DevServerStatus,
+  Effort,
   GithubRepo,
   LocalRepo,
   LoginView,
@@ -77,6 +78,7 @@ export interface NewCardInput {
   backend: Backend;
   permissionMode: PermissionMode;
   model?: string;
+  effort?: Effort;
   start: boolean;
 }
 
@@ -135,7 +137,7 @@ async function call<T>(method: string, url: string, body?: unknown): Promise<T> 
 }
 
 export const api = {
-  list: () => call<{ cards: Card[]; home: string }>("GET", "/api/cards"),
+  list: () => call<{ cards: Card[]; home: string; roots: Record<string, string> }>("GET", "/api/cards"),
   create: (input: NewCardInput) => call<{ card: Card }>("POST", "/api/cards", input),
   move: (id: string, column: Column) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { column }),
   rename: (id: string, title: string) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { title }),
@@ -146,6 +148,8 @@ export const api = {
   answer: (id: string, allow: boolean, answers?: Record<string, string>, pendingId?: string) =>
     call("POST", `/api/cards/${id}/permission`, { allow, answers, pendingId }),
   stop: (id: string) => call("POST", `/api/cards/${id}/stop`),
+  // Stops the Claude CLI that has a picked-up session open in another app.
+  release: (id: string) => call<{ stopped: number }>("POST", `/api/cards/${id}/release`),
   devStatus: (id: string) => call<{ status: DevServerStatus }>("GET", `/api/cards/${id}/dev`),
   devAction: (id: string, action: "start" | "restart" | "stop") =>
     call<{ status: DevServerStatus }>("POST", `/api/cards/${id}/dev`, { action }),

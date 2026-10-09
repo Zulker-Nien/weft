@@ -3,8 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import Composer, { type ComposerHandle } from "./Composer";
 import Icon, { Spinner } from "./Icon";
-import StatusStrip from "./StatusStrip";
-import type { CardStats } from "@/lib/types";
 
 // What you were writing to a card, kept per card until it's sent.
 const draftKey = (cardId: string) => `weft.reply.${cardId}`;
@@ -29,45 +27,47 @@ function writeDraft(cardId: string, markdown: string) {
 export default function ReplyBox({
   cardId,
   cwd,
-  stats,
   live,
   placeholder,
   onSend,
+  onStop,
 }: {
   cardId: string;
   cwd: string;
-  stats?: CardStats;
   // A turn is running or waiting on a permission answer, so a reply can't go yet.
   live: boolean;
   placeholder: string;
   onSend: (text: string) => Promise<void>;
+  onStop: () => Promise<void>;
 }) {
   const [initial] = useState(() => readDraft(cardId));
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Messages written while the thread was working; they go out together once the turn ends.
   const [queue, setQueue] = useState<string[]>([]);
-  const wasLive = useRef(live);
+  // Held while you edit a message pulled back out of the queue (or after a queued send failed).
+  const [paused, setPaused] = useState(false);
   const composer = useRef<ComposerHandle>(null);
   const draftTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => () => clearTimeout(draftTimer.current), []);
 
-  // The turn just ended: send what was queued as one message.
+  // The turn ended and nothing is being edited: send what was queued as one message.
   useEffect(() => {
-    const ended = wasLive.current && !live;
-    wasLive.current = live;
-    if (!ended || queue.length === 0) return;
+    if (live || paused || queue.length === 0) return;
     const text = queue.join("\n\n");
+    // Cleared in the same pass as the send, so a re-run of this effect can't send the queue twice.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setQueue([]);
     onSend(text).catch((err) => {
       setQueue((q) => [text, ...q]);
+      setPaused(true);
       setError(err instanceof Error ? err.message : String(err));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [live]);
+  }, [live, paused, queue]);
 
-  async function submit() {
+  async function submit(now = false) {
     if (sending) return;
     let text: string;
     try {
@@ -76,12 +76,17 @@ export default function ReplyBox({
       setError(err instanceof Error ? err.message : String(err));
       return;
     }
+    if (!text && paused && queue.length > 0) {
+      setPaused(false);
+      return;
+    }
     if (!text) {
       setError("Write a message first.");
       return;
     }
-    if (live) {
+    if (live && !now) {
       setQueue((q) => [...q, text]);
+      setPaused(false);
       clearTimeout(draftTimer.current);
       writeDraft(cardId, "");
       composer.current?.clear();
@@ -89,7 +94,10 @@ export default function ReplyBox({
     }
     setSending(true);
     try {
+      // Send now: interrupt the running turn first, then the message goes out as the next one.
+      if (live) await onStop();
       await onSend(text);
+      setPaused(false);
       clearTimeout(draftTimer.current);
       writeDraft(cardId, "");
       composer.current?.clear();
@@ -101,7 +109,26 @@ export default function ReplyBox({
   }
 
   return (
-    <div className="border-t border-line p-3">
+    <div
+      className="border-t border-line p-3"
+      onKeyDownCapture={(e) => {
+        // Up in an empty box pulls the last queued message back to edit; the queue holds meanwhile.
+        if (e.key === "ArrowUp" && queue.length > 0 && composer.current?.isEmpty()) {
+          e.preventDefault();
+          e.stopPropagation();
+          composer.current.write(queue[queue.length - 1]);
+          setQueue((q) => q.slice(0, -1));
+          setPaused(true);
+        }
+      }}
+      onKeyDown={(e) => {
+        // Ctrl+C stops the running turn, unless text is selected (then it's a copy).
+        if (live && e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "c" && !window.getSelection()?.toString()) {
+          e.preventDefault();
+          void onStop().catch((err) => setError(err instanceof Error ? err.message : String(err)));
+        }
+      }}
+    >
       {queue.length > 0 && (
         <ul className="mb-2 flex flex-col gap-1">
           {queue.map((text, i) => (
@@ -109,7 +136,7 @@ export default function ReplyBox({
               key={i}
               className="flex items-center gap-2 rounded-md bg-sunken px-2.5 py-1.5 text-[12.5px] text-muted"
             >
-              <span className="shrink-0 text-[11px] uppercase tracking-wide">Queued</span>
+              <span className="shrink-0 text-[11px] uppercase tracking-wide">{paused ? "Paused" : "Queued"}</span>
               <span className="min-w-0 flex-1 truncate">{text}</span>
               <button
                 type="button"
@@ -137,6 +164,18 @@ export default function ReplyBox({
         }}
         sizeClass="min-h-[44px] max-h-[40vh]"
         actions={
+          <>
+            {live && (
+              <button
+                type="button"
+                onClick={() => void submit(true)}
+                disabled={sending}
+                title="Stop the current turn and send this now"
+                className="ml-1 shrink-0 rounded-md border border-line-strong px-2 py-1 text-[12px] text-ink hover:bg-sunken disabled:opacity-40"
+              >
+                Send now
+              </button>
+            )}
           <button
             type="button"
             onClick={() => void submit()}
@@ -147,9 +186,9 @@ export default function ReplyBox({
           >
             {sending ? <Spinner size={13} /> : <Icon name="send" size={15} />}
           </button>
+          </>
         }
       />
-      <StatusStrip stats={stats} cwd={cwd} className="mt-1.5 px-1" />
       {error && <p className="mt-1.5 text-[12px] text-danger">{error}</p>}
     </div>
   );
