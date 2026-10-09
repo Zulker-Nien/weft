@@ -4,7 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { query, type ModelUsage, type PermissionResult, type Query, type SDKMessage, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { messageContent } from "./attachments";
 import { skillsForPrompt } from "./automations";
-import { COPILOT_PROMPT, SAFE_BOARD_TOOLS, boardMcpServer, describeBoardTool, threadBoardMcpServer } from "./board-tools";
+import { COPILOT_PROMPT, boardMcpServer, describeBoardTool, isTrustedTool, threadBoardMcpServer } from "./board-tools";
 import { BROWSER_PROMPT, browserMcpServer } from "./browser-tools";
 import { publish } from "./bus";
 import { firstLine, shortToolName, summarizeInput, toolAction } from "./format";
@@ -17,7 +17,8 @@ import { extractReview, REVIEW_PROMPT } from "./review";
 import { extractStatus, type BoardStatus } from "./status";
 import { appendThread, getCard, getThread, replaceThreadItem, updateCard } from "./store";
 import { adoptLocalMedia, toolResult } from "./thread-media";
-import type { Backend, Card, CardStats, Effort, LimitWindow, PermissionMode, Question } from "./types";
+import { columnAfterTurn, eventWindow, modelStats, readQuestions, readResult, turnCost, usageWindow } from "./turn";
+import type { Backend, Card, CardStats, Effort, PermissionMode, Question } from "./types";
 
 // Spare CLIs started ahead of time, one per recent project folder, so a new card doesn't wait.
 const MAX_SPARES = 3;
@@ -473,24 +474,6 @@ function pendingView(p: Pending) {
   return { id: p.id, toolName: p.toolName, title: p.title, input: p.input, questions: p.questions };
 }
 
-// The questions from an AskUserQuestion call, cleaned up for the board.
-function readQuestions(input: Record<string, unknown>): Question[] | undefined {
-  if (!Array.isArray(input.questions)) return undefined;
-  const questions = input.questions
-    .filter((q): q is Record<string, unknown> => Boolean(q) && typeof q === "object")
-    .map((q) => ({
-      question: String(q.question ?? ""),
-      header: typeof q.header === "string" ? q.header : undefined,
-      multiSelect: q.multiSelect === true,
-      options: (Array.isArray(q.options) ? q.options : [])
-        .filter((o): o is Record<string, unknown> => Boolean(o) && typeof o === "object")
-        .map((o) => ({ label: String(o.label ?? ""), description: typeof o.description === "string" ? o.description : undefined }))
-        .filter((o) => o.label),
-    }))
-    .filter((q) => q.question);
-  return questions.length ? questions : undefined;
-}
-
 function askUser(
   cardId: string,
   session: Session,
@@ -534,13 +517,6 @@ function askUser(
       { once: true },
     );
   });
-}
-
-// This app's own tools (the browser pane, and the board tools: list_cards, create_card, and the copilot's others) skip the prompt.
-function isTrustedTool(toolName: string, source?: string) {
-  if (source !== "sdk") return false;
-  if (toolName.startsWith("mcp__browser__")) return true;
-  return toolName.startsWith("mcp__board__") && SAFE_BOARD_TOOLS.has(toolName.slice("mcp__board__".length));
 }
 
 async function drive(session: Session, executable: string | undefined) {
@@ -646,8 +622,8 @@ function handle(id: string, session: Session, msg: SDKMessage) {
 
     case "rate_limit_event": {
       const info = msg.rate_limit_info;
-      if (info.utilization === undefined) break;
-      const window: LimitWindow = { used: Math.round(info.utilization * 100), resetsAt: info.resetsAt };
+      const window = eventWindow(info);
+      if (!window) break;
       if (info.rateLimitType === "five_hour") updateStats(id, { fiveHour: window });
       else if (info.rateLimitType === "seven_day") updateStats(id, { sevenDay: window });
       break;
@@ -709,12 +685,13 @@ function handle(id: string, session: Session, msg: SDKMessage) {
 
     case "result": {
       const stopped = session.stopping;
-      const ok = msg.subtype === "success";
-      const parsed = ok
-        ? (({ text, status }) => ({ text: extractReview(text).text, status }))(extractStatus(msg.result))
-        : { text: `Ended early: ${msg.subtype.replace(/_/g, " ")}`, status: undefined };
-      const summary = stopped ? "Stopped" : parsed.text;
-      const isError = !stopped && msg.is_error;
+      const parsed = readResult({
+        subtype: msg.subtype,
+        result: msg.subtype === "success" ? msg.result : undefined,
+        isError: msg.is_error,
+        stopped,
+      });
+      const { summary, isError } = parsed;
       session.busy = false;
       session.stopping = false;
 
@@ -725,15 +702,13 @@ function handle(id: string, session: Session, msg: SDKMessage) {
       }
 
       const status = parsed.status ?? session.status;
-      // Totals are cumulative within a CLI process. A resumed session usually starts from its saved
-      // total; when it doesn't, this process's totals are added to what the card had before.
-      const previous = getCard(id)?.costUsd ?? 0;
-      session.costBase ??= msg.total_cost_usd >= previous ? 0 : previous;
-      const costUsd = session.costBase + msg.total_cost_usd;
+      const cost = turnCost(getCard(id)?.costUsd ?? 0, msg.total_cost_usd, session.costBase);
+      session.costBase = cost.base;
+      const costUsd = cost.costUsd;
       appendThread(id, { kind: "result", text: summary, costUsd, isError, at: Date.now() });
       safeUpdate(id, {
         sessionId: msg.session_id,
-        column: stopped || isError ? "review" : (status?.column ?? "review"),
+        column: columnAfterTurn(stopped, isError, status),
         pending: null,
         costUsd,
         turns: (getCard(id)?.turns ?? 0) + 1,
@@ -766,9 +741,7 @@ async function refreshLimits(id: string, session: Session) {
     const usage = await session.query?.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true });
     const limits = usage?.rate_limits;
     if (!limits) return;
-    const toWindow = (w?: { utilization: number | null; resets_at: string | null } | null): LimitWindow | undefined =>
-      w?.utilization == null ? undefined : { used: Math.round(w.utilization), resetsAt: w.resets_at ? Date.parse(w.resets_at) / 1000 : undefined };
-    updateStats(id, { fiveHour: toWindow(limits.five_hour), sevenDay: toWindow(limits.seven_day) });
+    updateStats(id, { fiveHour: usageWindow(limits.five_hour), sevenDay: usageWindow(limits.seven_day) });
   } catch {}
 }
 
@@ -778,12 +751,12 @@ function updateStats(id: string, patch: Partial<CardStats>) {
 
 // The status strip's numbers after a turn: model, context fill, tokens, and the folder's changed lines.
 function turnStats(id: string, session: Session, modelUsage: Record<string, ModelUsage>): CardStats {
-  const models = Object.entries(modelUsage ?? {});
-  const [model, main] = models.sort((a, b) => b[1].costUSD - a[1].costUSD)[0] ?? [];
-  const tokens = models.reduce((sum, [, u]) => sum + u.inputTokens + u.outputTokens, 0);
-  const contextUsed =
-    main?.contextWindow && session.contextTokens ? Math.min(100, Math.round((session.contextTokens / main.contextWindow) * 100)) : undefined;
-  return { ...getCard(id)?.stats, model, contextUsed, tokens: tokens || undefined, ...changedLines(session.spec.cwd), branch: gitBranch(session.spec.cwd) };
+  return {
+    ...getCard(id)?.stats,
+    ...modelStats(modelUsage, session.contextTokens),
+    ...changedLines(session.spec.cwd),
+    branch: gitBranch(session.spec.cwd),
+  };
 }
 
 function gitBranch(cwd: string) {

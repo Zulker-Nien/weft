@@ -25,6 +25,14 @@ You're in a small chat window, so keep replies short.`;
 // Starting, replying to, and answering for a thread run agents, so the user approves those.
 export const SAFE_BOARD_TOOLS = new Set(["list_cards", "read_thread", "create_card", "move_card", "stop_card"]);
 
+// This app's own tools (the browser pane, and the board tools: list_cards, create_card, and the copilot's others) skip the prompt.
+// source is the MCP server's type; only in-process ("sdk") servers are Weft's own.
+export function isTrustedTool(toolName: string, source?: string) {
+  if (source !== "sdk") return false;
+  if (toolName.startsWith("mcp__browser__")) return true;
+  return toolName.startsWith("mcp__board__") && SAFE_BOARD_TOOLS.has(toolName.slice("mcp__board__".length));
+}
+
 function boardCard(id: string): Card {
   const card = getCard(id);
   if (!card || card.role === "copilot") throw new Error(`No card ${id}. Use list_cards to get card ids.`);

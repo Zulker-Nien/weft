@@ -14,7 +14,7 @@ vi.mock("./store", () => ({
 }));
 vi.mock("./settings", () => ({ touchProject: vi.fn() }));
 
-const { createBoardCard } = await import("./board-tools");
+const { createBoardCard, isTrustedTool } = await import("./board-tools");
 
 describe("createBoardCard", () => {
   beforeEach(() => {
@@ -34,5 +34,24 @@ describe("createBoardCard", () => {
   it("rejects a folder that doesn't exist, creating nothing", () => {
     expect(() => createBoardCard({ prompt: "x", folder: "/no/such/dir", permissionMode: "default" })).toThrow();
     expect(created).toHaveLength(0);
+  });
+});
+
+describe("isTrustedTool", () => {
+  it("trusts Weft's own in-process tools: the browser pane and the safe board tools", () => {
+    expect(isTrustedTool("mcp__browser__navigate", "sdk")).toBe(true);
+    expect(isTrustedTool("mcp__board__list_cards", "sdk")).toBe(true);
+    expect(isTrustedTool("mcp__board__create_card", "sdk")).toBe(true);
+  });
+
+  it("asks for board tools that run agents, and for anything else", () => {
+    expect(isTrustedTool("mcp__board__start_card", "sdk")).toBe(false);
+    expect(isTrustedTool("mcp__board__reply", "sdk")).toBe(false);
+    expect(isTrustedTool("Bash", "sdk")).toBe(false);
+  });
+
+  it("never trusts a tool from a server that isn't in-process, whatever its name", () => {
+    expect(isTrustedTool("mcp__browser__navigate", "stdio")).toBe(false);
+    expect(isTrustedTool("mcp__board__list_cards", undefined)).toBe(false);
   });
 });
