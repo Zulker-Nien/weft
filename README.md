@@ -144,7 +144,8 @@ yours) and sends the one you pick.
 
 The bar under the header lists your most recent project folders. Click one to see only its cards;
 More lists every project, opens a folder, or creates a new one. Filter and sort controls sit on
-the right. New threads default to the selected project.
+the right. New threads default to the selected project. The New thread dialog drags by its header and
+resizes from any edge or corner; it stays inside the window and remembers its size and position.
 
 ## Logging in
 
