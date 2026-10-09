@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { query, type ModelUsage, type PermissionResult, type Query, type SDKMessage, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { messageContent } from "./attachments";
-import { skillsForPrompt } from "./automations";
+import { isDoneCommand, skillsForPrompt } from "./automations";
 import { COPILOT_PROMPT, boardMcpServer, describeBoardTool, isTrustedTool, threadBoardMcpServer } from "./board-tools";
 import { BROWSER_PROMPT, browserMcpServer } from "./browser-tools";
 import { publish } from "./bus";
@@ -318,12 +318,14 @@ export function sendMessage(cardId: string, text: string, { echo = true } = {}) 
   session.inbox.push(text);
 }
 
-// A message you typed: sent now, then the skills that "a prompt matches" rules want for it follow as
+// A message you typed: sent now (a /done one archives the card once it's run), then the skills that "a prompt matches" rules want for it follow as
 // their own turns, once per thread per skill.
 export function sendUserMessage(cardId: string, text: string) {
   const card = getCard(cardId);
   if (!card) throw new Error("No such card.");
   sendMessage(cardId, text);
+  // /done files the card away when its turn ends, as a move to Done does.
+  if (isDoneCommand(text)) archiveWhenIdle(cardId);
   const skills = skillsForPrompt(card, text);
   if (!skills.length) return;
   updateCard(cardId, { promptSkills: [...(card.promptSkills ?? []), ...skills] });

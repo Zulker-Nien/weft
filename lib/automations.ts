@@ -50,3 +50,8 @@ export function skillsForPrompt(card: Card, prompt: string): string[] {
     .map((rule) => rule.skill);
   return [...new Set(matched)].filter((skill) => !ran.has(skill));
 }
+
+// A message that wraps the thread up (/done, /weft:done, /done-quick): the card is archived once it runs.
+export function isDoneCommand(text: string): boolean {
+  return /^\/(weft:)?done(-quick)?(\s|$)/.test(text.trim());
+}

@@ -5,7 +5,7 @@ import type { Automation, Card } from "./types";
 let rules: Automation[] = [];
 vi.mock("./settings", () => ({ automations: () => rules }));
 
-import { firstMessage, messagesForMove, skillsForPrompt } from "./automations";
+import { firstMessage, isDoneCommand, messagesForMove, skillsForPrompt } from "./automations";
 
 const card = (over: Partial<Card> = {}) => ({ id: "c1", prompt: "Fix the bug", sessionId: "s1", ...over }) as Card;
 
@@ -101,5 +101,14 @@ describe("skillsForPrompt", () => {
     rules = [rule(), rule({ id: "q", pattern: "vercel" })];
     expect(skillsForPrompt(card(), "vercel")).toEqual(["vercel:knowledge-update"]);
     expect(skillsForPrompt(card({ promptSkills: ["vercel:knowledge-update"] }), "vercel")).toEqual([]);
+  });
+});
+
+describe("isDoneCommand", () => {
+  it("matches /done and its variants, with or without arguments", () => {
+    for (const text of ["/done", " /weft:done ", "/done-quick", "/done ship it"]) expect(isDoneCommand(text)).toBe(true);
+  });
+  it("ignores other messages", () => {
+    for (const text of ["done", "/doner", "/weft:commit", "we're /done"]) expect(isDoneCommand(text)).toBe(false);
   });
 });
