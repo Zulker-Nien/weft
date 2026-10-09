@@ -540,9 +540,11 @@ function setupDock() {
 // ---- IPC from the board and copilot ----
 
 // A page that won't load (a dev server that isn't running) is shown in the pane; it isn't an error for the board.
-ipcMain.handle("browser:open", (_e, url) => pane.open(url).catch((err) => ({ error: String(err.message || err) })));
+ipcMain.handle("browser:open", (_e, url, key) => pane.open(url, key || undefined, true).catch((err) => ({ error: String(err.message || err) })));
 ipcMain.handle("browser:state", () => pane.state());
 ipcMain.on("browser:visible", (_e, visible) => pane.setVisible(Boolean(visible)));
+ipcMain.on("browser:active", (_e, key) => pane.setActive(key));
+ipcMain.on("browser:prune", (_e, keys) => pane.prune(Array.isArray(keys) ? keys : []));
 ipcMain.on("browser:bounds", (_e, rect) => pane.setBounds(rect));
 ipcMain.on("browser:back", () => pane.back());
 ipcMain.on("browser:forward", () => pane.forward());

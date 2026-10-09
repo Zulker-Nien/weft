@@ -12,7 +12,9 @@ contextBridge.exposeInMainWorld("threadboard", {
   desktop: true,
   platform: process.platform,
   browser: {
-    open: (url) => ipcRenderer.invoke("browser:open", url),
+    open: (url, key) => ipcRenderer.invoke("browser:open", url, key),
+    setActive: (key) => ipcRenderer.send("browser:active", key),
+    prune: (keys) => ipcRenderer.send("browser:prune", keys),
     getState: () => ipcRenderer.invoke("browser:state"),
     setVisible: (visible) => ipcRenderer.send("browser:visible", visible),
     setBounds: (rect) => ipcRenderer.send("browser:bounds", rect),

@@ -5,12 +5,16 @@ const { WebContentsView } = require("electron");
 const http = require("node:http");
 
 function createBrowserPane({ getWindow, getAppView, token, onContents }) {
-  let view;
+  // One page per card (keyed by card id), so each review keeps its own browser; "board" is the
+  // one shown with no card open. Only the active one is on screen.
+  const BOARD = "board";
+  const views = new Map();
+  let active = BOARD;
   let visible = false;
   let bounds = { x: 0, y: 0, width: 0, height: 0 };
 
   function state() {
-    const wc = view?.webContents;
+    const wc = views.get(active)?.webContents;
     return {
       visible,
       url: wc ? wc.getURL() : "",
@@ -27,23 +31,26 @@ function createBrowserPane({ getWindow, getAppView, token, onContents }) {
   }
 
   function layout() {
-    if (!view) return;
-    view.setBounds(bounds);
-    // Until a page loads, the board shows its own placeholder instead of a blank view.
-    const hasPage = Boolean(view.webContents.getURL());
-    view.setVisible(visible && hasPage && bounds.width > 0 && bounds.height > 0);
+    for (const [key, view] of views) {
+      view.setBounds(bounds);
+      // Until a page loads, the board shows its own placeholder instead of a blank view.
+      const hasPage = Boolean(view.webContents.getURL());
+      view.setVisible(key === active && visible && hasPage && bounds.width > 0 && bounds.height > 0);
+    }
   }
 
-  function ensure() {
-    if (view) return view;
-    view = new WebContentsView({
+  function ensure(key = active) {
+    const existing = views.get(key);
+    if (existing) return existing;
+    const view = new WebContentsView({
       webPreferences: { partition: "persist:threadboard-browser", sandbox: true, contextIsolation: true },
     });
     view.setBackgroundColor("#ffffff");
     getWindow().contentView.addChildView(view);
+    views.set(key, view);
     const wc = view.webContents;
     onContents?.(wc);
-    // Pop-ups open in the pane instead of new windows.
+    // Pop-ups open in the same card's view instead of new windows.
     wc.setWindowOpenHandler(({ url }) => {
       wc.loadURL(url).catch(() => {});
       return { action: "deny" };
@@ -51,7 +58,7 @@ function createBrowserPane({ getWindow, getAppView, token, onContents }) {
     for (const event of ["did-navigate", "did-navigate-in-page", "page-title-updated", "did-start-loading", "did-stop-loading"]) {
       wc.on(event, () => {
         layout();
-        sendState();
+        if (key === active) sendState();
       });
     }
     layout();
@@ -63,6 +70,29 @@ function createBrowserPane({ getWindow, getAppView, token, onContents }) {
     if (visible) ensure();
     layout();
     sendState();
+  }
+
+  // Shows a card's browser, or the board's own with no card open. A card and its browser go together:
+  // opening a card shows its page (if it has one), and closing the card hides the pane.
+  function setActive(key) {
+    if (key === active) return;
+    active = key || BOARD;
+    visible = active !== BOARD && Boolean(views.get(active)?.webContents.getURL());
+    layout();
+    sendState();
+  }
+
+  // Closes the browsers of cards that are gone.
+  function prune(keep) {
+    const keepKeys = new Set([BOARD, active, ...keep]);
+    for (const [key, view] of views) {
+      if (keepKeys.has(key)) continue;
+      views.delete(key);
+      try {
+        getWindow().contentView.removeChildView(view);
+        view.webContents.close();
+      } catch {}
+    }
   }
 
   function setBounds(rect) {
@@ -83,10 +113,14 @@ function createBrowserPane({ getWindow, getAppView, token, onContents }) {
     return `https://${url}`;
   }
 
-  async function open(raw) {
+  // Loads a page in a card's browser. Opening in the card on screen shows the pane; another card's
+  // browser (an agent working in the background) loads without taking over the screen.
+  // From the board itself (activate), the card's browser is brought on screen.
+  async function open(raw, key = active, activate = false) {
     const url = normalizeUrl(raw);
-    const v = ensure();
-    setVisible(true);
+    if (activate) active = key;
+    const v = ensure(key);
+    if (key === active) setVisible(true);
     try {
       await v.webContents.loadURL(url);
     } catch (err) {
@@ -96,27 +130,28 @@ function createBrowserPane({ getWindow, getAppView, token, onContents }) {
     return { url: v.webContents.getURL(), title: v.webContents.getTitle() };
   }
 
-  function requirePage() {
+  function requirePage(key = active) {
+    const view = views.get(key);
     if (!view || !view.webContents.getURL()) throw new Error("The browser pane has no page open yet. Use open_url first.");
     return view.webContents;
   }
 
-  async function pageText() {
-    const wc = requirePage();
+  async function pageText(key) {
+    const wc = requirePage(key);
     const text = await wc.executeJavaScript("document.body ? document.body.innerText : ''");
     return { url: wc.getURL(), title: wc.getTitle(), text: String(text).slice(0, 30_000) };
   }
 
-  async function screenshot() {
-    const wc = requirePage();
-    if (!visible) setVisible(true);
+  async function screenshot(key = active) {
+    const wc = requirePage(key);
+    if (key === active && !visible) setVisible(true);
     let image = await wc.capturePage();
     if (image.getSize().width > 1280) image = image.resize({ width: 1280 });
     return { png: image.toPNG().toString("base64") };
   }
 
-  async function click(selector) {
-    const wc = requirePage();
+  async function click(selector, key) {
+    const wc = requirePage(key);
     const found = await wc.executeJavaScript(`(() => {
       const el = document.querySelector(${JSON.stringify(String(selector))});
       if (!el) return false;
@@ -127,8 +162,8 @@ function createBrowserPane({ getWindow, getAppView, token, onContents }) {
     return { found };
   }
 
-  async function typeText(selector, text) {
-    const wc = requirePage();
+  async function typeText(selector, text, key) {
+    const wc = requirePage(key);
     const found = await wc.executeJavaScript(`(() => {
       const el = document.querySelector(${JSON.stringify(String(selector))});
       if (!el) return false;
@@ -158,11 +193,11 @@ function createBrowserPane({ getWindow, getAppView, token, onContents }) {
   // Resolves to the control server's base URL.
   function startControlServer() {
     const routes = {
-      "POST /browser/open": (body) => open(body.url),
-      "GET /browser/text": () => pageText(),
-      "GET /browser/screenshot": () => screenshot(),
-      "POST /browser/click": (body) => click(body.selector),
-      "POST /browser/type": (body) => typeText(body.selector, body.text),
+      "POST /browser/open": (body) => open(body.url, body.key),
+      "POST /browser/text": (body) => pageText(body.key),
+      "POST /browser/screenshot": (body) => screenshot(body.key),
+      "POST /browser/click": (body) => click(body.selector, body.key),
+      "POST /browser/type": (body) => typeText(body.selector, body.text, body.key),
     };
     const server = http.createServer(async (req, res) => {
       const send = (status, body) => {
@@ -189,10 +224,12 @@ function createBrowserPane({ getWindow, getAppView, token, onContents }) {
     setVisible,
     setBounds,
     isVisible: () => visible,
-    webContents: () => view?.webContents,
-    back: () => view?.webContents.navigationHistory.goBack(),
-    forward: () => view?.webContents.navigationHistory.goForward(),
-    reload: () => view?.webContents.reload(),
+    setActive,
+    prune,
+    webContents: () => views.get(active)?.webContents,
+    back: () => views.get(active)?.webContents.navigationHistory.goBack(),
+    forward: () => views.get(active)?.webContents.navigationHistory.goForward(),
+    reload: () => views.get(active)?.webContents.reload(),
     startControlServer,
   };
 }

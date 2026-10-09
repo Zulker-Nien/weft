@@ -45,7 +45,7 @@ lives in `electron/server.cjs`.
     `/api/cards` (with `x-threadboard: 1`) and then opens the new card. If
     `folder` is missing, the most recent project's path is read from
     `/api/settings` (falling back to `os.homedir()`).
-- IPC handlers at the bottom: `browser:open`, `browser:state`, `browser:visible`,
+- IPC handlers at the bottom: `browser:open` (url, card key), `browser:active`, `browser:prune`, `browser:state`, `browser:visible`,
   `browser:bounds`, `browser:back/forward/reload`, `copilot:toggle`,
   `dialog:openFolder`, `shell:openExternal` (http/https only), `badge:set`, and
   `splash:action` (`retry` re-runs `boot()`; `logs` opens the logs folder; `quit`
