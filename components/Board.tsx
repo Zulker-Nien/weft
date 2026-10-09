@@ -2,20 +2,24 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { api, mergeThread, type BrowserState, type MenuAction, type NewCardInput } from "@/lib/client";
+import { worktreeParent } from "@/lib/format";
 import { COLUMNS, type BoardEvent, type Card, type Column, type LoginView, type Project, type ThreadItem } from "@/lib/types";
 import { useShortcutListener, useShortcuts } from "@/lib/hotkeys";
 import { setTheme, THEMES } from "@/lib/theme";
+import { playChime, preloadChimes, type ChimeKind } from "@/lib/chimes";
 import { useBoardEvents } from "@/lib/use-events";
 import { keepTypedText, useEscape } from "@/lib/use-escape";
 import BrowserPane from "./BrowserPane";
 import CardView from "./CardView";
 import CommandPalette, { type PaletteItem } from "./CommandPalette";
+import CoverageBadge from "./CoverageBadge";
 import Icon from "./Icon";
 import LoginDialog from "./LoginDialog";
 import NewCardDialog from "./NewCardDialog";
 import ProjectBar, { folderName, SORTS, type ProjectSummary, type SortKey } from "./ProjectBar";
 import SettingsDialog from "./SettingsDialog";
 import ShortcutsDialog from "./ShortcutsDialog";
+import StatusStrip from "./StatusStrip";
 import ThreadPanel from "./ThreadPanel";
 
 const CLOSED_BROWSER: BrowserState = {
@@ -59,6 +63,18 @@ function readPrefs(): { project?: string | null; sort?: SortKey } {
     return {};
   }
 }
+
+// Columns whose arrival marks a card unseen: the ones that want you to look.
+const UNSEEN_COLUMNS: Column[] = ["needs_you", "review", "done"];
+
+function without(set: ReadonlySet<string>, id: string) {
+  const next = new Set(set);
+  next.delete(id);
+  return next;
+}
+
+// A move you just made yourself doesn't chime; only changes the board or an agent makes do.
+const OWN_MOVE_MS = 3000;
 
 function writePrefs(prefs: { project: string | null; sort: SortKey }) {
   try {
@@ -127,10 +143,13 @@ export default function Board() {
   const [browser, setBrowser] = useState<BrowserState>(CLOSED_BROWSER);
   const [webBrowserOpen, setWebBrowserOpen] = useState(false);
   const [browserWidth, setBrowserWidth] = useState(560);
+  const [popped, setPopped] = useState(false);
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [copilotNeedsYou, setCopilotNeedsYou] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [project, setProject] = useState<string | null>(null);
+  // Worktree folder -> its main repo, from the server; the bar shows each worktree's cards under that repo.
+  const [roots, setRoots] = useState<Record<string, string>>({});
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("newest");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -143,7 +162,16 @@ export default function Board() {
   const [expanded, setExpanded] = useState<{ view: string; columns: Column[] }>({ view: "", columns: [] });
   // Each card's last known column, to notice when one moves.
   const columns = useRef(new Map<string, Column>());
+  // Each card's last known error, to chime when a new one appears.
+  const errors = useRef(new Map<string, string | undefined>());
+  const copilotColumn = useRef<Column | null>(null);
+  // Moves you made, by card: where to and when, so their chime is skipped.
+  const ownMoves = useRef(new Map<string, { column: Column; at: number }>());
   const selectedRef = useRef<string | null>(null);
+  // Cards that moved (with a chime) while you weren't looking; highlighted until you open them.
+  const [unseen, setUnseen] = useState<ReadonlySet<string>>(new Set());
+  // Folders the server has already resolved into roots.
+  const resolvedFolders = useRef(new Set<string>());
   const now = useNow();
   const desktop = useSyncExternalStore(noopSubscribe, () => Boolean(window.threadboard), () => false);
   // On macOS the header doubles as the title bar, under the window's traffic lights.
@@ -153,6 +181,9 @@ export default function Board() {
   useEffect(() => {
     selectedRef.current = selectedId;
   }, [selectedId]);
+
+  // Decode the chime files now, so the first card that moves isn't late to sound.
+  useEffect(() => preloadChimes(), []);
 
   const notify = useCallback((err: unknown) => {
     setToast(err instanceof Error ? err.message : String(err));
@@ -175,10 +206,24 @@ export default function Board() {
       .catch(() => {});
   }, []);
 
+  const rootOf = useCallback((cwd: string) => roots[cwd] ?? worktreeParent(cwd) ?? cwd, [roots]);
+
+  // A card or project in a folder the server hasn't seen yet fetches the roots again, in case it's a worktree.
+  const resolveFolders = useCallback((folders: string[]) => {
+    const fresh = folders.filter((f) => !resolvedFolders.current.has(f) && !worktreeParent(f));
+    if (!fresh.length) return;
+    for (const f of fresh) resolvedFolders.current.add(f);
+    api
+      .list()
+      .then((data) => setRoots(data.roots))
+      .catch(() => {});
+  }, []);
+
   const select = useCallback(
     (id: string | null) => {
       selectedRef.current = id;
       setSelectedId(id);
+      if (id) setUnseen((prev) => (prev.has(id) ? without(prev, id) : prev));
       setThread([]);
       setStreaming("");
       if (id) loadThread(id, { merge: true });
@@ -193,14 +238,32 @@ export default function Board() {
         case "card":
           // The copilot is a thread too, but it has its own window.
           if (event.card.role === "copilot") {
+            if (copilotColumn.current && copilotColumn.current !== "needs_you" && event.card.column === "needs_you") {
+              playChime("needs_you");
+            }
+            copilotColumn.current = event.card.column;
             setCopilotNeedsYou(event.card.column === "needs_you");
             break;
           }
           {
-            const previous = columns.current.get(event.card.id);
-            columns.current.set(event.card.id, event.card.column);
-            if (previous && previous !== event.card.column) announce(event.card, () => select(event.card.id));
+            const { id, column, error } = event.card;
+            const previous = columns.current.get(id);
+            columns.current.set(id, column);
+            const previousError = errors.current.get(id);
+            errors.current.set(id, error);
+            if (previous && previous !== column) {
+              announce(event.card, () => select(id));
+              const own = ownMoves.current.get(id);
+              ownMoves.current.delete(id);
+              const mine = own?.column === column && Date.now() - own.at < OWN_MOVE_MS;
+              if (!mine && column !== "backlog") playChime(column as ChimeKind);
+              if (!mine && UNSEEN_COLUMNS.includes(column) && selectedRef.current !== id) {
+                setUnseen((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
+              }
+            }
+            if (previous && error && error !== previousError) playChime("error");
           }
+          resolveFolders([event.card.cwd]);
           setCards((prev) => {
             const at = prev.findIndex((c) => c.id === event.card.id);
             if (at === -1) return [event.card, ...prev];
@@ -211,6 +274,7 @@ export default function Board() {
           break;
         case "card_deleted":
           setCards((prev) => prev.filter((c) => c.id !== event.id));
+          setUnseen((prev) => (prev.has(event.id) ? without(prev, event.id) : prev));
           if (selectedRef.current === event.id) setSelectedId(null);
           break;
         case "thread":
@@ -226,6 +290,7 @@ export default function Board() {
           if (event.cardId === selectedRef.current) setStreaming((text) => text + event.text);
           break;
         case "projects":
+          resolveFolders(event.projects.map((p) => p.path));
           setProjects(event.projects);
           break;
         case "login":
@@ -238,21 +303,31 @@ export default function Board() {
         .list()
         .then((data) => {
           columns.current = new Map(data.cards.map((c) => [c.id, c.column]));
+          errors.current = new Map(data.cards.map((c) => [c.id, c.error]));
+          for (const c of data.cards) resolvedFolders.current.add(c.cwd);
           setCards(data.cards);
           setHome(data.home);
+          setRoots(data.roots);
           setLoaded(true);
         })
         .catch(notify);
       api
         .settings()
-        .then((settings) => setProjects(settings.projects))
+        .then((settings) => {
+          // The card list resolved the saved projects too.
+          for (const p of settings.projects) resolvedFolders.current.add(p.path);
+          setProjects(settings.projects);
+        })
         .catch(() => {});
       const prefs = readPrefs();
       if (prefs.project !== undefined) setProject(prefs.project);
       if (prefs.sort && prefs.sort in SORTERS) setSort(prefs.sort);
       api
         .copilot()
-        .then(({ card }) => setCopilotNeedsYou(card.column === "needs_you"))
+        .then(({ card }) => {
+          copilotColumn.current = card.column;
+          setCopilotNeedsYou(card.column === "needs_you");
+        })
         .catch(() => {});
       if (selectedRef.current) loadThread(selectedRef.current);
     },
@@ -317,7 +392,7 @@ export default function Board() {
     const needle = query.trim().toLowerCase();
     const groups = new Map<Column, Card[]>(COLUMNS.map((c) => [c.id, []]));
     for (const card of cards) {
-      if (project && card.cwd !== project) continue;
+      if (project && rootOf(card.cwd) !== project) continue;
       if (card.archived && !showArchived) continue;
       if (needle) {
         const haystack = [card.title, card.prompt, card.lastLine, card.stage, card.remaining].join(" ").toLowerCase();
@@ -327,10 +402,11 @@ export default function Board() {
     }
     for (const list of groups.values()) list.sort(SORTERS[sort]);
     return groups;
-  }, [cards, project, query, sort, showArchived]);
-  const archivedCount = cards.filter((c) => c.archived && (!project || c.cwd === project)).length;
+  }, [cards, project, query, sort, showArchived, rootOf]);
+  const archivedCount = cards.filter((c) => c.archived && (!project || rootOf(c.cwd) === project)).length;
 
-  // Recent projects: saved ones plus every folder a card runs in, most recently active first.
+  // Recent projects: saved ones plus every folder a card runs in, most recently active first. Worktrees
+  // count toward their main repo and never get a chip of their own.
   const projectSummaries = useMemo<ProjectSummary[]>(() => {
     const byPath = new Map<string, ProjectSummary>();
     const summary = (path: string) => {
@@ -338,16 +414,16 @@ export default function Board() {
       if (!s) byPath.set(path, (s = { path, lastActivity: 0, cards: 0, running: 0, needsYou: 0 }));
       return s;
     };
-    for (const p of projects) summary(p.path).lastActivity = Math.max(summary(p.path).lastActivity, p.lastUsedAt);
+    for (const p of projects) summary(rootOf(p.path)).lastActivity = Math.max(summary(rootOf(p.path)).lastActivity, p.lastUsedAt);
     for (const card of cards) {
-      const s = summary(card.cwd);
+      const s = summary(rootOf(card.cwd));
       s.cards += 1;
       s.lastActivity = Math.max(s.lastActivity, activeAt(card));
       if (card.column === "running") s.running += 1;
       if (card.column === "needs_you") s.needsYou += 1;
     }
     return [...byPath.values()].sort((a, b) => b.lastActivity - a.lastActivity);
-  }, [projects, cards]);
+  }, [projects, cards, rootOf]);
 
   const selected = cards.find((c) => c.id === selectedId) ?? null;
   const browserOpen = desktop ? browser.visible : webBrowserOpen;
@@ -444,7 +520,7 @@ export default function Board() {
         command("close", "Close the open thread", "x", () => select(null), "Escape"),
         ...(selected.column === "running" ? [command("stop", "Stop the open thread", "stop", () => api.stop(selected.id).catch(notify))] : []),
         ...COLUMNS.filter((c) => c.id !== selected.column).map((c) =>
-          command(`move-${c.id}`, `Move the open thread to ${c.label}`, "forward", () => api.move(selected.id, c.id).catch(notify)),
+          command(`move-${c.id}`, `Move the open thread to ${c.label}`, "forward", () => move(selected.id, c.id)),
         ),
       );
     }
@@ -607,6 +683,17 @@ export default function Board() {
         input.focus();
       },
     },
+    {
+      id: "archive",
+      keys: ["shift+a"],
+      description: "Archive or unarchive the open thread",
+      group: "Thread",
+      enabled: boardKeys,
+      handler: () => {
+        if (!selected) return false;
+        toggleArchive(selected);
+      },
+    },
   ]);
   useShortcutListener();
 
@@ -634,6 +721,13 @@ export default function Board() {
     if (cwd) api.warm({ cwd }).catch(() => {});
   }
 
+  // Archiving closes the thread; unarchiving leaves it open.
+  function toggleArchive(card: Card) {
+    const archived = !card.archived;
+    if (archived) select(null);
+    api.archive(card.id, archived).catch(notify);
+  }
+
   function openCard(card: Card) {
     select(card.id);
     // Start its CLI now so a reply doesn't wait.
@@ -652,10 +746,23 @@ export default function Board() {
   });
   useEscape(browserOpen, toggleBrowser);
 
+  // Pops the open thread and its browser into one large overlay, and back.
+  function toggleExpanded() {
+    if (!popped && window.threadboard && !browser.visible) window.threadboard.browser.setVisible(true);
+    setPopped(!popped);
+  }
+  useEscape(popped && Boolean(selectedId), () => setPopped(false));
+
   // The desktop app gives the copilot its own window; in a browser tab it opens as a pop-up.
   function toggleCopilot() {
     if (window.threadboard) window.threadboard.copilot.toggle();
     else window.open("/copilot", "threadboard-copilot", "popup,width=420,height=680");
+  }
+
+  // Moves a card for you, remembering it so the move doesn't chime.
+  function move(id: string, column: Column) {
+    ownMoves.current.set(id, { column, at: Date.now() });
+    api.move(id, column).catch(notify);
   }
 
   function drop(column: Column, e: React.DragEvent) {
@@ -663,12 +770,11 @@ export default function Board() {
     setDragOver(null);
     const id = e.dataTransfer.getData("text/plain");
     const card = cards.find((c) => c.id === id);
-    if (card && card.column !== column) api.move(id, column).catch(notify);
+    if (card && card.column !== column) move(id, column);
   }
 
   async function create(input: NewCardInput) {
-    const { card } = await api.create(input);
-    if (input.start) select(card.id);
+    await api.create(input);
   }
 
   return (
@@ -685,6 +791,7 @@ export default function Board() {
           {running} running
           {waiting > 0 && <span className="text-warn"> · {waiting} need{waiting === 1 ? "s" : ""} you</span>}
         </span>
+        <CoverageBadge />
         <div className="flex-1" />
         <button
           onClick={toggleCopilot}
@@ -767,6 +874,7 @@ export default function Board() {
                       card={card}
                       now={now}
                       selected={card.id === selectedId}
+                      unseen={unseen.has(card.id)}
                       onOpen={() => openCard(card)}
                       onAnswer={(allow) => api.answer(card.id, allow, undefined, card.pending?.id).catch(notify)}
                       onStop={() => api.stop(card.id).catch(notify)}
@@ -798,6 +906,10 @@ export default function Board() {
           })}
         </main>
 
+        {popped && selected && (
+          <div className="fixed inset-0 z-30 bg-black/40" onClick={() => setPopped(false)} aria-hidden="true" />
+        )}
+        <div className={popped && selected ? "fixed inset-4 z-40 flex overflow-hidden rounded-xl border border-line-strong bg-panel shadow-2xl" : "contents"}>
         {selected && (
           <ThreadPanel
             key={selected.id}
@@ -809,16 +921,15 @@ export default function Board() {
             }}
             onAnswer={(allow, answers) => api.answer(selected.id, allow, answers, selected.pending?.id).catch(notify)}
             onStop={() => api.stop(selected.id).catch(notify)}
-            onArchive={() => {
-              const archived = !selected.archived;
-              if (archived) select(null);
-              api.archive(selected.id, archived).catch(notify);
-            }}
+            onRelease={() => api.release(selected.id).catch(notify)}
+            onArchive={() => toggleArchive(selected)}
             onDelete={() => {
               select(null);
               api.remove(selected.id).catch(notify);
             }}
             onClose={() => select(null)}
+            expanded={popped}
+            onToggleExpanded={toggleExpanded}
           />
         )}
 
@@ -826,16 +937,27 @@ export default function Board() {
           <BrowserPane
             desktop={desktop}
             state={browser}
-            obscured={showNew || showSettings || showPalette || Boolean(login) || menuOpen}
+            obscured={showNew || showSettings || showPalette || showHelp || Boolean(login) || menuOpen}
             width={browserWidth}
             onWidth={setBrowserWidth}
             onClose={toggleBrowser}
+            expanded={popped && Boolean(selected)}
           />
         )}
+        </div>
       </div>
 
+      <footer className="flex shrink-0 items-center justify-between gap-4 border-t border-line bg-panel px-4 py-1.5">
+        <StatusStrip stats={selected ? selected.stats : latestLimits(cards)} cwd={selected?.cwd} />
+        <span className="shrink-0 whitespace-nowrap text-[11.5px] text-muted">
+          <a href={REPO_URL} onClick={(e) => openLink(e, REPO_URL)} className="font-medium text-ink hover:text-accent">Weft</a> v{process.env.NEXT_PUBLIC_APP_VERSION} built with{" "}
+          <a href={COFFEE_URL} onClick={(e) => openLink(e, COFFEE_URL)} title="Buy me a coffee">☕</a> by{" "}
+          <a href="mailto:alex@aimhuge.com" className="hover:text-accent">alex@aimhuge.com</a>
+        </span>
+      </footer>
+
       {showNew && (
-        <NewCardDialog home={home} defaultCwd={project ?? undefined} limits={latestLimits(cards)} onClose={() => setShowNew(false)} onCreate={create} />
+        <NewCardDialog home={home} defaultCwd={project ?? undefined} recentCwd={[...cards].sort((a, b) => b.updatedAt - a.updatedAt).find((c) => c.cwd !== home)?.cwd} limits={latestLimits(cards)} onClose={() => setShowNew(false)} onCreate={create} />
       )}
       {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
       {showHelp && <ShortcutsDialog onClose={() => setShowHelp(false)} />}
@@ -853,6 +975,16 @@ export default function Board() {
       )}
     </div>
   );
+}
+
+const REPO_URL = "https://github.com/fotoflo/weft";
+const COFFEE_URL = "https://buymeacoffee.com/alexmiller";
+
+// The desktop shell opens links in the default browser; the web build uses the link as is.
+function openLink(e: React.MouseEvent, url: string) {
+  if (!window.threadboard) return;
+  e.preventDefault();
+  window.threadboard.openExternal(url);
 }
 
 // The newest plan rate limits any thread has seen; they're account-wide.

@@ -25,7 +25,7 @@ Two other pieces share the name and are separate: `lib/shortcuts.ts` holds user-
 
 General: `?` or ⌘/ help, `n` new thread, `/` filter, `,` settings, `c` copilot, `b` browser.
 Board: `j`/`k` or ↓/↑ between cards, `h`/`l` or ←/→ between columns, Home/End first and last card, Enter or `o` open the focused card, `a` jump to a card that needs you, `[`/`]` previous and next project, `s` cycle sort.
-Thread: `r` reply in the open thread.
+Thread: `r` reply in the open thread, Shift+`A` archive or unarchive it (plain `a` stays "needs you").
 
 ## Gotchas
 
