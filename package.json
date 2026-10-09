@@ -4,16 +4,25 @@
   "version": "0.1.0",
   "description": "A board for your AI",
   "author": "Alex Miller <fotoflo@gmail.com>",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aimhuge/weft.git"
+  },
+  "homepage": "https://github.com/aimhuge/weft#readme",
+  "bugs": "https://github.com/aimhuge/weft/issues",
   "private": true,
   "main": "electron/main.cjs",
   "scripts": {
-    "dev": "next dev -H 127.0.0.1 -p 3456",
+    "dev": "node electron/free-port.cjs 3456 .next && next dev -H 127.0.0.1 -p 3456",
     "desktop": "electron .",
     "build": "next build",
-    "start": "next start -H 127.0.0.1 -p 3456",
+    "start": "electron .",
     "lint": "eslint",
+    "test": "vitest run",
     "app": "THREADBOARD_DIST=.next-app next build && THREADBOARD_DIST=.next-app THREADBOARD_PROD=1 electron .",
-    "dist": "THREADBOARD_DIST=.next-dist THREADBOARD_STANDALONE=1 next build && node scripts/prepare-standalone.mjs .next-dist && electron-builder --mac --dir"
+    "dist": "THREADBOARD_DIST=.next-dist THREADBOARD_STANDALONE=1 next build && node scripts/prepare-standalone.mjs .next-dist && electron-builder --mac --dir",
+    "coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.293",
@@ -34,12 +43,14 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^3.2.7",
     "electron": "^44.7.0",
     "electron-builder": "^26.15.3",
     "eslint": "^9",
     "eslint-config-next": "16.4.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   },
   "build": {
     "appId": "app.weft.desktop",
