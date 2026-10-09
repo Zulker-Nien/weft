@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <!-- The same glyph drawn on the 32px grid (electron/assets/trayTemplate@2x.png), with softened ends. -->
+  <g fill="#000">
+    <rect x="4" y="4" width="4" height="8" rx="1"/>
+    <rect x="4" y="20" width="4" height="8" rx="1"/>
+    <rect x="14" y="4" width="4" height="24" rx="1"/>
+    <rect x="24" y="4" width="4" height="8" rx="1"/>
+    <rect x="24" y="20" width="4" height="8" rx="1"/>
+    <rect x="2" y="14" width="10" height="4" rx="1"/>
+    <rect x="20" y="14" width="10" height="4" rx="1"/>
+  </g>
+</svg>

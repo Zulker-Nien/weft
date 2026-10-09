@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; img-src 'self' data:" />
+    <title>Weft</title>
+    <style>
+      :root {
+        --bg: #f4f3ef;
+        --ink: #1c1b18;
+        --muted: #64625c;
+        --faint: #96948c;
+        --line: rgb(20 20 15 / 0.12);
+        --accent: #d9774b;
+        --danger: #b93434;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #131312;
+          --ink: #ecebe6;
+          --muted: #a3a19a;
+          --faint: #75736d;
+          --line: rgb(255 255 245 / 0.12);
+          --danger: #f08080;
+        }
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        background: var(--bg);
+        color: var(--ink);
+        font: 14px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        -webkit-app-region: drag;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      main {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+        text-align: center;
+        max-width: 420px;
+        padding: 0 24px;
+      }
+      img {
+        width: 96px;
+        height: 96px;
+        animation: rise 0.5s ease-out both;
+      }
+      h1 {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      .tagline {
+        margin: -10px 0 0;
+        color: var(--muted);
+      }
+      .status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--faint);
+        font-size: 12.5px;
+        min-height: 20px;
+      }
+      .thread {
+        width: 120px;
+        height: 2px;
+        border-radius: 2px;
+        background: var(--line);
+        overflow: hidden;
+        position: relative;
+      }
+      .thread::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        width: 40%;
+        border-radius: 2px;
+        background: var(--accent);
+        animation: weave 1.2s ease-in-out infinite;
+      }
+      .error {
+        display: none;
+        color: var(--danger);
+        font-size: 13px;
+      }
+      .actions {
+        display: none;
+        gap: 8px;
+        -webkit-app-region: no-drag;
+      }
+      button {
+        font: inherit;
+        font-size: 12.5px;
+        padding: 6px 12px;
+        border-radius: 7px;
+        border: 0.5px solid var(--line);
+        background: transparent;
+        color: var(--ink);
+        cursor: pointer;
+      }
+      button.primary {
+        background: var(--accent);
+        border-color: transparent;
+        color: #fff;
+      }
+      body.failed .thread {
+        display: none;
+      }
+      body.failed .error,
+      body.failed .actions {
+        display: flex;
+      }
+      @keyframes weave {
+        0% {
+          transform: translateX(-100%);
+        }
+        100% {
+          transform: translateX(250%);
+        }
+      }
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(6px) scale(0.97);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="assets/icon.png" alt="" onerror="this.style.visibility='hidden'" />
+      <h1>Weft</h1>
+      <p class="tagline">A board for your AI coding threads</p>
+      <div class="thread" aria-hidden="true"></div>
+      <div class="status" id="status">Starting…</div>
+      <div class="error" id="error"></div>
+      <div class="actions">
+        <button class="primary" onclick="window.threadboard?.splashAction('retry')">Try again</button>
+        <button onclick="window.threadboard?.splashAction('logs')">Open logs</button>
+        <button onclick="window.threadboard?.splashAction('quit')">Quit</button>
+      </div>
+    </main>
+    <script>
+      // Called by the main process.
+      window.setStatus = (text) => {
+        document.body.classList.remove("failed");
+        document.getElementById("status").textContent = text;
+      };
+      window.showError = (text) => {
+        document.body.classList.add("failed");
+        document.getElementById("status").textContent = "";
+        document.getElementById("error").textContent = text;
+      };
+    </script>
+  </body>
+</html>

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <!-- Weft icon redrawn on the 16px pixel grid (icon_16x16): 2px threads, colour alone shows which is on top. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="1.5" x2="0" y2="14.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#28324d"/>
+      <stop offset="1" stop-color="#151a29"/>
+    </linearGradient>
+  </defs>
+  <rect x="1.5" y="1.5" width="13" height="13" rx="3" fill="url(#bg)"/>
+  <g shape-rendering="crispEdges">
+    <!-- Warps -->
+    <g fill="#ece5d8">
+      <rect x="4" y="4" width="2" height="8"/>
+      <rect x="7" y="4" width="2" height="8"/>
+      <rect x="10" y="4" width="2" height="8"/>
+    </g>
+    <!-- Wefts -->
+    <rect x="4" y="4" width="8" height="2" fill="#7885a9"/>
+    <rect x="4" y="7" width="8" height="2" fill="#da7a4c"/>
+    <rect x="4" y="10" width="8" height="2" fill="#6f7ca0"/>
+    <!-- Crossings where the warp is on top -->
+    <g fill="#ece5d8">
+      <rect x="4" y="4" width="2" height="2"/>
+      <rect x="10" y="4" width="2" height="2"/>
+      <rect x="7" y="7" width="2" height="2"/>
+      <rect x="4" y="10" width="2" height="2"/>
+      <rect x="10" y="10" width="2" height="2"/>
+    </g>
+  </g>
+</svg>

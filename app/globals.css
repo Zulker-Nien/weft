@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+:root {
+  --canvas: #f4f3ef;
+  --panel: #ffffff;
+  --card: #ffffff;
+  --sunken: #ebe9e3;
+  --line: rgb(20 20 15 / 0.09);
+  --line-strong: rgb(20 20 15 / 0.18);
+  --ink: #1c1b18;
+  --muted: #64625c;
+  --faint: #96948c;
+  --accent: #2c6bd6;
+  --accent-soft: rgb(44 107 214 / 0.1);
+  --on-accent: #ffffff;
+  --warn: #9a5b00;
+  --warn-soft: rgb(230 160 30 / 0.16);
+  --ok: #26773f;
+  --ok-soft: rgb(38 119 63 / 0.11);
+  --danger: #b93434;
+  --danger-soft: rgb(185 52 52 / 0.1);
+  --claude: #b4562f;
+  --claude-soft: rgb(196 100 60 / 0.13);
+  --puku: #6c45c4;
+  --puku-soft: rgb(122 82 209 / 0.13);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas: #131312;
+    --panel: #1b1b19;
+    --card: #222220;
+    --sunken: #181816;
+    --line: rgb(255 255 245 / 0.08);
+    --line-strong: rgb(255 255 245 / 0.17);
+    --ink: #ecebe6;
+    --muted: #a3a19a;
+    --faint: #75736d;
+    --accent: #6ea0f5;
+    --accent-soft: rgb(110 160 245 / 0.14);
+    --on-accent: #0d1a30;
+    --warn: #f0b64e;
+    --warn-soft: rgb(240 182 78 / 0.14);
+    --ok: #69c788;
+    --ok-soft: rgb(105 199 136 / 0.12);
+    --danger: #f08080;
+    --danger-soft: rgb(240 128 128 / 0.12);
+    --claude: #e8916b;
+    --claude-soft: rgb(232 145 107 / 0.15);
+    --puku: #ac91f0;
+    --puku-soft: rgb(172 145 240 / 0.15);
+  }
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-panel: var(--panel);
+  --color-card: var(--card);
+  --color-sunken: var(--sunken);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-claude: var(--claude);
+  --color-claude-soft: var(--claude-soft);
+  --color-puku: var(--puku);
+  --color-puku-soft: var(--puku-soft);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+/* A header that moves the desktop window, like a title bar. Its controls still take clicks. */
+.app-drag {
+  -webkit-app-region: drag;
+}
+
+.app-drag :is(button, input, select, textarea, a) {
+  -webkit-app-region: no-drag;
+}

@@ -1,0 +1,555 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { api, mergeThread, type BrowserState, type MenuAction, type NewCardInput } from "@/lib/client";
+import { COLUMNS, type BoardEvent, type Card, type Column, type LoginView, type Project, type ThreadItem } from "@/lib/types";
+import { useBoardEvents } from "@/lib/use-events";
+import BrowserPane from "./BrowserPane";
+import CardView from "./CardView";
+import Icon from "./Icon";
+import LoginDialog from "./LoginDialog";
+import NewCardDialog from "./NewCardDialog";
+import ProjectBar, { type ProjectSummary, type SortKey } from "./ProjectBar";
+import SettingsDialog from "./SettingsDialog";
+import ThreadPanel from "./ThreadPanel";
+
+const CLOSED_BROWSER: BrowserState = {
+  visible: false,
+  url: "",
+  title: "",
+  loading: false,
+  canGoBack: false,
+  canGoForward: false,
+};
+
+const EMPTY_HINT: Record<Column, string> = {
+  backlog: "New threads wait here until you start them",
+  running: "Drag a backlog card here to start it",
+  needs_you: "Cards land here when an agent asks for permission",
+  review: "Cards land here when a turn finishes",
+  done: "Drag reviewed threads here",
+};
+
+// When a card's thread last moved. A card picked up from Claude Code carries its session's last message
+// time; its updatedAt also changes when the board only reads the transcript.
+const activeAt = (card: Card) => card.lastActivity ?? card.updatedAt;
+
+const SORTERS: Record<SortKey, (a: Card, b: Card) => number> = {
+  newest: (a, b) => b.createdAt - a.createdAt,
+  active: (a, b) => activeAt(b) - activeAt(a),
+  oldest: (a, b) => a.createdAt - b.createdAt,
+  cost: (a, b) => (b.costUsd ?? 0) - (a.costUsd ?? 0),
+};
+
+// Cards shown per column until "Show more"; picking up Claude Code sessions can put hundreds in one.
+const COLUMN_LIMIT = 40;
+
+// The selected project and sort order, remembered per browser.
+const VIEW_PREFS = "threadboard.view";
+
+function readPrefs(): { project?: string | null; sort?: SortKey } {
+  try {
+    return JSON.parse(localStorage.getItem(VIEW_PREFS) ?? "{}");
+  } catch {
+    return {};
+  }
+}
+
+function writePrefs(prefs: { project: string | null; sort: SortKey }) {
+  try {
+    localStorage.setItem(VIEW_PREFS, JSON.stringify(prefs));
+  } catch {}
+}
+
+function lastFolder() {
+  try {
+    return localStorage.getItem("threadboard.cwd");
+  } catch {
+    return null;
+  }
+}
+
+// A desktop notification when a card changes column while the app isn't focused.
+function announce(card: Card, onClick: () => void) {
+  const message =
+    card.column === "needs_you"
+      ? `${card.title} needs you`
+      : card.column === "review"
+        ? `${card.title} is ready for review`
+        : card.column === "done"
+          ? `${card.title} is done`
+          : null;
+  if (!message || typeof Notification === "undefined" || document.hasFocus()) return;
+  if (Notification.permission !== "granted") {
+    if (Notification.permission === "default") void Notification.requestPermission();
+    return;
+  }
+  const notification = new Notification(message, { body: card.pending?.title ?? card.lastLine ?? "" });
+  notification.onclick = () => {
+    window.focus();
+    onClick();
+  };
+}
+
+const noopSubscribe = () => () => {};
+
+// The clock for "5m ago" labels. It reads 0 during prerender, where the current time isn't allowed,
+// and starts ticking once the board is in the browser.
+let clock = 0;
+function subscribeClock(onTick: () => void) {
+  clock = Date.now();
+  const timer = setInterval(() => {
+    clock = Date.now();
+    onTick();
+  }, 30_000);
+  return () => clearInterval(timer);
+}
+
+function useNow() {
+  return useSyncExternalStore(subscribeClock, () => clock, () => 0);
+}
+
+export default function Board() {
+  const [cards, setCards] = useState<Card[]>([]);
+  const [home, setHome] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [thread, setThread] = useState<ThreadItem[]>([]);
+  const [streaming, setStreaming] = useState("");
+  const [showNew, setShowNew] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<Column | null>(null);
+  const [browser, setBrowser] = useState<BrowserState>(CLOSED_BROWSER);
+  const [webBrowserOpen, setWebBrowserOpen] = useState(false);
+  const [browserWidth, setBrowserWidth] = useState(560);
+  const [copilotOpen, setCopilotOpen] = useState(false);
+  const [copilotNeedsYou, setCopilotNeedsYou] = useState(false);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [project, setProject] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortKey>("newest");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [login, setLogin] = useState<LoginView | null>(null);
+  // Columns showing all their cards, for the project and filter they were expanded under.
+  const [expanded, setExpanded] = useState<{ view: string; columns: Column[] }>({ view: "", columns: [] });
+  // Each card's last known column, to notice when one moves.
+  const columns = useRef(new Map<string, Column>());
+  const selectedRef = useRef<string | null>(null);
+  const now = useNow();
+  const desktop = useSyncExternalStore(noopSubscribe, () => Boolean(window.threadboard), () => false);
+  // On macOS the header doubles as the title bar, under the window's traffic lights.
+  const mac = useSyncExternalStore(noopSubscribe, () => window.threadboard?.platform ?? "", () => "") === "darwin";
+  const onMenu = useRef<(action: MenuAction, payload?: string) => void>(() => {});
+
+  useEffect(() => {
+    selectedRef.current = selectedId;
+  }, [selectedId]);
+
+  const notify = useCallback((err: unknown) => {
+    setToast(err instanceof Error ? err.message : String(err));
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  // merge keeps live items that arrived during the fetch; without it (after a reconnect, when what's
+  // shown may be stale) the snapshot replaces the thread.
+  const loadThread = useCallback((id: string, { merge = false }: { merge?: boolean } = {}) => {
+    api
+      .thread(id)
+      .then((data) => {
+        if (selectedRef.current === id) setThread((prev) => (merge ? mergeThread(data.items, prev) : data.items));
+      })
+      .catch(() => {});
+  }, []);
+
+  const select = useCallback(
+    (id: string | null) => {
+      selectedRef.current = id;
+      setSelectedId(id);
+      setThread([]);
+      setStreaming("");
+      if (id) loadThread(id, { merge: true });
+    },
+    [loadThread],
+  );
+
+  // Live updates. The first open (and every reconnect) reloads everything, so nothing is missed.
+  useBoardEvents(
+    (event: BoardEvent) => {
+      switch (event.type) {
+        case "card":
+          // The copilot is a thread too, but it has its own window.
+          if (event.card.role === "copilot") {
+            setCopilotNeedsYou(event.card.column === "needs_you");
+            break;
+          }
+          {
+            const previous = columns.current.get(event.card.id);
+            columns.current.set(event.card.id, event.card.column);
+            if (previous && previous !== event.card.column) announce(event.card, () => select(event.card.id));
+          }
+          setCards((prev) => {
+            const at = prev.findIndex((c) => c.id === event.card.id);
+            if (at === -1) return [event.card, ...prev];
+            const next = prev.slice();
+            next[at] = event.card;
+            return next;
+          });
+          break;
+        case "card_deleted":
+          setCards((prev) => prev.filter((c) => c.id !== event.id));
+          if (selectedRef.current === event.id) setSelectedId(null);
+          break;
+        case "thread":
+          if (event.cardId !== selectedRef.current) break;
+          setThread((prev) => {
+            const next = prev.slice();
+            next[event.index] = event.item;
+            return next;
+          });
+          if (event.item.kind === "assistant" || event.item.kind === "result") setStreaming("");
+          break;
+        case "delta":
+          if (event.cardId === selectedRef.current) setStreaming((text) => text + event.text);
+          break;
+        case "projects":
+          setProjects(event.projects);
+          break;
+        case "login":
+          setLogin(event.login.state === "cancelled" ? null : event.login);
+          break;
+      }
+    },
+    () => {
+      api
+        .list()
+        .then((data) => {
+          columns.current = new Map(data.cards.map((c) => [c.id, c.column]));
+          setCards(data.cards);
+          setHome(data.home);
+          setLoaded(true);
+        })
+        .catch(notify);
+      api
+        .settings()
+        .then((settings) => setProjects(settings.projects))
+        .catch(() => {});
+      const prefs = readPrefs();
+      if (prefs.project !== undefined) setProject(prefs.project);
+      if (prefs.sort && prefs.sort in SORTERS) setSort(prefs.sort);
+      api
+        .copilot()
+        .then(({ card }) => setCopilotNeedsYou(card.column === "needs_you"))
+        .catch(() => {});
+      if (selectedRef.current) loadThread(selectedRef.current);
+    },
+  );
+
+  useEffect(() => {
+    const bridge = window.threadboard;
+    if (!bridge) return;
+    void bridge.browser.getState().then(setBrowser);
+    const offBrowser = bridge.browser.onState(setBrowser);
+    const offCopilot = bridge.copilot.onState((state) => setCopilotOpen(state.open));
+    return () => {
+      offBrowser();
+      offCopilot();
+    };
+  }, []);
+
+  useEffect(() => {
+    window.threadboard?.setBadge(cards.filter((c) => c.column === "needs_you").length);
+  }, [cards]);
+
+  // The menu, dock, tray, and shortcuts reach the board through onMenu, which always sees the latest state.
+  useEffect(() => {
+    onMenu.current = (action, payload) => {
+      switch (action) {
+        case "new-thread":
+          openNew();
+          break;
+        case "settings":
+          setShowSettings(true);
+          break;
+        case "open-card": {
+          const card = cards.find((c) => c.id === payload);
+          if (card) openCard(card);
+          else if (payload) select(payload);
+          break;
+        }
+        case "find": {
+          const input = document.querySelector<HTMLInputElement>('input[placeholder="Filter cards"]');
+          input?.focus();
+          input?.select();
+          break;
+        }
+      }
+    };
+  });
+
+  useEffect(() => window.threadboard?.onMenu?.((action, payload) => onMenu.current(action, payload)), []);
+
+  const filtering = Boolean(project || query.trim());
+  // Picking another project or changing the filter collapses the columns again.
+  const view = `${project ?? ""}\n${query.trim()}`;
+  const expandedColumns = expanded.view === view ? expanded.columns : [];
+
+  const byColumn = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    const groups = new Map<Column, Card[]>(COLUMNS.map((c) => [c.id, []]));
+    for (const card of cards) {
+      if (project && card.cwd !== project) continue;
+      if (needle) {
+        const haystack = [card.title, card.prompt, card.lastLine, card.stage, card.remaining].join(" ").toLowerCase();
+        if (!haystack.includes(needle)) continue;
+      }
+      groups.get(card.column)?.push(card);
+    }
+    for (const list of groups.values()) list.sort(SORTERS[sort]);
+    return groups;
+  }, [cards, project, query, sort]);
+
+  // Recent projects: saved ones plus every folder a card runs in, most recently active first.
+  const projectSummaries = useMemo<ProjectSummary[]>(() => {
+    const byPath = new Map<string, ProjectSummary>();
+    const summary = (path: string) => {
+      let s = byPath.get(path);
+      if (!s) byPath.set(path, (s = { path, lastActivity: 0, cards: 0, running: 0, needsYou: 0 }));
+      return s;
+    };
+    for (const p of projects) summary(p.path).lastActivity = Math.max(summary(p.path).lastActivity, p.lastUsedAt);
+    for (const card of cards) {
+      const s = summary(card.cwd);
+      s.cards += 1;
+      s.lastActivity = Math.max(s.lastActivity, activeAt(card));
+      if (card.column === "running") s.running += 1;
+      if (card.column === "needs_you") s.needsYou += 1;
+    }
+    return [...byPath.values()].sort((a, b) => b.lastActivity - a.lastActivity);
+  }, [projects, cards]);
+
+  const selected = cards.find((c) => c.id === selectedId) ?? null;
+  const browserOpen = desktop ? browser.visible : webBrowserOpen;
+  const waiting = cards.filter((c) => c.column === "needs_you").length;
+  const running = cards.filter((c) => c.column === "running").length;
+
+  function chooseProject(path: string | null) {
+    setProject(path);
+    writePrefs({ project: path, sort });
+    // Have a CLI ready in that folder for the next new thread.
+    if (path) api.warm({ cwd: path }).catch(() => {});
+  }
+
+  function chooseSort(next: SortKey) {
+    setSort(next);
+    writePrefs({ project, sort: next });
+  }
+
+  function openNew() {
+    setShowNew(true);
+    const cwd = project ?? lastFolder();
+    if (cwd) api.warm({ cwd }).catch(() => {});
+  }
+
+  function openCard(card: Card) {
+    select(card.id);
+    // Start its CLI now so a reply doesn't wait.
+    if (!card.warm && card.column !== "done") api.warm({ cardId: card.id }).catch(() => {});
+  }
+
+  function toggleBrowser() {
+    if (window.threadboard) window.threadboard.browser.setVisible(!browser.visible);
+    else setWebBrowserOpen((open) => !open);
+  }
+
+  // The desktop app gives the copilot its own window; in a browser tab it opens as a pop-up.
+  function toggleCopilot() {
+    if (window.threadboard) window.threadboard.copilot.toggle();
+    else window.open("/copilot", "threadboard-copilot", "popup,width=420,height=680");
+  }
+
+  function drop(column: Column, e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(null);
+    const id = e.dataTransfer.getData("text/plain");
+    const card = cards.find((c) => c.id === id);
+    if (card && card.column !== column) api.move(id, column).catch(notify);
+  }
+
+  async function create(input: NewCardInput) {
+    const { card } = await api.create(input);
+    if (input.start) select(card.id);
+  }
+
+  return (
+    <div className="flex h-screen flex-col">
+      <header
+        className={`flex shrink-0 items-center gap-3 border-b border-line bg-panel ${mac ? "app-drag h-11 pl-[78px] pr-4" : "px-4 py-2.5"}`}
+      >
+        <h1 className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-ink">
+          {/* eslint-disable-next-line @next/next/no-img-element -- a fixed 18px mark needs no optimizing */}
+          <img src="/logo.svg" alt="" width={18} height={18} />
+          Weft
+        </h1>
+        <span className="text-[12px] text-muted">
+          {running} running
+          {waiting > 0 && <span className="text-warn"> · {waiting} need{waiting === 1 ? "s" : ""} you</span>}
+        </span>
+        <div className="flex-1" />
+        <button
+          onClick={toggleCopilot}
+          className={`relative flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12.5px] ${copilotOpen ? "border-accent bg-accent-soft text-accent" : "border-line-strong text-ink hover:bg-sunken"}`}
+        >
+          <Icon name="sparkles" size={14} /> Copilot
+          {copilotNeedsYou && (
+            <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-warn" title="The copilot needs you" />
+          )}
+        </button>
+        <button
+          onClick={toggleBrowser}
+          className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12.5px] ${browserOpen ? "border-accent bg-accent-soft text-accent" : "border-line-strong text-ink hover:bg-sunken"}`}
+        >
+          <Icon name="globe" size={14} /> Browser
+        </button>
+        <button
+          onClick={() => setShowSettings(true)}
+          title="Settings"
+          aria-label="Settings"
+          className="rounded-md border border-line-strong p-1.5 text-muted hover:bg-sunken hover:text-ink"
+        >
+          <Icon name="sliders" size={15} />
+        </button>
+        <button
+          onClick={openNew}
+          className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[12.5px] font-medium text-on-accent hover:opacity-90"
+        >
+          <Icon name="plus" size={14} /> New thread
+        </button>
+      </header>
+
+      <ProjectBar
+        projects={projectSummaries}
+        total={cards.length}
+        selected={project}
+        onSelect={chooseProject}
+        query={query}
+        onQuery={setQuery}
+        sort={sort}
+        onSort={chooseSort}
+        home={home}
+        onMenuOpenChange={setMenuOpen}
+      />
+
+      <div className="flex min-h-0 flex-1">
+        <main className="flex min-w-0 flex-1 gap-3 overflow-x-auto p-3">
+          {COLUMNS.map((column) => {
+            const list = byColumn.get(column.id) ?? [];
+            const shown = expandedColumns.includes(column.id) ? list : list.slice(0, COLUMN_LIMIT);
+            return (
+              <section
+                key={column.id}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(column.id);
+                }}
+                onDragLeave={() => setDragOver((c) => (c === column.id ? null : c))}
+                onDrop={(e) => drop(column.id, e)}
+                className={`flex w-[264px] min-w-[220px] shrink-0 flex-col rounded-xl border ${dragOver === column.id ? "border-accent bg-accent-soft" : "border-transparent bg-sunken"}`}
+              >
+                <div className="flex items-center justify-between px-3 pb-1.5 pt-2.5">
+                  <h2 className={`text-[12.5px] font-medium ${column.id === "needs_you" && list.length ? "text-warn" : "text-ink"}`}>
+                    {column.label}
+                  </h2>
+                  <span className="text-[11.5px] text-faint">{list.length}</span>
+                </div>
+                <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
+                  {shown.map((card) => (
+                    <CardView
+                      key={card.id}
+                      card={card}
+                      now={now}
+                      selected={card.id === selectedId}
+                      onOpen={() => openCard(card)}
+                      onAnswer={(allow) => api.answer(card.id, allow, undefined, card.pending?.id).catch(notify)}
+                      onStop={() => api.stop(card.id).catch(notify)}
+                    />
+                  ))}
+                  {shown.length < list.length && (
+                    <button
+                      onClick={() => setExpanded({ view, columns: [...expandedColumns, column.id] })}
+                      className="rounded-lg px-2 py-1.5 text-center text-[12px] text-muted hover:bg-card hover:text-ink"
+                    >
+                      Show {list.length - shown.length} more
+                    </button>
+                  )}
+                  {loaded && list.length === 0 && (
+                    <p className="px-2 py-3 text-center text-[11.5px] leading-snug text-faint">{filtering ? "No matching cards" : EMPTY_HINT[column.id]}</p>
+                  )}
+                  {column.id === "backlog" && (
+                    <button
+                      onClick={openNew}
+                      className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12.5px] text-muted hover:bg-card hover:text-ink"
+                    >
+                      <Icon name="plus" size={13} /> Add a thread
+                    </button>
+                  )}
+                </div>
+              </section>
+            );
+          })}
+        </main>
+
+        {selected && (
+          <ThreadPanel
+            key={selected.id}
+            card={selected}
+            items={thread}
+            streaming={streaming}
+            onSend={async (text) => {
+              await api.send(selected.id, text);
+            }}
+            onAnswer={(allow, answers) => api.answer(selected.id, allow, answers, selected.pending?.id).catch(notify)}
+            onStop={() => api.stop(selected.id).catch(notify)}
+            onDelete={() => {
+              select(null);
+              api.remove(selected.id).catch(notify);
+            }}
+            onClose={() => select(null)}
+          />
+        )}
+
+        {browserOpen && (
+          <BrowserPane
+            desktop={desktop}
+            state={browser}
+            obscured={showNew || showSettings || Boolean(login) || menuOpen}
+            width={browserWidth}
+            onWidth={setBrowserWidth}
+            onClose={toggleBrowser}
+          />
+        )}
+      </div>
+
+      {showNew && (
+        <NewCardDialog home={home} defaultCwd={project ?? undefined} onClose={() => setShowNew(false)} onCreate={create} />
+      )}
+      {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
+      {login && <LoginDialog login={login} onClose={() => setLogin(null)} />}
+
+      {toast && (
+        <div className="fixed bottom-4 left-4 z-50 flex max-w-md items-start gap-2 rounded-lg border border-danger/30 bg-panel px-3.5 py-2.5 text-[13px] text-ink shadow-lg">
+          <Icon name="alert" size={15} className="mt-0.5 text-danger" />
+          <span className="flex-1">{toast}</span>
+          <button onClick={() => setToast(null)} aria-label="Dismiss" className="text-muted hover:text-ink">
+            <Icon name="x" size={14} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

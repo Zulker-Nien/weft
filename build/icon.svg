@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!--
+    Weft app icon. Big Sur grid: an 824px body with a 185px corner radius, inset 100px.
+    Three cream warp threads run down; three wefts run across in a plain weave (over, under,
+    over). The middle weft is clay: the one thread that binds the others into cloth.
+    Wherever a thread passes under another, a mask cuts it 20px clear of the one on top.
+  -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="100" x2="0" y2="924" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#28324d"/>
+      <stop offset="1" stop-color="#151a29"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="100" x2="0" y2="924" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.16"/>
+      <stop offset="0.45" stop-color="#fff" stop-opacity="0.04"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0.02"/>
+    </linearGradient>
+    <linearGradient id="warp" x1="0" y1="192" x2="0" y2="832" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f4eee3"/>
+      <stop offset="1" stop-color="#e3dbcc"/>
+    </linearGradient>
+    <linearGradient id="weft" x1="0" y1="258" x2="0" y2="766" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6a779b"/>
+      <stop offset="1" stop-color="#5a668a"/>
+    </linearGradient>
+    <linearGradient id="clay" x1="0" y1="462" x2="0" y2="562" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e3875a"/>
+      <stop offset="1" stop-color="#d06b3e"/>
+    </linearGradient>
+    <filter id="drop" x="40" y="40" width="944" height="964" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000" flood-opacity="0.32"/>
+    </filter>
+
+    <!-- Outer warps pass under the clay weft. -->
+    <mask id="under-clay" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <rect x="0" y="442" width="1024" height="140" fill="#000"/>
+    </mask>
+    <!-- The middle warp passes under the top and bottom wefts. -->
+    <mask id="under-slate" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <rect x="0" y="238" width="1024" height="140" fill="#000"/>
+      <rect x="0" y="646" width="1024" height="140" fill="#000"/>
+    </mask>
+    <!-- Top and bottom wefts pass under the outer warps. -->
+    <mask id="under-outer" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <rect x="238" y="0" width="140" height="1024" fill="#000"/>
+      <rect x="646" y="0" width="140" height="1024" fill="#000"/>
+    </mask>
+    <!-- The clay weft passes under the middle warp. -->
+    <mask id="under-middle" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <rect x="442" y="0" width="140" height="1024" fill="#000"/>
+    </mask>
+  </defs>
+
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)" filter="url(#drop)"/>
+  <rect x="101.5" y="101.5" width="821" height="821" rx="183.5" fill="none" stroke="url(#rim)" stroke-width="3"/>
+
+  <!-- Warps -->
+  <rect x="258" y="192" width="100" height="640" rx="50" fill="url(#warp)" mask="url(#under-clay)"/>
+  <rect x="462" y="192" width="100" height="640" rx="50" fill="url(#warp)" mask="url(#under-slate)"/>
+  <rect x="666" y="192" width="100" height="640" rx="50" fill="url(#warp)" mask="url(#under-clay)"/>
+
+  <!-- Wefts -->
+  <rect x="192" y="258" width="640" height="100" rx="50" fill="url(#weft)" mask="url(#under-outer)"/>
+  <rect x="192" y="462" width="640" height="100" rx="50" fill="url(#clay)" mask="url(#under-middle)"/>
+  <rect x="192" y="666" width="640" height="100" rx="50" fill="url(#weft)" mask="url(#under-outer)"/>
+</svg>

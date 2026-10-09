@@ -1,0 +1,39 @@
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  // `npm run app` builds into its own folder so it never collides with a running dev server.
+  distDir: process.env.THREADBOARD_DIST || ".next",
+  // `npm run dist` builds a self-contained server that the packaged Weft.app runs.
+  output: process.env.THREADBOARD_STANDALONE ? "standalone" : undefined,
+  // The SDK finds its native Claude Code binary with a runtime require.resolve that tracing can't
+  // see, so pull in the platform package explicitly.
+  outputFileTracingIncludes: {
+    "/**/*": [
+      "./node_modules/@anthropic-ai/claude-agent-sdk/**/*",
+      `./node_modules/@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/**/*`,
+    ],
+  },
+  // lib/login.ts runs a CLI by a runtime path, which makes tracing pull in the whole project
+  // folder; keep electron-builder's output (dist/) out of it. These globs match anywhere in a path,
+  // so a bare "dist/**" would also drop .next-dist/server/chunks. scripts/prepare-standalone.mjs
+  // prunes the source files that come along.
+  outputFileTracingExcludes: {
+    "/**/*": ["./dist/mac*/**/*", "./dist/Weft-*", "./dist/builder-*"],
+  },
+  cacheComponents: true,
+  partialPrefetching: true,
+  // The Agent SDK spawns the CLI from files inside its own package, so it must not be bundled.
+  serverExternalPackages: ["@anthropic-ai/claude-agent-sdk"],
+  // The desktop shell loads the app from 127.0.0.1, not localhost.
+  allowedDevOrigins: ["127.0.0.1"],
+  turbopack: {
+    rules: {
+      "*.css": {
+        loaders: ["@tailwindcss/turbopack"],
+        as: "*.css",
+      },
+    },
+  },
+};
+
+export default nextConfig;
