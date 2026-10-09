@@ -31,7 +31,9 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - tests before refactoring; small behavior-preserving steps
   - "make the change easy, then make the easy change"
   - name the smell (Long Function, Large Class, Duplicated Code, Feature Envy) before fixing it
-  - hotspots: components/Board.tsx (~900 lines), lib/runner.ts (~810), electron/main.cjs (~620)
+  - hotspots: components/Board.tsx (~950 lines), lib/runner.ts (~800), electron/main.cjs (~620).
+    Pure logic already moved out: `lib/board-view.ts` (columns, project chips, chime/unseen rules) and
+    `lib/turn.ts` (how a turn's result reads, cost, limits). Next: Board's state into hooks.
   - I have a small Vitest suite (`npm test`) over the pure logic in `lib/`. Runner, store and UI are
     still untested; add tests with any risky change.
 
@@ -68,8 +70,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 
 ## Known gaps (verified 2026-10-10)
 
-- Tests cover `lib/status.ts`, `review.ts`, `guard.ts`, `automations.ts`, `format.ts`, `settings.ts`, `store.ts`
-  and `board-tools.ts`; none for the runner, API routes or UI. CI (`.github/workflows/ci.yml`) runs lint,
+- Tests cover `lib/status.ts`, `review.ts`, `guard.ts`, `automations.ts`, `format.ts`, `settings.ts`, `store.ts`,
+  `board-tools.ts`, `board-view.ts` and `turn.ts`; none for runner.ts's SDK loop, API routes or UI. CI (`.github/workflows/ci.yml`) runs lint,
   typecheck and tests, but the repo has no upstream branch yet, so it hasn't run.
 - `7b1db11`, `dfdd9c7` and `0e54c6f` don't build on their own (Board.tsx imported files committed later);
   everything from `2766738` on does.
