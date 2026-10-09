@@ -19,7 +19,9 @@
     "build": "next build",
     "start": "electron .",
     "lint": "eslint",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
+    "prepare": "git config core.hooksPath .githooks || true",
     "app": "THREADBOARD_DIST=.next-app next build && THREADBOARD_DIST=.next-app THREADBOARD_PROD=1 electron .",
     "dist": "THREADBOARD_DIST=.next-dist THREADBOARD_STANDALONE=1 next build && node scripts/prepare-standalone.mjs .next-dist && electron-builder --mac --dir",
     "coverage": "vitest run --coverage"

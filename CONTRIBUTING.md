@@ -19,8 +19,12 @@ You need Node 20+ and a logged-in `claude` CLI (or `puku-cli`). Weft is macOS-fi
 
 ```bash
 npm run lint
+npm run typecheck
 npm test
 ```
+
+`npm install` sets up a pre-commit hook that type-checks exactly what you staged, so a commit can't
+import a file you forgot to `git add`.
 
 Tests are Vitest and sit beside the code as `lib/*.test.ts`. Add a test with any risky change,
 especially to `lib/`. The runner, store and UI are still untested, so tests there are welcome.

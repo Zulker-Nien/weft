@@ -61,16 +61,20 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - This Next.js differs from your training data: read `node_modules/next/dist/docs/` first.
   Leave the managed block in AGENTS.md alone.
 - When a feature lands, update README.md and docs/ROADMAP.md in the same change.
-- Run `npm run lint` and `npm test` (Vitest; tests sit beside the code as `lib/*.test.ts`).
+- Run `npm run lint`, `npm run typecheck` and `npm test` (Vitest; tests sit beside the code as `lib/*.test.ts`).
+- Stage every new file a change imports. The pre-commit hook (`.githooks/pre-commit`, set up by
+  `npm install`) type-checks the staged files alone and refuses a commit that imports an unstaged
+  file. Never `git stash` in this tree: other threads' unstaged work lives here too.
 
-## Known gaps (verified 2026-10-09)
+## Known gaps (verified 2026-10-10)
 
-- Tests cover only `lib/status.ts`, `review.ts`, `guard.ts`, `automations.ts`, `format.ts`; none for the runner,
-  store, API routes or UI. No CI.
+- Tests cover `lib/status.ts`, `review.ts`, `guard.ts`, `automations.ts`, `format.ts`, `settings.ts`, `store.ts`
+  and `board-tools.ts`; none for the runner, API routes or UI. CI (`.github/workflows/ci.yml`) runs lint,
+  typecheck and tests, but the repo has no upstream branch yet, so it hasn't run.
+- `7b1db11`, `dfdd9c7` and `0e54c6f` don't build on their own (Board.tsx imported files committed later);
+  everything from `2766738` on does.
 - Two known `lib/status.ts` bugs are pinned as `it.fails` tests: a status line quoted in a code block is
   stripped and acted on, and `**BOARD STATUS:** column=...` (bold label only) is stripped but not read.
 - No busy-folder or overlap warning yet; parallel cards in one repo share a working tree.
 - Copilot isn't told when threads finish or need you.
 - puku-cli sessions aren't imported; a full puku thread hasn't been verified end to end.
-- README "Known gaps" is stale: Markdown rendering (`components/Markdown.tsx`) and a browser
-  page per card (`electron/browser-pane.cjs`) exist now.

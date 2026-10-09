@@ -210,8 +210,7 @@ Weft is released under the [Apache License 2.0](LICENSE).
 - Only Claude Code sessions are picked up; puku-cli sessions (`~/.puku-cli/projects`) aren't yet.
 - Picked-up cards open with the last 400 items of the conversation, and show the conversation as
   it was last read from disk, not live, until you reply in Weft.
-- Automated tests are thin: `npm test` runs a Vitest suite over the pure helpers in `lib/` (status parser,
-  review tour, API guard, automations, formatting). The runner, store and UI have none yet, and there is no CI.
+- Automated tests are thin: `npm test` runs a Vitest suite over `lib/` (status parser, review tour,
+  API guard, automations, formatting, settings, store, board tools). The runner, API routes and UI have
+  none yet. CI runs lint, typecheck and tests; a pre-commit hook type-checks what's staged.
 - No git worktree per card yet, so parallel cards in the same repo share a working tree.
-- Assistant messages show as plain text, not rendered Markdown.
-- One browser pane is shared by all cards.
