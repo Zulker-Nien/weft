@@ -13,6 +13,8 @@ import type { Backend, PermissionMode } from "@/lib/types";
 const BACKENDS: Backend[] = ["claude", "puku"];
 const MODES: PermissionMode[] = ["default", "acceptEdits", "auto", "bypassPermissions"];
 
+const MODEL_ID = /^[\w.\-\[\]]{1,60}$/;
+
 export async function GET(req: Request) {
   const denied = guard(req, { write: false });
   if (denied) return denied;
@@ -39,7 +41,9 @@ export async function POST(req: Request) {
       ? (body.permissionMode as PermissionMode)
       : "bypassPermissions";
 
-    const card = createCard({ title, prompt, cwd, backend, permissionMode });
+    const model = backend === "claude" && typeof body.model === "string" && MODEL_ID.test(body.model) ? body.model : undefined;
+
+    const card = createCard({ title, prompt, cwd, backend, permissionMode, model });
     touchProject(cwd);
     if (body.start) sendMessage(card.id, firstMessage(card));
     return Response.json({ card: getCard(card.id) });
