@@ -79,6 +79,15 @@ rules don't queue anything; `firstMessage()` appends "Start by using the /x skil
 prompt, used by every path that starts a Backlog card (`POST /api/cards`, the PATCH to running,
 the copilot's `start_card`). The copilot's `move_card` never runs automations.
 
+### Archiving after Done
+
+Moving a card to Done also calls `archiveWhenIdle()` (`lib/runner.ts`): with no queued or running
+turn it sets `card.archived` at once; otherwise the id goes in `archiveAfter` and the `result`
+handler archives it (`column: "done", archived: true`) once the queue drains. A stopped or
+errored turn drops the id, leaving the card in Done unarchived. `sendMessage()` clears `archived`,
+and a move to any other column does too. The board hides archived cards until "Show N archived"
+in the Done header (`components/Board.tsx`).
+
 ## Permissions and questions
 
 ### `canUseTool` -> `askUser` -> `settle`
@@ -231,7 +240,17 @@ don't appear in the Claude app's session list.
 
 ## Review tour
 
-A thread that finishes work for review ends its reply with a fenced `weft-review` JSON block (the instruction is `REVIEW_PROMPT` in `lib/review.ts`, appended to every board thread's system prompt in `drive()`). `lib/runner.ts` strips the block from the visible text and saves the parsed plan on `card.review`. While the card is in Review, `components/ReviewPanel.tsx` shows the plan above the thread: one step at a time with what to look for, "Looks good, next" and previous/next buttons, and a feedback box that sends the note to the thread as a reply. When the plan has a `url`, each step opens its page in the browser pane (desktop app only). A new plan from the thread restarts the tour.
+A thread that finishes work for review ends its reply with a fenced `weft-review` JSON block (the instruction is `REVIEW_PROMPT` in `lib/review.ts`, appended to every board thread's system prompt in `drive()`). `lib/runner.ts` strips the block from the visible text and saves the parsed plan on `card.review`: `url` (where the app runs), `dev` (the command that starts it), and `steps`.
+
+While the card is in Review, `components/ReviewPanel.tsx` sits at the bottom of the thread, in place of the reply box (`footer` and `replaceReply` on `ThreadView`). A card with no plan keeps its reply box with a "Build review tour" strip above it. It shows one step at a time with what to look for, "Looks good, next" and previous/next buttons, an **Open browser** button, and a feedback box that sends the note to the thread. A new plan restarts the tour.
+
+- **A step's page** (`stepUrl` in `lib/review.ts`): its `path` as a full URL, an absolute media/file path (opened as `file://`), or a path on the plan's `url`. A step with no `path` uses the first URL or file path in its `look` text, then the plan's `url`. A plan with no `url` falls back to the local app the thread mentioned most.
+- **Dev server** (`lib/devserver.ts`, `app/api/cards/[id]/dev/route.ts`): when the plan has `dev` and `url`, the tour asks the server to start the command in the card's folder unless the url already answers, polls its status every 3 s, and shows running/starting/crashed with Start/Restart buttons. Servers Weft started are stopped when Weft exits.
+- **Self-check**: the `weft:preview` skill (`plugin/skills/preview`) starts the server, confirms the page renders, and gives the url and start command for the plan.
+
+## Browser per card
+
+The browser pane keeps one page per card (`views` in `electron/browser-pane.cjs`, keyed by card id; `"board"` when no card is open). `Board` calls `browser.setActive(selectedId)`, so opening a card shows its page (if it has one) and closing the card hides the pane. `browser.open(url, cardId)` from the board activates that card's browser; agent tools (`browserMcpServer(() => session.cardId)` in `lib/browser-tools.ts`) pass the card id to the control server and load into their own card's browser without taking over the screen. `browser.prune` closes the browsers of deleted cards.
 
 ## Prompt search
 
