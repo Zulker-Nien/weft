@@ -13,6 +13,82 @@ const ROOT = path.join(__dirname, "..");
 const MAX_LOG_BYTES = 5 * 1024 * 1024;
 const MAX_RESTARTS = 3;
 const RESTART_WINDOW_MS = 2 * 60_000;
+const RECOVER_GRACE_MS = 500;
+
+// Tail of the child's stdout/stderr to inspect for recoverable errors. The pure parser that backs
+// this lives at `lib/dev-server.ts`; this inline copy is a few lines so the main process doesn't
+// need a TS loader. lib/dev-server.test.ts is the contract.
+const TAIL_BYTES = 4 * 1024;
+const PEER_RE = /Another next dev server is already running\.[\s\S]*?- Local:\s+http:\/\/127\.0\.0\.1:(\d+)[\s\S]*?- PID:\s+(\d+)/;
+const MISSING_RE = /Module not found: Can't resolve ['"]([^'"]+)['"]/g;
+const RELATIVE_PROBES = ["", ".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx", "/index.js", "/index.jsx"];
+
+function tailOf(buf) {
+  if (buf.length <= TAIL_BYTES) return buf;
+  return buf.slice(buf.length - TAIL_BYTES);
+}
+
+function readTail(file) {
+  // The log is append-only and small (capped at MAX_LOG_BYTES). Read the last TAIL_BYTES and
+  // decode; if the file is gone or unreadable, return an empty buffer so we fall through to
+  // the existing crash counter.
+  try {
+    const stat = fs.statSync(file);
+    const start = Math.max(0, stat.size - TAIL_BYTES);
+    const fd = fs.openSync(file, "r");
+    try {
+      const len = stat.size - start;
+      const buf = Buffer.alloc(len);
+      fs.readSync(fd, buf, 0, len, start);
+      return buf.toString("utf8");
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return "";
+  }
+}
+
+function resolveSpec(spec, repoRoot) {
+  if (spec.startsWith(".") || spec.startsWith("/") || spec.startsWith("file://")) {
+    const rel = spec.startsWith("file://") ? new URL(spec).pathname : spec;
+    const base = path.resolve(repoRoot, rel);
+    for (const probe of RELATIVE_PROBES) {
+      const candidate = `${base}${probe}`;
+      try {
+        if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return candidate;
+      } catch {}
+    }
+    return null;
+  }
+  return path.join(repoRoot, "node_modules", spec, "package.json");
+}
+
+// Returns { kind: "peer", pid, port } | { kind: "module-not-found", spec, exists } | null.
+function classifyTail(buf) {
+  const tail = tailOf(buf);
+  const peerMatch = tail.match(PEER_RE);
+  if (peerMatch) {
+    const port = Number(peerMatch[1]);
+    const pid = Number(peerMatch[2]);
+    if (Number.isFinite(pid) && Number.isFinite(port) && pid > 0) return { kind: "peer", pid, port };
+  }
+  const misses = [...tail.matchAll(MISSING_RE)];
+  if (misses.length) {
+    const spec = misses[misses.length - 1][1];
+    const resolved = resolveSpec(spec, ROOT);
+    let exists = false;
+    if (resolved) {
+      try { exists = fs.existsSync(resolved); } catch {}
+    }
+    return { kind: "module-not-found", spec, exists };
+  }
+  return null;
+}
+
+function killPid(pid) {
+  try { process.kill(pid, "SIGTERM"); } catch {}
+}
 
 function logFile() {
   const file = path.join(app.getPath("logs"), "server.log");
@@ -119,6 +195,28 @@ async function startServer({ preferredPort, env, onStatus, onFatal }) {
       log.write(`--- server exited (code ${code}, signal ${signal})\n`);
       // Ignore a process that was stopped on purpose or already replaced.
       if (stopping || proc !== child) return;
+      // Inspect the child's recent output for a recoverable cause: a peer dev server (Next 16.4's
+      // project-wide guard) or a stale "Module not found" for a path that exists on disk. Both
+      // should not count toward the 3-in-2-min crash budget.
+      const classified = classifyTail(readTail(logPath));
+      if (classified?.kind === "peer") {
+        log.write(`--- weft: killing peer dev server pid ${classified.pid} (port ${classified.port})\n`);
+        killPid(classified.pid);
+        crashes = [];
+        onStatus?.("Restarting…");
+        setTimeout(launch, RECOVER_GRACE_MS);
+        return;
+      }
+      if (classified?.kind === "module-not-found" && classified.exists) {
+        const dist = process.env.THREADBOARD_DIST || ".next";
+        const distPath = path.join(ROOT, dist);
+        log.write(`--- weft: stale module resolution for "${classified.spec}"; removing ${dist} and retrying\n`);
+        try { fs.rmSync(distPath, { recursive: true, force: true }); } catch {}
+        crashes = [];
+        onStatus?.("Restarting…");
+        setTimeout(launch, RECOVER_GRACE_MS);
+        return;
+      }
       const now = Date.now();
       crashes = [...crashes.filter((t) => now - t < RESTART_WINDOW_MS), now];
       if (crashes.length > MAX_RESTARTS) {

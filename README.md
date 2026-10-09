@@ -13,7 +13,7 @@ cloth.
 git clone https://github.com/aimhuge/weft.git && cd weft
 npm install
 npm run desktop     # Electron app: board + side browser
-npm run dev         # board only, in a normal browser at http://127.0.0.1:3456 (no browser pane)
+npm run dev         # board only, in a normal browser at http://127.0.0.1:1000 (no browser pane)
 npm test            # unit tests (Vitest), about a second; npm run lint for ESLint
 ```
 
@@ -56,6 +56,13 @@ On launch and every minute after, Weft picks up your Claude Code sessions (the o
 
 Weft's own threads run with a clean environment (no variables inherited from a Claude session it
 was started from) and are marked as SDK sessions, so they don't show up in the Claude app's list.
+
+## Reading a thread
+
+- Messages render as Markdown, with a Copy button on code blocks.
+- A run of tool calls folds into one line like "Ran 3 commands, read 2 files +1"; click it to see each call and its output. Failed, denied and waiting calls are counted on the line.
+- Images show inline: screenshots tools took, images pasted into Claude Code, and local images an agent shows with `![](path)` (copied into `~/.weft/attachments`). Click one to see it full size.
+- Sessions running in another app move to Running (busy) or Needs you (waiting for an answer) on their own, within about 5 seconds, and go back to Review when the turn ends.
 
 ## Writing a prompt
 

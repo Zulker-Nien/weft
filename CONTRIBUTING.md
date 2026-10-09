@@ -10,7 +10,7 @@ git clone https://github.com/aimhuge/weft.git
 cd weft
 npm install
 npm run desktop     # Electron app: board + side browser
-npm run dev         # board only, at http://127.0.0.1:3456
+npm run dev         # board only, at http://127.0.0.1:1000
 ```
 
 You need Node 20+ and a logged-in `claude` CLI (or `puku-cli`). Weft is macOS-first today.

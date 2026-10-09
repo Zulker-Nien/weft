@@ -14,7 +14,7 @@
   "private": true,
   "main": "electron/main.cjs",
   "scripts": {
-    "dev": "node electron/free-port.cjs 3456 .next && next dev -H 127.0.0.1 -p 3456",
+    "dev": "node electron/free-port.cjs 1000 .next && next dev -H 127.0.0.1 -p 1000",
     "desktop": "electron .",
     "build": "next build",
     "start": "electron .",

@@ -12,9 +12,9 @@ lives in `electron/server.cjs`.
 - `app.setName("Weft")`, `productName` in `package.json` is "Weft".
 - `TOKEN` is a 24-byte random hex string generated once at startup; passed to the
   control server (see below) and to the Next server as `THREADBOARD_SHELL_TOKEN`.
-- `PREFERRED_PORT` is `THREADBOARD_PORT` or `3457`; `server.cjs` uses a free port instead
-  when that one is taken. (`npm run dev`, the board-only mode without Electron, uses
-  `3456`.)
+- `PREFERRED_PORT` is `THREADBOARD_PORT` or `1000`; `server.cjs` uses a free port instead
+  when that one is taken. (`npm run dev`, the board-only mode without Electron, also
+  uses `1000`, so a dev server and the desktop app never collide on different ports.)
 - `app.requestSingleInstanceLock()` makes a second `weft` launch just emit
   `second-instance`, which the first process handles by calling `showMain()` and
   routing any `weft://` argument through `handleLink()`.
@@ -75,10 +75,19 @@ env var `THREADBOARD_PROD`:
 - `pickPort(preferred)` returns `preferred` if it's free, else asks the kernel for
   one with `net.createServer().listen(0, "127.0.0.1")`.
 - `waitForServer` polls `GET ${url}/api/cards` every 250ms with a 120s timeout.
-- On exit, if the process wasn't stopped on purpose and wasn't replaced, a
-  crash timestamp is recorded; once `crashes.length > MAX_RESTARTS` (3) within
-  `RESTART_WINDOW_MS` (2 minutes), `onFatal` fires (or `failStart` rejects before
-  the first successful start). Otherwise it logs and `setTimeout(launch, 500)`.
+- On exit, if the process wasn't stopped on purpose and wasn't replaced, the
+  supervisor reads the tail of its log and classifies the failure. Two are
+  recoverable and don't count toward the crash budget: a "Another next dev
+  server is already running" error (a peer dev server in the same project —
+  Next 16.4's project-wide guard rejects the new spawn; the supervisor kills
+  the named PID and retries), and a "Module not found: Can't resolve 'X'" where
+  `X` resolves to a file on disk (a stale Turbopack cache; the supervisor
+  `rm -rf .next` and retries). Otherwise a crash timestamp is recorded; once
+  `crashes.length > MAX_RESTARTS` (3) within `RESTART_WINDOW_MS` (2 minutes),
+  `onFatal` fires (or `failStart` rejects before the first successful start).
+  Otherwise it logs and `setTimeout(launch, 500)`. The recoverable classifier
+  is in `electron/server.cjs` (`classifyTail`); the canonical pure version
+  with tests is `lib/dev-server.ts`.
 - The log is appended to `~/Library/Logs/Weft/server.log` (via
   `app.getPath("logs")`); files over `MAX_LOG_BYTES` (5 MB) are rotated to
   `server.log.old`. Returns `{ url, logPath, stop, restart }`.
