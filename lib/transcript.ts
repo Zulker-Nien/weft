@@ -1,5 +1,5 @@
 import type { SessionMessage } from "@anthropic-ai/claude-agent-sdk";
-import { toolAction } from "./format";
+import { summarizeInput, toolAction } from "./format";
 import { MEDIA_REF, attachmentName } from "./media";
 import { extractReview } from "./review";
 import { extractStatus } from "./status";
@@ -81,19 +81,6 @@ export function typedPromptOf(record: Record<string, unknown>): string {
     .join("\n\n");
 }
 
-function summarize(input: Record<string, unknown>) {
-  for (const key of ["command", "file_path", "path", "pattern", "url", "query", "selector", "description", "prompt"]) {
-    const value = input[key];
-    if (typeof value === "string" && value) return clip(value, 100);
-  }
-  const json = JSON.stringify(input);
-  return json === "{}" ? "" : clip(json, 100);
-}
-
-function clip(text: string, max: number) {
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
-}
-
 function blocksOf(content: unknown): Block[] {
   if (typeof content === "string") return [{ type: "text", text: content }];
   return Array.isArray(content) ? content.filter((b): b is Block => typeof b === "object" && b !== null) : [];
@@ -130,7 +117,7 @@ export function transcriptToThread(messages: SessionMessage[], options?: { maxIt
           const input = (block.input ?? {}) as Record<string, unknown>;
           tools.set(block.id, items.length);
           const name = block.name ?? "tool";
-          items.push({ kind: "tool", id: block.id, name, summary: summarize(input), action: toolAction(name, input), at });
+          items.push({ kind: "tool", id: block.id, name, summary: summarizeInput(input), action: toolAction(name, input), at });
         }
       }
       continue;

@@ -2,7 +2,7 @@ import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { firstMessage } from "./automations";
 import { resolveFolder } from "./folders";
-import { formatCost, shortToolName, titleFromPrompt } from "./format";
+import { clip, formatCost, shortToolName, titleFromPrompt } from "./format";
 import { touchProject } from "./settings";
 import { createCard, getCard, getThread, listCards, updateCard } from "./store";
 import type { Backend, Card, PermissionMode, ThreadItem } from "./types";
@@ -24,10 +24,6 @@ You're in a small chat window, so keep replies short.`;
 // The copilot uses these without asking: they read the board or only rearrange it.
 // Starting, replying to, and answering for a thread run agents, so the user approves those.
 export const SAFE_BOARD_TOOLS = new Set(["list_cards", "read_thread", "create_card", "move_card", "stop_card"]);
-
-function clip(text: string, max: number) {
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
-}
 
 function boardCard(id: string): Card {
   const card = getCard(id);

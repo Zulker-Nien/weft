@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { Card } from "./types";
 import {
+  clip,
   describeToolRun,
+  firstLine,
   folderName,
   formatCost,
   formatReset,
   formatTokens,
   isLive,
   shortToolName,
+  summarizeInput,
   timeAgo,
   titleFromPrompt,
   toolAction,
@@ -151,5 +154,38 @@ describe("titleFromPrompt", () => {
   it("names a media-only prompt after its file, else a default", () => {
     expect(titleFromPrompt("![shot.png](/tmp/shot.png)")).toBe("Look at shot.png");
     expect(titleFromPrompt("   \n")).toBe("New thread");
+  });
+});
+
+describe("clip", () => {
+  it("leaves short text alone and ends cut text in an ellipsis at exactly max", () => {
+    expect(clip("short", 10)).toBe("short");
+    expect(clip("exactly10!", 10)).toBe("exactly10!");
+    expect(clip("eleven chars", 10)).toBe("eleven ch…");
+  });
+});
+
+describe("firstLine", () => {
+  it("takes the first non-blank line, trimmed", () => {
+    expect(firstLine("\n  \n  hello there  \nsecond")).toBe("hello there");
+    expect(firstLine("   \n")).toBe("");
+  });
+
+  it("clips to 140 by default, or to the max given", () => {
+    expect(firstLine("x".repeat(200))).toHaveLength(140);
+    expect(firstLine("abcdef", 4)).toBe("abc…");
+  });
+});
+
+describe("summarizeInput", () => {
+  it("picks the most telling argument, in a fixed order", () => {
+    expect(summarizeInput({ path: "/a", command: "ls" })).toBe("ls");
+    expect(summarizeInput({ command: "", file_path: "/b" })).toBe("/b");
+  });
+
+  it("falls back to the arguments as JSON, or nothing for none", () => {
+    expect(summarizeInput({ count: 3 })).toBe('{"count":3}');
+    expect(summarizeInput({})).toBe("");
+    expect(summarizeInput({ command: "y".repeat(150) })).toHaveLength(100);
   });
 });

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { saveAttachmentData } from "./attachments";
+import { clip } from "./format";
 import { MEDIA_REF, attachmentName, mediaKind, mediaMarkdown } from "./media";
 
 // Images that reach a thread some other way than being pasted into a message: a screenshot a tool
@@ -23,10 +24,6 @@ const MAX_COPY_BYTES = 200 * 1024 ** 2;
 const g = globalThis as unknown as { __threadboardCopied?: Map<string, string> };
 // Files already copied, by "path|size|mtime", so a transcript read doesn't hash them again.
 const copied = (g.__threadboardCopied ??= new Map<string, string>());
-
-function clip(text: string, max: number) {
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
-}
 
 // Saves an image block's bytes and returns the attachment, or undefined if it isn't one.
 function saveImageBlock(block: Block, name: string) {

@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { getSessionMessages, listSessions } from "@anthropic-ai/claude-agent-sdk";
 import { dismissedSessions } from "./settings";
+import { firstLine } from "./format";
 import { extractStatus } from "./status";
 import { addCards, getThread, listCards, replaceThread, updateCard } from "./store";
 import { transcriptToThread } from "./transcript";
@@ -48,11 +49,6 @@ function columnFor(stage: string | undefined, lastActivity: number, live?: Colum
   if (stage === "Done") return "done";
   if (stage) return "review";
   return Date.now() - lastActivity < RECENT_MS ? "review" : "done";
-}
-
-function clip(text: string, max: number) {
-  const line = text.split("\n").find((l) => l.trim())?.trim() ?? "";
-  return line.length > max ? `${line.slice(0, max - 1)}…` : line;
 }
 
 // sessionId → its .jsonl file.
@@ -133,7 +129,7 @@ function lastReply(lines: string[]): string | undefined {
     const text = (record.message.content as { type?: string; text?: string }[])
       .flatMap((b) => (b?.type === "text" && b.text ? [b.text] : []))
       .join("\n");
-    const line = clip(extractStatus(text).text, 140);
+    const line = firstLine(extractStatus(text).text);
     if (line) return line;
   }
   return undefined;
@@ -348,7 +344,7 @@ async function runSync(): Promise<SyncResult> {
         source: "claude-code",
         lastActivity: activity,
         openElsewhere,
-        lastLine: (live && LIVE_LINES[live]) || (session.firstPrompt ? clip(session.firstPrompt, 140) : undefined),
+        lastLine: (live && LIVE_LINES[live]) || (session.firstPrompt ? firstLine(session.firstPrompt) : undefined),
         createdAt: session.createdAt ?? activity,
         updatedAt: activity,
       });

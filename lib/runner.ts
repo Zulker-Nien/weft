@@ -7,7 +7,7 @@ import { skillsForPrompt } from "./automations";
 import { COPILOT_PROMPT, SAFE_BOARD_TOOLS, boardMcpServer, describeBoardTool, threadBoardMcpServer } from "./board-tools";
 import { BROWSER_PROMPT, browserMcpServer } from "./browser-tools";
 import { publish } from "./bus";
-import { shortToolName, toolAction } from "./format";
+import { firstLine, shortToolName, summarizeInput, toolAction } from "./format";
 import { cliEnv } from "./env";
 import { isOpenElsewhere } from "./import";
 import { isNotLoggedInError, startLogin } from "./login";
@@ -501,7 +501,7 @@ function askUser(
 ): Promise<PermissionResult> {
   return new Promise((resolve) => {
     const questions = toolName === "AskUserQuestion" ? readQuestions(input) : undefined;
-    const summary = summarize(toolName, input);
+    const summary = summarizeInput(input);
     const label = questions
       ? questions.map((q) => q.question).join(" ")
       : (title ??
@@ -684,7 +684,7 @@ function handle(id: string, session: Session, msg: SDKMessage) {
           }
         } else if (block.type === "tool_use") {
           const input = (block.input ?? {}) as Record<string, unknown>;
-          const summary = summarize(block.name, input);
+          const summary = summarizeInput(input);
           const action = toolAction(block.name, input);
           const index = appendThread(id, { kind: "tool", id: block.id, name: block.name, summary, action, at: Date.now() });
           session.toolIndex.set(block.id, index);
@@ -808,22 +808,4 @@ function changedLines(cwd: string) {
   } catch {
     return { added: undefined, removed: undefined };
   }
-}
-
-function summarize(name: string, input: Record<string, unknown>) {
-  for (const key of ["command", "file_path", "path", "pattern", "url", "query", "selector", "description", "prompt"]) {
-    const value = input[key];
-    if (typeof value === "string" && value) return clip(value, 100);
-  }
-  const json = JSON.stringify(input);
-  return json === "{}" ? "" : clip(json, 100);
-}
-
-function firstLine(text: string) {
-  const line = text.split("\n").find((l) => l.trim()) ?? "";
-  return clip(line.trim(), 140);
-}
-
-function clip(text: string, max: number) {
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }

@@ -191,3 +191,24 @@ export function formatReset(resetsAt: number, now = Date.now()) {
   const sameDay = d.getTime() - now < 20 * 3600_000;
   return sameDay ? time : `${d.toLocaleDateString("en-US", { weekday: "short" }).toLowerCase()} ${time}`;
 }
+
+// Cuts text to max characters, ending in an ellipsis when it had to cut.
+export function clip(text: string, max: number) {
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+// The first non-blank line, trimmed and clipped: what a card shows as its last line.
+export function firstLine(text: string, max = 140) {
+  const line = text.split("\n").find((l) => l.trim())?.trim() ?? "";
+  return clip(line, max);
+}
+
+// One short line for a tool call: its most telling argument, else the arguments as JSON.
+export function summarizeInput(input: Record<string, unknown>) {
+  for (const key of ["command", "file_path", "path", "pattern", "url", "query", "selector", "description", "prompt"]) {
+    const value = input[key];
+    if (typeof value === "string" && value) return clip(value, 100);
+  }
+  const json = JSON.stringify(input);
+  return json === "{}" ? "" : clip(json, 100);
+}
