@@ -26,6 +26,8 @@ const nextConfig: NextConfig = {
   partialPrefetching: true,
   // The Agent SDK spawns the CLI from files inside its own package, so it must not be bundled.
   serverExternalPackages: ["@anthropic-ai/claude-agent-sdk"],
+  // The "N" dev badge sits over the board's bottom-left corner; compile and runtime errors still show.
+  devIndicators: false,
   // The desktop shell loads the app from 127.0.0.1, not localhost.
   allowedDevOrigins: ["127.0.0.1"],
   turbopack: {
