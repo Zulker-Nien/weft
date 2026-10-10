@@ -3,6 +3,7 @@ import { startSessionSync } from "./import";
 import { startSearchIndex } from "./search";
 import { boardDigest, lastSeen, rememberSeen, snapshot, withDigest } from "./copilot-digest";
 import { endSession, ensureSpare, sendUserMessage, warmUp } from "./runner";
+import { startScheduler } from "./scheduler";
 import { listProjects } from "./settings";
 import { clearThread, createCard, getCard, listCards, updateCard } from "./store";
 import { COPILOT_ID } from "./types";
@@ -61,6 +62,8 @@ export function prewarm() {
   // Pick up the user's existing Claude Code sessions as cards, and keep them in sync.
   startSessionSync();
   startSearchIndex();
+  // Send the messages queued for a set time (lib/scheduler.ts), including any that came due while closed.
+  startScheduler();
   ensureCopilot();
   warmUp(COPILOT_ID);
   const recent = listProjects()[0]?.path ?? listCards().find((c) => c.role !== "copilot")?.cwd;

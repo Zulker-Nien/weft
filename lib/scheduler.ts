@@ -1,0 +1,49 @@
+import { randomUUID } from "node:crypto";
+import { isBusy, sendUserMessage } from "./runner";
+import { addScheduled, dueMessage } from "./schedule";
+import { getCard, listCards, updateCard } from "./store";
+import { COPILOT_ID, type Card } from "./types";
+
+// How often the server looks for scheduled messages whose time has come. A Mac that slept past
+// one sends it on the first check after waking; a Weft that was closed, on the first after starting.
+const CHECK_EVERY_MS = 15_000;
+
+const g = globalThis as unknown as { __weftScheduleTimer?: ReturnType<typeof setInterval> };
+
+export function scheduleMessage(cardId: string, text: string, at: number): Card {
+  const card = getCard(cardId);
+  if (!card) throw new Error("No such card.");
+  if (cardId === COPILOT_ID) throw new Error("The copilot can't take a scheduled message.");
+  if (!Number.isFinite(at)) throw new Error("Pick a time to send it.");
+  if (at <= Date.now()) throw new Error("That time has already passed.");
+  return updateCard(cardId, { scheduled: addScheduled(card.scheduled, { id: randomUUID(), text, at }) });
+}
+
+export function unscheduleMessage(cardId: string, messageId: string): Card {
+  const card = getCard(cardId);
+  if (!card) throw new Error("No such card.");
+  const scheduled = (card.scheduled ?? []).filter((m) => m.id !== messageId);
+  return updateCard(cardId, { scheduled: scheduled.length ? scheduled : undefined });
+}
+
+// Sends each card's due message, one per card per check. A card mid-turn waits for its turn to end.
+export function sendDueMessages(now = Date.now()) {
+  for (const card of listCards()) {
+    const due = dueMessage(card, now);
+    if (!due || isBusy(card.id)) continue;
+    const rest = card.scheduled!.slice(1);
+    updateCard(card.id, { scheduled: rest.length ? rest : undefined });
+    try {
+      sendUserMessage(card.id, due.text);
+    } catch (err) {
+      updateCard(card.id, { error: `A scheduled message couldn't go: ${err instanceof Error ? err.message : String(err)}` });
+    }
+  }
+}
+
+// Once per server process.
+export function startScheduler() {
+  if (g.__weftScheduleTimer) return;
+  g.__weftScheduleTimer = setInterval(() => sendDueMessages(), CHECK_EVERY_MS);
+  sendDueMessages();
+}

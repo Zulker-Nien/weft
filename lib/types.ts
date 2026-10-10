@@ -55,6 +55,13 @@ export interface CardStats {
   sevenDay?: LimitWindow;
 }
 
+// A message written now and sent to the thread later, at `at` (unix ms).
+export interface ScheduledMessage {
+  id: string;
+  text: string;
+  at: number;
+}
+
 // A thread's tour of what it built, for the user to step through in Review (see lib/review.ts).
 export interface ReviewStep {
   title: string;
@@ -128,6 +135,8 @@ export interface Card {
   forkedFrom?: string;
   // When Weft last finished a turn on this card, to tell its own session writes from other apps'.
   lastWeftTurn?: number;
+  // Messages to send at a set time (lib/schedule.ts), soonest first; lib/scheduler.ts sends them.
+  scheduled?: ScheduledMessage[];
   createdAt: number;
   updatedAt: number;
 }

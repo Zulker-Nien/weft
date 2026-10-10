@@ -88,6 +88,22 @@ rules don't queue anything; `firstMessage()` appends "Start by using the /x skil
 prompt, used by every path that starts a Backlog card (`POST /api/cards`, the PATCH to running,
 the copilot's `start_card`). The copilot's `move_card` never runs automations.
 
+### Scheduled messages (send later)
+
+The reply box's clock button (`components/SendLater.tsx`, Alt+Enter) saves a message on the card
+as `card.scheduled` (`ScheduledMessage[]`, soonest first) through `POST /api/cards/[id]/scheduled`;
+`DELETE` takes one back. The server sends them, not the browser: `startScheduler()`
+(`lib/scheduler.ts`, started from `prewarm()`) checks every 15 s and calls `sendUserMessage()` for
+each card's first due message, so it goes out with the thread closed, and one that came due while
+Weft was shut goes on the first check after the next start. A card mid-turn keeps its message until
+the turn ends. A failed send puts the reason in `card.error` and is not retried.
+
+The default time is the plan's next 5-hour reset plus a minute (`RESET_GRACE_MS`), read by
+`nextFiveHourReset()` (`lib/schedule.ts`) from the latest `stats.fiveHour.resetsAt` any Claude card
+has seen (the figure the status bar shows). Puku threads, and Claude ones with no known reset, get
+"In 1 hour" first; "Tomorrow morning" (9am) and a date-time picker are always there. The copilot
+can't schedule. The card shows the next time as a clock badge in its footer.
+
 ### Archiving after Done
 
 Moving a card to Done also calls `archiveWhenIdle()` (`lib/runner.ts`): with no queued or running

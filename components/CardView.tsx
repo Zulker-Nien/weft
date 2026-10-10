@@ -4,6 +4,7 @@ import { useState } from "react";
 import { api } from "@/lib/client";
 import { folderName, formatCost, isLive, timeAgo } from "@/lib/format";
 import { isBusy } from "@/lib/overlap";
+import { formatAt } from "@/lib/schedule";
 import type { Card } from "@/lib/types";
 import Icon, { Spinner } from "./Icon";
 
@@ -186,6 +187,15 @@ export default function CardView({
             {card.turns ? ` · ${card.turns} turn${card.turns === 1 ? "" : "s"}` : ""}
             {cost ? ` · ${cost}` : ""}
           </span>
+          {card.scheduled?.length ? (
+            <span
+              className="flex shrink-0 items-center gap-0.5 text-accent"
+              title={`${card.scheduled.length} message${card.scheduled.length > 1 ? "s" : ""} scheduled; the next sends ${formatAt(card.scheduled[0].at, now)}`}
+            >
+              <Icon name="clock" size={10} />
+              {formatAt(card.scheduled[0].at, now)}
+            </span>
+          ) : null}
           {card.openElsewhere && (
             <span
               className="flex shrink-0 items-center gap-1 text-muted"

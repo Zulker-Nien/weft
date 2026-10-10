@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { api } from "@/lib/client";
 import { alsoHereLine } from "@/lib/overlap";
-import type { Card } from "@/lib/types";
+import { formatAt, sendLaterOptions } from "@/lib/schedule";
+import { useNow } from "@/lib/use-now";
+import type { Backend, Card, ScheduledMessage } from "@/lib/types";
 import Composer, { type ComposerHandle } from "./Composer";
 import Icon, { Spinner } from "./Icon";
+import SendLater from "./SendLater";
 
 // What you were writing to a card, kept per card until it's sent.
 const draftKey = (cardId: string) => `weft.reply.${cardId}`;
@@ -32,6 +36,7 @@ export default function ReplyBox({
   live,
   placeholder,
   alsoHere = [],
+  sendLater,
   onSend,
   onStop,
 }: {
@@ -42,6 +47,9 @@ export default function ReplyBox({
   // A turn is running or waiting on a permission answer, so a reply can't go yet.
   live: boolean;
   placeholder: string;
+  // Board threads can take a message to send at a set time; the copilot can't, so it leaves this out.
+  // resetAt is the plan's next 5-hour reset (unix ms), the default time on a Claude thread.
+  sendLater?: { backend: Backend; resetAt?: number; scheduled: ScheduledMessage[] };
   onSend: (text: string) => Promise<void>;
   onStop: () => Promise<void>;
 }) {
@@ -52,6 +60,8 @@ export default function ReplyBox({
   const [queue, setQueue] = useState<string[]>([]);
   // Held while you edit a message pulled back out of the queue (or after a queued send failed).
   const [paused, setPaused] = useState(false);
+  const [laterOpen, setLaterOpen] = useState(false);
+  const now = useNow();
   const composer = useRef<ComposerHandle>(null);
   const draftTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -113,10 +123,44 @@ export default function ReplyBox({
     }
   }
 
+  // Sends the message at `at` from the server, so it goes even if this thread is closed by then.
+  async function scheduleAt(at: number) {
+    setLaterOpen(false);
+    let text: string;
+    try {
+      text = composer.current?.read() ?? "";
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      return;
+    }
+    if (!text) {
+      setError("Write a message first.");
+      composer.current?.focus();
+      return;
+    }
+    try {
+      await api.schedule(cardId, text, at);
+      clearTimeout(draftTimer.current);
+      writeDraft(cardId, "");
+      composer.current?.clear();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  const scheduled = sendLater?.scheduled ?? [];
+
   return (
     <div
       className="border-t border-line p-3"
       onKeyDownCapture={(e) => {
+        // Alt+Enter opens Send later with the default time focused, so a second Enter schedules it.
+        if (sendLater && e.key === "Enter" && e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          setLaterOpen(true);
+          return;
+        }
         // Up in an empty box pulls the last queued message back to edit; the queue holds meanwhile.
         if (e.key === "ArrowUp" && queue.length > 0 && composer.current?.isEmpty()) {
           e.preventDefault();
@@ -143,8 +187,39 @@ export default function ReplyBox({
           <span className="truncate">{alsoHereLine(alsoHere)}</span>
         </p>
       )}
-      {queue.length > 0 && (
+      {(queue.length > 0 || scheduled.length > 0) && (
         <ul className="mb-2 flex flex-col gap-1">
+          {scheduled.map((m) => (
+            <li
+              key={m.id}
+              className="flex items-center gap-2 rounded-md bg-sunken px-2.5 py-1.5 text-[12.5px] text-muted"
+              title={`Sends ${new Date(m.at).toLocaleString("en-US", { weekday: "long", hour: "numeric", minute: "2-digit" })}, even if this thread is closed`}
+            >
+              <Icon name="clock" size={11} className="shrink-0" />
+              <span className="shrink-0 font-mono text-[11px]">{formatAt(m.at, now)}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  // Back into an empty box to edit; it stops being scheduled until you schedule it again.
+                  if (!composer.current?.isEmpty()) return setError("Clear the box first to edit a scheduled message.");
+                  composer.current.write(m.text);
+                  void api.unschedule(cardId, m.id).catch((err) => setError(err instanceof Error ? err.message : String(err)));
+                }}
+                title="Take it back to edit"
+                className="min-w-0 flex-1 truncate text-left hover:text-ink"
+              >
+                {m.text}
+              </button>
+              <button
+                type="button"
+                onClick={() => void api.unschedule(cardId, m.id).catch((err) => setError(err instanceof Error ? err.message : String(err)))}
+                aria-label="Cancel scheduled message"
+                className="shrink-0 hover:text-ink"
+              >
+                <Icon name="x" size={12} />
+              </button>
+            </li>
+          ))}
           {queue.map((text, i) => (
             <li
               key={i}
@@ -179,6 +254,16 @@ export default function ReplyBox({
         sizeClass="min-h-[44px] max-h-[40vh]"
         actions={
           <>
+            {sendLater && (
+              <SendLater
+                open={laterOpen}
+                onOpenChange={setLaterOpen}
+                options={sendLaterOptions(sendLater.backend, sendLater.resetAt, now)}
+                now={now}
+                onPick={(at) => void scheduleAt(at)}
+                disabled={sending}
+              />
+            )}
             {live && (
               <button
                 type="button"

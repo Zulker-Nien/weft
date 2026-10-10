@@ -39,6 +39,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 
 - `Now` **Managed thread prompt and BOARD STATUS** — every board thread gets a system prompt asking it to end replies with a `BOARD STATUS` line; the board uses it to move the card to Needs you, Review, or Done and to show its stage and what's left. The parser skips status lines quoted in code blocks and reads the bold-label form (`**BOARD STATUS:** ...`).
 - `P1` **Markdown rendering** — render assistant messages as Markdown with syntax-highlighted code blocks and copy buttons.
+- `Now` **Send later** — the reply box's clock (Alt+Enter) schedules a message for a set time, by default a minute after the plan's next 5-hour reset; the server sends it even with the thread closed. Still open: weekly-limit resets, and scheduling from the copilot.
 - `P1` **Queue a reply while running** — the reply box is disabled while a turn runs ("Working. Stop it to reply."); let you queue the next message instead.
 - `P1` **Import existing CLI sessions** — list sessions from the CLIs' project folders and turn any of them into a card that resumes it.
 - `Now` **Images in prompts and replies** — paste or drop images and videos into the new-thread dialog and reply box, inline where they go; images reach the agent as image blocks, videos as file paths.

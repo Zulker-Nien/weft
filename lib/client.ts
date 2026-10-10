@@ -158,6 +158,9 @@ export const api = {
   archive: (id: string, archived: boolean) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { archived }),
   remove: (id: string) => call("DELETE", `/api/cards/${id}`),
   send: (id: string, text: string) => call<{ card: Card }>("POST", `/api/cards/${id}/messages`, { text }),
+  // Sends text to the thread at `at` (unix ms), even if Weft was closed then (it goes on the next start).
+  schedule: (id: string, text: string, at: number) => call<{ card: Card }>("POST", `/api/cards/${id}/scheduled`, { text, at }),
+  unschedule: (id: string, messageId: string) => call<{ card: Card }>("DELETE", `/api/cards/${id}/scheduled`, { messageId }),
   // pendingId is the request the user saw; the server refuses the answer if another is in front.
   answer: (id: string, allow: boolean, answers?: Record<string, string>, pendingId?: string) =>
     call("POST", `/api/cards/${id}/permission`, { allow, answers, pendingId }),

@@ -23,6 +23,7 @@ export default function ThreadView({
   footer,
   replaceReply = false,
   alsoHere,
+  scheduling,
 }: {
   card: Card;
   items: ThreadItem[];
@@ -36,6 +37,8 @@ export default function ThreadView({
   replaceReply?: boolean;
   // Other busy cards in this folder, warned about above the reply box.
   alsoHere?: Card[];
+  // Given on board threads, so the reply box offers Send later; resetAt is the next 5-hour reset (unix ms).
+  scheduling?: { resetAt?: number };
 }) {
   // The request already answered here, so a second click can't answer it (or the next one) again.
   const [answeredId, setAnsweredId] = useState<string | null>(null);
@@ -145,7 +148,9 @@ export default function ThreadView({
 
       {footer}
       {!replaceReply && (
-        <ReplyBox key={card.id} cardId={card.id} cwd={card.cwd} live={live} placeholder={placeholder} alsoHere={alsoHere} onSend={send} onStop={() => api.stop(card.id).then(() => {})} />
+        <ReplyBox key={card.id} cardId={card.id} cwd={card.cwd} live={live} placeholder={placeholder} alsoHere={alsoHere}
+          sendLater={scheduling && { backend: card.backend, resetAt: scheduling.resetAt, scheduled: card.scheduled ?? [] }}
+          onSend={send} onStop={() => api.stop(card.id).then(() => {})} />
       )}
     </>
   );

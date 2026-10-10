@@ -22,6 +22,7 @@ export default function ThreadPanel({
   onClose,
   onRename,
   alsoHere,
+  resetAt,
 }: {
   card: Card;
   items: ThreadItem[];
@@ -36,6 +37,8 @@ export default function ThreadPanel({
   onRename: (title: string) => void;
   // Other busy cards in this folder (lib/overlap.ts busyHere).
   alsoHere?: Card[];
+  // The plan's next 5-hour reset (unix ms), the reply box's default Send later time.
+  resetAt?: number;
 }) {
   const [editing, setEditing] = useState(false);
   const live = isLive(card);
@@ -157,6 +160,7 @@ export default function ThreadPanel({
         footer={card.column === "review" && <ReviewPanel card={card} items={items} onSend={onSend} />}
         replaceReply={card.column === "review" && Boolean(card.review)}
         alsoHere={alsoHere}
+        scheduling={{ resetAt }}
       />
     </aside>
   );

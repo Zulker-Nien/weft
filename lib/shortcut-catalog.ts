@@ -27,6 +27,7 @@ export const FIXED_SHORTCUTS: CatalogEntry[] = [
   { id: "reply-send", keys: ["Enter"], description: "Send a reply, or queue it while a turn runs", group: "Thread" },
   { id: "reply-newline", keys: ["shift+Enter"], description: "New line in a reply", group: "Thread" },
   { id: "reply-edit-queued", keys: ["ArrowUp"], description: "Edit the last queued message (empty reply box)", group: "Thread" },
+  { id: "reply-send-later", keys: ["alt+Enter"], description: "Send a reply later (Enter again: at the 5-hour reset)", group: "Thread" },
   { id: "reply-stop", keys: ["ctrl+c"], description: "Stop the running turn (in the reply box)", group: "Thread" },
   { id: "close-thread", keys: ["Escape"], description: "Close the open thread or dialog", group: "Thread" },
   { id: "new-send", keys: ["mod+Enter"], description: "Start the new thread", group: "Writing" },
