@@ -3,7 +3,7 @@ import { z } from "zod";
 import { firstMessage } from "./automations";
 import { markSeen } from "./copilot-digest";
 import { resolveFolder } from "./folders";
-import { clip, formatCost, shortToolName, titleFromPrompt } from "./format";
+import { clip, firstLine, formatCost, shortToolName, titleFromPrompt } from "./format";
 import { defaultPermissionMode, touchProject } from "./settings";
 import { createCard, getCard, getThread, listCards, updateCard } from "./store";
 import type { Backend, Card, PermissionMode, ThreadItem } from "./types";
@@ -129,15 +129,47 @@ export function createBoardCard(args: NewBoardCard): Card {
   return card;
 }
 
+// One line per card, so a whole board fits in a tool result (the full detail is read_thread's).
+export function cardLine(card: Card) {
+  return [
+    card.id,
+    card.column,
+    clip(card.title, 80),
+    card.cwd.replace(/^\/Users\/[^/]+/, "~"),
+    card.stage,
+    card.remaining && `remaining: ${clip(card.remaining, 60)}`,
+    card.pending && `waiting on: ${clip(card.pending.title, 60)}`,
+    card.error && `error: ${firstLine(card.error, 60)}`,
+    card.lastLine && `latest: ${firstLine(card.lastLine, 80)}`,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+}
+
+const LIST_LIMIT = 40;
+
 function listCardsTool() {
   return tool(
     "list_cards",
-    "List the threads on the board with their column, folder, CLI, latest activity, and anything waiting on the user.",
-    { column: COLUMN.optional() },
-    ({ column }) =>
+    "List the threads on the board, one line each: id | column | title | folder | stage | remaining | waiting on | latest. Open cards only unless include_done is true (then done and archived ones too); newest first, up to limit (default 40).",
+    {
+      column: COLUMN.optional(),
+      include_done: z.boolean().optional().describe("Also list done and archived cards (default false)"),
+      limit: z.number().int().positive().optional().describe(`Most cards to list (default ${LIST_LIMIT})`),
+    },
+    ({ column, include_done = false, limit = LIST_LIMIT }) =>
       attempt(() => {
-        const cards = listCards().filter((c) => c.role !== "copilot" && (!column || c.column === column));
-        return cards.length ? cards.map(describeCard).join("\n\n") : `No cards${column ? ` in ${column}` : ""}.`;
+        const all = listCards().filter((c) => c.role !== "copilot" && (!column || c.column === column));
+        const cards = all
+          .filter((c) => include_done || (c.column !== "done" && !c.archived))
+          .sort((a, b) => b.updatedAt - a.updatedAt);
+        const hidden = all.length - cards.length;
+        const notes = [
+          cards.length > limit && `${cards.length - limit} more not shown; raise limit or pass column.`,
+          hidden > 0 && `${hidden} done or archived left out; pass include_done=true to list them.`,
+        ].filter(Boolean);
+        if (!cards.length) notes.unshift(`No ${hidden ? "open " : ""}cards${column ? ` in ${column}` : ""}.`);
+        return [...cards.slice(0, limit).map(cardLine), ...notes].join("\n");
       }),
   );
 }

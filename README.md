@@ -207,7 +207,8 @@ with xterm.js (`components/TerminalDrawer.tsx`). Desktop app only.
   CLI process per thread), streams messages to the board, and routes permission prompts to the card. For puku-cli it points the SDK at the
   `puku-cli` binary (`pathToClaudeCodeExecutable`).
 - `lib/board-tools.ts` gives the copilot its board tools, and every board thread a small `board`
-  server with just `list_cards` and `create_card` (a card made this way records its `parentId`); `lib/copilot.ts` keeps its thread, which
+  server with just `list_cards` and `create_card` (a card made this way records its `parentId`; `list_cards` prints
+  one line per open card, newest first, and lists done and archived ones only with `include_done`); `lib/copilot.ts` keeps its thread, which
   has the fixed id `copilot` and is left off the board.
 - `plugin/` is Weft's own skills, loaded into every board thread with the SDK's `plugins` option;
   `lib/skills.ts` lists them with yours and a project's. `lib/automations.ts` turns the Settings
