@@ -10,7 +10,7 @@ export interface ProjectSummary {
   lastActivity: number; // ms timestamp, used for ordering (already sorted most recent first)
   cards: number; // total cards in that folder
   running: number; // cards in the Running column
-  needsYou: number; // cards in the Needs you column
+  needsYou: number; // unarchived cards in the Needs you column
 }
 
 export interface BoardView {
@@ -62,6 +62,8 @@ export function summarizeProjects(projects: Project[], cards: Card[], rootOf: (c
     const s = summary(rootOf(card.cwd));
     s.cards += 1;
     s.lastActivity = Math.max(s.lastActivity, activeAt(card));
+    // An archived card is out of sight, so it doesn't light a project's running or needs-you dot.
+    if (card.archived) continue;
     if (card.column === "running") s.running += 1;
     if (card.column === "needs_you") s.needsYou += 1;
   }

@@ -435,8 +435,9 @@ export default function Board() {
   // Each folder has its own shell; with All projects showing, the latest card's folder.
   const terminalCwd = selected?.cwd ?? project ?? latest?.cwd ?? home;
   const browserOpen = desktop ? browser.visible : webBrowserOpen;
-  const waiting = cards.filter((c) => c.column === "needs_you").length;
-  const running = cards.filter((c) => c.column === "running").length;
+  // Archived cards are hidden from the board, so the header doesn't count them either.
+  const waiting = cards.filter((c) => c.column === "needs_you" && !c.archived).length;
+  const running = cards.filter((c) => c.column === "running" && !c.archived).length;
 
   // Shortcuts that act on the board stand down while a dialog or the project menu is up.
   const boardKeys = !(showNew || showSettings || showHelp || showPalette || Boolean(login) || menuOpen);

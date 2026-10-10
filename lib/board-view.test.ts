@@ -160,6 +160,15 @@ describe("summarizeProjects", () => {
     expect(rows[0]).toMatchObject({ path: "/a", cards: 5, running: 1, needsYou: 1 });
   });
 
+  it("leaves archived cards out of running/needsYou but still counts them as cards", () => {
+    const cards = [
+      card({ id: "ny", cwd: "/a", column: "needs_you", archived: true }),
+      card({ id: "r", cwd: "/a", column: "running", archived: true }),
+    ];
+    const rows = summarizeProjects([], cards, identity);
+    expect(rows[0]).toMatchObject({ path: "/a", cards: 2, running: 0, needsYou: 0 });
+  });
+
   it("sorts rows by lastActivity descending", () => {
     const rootOf = (cwd: string) => cwd;
     const fresh = card({ id: "f", cwd: "/fresh", lastActivity: 3000 });

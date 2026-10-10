@@ -111,7 +111,9 @@ turn it sets `card.archived` at once; otherwise the id goes in `archiveAfter` an
 handler archives it (`column: "done", archived: true`) once the queue drains. A stopped or
 errored turn drops the id, leaving the card in Done unarchived. `sendMessage()` clears `archived`,
 and a move to any other column does too. The board hides archived cards until "Show N archived"
-in the Done header (`components/Board.tsx`).
+in the Done header (`components/Board.tsx`). Archived cards don't count toward the header's
+"need you" and "running" totals or a project chip's dots (`summarizeProjects` in `lib/board-view.ts`),
+so a hidden card never shows a count you can't find.
 
 ## Permissions and questions
 
