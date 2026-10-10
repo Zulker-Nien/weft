@@ -118,6 +118,8 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 
 - `P1` **Browser tab per card** — each card drives its own tab, and the pane shows the selected card's tab; today one page is shared by all cards.
 - `P1` **Console and network tools** — let agents read console errors and failed requests from the pane, which is most of what debugging a dev server needs.
+- `Now` **Always show something** — a starter page in a new card's pane, and a Haiku-written update page (how it's going, what we did, what's next) after any turn that showed nothing (`lib/glance.ts`). Measured 2026-10-10: Haiku with a bare CLI ~8-15s and steady; puku-ai-2.8 similar but 8-31s; Haiku via plain `claude -p` 18-45s from startup.
+- `P2` **Glance switch and model** — a Settings toggle for the update page, and a choice of model.
 - `P1` **More input tools** — scroll, press a key, hover, select an option, and wait for an element, alongside `click` and `type_text`.
 - `P2` **Structured page snapshot** — an accessibility-tree snapshot with element refs, so clicks don't depend on guessing CSS selectors.
 - `P2` **Who's driving** — show when an agent is controlling the pane, and pause agent actions while you type in it.

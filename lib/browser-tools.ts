@@ -31,6 +31,21 @@ async function shell(route: string, body?: Record<string, unknown>) {
   return data;
 }
 
+// What a card's browser shows: "" with no page yet, undefined when the shell can't say (an older
+// shell without the route, or no desktop app).
+export async function paneUrl(key: string): Promise<string | undefined> {
+  try {
+    return String((await shell("/browser/url", { key })).url ?? "");
+  } catch {
+    return undefined;
+  }
+}
+
+// Loads a page in a card's browser for Weft itself (not an agent); shown if that card is on screen.
+export async function openInPane(url: string, key: string) {
+  await shell("/browser/open", { url, key });
+}
+
 async function attempt(run: () => Promise<ToolResult>): Promise<ToolResult> {
   try {
     return await run();

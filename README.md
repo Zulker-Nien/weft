@@ -199,6 +199,11 @@ copilot opens as a pop-up at `/copilot`.
   rules into messages, and `queueMessages()` in `lib/runner.ts` runs them one turn at a time.
 - `lib/browser-tools.ts` gives every thread `mcp__browser__*` tools (open_url, read_page,
   screenshot, click, type_text) that drive the side pane. They're allowed without a prompt.
+- `lib/glance.ts` keeps the pane from ever being empty or stale. A card whose pane has no page gets a
+  starter page (the ask, "working on it") the moment its turn starts. A turn that ends without opening
+  anything in the pane gets a teammate's update page (how it's going, what we did, what's next),
+  written in the background by Haiku with a bare CLI (~12s) and opened in that card's pane. A live app
+  (an http page) and pages the thread opened itself are left alone. Pages live in `~/.weft/glance/`.
 - `app/api/*` is the backend: cards, threads, permissions, and a server-sent events stream
   (`/api/events`) that keeps the board live. Every route only answers requests addressed to
   127.0.0.1/localhost, and writes need an `x-threadboard` header, so other websites can't drive it.

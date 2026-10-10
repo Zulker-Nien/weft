@@ -9,6 +9,7 @@ import { BROWSER_PROMPT, browserMcpServer } from "./browser-tools";
 import { publish } from "./bus";
 import { firstLine, shortToolName, summarizeInput, toolAction } from "./format";
 import { cliEnv } from "./env";
+import { glanceAfterTurn, showStarter } from "./glance";
 import { isOpenElsewhere } from "./import";
 import { isNotLoggedInError, startLogin } from "./login";
 import { keepAliveMinutes, threadPrompt } from "./settings";
@@ -90,6 +91,10 @@ interface Session {
   stopping: boolean;
   // The latest BOARD STATUS line seen in the current turn.
   status?: BoardStatus;
+  // Whether the current turn opened a page in the browser pane (see lib/glance.ts).
+  openedPane?: boolean;
+  // Counts this session's turns, so a late update page from an earlier turn is dropped.
+  turnSeq?: number;
   // Parallel tool calls can ask at once; the card shows the oldest.
   pending: Pending[];
   toolIndex: Map<string, number>;
@@ -316,7 +321,10 @@ export function sendMessage(cardId: string, text: string, { echo = true, cli = t
   clearTimeout(session.idle);
   session.busy = true;
   session.status = undefined;
+  session.openedPane = false;
+  session.turnSeq = (session.turnSeq ?? 0) + 1;
   session.inbox.push(cli);
+  if (!session.spec.copilot) showStarter(cardId, card.title, text).catch(() => {});
 }
 
 // A message you typed: sent now (a /done one archives the card once it's run), then the skills that "a prompt matches" rules want for it follow as
@@ -686,6 +694,7 @@ function handleAssistant(id: string, session: Session, msg: Extract<SDKMessage, 
       const input = (block.input ?? {}) as Record<string, unknown>;
       const summary = summarizeInput(input);
       const action = toolAction(block.name, input);
+      if (block.name === "mcp__browser__open_url") session.openedPane = true;
       const index = appendThread(id, { kind: "tool", id: block.id, name: block.name, summary, action, at: Date.now() });
       session.toolIndex.set(block.id, index);
       safeUpdate(id, { lastLine: `${shortToolName(block.name)} ${summary}`.trim() });
@@ -745,6 +754,7 @@ function handleResult(id: string, session: Session, msg: Extract<SDKMessage, { t
     ...(status ? { stage: status.stage, remaining: status.remaining } : {}),
   });
   scheduleIdle(session);
+  if (!session.spec.copilot) glanceAfter(id, session, { reply: parsed.summary, isError, stopped });
   if (archiveAfter.has(id) && (stopped || isError)) archiveAfter.delete(id);
   else if (archiveAfter.has(id) && !queued.has(id) && status?.column !== "needs_you") {
     archiveAfter.delete(id);
@@ -755,6 +765,14 @@ function handleResult(id: string, session: Session, msg: Extract<SDKMessage, { t
     // Once the drive loop has handled this result, so the next turn starts on a settled card.
     else if (status?.column !== "needs_you") setTimeout(() => sendQueued(id), 0);
   }
+}
+
+// A teammate's update page for the pane when the turn showed nothing (lib/glance.ts), written in the background.
+function glanceAfter(id: string, session: Session, turn: { reply: string; isError: boolean; stopped: boolean }) {
+  const ask = getThread(id).findLast((item) => item.kind === "user");
+  const seq = session.turnSeq;
+  const turnInfo = { ...turn, ask: ask?.kind === "user" ? ask.text : "", openedPane: Boolean(session.openedPane) };
+  glanceAfterTurn(id, turnInfo, () => session.turnSeq === seq && !session.busy).catch(() => {});
 }
 
 // The plan's 5-hour and weekly usage, asked of the CLI so it shows before any rate-limit event.

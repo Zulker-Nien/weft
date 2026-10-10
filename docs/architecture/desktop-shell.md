@@ -119,6 +119,11 @@ A native `WebContentsView` overlaid on the board. Lazily created on first
   them as `mcp__browser__*` MCP tools (`open_url`, `read_page`, `screenshot`,
   `click`, `type_text`). The board itself drives the pane over IPC
   (`electron/preload.cjs`).
+- `POST /browser/url` returns the URL a card's page shows ("" with no page).
+  `lib/glance.ts` uses it, with `paneUrl()` / `openInPane()` in
+  `lib/browser-tools.ts`, to keep the pane from being empty or stale: a starter
+  page when a card's turn starts with no page, and a Haiku-written update page
+  after a turn that opened nothing (never over a live `http` page).
 
 ## `electron/preload.cjs`
 

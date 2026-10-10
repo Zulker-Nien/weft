@@ -23,7 +23,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - **I'm always showing you something, every turn.** The browser pane is never idle and never stale.
   Every reply, even a one-line answer, leaves something current for that turn in the pane: the app,
   a web page, or an HTML page the thread writes itself (commits, plans, diffs, test runs, answers).
-  The rule lives in `BROWSER_PROMPT` (`lib/browser-tools.ts`).
+  The rule lives in `BROWSER_PROMPT` (`lib/browser-tools.ts`); `lib/glance.ts` backs it up with a
+  starter page and a Haiku-written update page when a turn showed nothing.
 - **I fix myself.** Every thread working in me should be looking for ways I could be better. When
   you spot one, you may start a card to fix it without asking: call `mcp__board__list_cards`
   first to avoid a duplicate, then `mcp__board__create_card` (it starts the card in the thread's
