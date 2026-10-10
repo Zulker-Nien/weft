@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { stepUrl } from "@/lib/review";
 import { api } from "@/lib/client";
-import { mediaMarkdown, mediaUrl } from "@/lib/media";
 import type { Card, DevServerStatus, ReviewPlan, ThreadItem } from "@/lib/types";
+import Composer, { type ComposerHandle } from "./Composer";
 import Icon from "./Icon";
 
 // The tour a thread left for its Review card: one step at a time, with what to look for, the page
@@ -20,7 +20,7 @@ export default function ReviewPanel({
 }) {
   // A new plan (the thread answered feedback) starts the tour over.
   return card.review ? (
-    <Tour key={JSON.stringify(card.review)} cardId={card.id} plan={card.review} items={items} onSend={onSend} />
+    <Tour key={JSON.stringify(card.review)} cardId={card.id} cwd={card.cwd} plan={card.review} items={items} onSend={onSend} />
   ) : (
     <NoTour cardId={card.id} items={items} onSend={onSend} />
   );
@@ -136,11 +136,13 @@ function DevServer({ cardId, plan }: { cardId: string; plan: ReviewPlan }) {
 
 function Tour({
   cardId,
+  cwd,
   plan: written,
   items,
   onSend,
 }: {
   cardId: string;
+  cwd: string;
   plan: ReviewPlan;
   items: ThreadItem[];
   onSend: (text: string) => Promise<void>;
@@ -150,10 +152,9 @@ function Tour({
   const plan = useMemo(() => (guess ? { ...written, url: guess } : written), [written, guess]);
   const [index, setIndex] = useState(0);
   const [approved, setApproved] = useState<Set<number>>(new Set());
-  const [note, setNote] = useState("");
-  // Images pasted into the feedback box, uploaded and sent along as Markdown below the note.
-  const [images, setImages] = useState<{ name: string; path: string }[]>([]);
-  const [uploading, setUploading] = useState(0);
+  const composer = useRef<ComposerHandle>(null);
+  const [empty, setEmpty] = useState(true);
+  const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -170,34 +171,28 @@ function Tour({
 
   function go(to: number) {
     setIndex(Math.max(0, Math.min(steps.length - 1, to)));
-    setNote("");
-    setImages([]);
+    composer.current?.clear();
+    setEmpty(true);
+    setError("");
   }
 
-  async function attach(files: File[]) {
-    setUploading((n) => n + files.length);
-    for (const file of files) {
-      try {
-        const saved = await api.uploadAttachment(file, file.name || "pasted-image.png");
-        setImages((prev) => [...prev, { name: file.name || saved.name, path: saved.path }]);
-      } catch (err) {
-        window.alert(err instanceof Error ? err.message : String(err));
-      } finally {
-        setUploading((n) => n - 1);
-      }
-    }
-  }
-
-  const canSend = (note.trim() || images.length > 0) && !uploading && !sending;
-
+  // The feedback box is the same composer as the reply box: screenshots paste or drop right in.
   async function sendFeedback() {
-    if (!canSend) return;
-    const text = [note.trim(), ...images.map((img) => mediaMarkdown(img.name, img.path))].filter(Boolean).join("\n");
+    if (sending || !composer.current || composer.current.isEmpty()) return;
+    let text: string;
+    try {
+      text = composer.current.read();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      return;
+    }
+    if (!text) return;
     setSending(true);
     try {
       await onSend(`Review feedback on step ${index + 1} of ${steps.length}, “${step.title}”:\n${text}`);
-      setNote("");
-      setImages([]);
+      composer.current?.clear();
+      setEmpty(true);
+      setError("");
     } finally {
       setSending(false);
     }
@@ -244,48 +239,21 @@ function Tour({
               {step.look}
             </p>
           )}
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            onPaste={(e) => {
-              const files = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
-              if (files.length && !e.clipboardData.getData("text/plain").trim()) {
-                e.preventDefault();
-                void attach(files);
-              }
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                void sendFeedback();
-              }
-            }}
-            rows={2}
-            placeholder="Anything wrong or missing here? Paste a screenshot to show it. (⌘↵ to send)"
-            className="mt-2 w-full resize-none rounded-md border border-line-strong bg-panel px-2.5 py-1.5 text-[12.5px] text-ink outline-none focus:border-accent"
-          />
-          {(images.length > 0 || uploading > 0) && (
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-              {images.map((img, i) => (
-                <div key={img.path} className="group relative">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={mediaUrl(img.path) ?? ""}
-                    alt={img.name}
-                    className="h-12 w-auto max-w-[96px] rounded border border-line-strong object-cover"
-                  />
-                  <button
-                    onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
-                    aria-label={`Remove ${img.name}`}
-                    className="absolute -right-1.5 -top-1.5 hidden rounded-full border border-line-strong bg-panel p-0.5 text-ink group-hover:block"
-                  >
-                    <Icon name="x" size={10} />
-                  </button>
-                </div>
-              ))}
-              {uploading > 0 && <span className="text-[11.5px] text-muted">uploading…</span>}
-            </div>
-          )}
+          <div className="mt-2">
+            <Composer
+              ref={composer}
+              variant="reply"
+              cwd={cwd}
+              placeholder="Anything wrong or missing here? Paste a screenshot to show it. (Enter to send)"
+              onSubmit={() => void sendFeedback()}
+              onChange={(markdown) => {
+                setEmpty(!markdown.trim());
+                setError("");
+              }}
+              sizeClass="min-h-[44px] max-h-[30vh]"
+            />
+            {error && <p className="mt-1 text-[11.5px] text-danger">{error}</p>}
+          </div>
           <div className="mt-2 flex items-center gap-2">
             <button
               onClick={() => go(index - 1)}
@@ -297,7 +265,7 @@ function Tour({
             </button>
             <button
               onClick={() => void sendFeedback()}
-              disabled={!canSend}
+              disabled={empty || sending}
               className="rounded-md border border-line-strong px-2.5 py-1 text-[12.5px] text-ink hover:bg-sunken disabled:opacity-40"
             >
               Send feedback
