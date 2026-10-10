@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Card } from "./types";
+import type { Card, ThreadItem } from "./types";
 
 // store.ts reads THREADBOARD_DATA once at import, so each test points it at a fresh temp dir
 // and re-imports the module. Never the real ~/.weft.
@@ -125,5 +125,148 @@ describe("store threads", () => {
   it("an unknown thread is empty", async () => {
     const store = await load();
     expect(store.getThread("never")).toEqual([]);
+  });
+});
+
+describe("store data folder", () => {
+  let home: string;
+  beforeEach(() => {
+    home = fs.mkdtempSync(path.join(os.tmpdir(), "weft-home-"));
+    delete process.env.THREADBOARD_DATA;
+    vi.spyOn(os, "homedir").mockReturnValue(home);
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+
+  it("defaults to ~/.weft", async () => {
+    expect((await load()).DATA_DIR).toBe(path.join(home, ".weft"));
+  });
+
+  it("moves an old ~/.threadboard folder to ~/.weft once", async () => {
+    fs.mkdirSync(path.join(home, ".threadboard"));
+    fs.writeFileSync(path.join(home, ".threadboard", "board.json"), JSON.stringify({ cards: [] }));
+    expect((await load()).DATA_DIR).toBe(path.join(home, ".weft"));
+    expect(fs.existsSync(path.join(home, ".weft", "board.json"))).toBe(true);
+    expect(fs.existsSync(path.join(home, ".threadboard"))).toBe(false);
+  });
+
+  it("leaves ~/.threadboard alone when ~/.weft already exists", async () => {
+    fs.mkdirSync(path.join(home, ".threadboard"));
+    fs.mkdirSync(path.join(home, ".weft"));
+    expect((await load()).DATA_DIR).toBe(path.join(home, ".weft"));
+    expect(fs.existsSync(path.join(home, ".threadboard"))).toBe(true);
+  });
+
+  it("keeps using ~/.threadboard when the move fails", async () => {
+    fs.mkdirSync(path.join(home, ".threadboard"));
+    vi.spyOn(fs, "renameSync").mockImplementation(() => {
+      throw new Error("EPERM");
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect((await load()).DATA_DIR).toBe(path.join(home, ".threadboard"));
+    expect(warn).toHaveBeenCalledOnce();
+  });
+});
+
+const shot = (url: string, at = 1): ThreadItem => ({ kind: "tool", id: `t${at}`, name: "screenshot", summary: "", at, images: [url] });
+
+describe("store pictures", () => {
+  const p = globalThis as unknown as { __weftPicturesBackfill?: boolean };
+  beforeEach(() => {
+    delete p.__weftPicturesBackfill;
+  });
+
+  it("appending an image counts it and makes it the thumbnail, and publishes the card", async () => {
+    const store = await load();
+    const { subscribe } = await import("./bus");
+    store.createCard(input(), "c");
+    const seen: unknown[] = [];
+    subscribe((e) => seen.push(e));
+    store.appendThread("c", shot("/api/attachments/a.png"));
+    expect(store.getCard("c")).toMatchObject({ pictures: 1, thumb: "/api/attachments/a.png" });
+    expect(seen).toContainEqual(expect.objectContaining({ type: "card" }));
+  });
+
+  it("a text item leaves pictures alone; a thread item for no card is fine", async () => {
+    const store = await load();
+    store.createCard(input(), "c");
+    store.appendThread("c", { kind: "user", text: "hi", at: 1 });
+    expect(store.getCard("c")?.pictures).toBeUndefined();
+    expect(store.appendThread("ghost", shot("/api/attachments/a.png"))).toBe(0);
+  });
+
+  it("replacing a tool call with its screenshot result adds the picture", async () => {
+    const store = await load();
+    store.createCard(input(), "c");
+    store.appendThread("c", { kind: "tool", id: "t", name: "screenshot", summary: "", at: 1 });
+    store.replaceThreadItem("c", 0, shot("/api/attachments/b.png"));
+    expect(store.getCard("c")).toMatchObject({ pictures: 1, thumb: "/api/attachments/b.png" });
+    store.replaceThreadItem("ghost", 0, shot("/api/attachments/b.png"));
+  });
+
+  it("replaceThread recounts the whole thread, and skips the save when nothing changed", async () => {
+    const store = await load();
+    store.createCard(input(), "c");
+    store.replaceThread("c", [shot("/api/attachments/a.png", 1), shot("/api/attachments/b.png", 2)]);
+    expect(store.getCard("c")).toMatchObject({ pictures: 2, thumb: "/api/attachments/b.png" });
+    const write = vi.spyOn(fs, "writeFileSync");
+    store.replaceThread("c", [shot("/api/attachments/a.png", 1), shot("/api/attachments/b.png", 2)]);
+    expect(write.mock.calls.filter(([f]) => String(f).endsWith("board.json"))).toHaveLength(0);
+    write.mockRestore();
+  });
+
+  it("decorateCard sets the thumb and emoji without touching updatedAt", async () => {
+    const store = await load();
+    const card = store.createCard(input(), "c");
+    const before = card.updatedAt;
+    store.decorateCard("c", { thumb: "/x.png", emoji: "🧵" });
+    expect(store.getCard("c")).toMatchObject({ thumb: "/x.png", emoji: "🧵", updatedAt: before });
+    expect(() => store.decorateCard("ghost", { thumb: "/y.png", emoji: "x" })).not.toThrow();
+  });
+
+  it("backfills pictures for old cards once, a card per tick, skipping archived ones", async () => {
+    let store = await load();
+    store.createCard(input(), "old");
+    store.createCard(input(), "plain");
+    store.createCard(input({ archived: true }), "gone");
+    store.createCard(input(), "broken");
+    store.createCard(input({ pictures: 3 }), "done");
+    store.appendThread("old", shot("/api/attachments/a.png"));
+    store.appendThread("gone", shot("/api/attachments/g.png"));
+    // Simulate cards saved before thumbnails existed.
+    const board = JSON.parse(fs.readFileSync(path.join(dir, "board.json"), "utf8")) as { cards: Card[] };
+    for (const c of board.cards) {
+      if (c.id === "done") continue;
+      delete c.pictures;
+      delete c.thumb;
+    }
+    fs.writeFileSync(path.join(dir, "board.json"), JSON.stringify(board));
+    fs.writeFileSync(path.join(dir, "threads", "broken.json"), "{not json");
+    store = await load();
+    store.getThread("plain"); // already cached: stays cached
+
+    store.listCards();
+    store.listCards(); // second call doesn't start another pass
+    await vi.waitFor(() => expect(store.getCard("broken")?.pictures).toBe(0));
+    await new Promise((r) => setImmediate(r));
+
+    expect(store.getCard("old")).toMatchObject({ pictures: 1, thumb: "/api/attachments/a.png" });
+    expect(store.getCard("plain")?.pictures).toBe(0);
+    expect(store.getCard("gone")?.pictures).toBeUndefined();
+    expect(store.getCard("done")?.pictures).toBe(3);
+    const saved = JSON.parse(fs.readFileSync(path.join(dir, "board.json"), "utf8")) as { cards: Card[] };
+    expect(saved.cards.find((c) => c.id === "old")?.pictures).toBe(1);
+  });
+
+  it("backfill does nothing when every card already has pictures", async () => {
+    const store = await load();
+    store.createCard(input({ pictures: 0 }), "c");
+    const write = vi.spyOn(fs, "writeFileSync");
+    store.listCards();
+    await new Promise((r) => setImmediate(r));
+    expect(write).not.toHaveBeenCalled();
+    write.mockRestore();
   });
 });

@@ -37,15 +37,18 @@ If you are an agent editing this repo, you are working on me. Read README.md for
     Pure logic already moved out: `lib/board-view.ts` (columns, project chips, chime/unseen rules) and
     `lib/turn.ts` (how a turn's result reads, cost, limits); Board's hooks into `lib/use-*.ts` (`use-now`,
     `use-toast`, `use-desktop-bridge`). Next: live events/chimes, view prefs, shortcuts, command palette.
-  - I have a small Vitest suite (`npm test`) over the pure logic in `lib/` and the API routes
-    (`app/api/routes.test.ts`, runner and store mocked), plus characterization tests of the runner's
-    SDK loop (`lib/runner.test.ts`, fake `query()`). The UI is still untested; add tests with any risky change.
+  - My Vitest suite (`npm test`, ~1,400 tests) covers every line of `lib/` and `app/api/` (98.6% of branches,
+    `npm run coverage`): a test file beside each module, routes with their libs mocked, the runner's SDK loop
+    against a fake `query()` (`lib/runner.test.ts`), and browser code and React hooks under happy-dom +
+    @testing-library/react (`// @vitest-environment happy-dom`). `components/` and `electron/` are untested
+    and outside the coverage set; add tests with any risky change, and keep new lib code at 100%.
 
 ## How I work (file map)
 
 - `electron/main.cjs`: shell; starts Next, windows, tray, dock, `weft://` links, global hotkey.
 - `electron/browser-pane.cjs`: native browser pane, one page per card; token-guarded control
-  server on 127.0.0.1 for agents, IPC for the board (`electron/preload.cjs`).
+  server on 127.0.0.1 for agents, IPC for the board (`electron/preload.cjs`); `electron/pane-pages.cjs`
+  saves each card's page to `~/.weft/pages/` so it comes back after a restart.
 - `electron/terminal.cjs` + `components/TerminalDrawer.tsx`: the terminal drawer (node-pty shell over IPC, xterm.js).
 - `lib/runner.ts`: one Agent SDK `query()` per thread, warm spares, permissions, turn queue;
   puku-cli via `pathToClaudeCodeExecutable`.
@@ -56,11 +59,16 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `plugin/skills/*`: my own skills (`/weft:done`, `/weft:commit`, `/weft:preview`, `/weft:setup-done`,
   which installs tests, docs and strict lint on a project before `/done`; `/weft:done` also keeps this file current);
   `lib/skills.ts` lists skills, `lib/automations.ts` turns "When … run …" rules into turns.
-- `lib/coverage.ts` + `app/api/coverage`: read `coverage/coverage-summary.json` (`npm run coverage`) for the
-  header pie, `components/CoverageBadge.tsx`.
+- `lib/coverage.ts` + `app/api/coverage`: read the project in view's `coverage/coverage-summary.json` (`npm run coverage`) for the
+  header pie, `components/CoverageBadge.tsx`; its hover bubble is `components/Tip.tsx` (native titles don't show in Electron).
+- `lib/card-pictures.ts`: a card's thumbnail (latest thread image, or a pane capture after each turn from `lib/glance.ts`) and its Haiku emoji tile; `components/CardView.tsx` draws the card.
+- `lib/library.ts` + `lib/library-view.ts` + `components/LibraryRail.tsx`: the library of starred cards (recipes are Claude
+  skills, to-dos and notes are saved pages in `~/.weft/library`), its rail and drawer (docs/architecture/library.md).
 - `lib/copilot.ts` + `lib/board-tools.ts`: the copilot thread and its `mcp__board__*` tools.
 - `lib/browser-tools.ts`: `mcp__browser__*` tools every thread gets.
 - `lib/import.ts`, `lib/search.ts`: pick up `~/.claude/projects` sessions as cards; search index.
+- `lib/hotkeys.ts` + `lib/shortcut-catalog.ts`: the keyboard shortcut registry and what the `?` sheet lists; tooltips, key badges,
+  right-click menus and `ModifierHint` read their keys from it (docs/architecture/keyboard-shortcuts.md).
 - `lib/store.ts`: storage in `~/.weft` (board.json, threads/, attachments/).
 - `app/api/*` + `lib/guard.ts`: localhost-only Host check, writes need `x-threadboard: 1`.
 - Components: `Board.tsx`, `ThreadView.tsx`, `ThreadItems.tsx`, `Markdown.tsx`, `ReviewPanel.tsx`;
@@ -73,6 +81,9 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   its format without updating `lib/status.ts`.
 - This Next.js differs from your training data: read `node_modules/next/dist/docs/` first.
   Leave the managed block in AGENTS.md alone.
+- Run me in dev mode (`npm run desktop`, or the `~/Applications/Weft.app` launcher, which opens
+  Electron on this folder). Run `npm run dist` only to ship a build to someone else; a local
+  packaged `.app` goes stale with every commit.
 - When a feature lands, update README.md and docs/ROADMAP.md in the same change.
 - Run `npm run lint`, `npm run typecheck` and `npm test` (Vitest; tests sit beside the code as `lib/*.test.ts`, API routes in `app/api/routes.test.ts`).
 - Stage every new file a change imports. The pre-commit hook (`.githooks/pre-commit`, set up by
@@ -81,9 +92,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 
 ## Known gaps (verified 2026-10-10)
 
-- Tests cover `lib/status.ts`, `review.ts`, `guard.ts`, `automations.ts`, `format.ts`, `settings.ts`, `store.ts`,
-  `board-tools.ts`, `board-view.ts` and `turn.ts`, plus the state-changing API routes (`app/api/routes.test.ts`;
-  events, search, transcribe, attachments and repos GET aren't covered); `lib/runner.test.ts` pins runner.ts's SDK loop with a fake `query()`; none for the UI. CI (`.github/workflows/ci.yml`) runs lint,
+- Coverage counts only `lib/` and `app/api/` (100% lines, 98.6% branches on 2026-10-11); `components/` and
+  `electron/` have no tests. Runner's leftover branches are defensive fallbacks. CI (`.github/workflows/ci.yml`) runs lint,
   typecheck and tests, but the repo has no upstream branch yet, so it hasn't run.
 - `7b1db11`, `dfdd9c7` and `0e54c6f` don't build on their own (Board.tsx imported files committed later);
   everything from `2766738` on does.

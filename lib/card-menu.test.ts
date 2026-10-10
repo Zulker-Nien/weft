@@ -7,15 +7,35 @@ function card(over: Partial<Card> = {}): Card {
 }
 
 const ids = (items: MenuItem[]) => items.flatMap((i) => ("id" in i ? [i.id] : []));
-const item = (items: MenuItem[], id: string) => items.find((i) => "id" in i && i.id === id) as { enabled?: boolean; label: string } | undefined;
+const item = (items: MenuItem[], id: string) => items.find((i) => "id" in i && i.id === id) as { enabled?: boolean; checked?: boolean; label: string; accelerator?: string } | undefined;
 
 describe("cardMenu", () => {
+  it("offers to star an unstarred card as each library kind, and to unstar a starred one", () => {
+    const plain = cardMenu(card());
+    expect(ids(plain)).toEqual(expect.arrayContaining(["star:recipe", "star:todo", "star:note"]));
+    expect(item(plain, "star:recipe")?.label).toBe("Save as Recipe");
+    expect(item(plain, "star:todo")?.accelerator).toBe("T");
+    expect(ids(plain)).not.toContain("unstar");
+
+    const starred = ids(cardMenu(card({ libraryId: "lib1" })));
+    expect(starred).toEqual(expect.arrayContaining(["show-in-library", "unstar"]));
+    expect(starred.some((id) => id.startsWith("star:"))).toBe(false);
+  });
+
   it("offers every move except the card's own column, flat", () => {
     const m = ids(cardMenu(card({ column: "review" })));
     expect(m).toContain("move:done");
     expect(m).toContain("move:backlog");
     expect(m).not.toContain("move:review");
     expect(m).not.toContain("start");
+  });
+
+  it("ticks the card's permission mode, without YOLO for puku threads", () => {
+    const m = cardMenu(card({ permissionMode: "auto" }));
+    expect(item(m, "mode:auto")).toMatchObject({ checked: true });
+    expect(item(m, "mode:default")).toMatchObject({ checked: false });
+    expect(ids(m)).toContain("mode:bypassPermissions");
+    expect(ids(cardMenu(card({ backend: "puku" })))).not.toContain("mode:bypassPermissions");
   });
 
   it("offers Start Now in Backlog", () => {
@@ -45,6 +65,20 @@ describe("cardMenu", () => {
     expect(ids(cardMenu(card({ sessionId: "s1", backend: "puku" as Card["backend"] })))).not.toContain("copy-resume");
   });
 
+  it("gives every item its own key, none the open menu needs itself", () => {
+    const dev = card({ column: "backlog", sessionId: "s1", review: { dev: "npm run dev", steps: [] } as unknown as Card["review"] });
+    const menus = [cardMenu(dev, null), cardMenu(dev, { state: "running", reachable: true, log: "" }), cardMenu(card({ column: "running" }))];
+    menus.push(columnMenu("done", { count: 2, archived: 1, showArchived: false }));
+    for (const m of menus) {
+      const keys = m.flatMap((i) => ("id" in i ? [i.accelerator] : []));
+      expect(keys.every(Boolean)).toBe(true);
+      expect(new Set(keys).size).toBe(keys.length);
+      expect(keys.some((k) => /^(Enter|Return|Esc|Escape|Space|Up|Down|Left|Right)$/.test(k!))).toBe(false);
+    }
+    expect(item(cardMenu(card()), "move:done")).toMatchObject({ accelerator: "D" });
+    expect(item(cardMenu(card()), "skill:weft:commit")).toMatchObject({ accelerator: "2" });
+  });
+
   it("labels archive by state", () => {
     expect(item(cardMenu(card({ archived: true })), "archive")?.label).toBe("Unarchive");
   });
@@ -62,5 +96,30 @@ describe("columnMenu", () => {
     expect(ids(columnMenu("review", { count: 3, archived: 2, showArchived: false }))).toEqual(["new"]);
     expect(ids(columnMenu("done", { count: 3, archived: 2, showArchived: false }))).toEqual(["new", "toggle-archived", "archive-done"]);
     expect(ids(columnMenu("done", { count: 0, archived: 0, showArchived: false }))).toEqual(["new"]);
+  });
+});
+
+describe("cardMenu dev server and library items", () => {
+  const withDev = card({ review: { dev: "npm run dev", steps: [] } as unknown as Card["review"] });
+
+  it("counts a starting server, or a reachable one Weft didn't start, as up", () => {
+    for (const dev of [{ state: "starting", log: "" }, { state: "stopped", reachable: true, log: "" }] as const) {
+      const got = ids(cardMenu(withDev, dev as unknown as Parameters<typeof cardMenu>[1]));
+      expect(got).toEqual(expect.arrayContaining(["dev:restart", "dev:stop"]));
+      expect(got).not.toContain("dev:start");
+    }
+  });
+
+  it("offers Show in Library and Unstar for a starred card instead of the Star items", () => {
+    const got = ids(cardMenu(card({ libraryId: "lib-1" })));
+    expect(got).toEqual(expect.arrayContaining(["show-in-library", "unstar"]));
+    expect(got.some((id) => id.startsWith("star:"))).toBe(false);
+  });
+});
+
+describe("columnMenu archived toggle", () => {
+  it("reads Hide Archived while archived cards are shown", () => {
+    expect(item(columnMenu("done", { count: 0, archived: 2, showArchived: true }), "toggle-archived")?.label).toBe("Hide Archived");
+    expect(item(columnMenu("done", { count: 0, archived: 2, showArchived: false }), "toggle-archived")?.label).toBe("Show 2 Archived");
   });
 });

@@ -18,11 +18,15 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 
 ## Board and organization
 
-- `Now` **Projects bar** — a bar above the columns listing the project folders in use, to filter the board to one or more projects and sort cards by activity, age, or cost.
+- `Now` **Projects bar** — a bar above the columns listing the project folders in use, to filter the board to one or more projects and sort cards by activity or age.
 - `P1` **Order within a column** — drag to reorder cards inside a column and keep that order, so the top of Backlog is what runs next.
 - `P1` **Archive instead of delete** — Done cards move to a searchable archive after N days; today delete also removes the card's thread view for good.
 - `P1` **Undo** — a short undo toast after a move, stop, or delete, since a misplaced drag or delete is easy to make and hard to fix.
-- `P1` **Card actions menu** — a ⋯ menu on each card (move to, start, stop, fork, archive, open folder) so nothing depends on drag-and-drop.
+- `Done` **Archive keys** — `Shift+A` archives the focused card (else the open thread) and steps focus to the next one, `Shift+E` archives the Done column, and `Z` or the toast's Undo restores the last archive (`lib/archive.ts`). Archive is the first action with undo.
+- `Done` **Card actions menu** — right-click a card for a native, one-click menu (`lib/card-menu.ts`): open, rename, start, move, stop, run Weft skills, dev server, new thread here, reveal folder, copy path or resume command, archive, delete. Columns get New thread, and Done gets show archived and archive all. Every item has a key that picks it while the menu is open (`D` Done, `1` `/weft:done`, `Y` YOLO). Fork isn't in it yet.
+- `Done` **Card library** — star a card as a recipe (a Claude skill with `{blanks}`, run again from the New thread dialog with its page in the pane), a to-do (its page, with saved ticks) or a note; a 38px rail with a drawer, Mine and project levels like Claude Code, and copilot access (docs/architecture/library.md).
+- `P2` **Library page snapshots** — keep a picture and the text of a live site a card showed, not just its link, when it's starred.
+- `P2` **Fill recipe blanks in the pane** — make the recipe page's blanks a form that fills the prompt, instead of editing the prompt.
 - `P2` **Swimlanes by project** — optional rows per project folder, so a board spanning several repos stays readable.
 - `P2` **Labels** — free-form colored tags (bug, refactor, spike) that the projects bar can filter on.
 - `P2` **Priority** — a priority field that sorts Backlog and that the run queue respects.
@@ -37,8 +41,10 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 
 ## Cards and threads
 
+- `Now` **Summary-first cards with a picture** — the card leads with the thread's last line in plain text, a 52 px thumbnail of its latest picture (thread screenshots and images, or a pane capture after each turn; hover to enlarge), an 8-dot stage bar with what's left, and a one-line footer. No picture yet: a Haiku emoji tile, or the folder's initial. Still open: emoji for cards that haven't had a turn since, and a setting to hide thumbnails.
+
 - `Now` **Managed thread prompt and BOARD STATUS** — every board thread gets a system prompt asking it to end replies with a `BOARD STATUS` line; the board uses it to move the card to Needs you, Review, or Done and to show its stage and what's left. The parser skips status lines quoted in code blocks and reads the bold-label form (`**BOARD STATUS:** ...`).
-- `P1` **Markdown rendering** — render assistant messages as Markdown with syntax-highlighted code blocks and copy buttons.
+- `Now` **Markdown rendering** — messages render as Markdown (headings, lists, tables, code blocks with a Copy button) in the same style as the composer. Still open: syntax highlighting.
 - `Now` **Send later** — the reply box's clock (Alt+Enter) schedules a message for a set time, by default a minute after the plan's next 5-hour reset; the server sends it even with the thread closed. Still open: weekly-limit resets, and scheduling from the copilot.
 - `P1` **Queue a reply while running** — the reply box is disabled while a turn runs ("Working. Stop it to reply."); let you queue the next message instead.
 - `P1` **Import existing CLI sessions** — list sessions from the CLIs' project folders and turn any of them into a card that resumes it.
@@ -49,7 +55,9 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `P1` **Fork a thread** — start a new card from a thread's current session, to try a second approach without losing the first.
 - `P1` **Card templates** — saved prompts with folder, CLI, and permission mode ("fix lint", "add tests for X", "review my diff"), picked from the new-card dialog.
 - `P1` **Full tool output** — tool results are clipped to 4,000 characters and summaries to 100; add "show full output" that reads the CLI's own transcript.
-- `P2` **Collapsible tool runs** — fold a run of consecutive tool calls into one row, so long threads are about the conversation, not the `grep`s.
+- `Now` **Collapsible tool runs** — a run of tool calls folds into one line ("Ran 3 commands, read 2 files +1") that opens to each call; screenshots stay visible under it.
+- `Now` **Images in threads** — tool screenshots, images pasted into Claude Code sessions and local images an agent shows with `![](path)` appear inline, saved in `~/.weft/attachments`; click for full size.
+- `Now` **Live sessions move columns** — a session busy in another app moves to Running, one waiting on a question to Needs you, read from Claude Code's own session list every 5 seconds.
 - `P2` **Subagent drill-down** — subagent turns are hidden today; show them nested under the Task call that started them.
 - `P2` **Retry after an error** — one click to resend the last message after "Ended early" or an API error.
 - `P2` **Edit and resend** — edit your last message and rerun the turn from there.
@@ -118,10 +126,14 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 
 ## Browser pane
 
+- `Now` **Always show something** — a working page in a card's blank pane when a turn starts (the card's own hovercar scene, dimmed, with the title, ask and a running clock), and a Haiku-written update page (how it's going, what we did, what's next) after any turn that showed nothing (`lib/glance.ts`). Measured 2026-10-10: Haiku with a bare CLI ~8-15s and steady; puku-ai-2.8 similar but 8-31s; Haiku via plain `claude -p` 18-45s from startup.
+- `Now` **Card pages survive a restart** — each card's last page is saved to `~/.weft/pages/` (temp pages copied) and comes back when you open the card (`electron/pane-pages.cjs`).
+- `P2` **Page history and cloud sync** — every page a card showed as a timeline, synced to Supabase (Postgres `card_pages` + Storage, R2 later if egress costs), with share links.
+- `Now` **Page zoom** — a % button in the pane's toolbar (steps, presets, Actual Size), ⌘+/−/0 and ⌘+scroll on the page in Chrome's steps, and pinch to magnify (`electron/browser-pane.cjs`).
+- `P2` **Fit to pane** — one click to fit a large image or a fixed-width page to the pane's width.
+- `P2` **Glance switch and model** — a Settings toggle for the update page, and a choice of model.
 - `P1` **Browser tab per card** — each card drives its own tab, and the pane shows the selected card's tab; today one page is shared by all cards.
 - `P1` **Console and network tools** — let agents read console errors and failed requests from the pane, which is most of what debugging a dev server needs.
-- `Now` **Always show something** — a starter page in a new card's pane, and a Haiku-written update page (how it's going, what we did, what's next) after any turn that showed nothing (`lib/glance.ts`). Measured 2026-10-10: Haiku with a bare CLI ~8-15s and steady; puku-ai-2.8 similar but 8-31s; Haiku via plain `claude -p` 18-45s from startup.
-- `P2` **Glance switch and model** — a Settings toggle for the update page, and a choice of model.
 - `P1` **More input tools** — scroll, press a key, hover, select an option, and wait for an element, alongside `click` and `type_text`.
 - `P2` **Structured page snapshot** — an accessibility-tree snapshot with element refs, so clicks don't depend on guessing CSS selectors.
 - `P2` **Who's driving** — show when an agent is controlling the pane, and pause agent actions while you type in it.
@@ -136,6 +148,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 ## Permissions, safety and sandboxing
 
 - `Done` **Default permission mode** — set in Settings (Auto out of the box); the new-thread dialog, the API, the copilot's `create_card` and warm spares all start in it.
+- `Done` **Switch a card's permission mode** — from the thread header or the card menu, applied to the running CLI; picked-up Claude Code sessions keep the mode they last ran in.
 - `P1` **Always-allow rules** — "allow always for this card / this project" on a prompt, saved as tool-plus-pattern rules you can edit in settings.
 - `P1` **Full request detail** — expand a pending request on the card to see the whole command, the file diff for an edit, or the full URL before answering.
 - `P1` **Deny with a reason** — deny and tell the agent what to do instead, rather than the fixed "The user denied this in Weft."
@@ -195,7 +208,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 
 ## Cost and analytics
 
-- `P1` **Cost totals** — spend per project, per day, and for the whole board in the header; today cost only appears per card.
+- `Not planned` **Cost totals** — Weft runs on a Claude subscription, so dollar estimates are hidden everywhere (cards, threads, copilot, recipe pages); cost is still recorded per card.
 - `P2` **Budgets** — a spend cap per card or per day; the card pauses and asks when it reaches it.
 - `P2` **Token usage per turn** — input, output, and cache tokens from each turn's result, to spot threads that reread too much.
 - `P2` **Plan usage** — for Claude subscriptions, show remaining session and weekly usage so you know when a limit is coming.
@@ -234,7 +247,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `P1` **First-run check** — on first launch, check for `claude` and `puku-cli`, their login state, and `git`, then pick a first project folder.
 - `P2` **Guided first card** — a starter card in a scratch folder that shows Running, Needs you, Review, and the browser pane in a couple of minutes.
 - `P2` **Data folder in settings** — choose where the board is stored from settings instead of the `THREADBOARD_DATA` variable.
-- `P2` **Shortcuts sheet** — `?` lists every keyboard shortcut, including ⌘J and ⌘⇧B.
+- `Now` **Shortcuts sheet** — `?` lists every keyboard shortcut (board, composer, terminal, app menu), searchable by words or keys; hold ⌘ or ⇧ for a cheat card; tooltips, the filter box and right-click menus show keys.
 - `P2` **Export and import settings** — move the thread prompt, templates, and rules to another machine as one file.
 - `Now` **Theme** — light, dark, or follow the system, from Settings → Appearance; the desktop window chrome follows it too.
 
@@ -253,6 +266,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 
 - `P1` **Unit tests for the core** — *started: `npm test` (Vitest) covers BOARD STATUS parsing, review tours, the API guard, automations, format helpers, and every API route (`app/api/routes.test.ts`).* Still to do: store reload rules (running cards become Review on restart), and cost accounting across resumed sessions.
 - `Done` **Runner tests** — `lib/runner.test.ts` drives the SDK loop against a fake `query()`: results, permissions and questions, stop, the turn queue, warm spares, login, and the CLI going away. No stub CLI executable yet.
+- `Done` **Coverage per project** — the header's "49% coverage" follows the project in view, hovers a breakdown, and without a report is a **Set up coverage** button that starts a `/weft:setup-done` thread there.
 - `P1` **UI tests** — component tests for the board, thread view, and reply box; the UI has none today.
 - `P2` **CI** — lint, typecheck, and tests on every push.
 - `P2` **End-to-end tests** — drive the Electron app: create a card, start it, allow a request, reply, drag it to Done.
@@ -263,7 +277,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 ## Accessibility and polish
 
 - `P1` **Keyboard-first board** — arrow keys between cards, Enter to open, A and D to allow or deny, N for a new card.
-- `P2` **Move without dragging** — a keyboard and menu way to move cards between columns, since drag-and-drop is the only way today.
+- `Done` **Move without dragging** — the card's right-click menu and the command palette move cards between columns.
 - `P2` **Screen reader announcements** — a live region that reads out card moves and new permission requests.
 - `P2` **Focus return** — focus goes back to the card after closing its thread panel or a dialog.
 - `P2` **Resizable thread panel** — drag the divider between the thread and its browser in the full-screen overlay, and remember the split.

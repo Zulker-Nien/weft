@@ -3,7 +3,7 @@
 import type { ChimeKind } from "./chimes";
 import { COLUMNS, type Card, type CardStats, type Column, type Project } from "./types";
 
-export type SortKey = "newest" | "active" | "oldest" | "cost";
+export type SortKey = "newest" | "active" | "oldest";
 
 export interface ProjectSummary {
   path: string; // absolute folder path
@@ -28,7 +28,6 @@ export const SORTERS: Record<SortKey, (a: Card, b: Card) => number> = {
   newest: (a, b) => b.createdAt - a.createdAt,
   active: (a, b) => activeAt(b) - activeAt(a),
   oldest: (a, b) => a.createdAt - b.createdAt,
-  cost: (a, b) => (b.costUsd ?? 0) - (a.costUsd ?? 0),
 };
 
 // The board's columns: the cards in the chosen project that match the filter, each column sorted.

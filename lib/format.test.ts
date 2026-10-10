@@ -6,11 +6,12 @@ import {
   firstLine,
   folderName,
   projectHue,
-  formatCost,
   formatReset,
   formatTokens,
   isLive,
   shortToolName,
+  STAGES,
+  stageStep,
   summarizeInput,
   timeAgo,
   titleFromPrompt,
@@ -48,13 +49,6 @@ describe("names and paths", () => {
 });
 
 describe("numbers and times", () => {
-  it("formats cost", () => {
-    expect(formatCost(undefined)).toBeNull();
-    expect(formatCost(0)).toBeNull();
-    expect(formatCost(0.004)).toBe("<$0.01");
-    expect(formatCost(1.236)).toBe("$1.24");
-  });
-
   it("formats tokens", () => {
     expect(formatTokens(999)).toBe("999");
     expect(formatTokens(1500)).toBe("1.5k");
@@ -191,6 +185,18 @@ describe("summarizeInput", () => {
   });
 });
 
+describe("stageStep", () => {
+  it("numbers the BOARD STATUS stages from 1", () => {
+    expect(stageStep("Planning")).toBe(1);
+    expect(stageStep("first shot")).toBe(3);
+    expect(stageStep("Done")).toBe(STAGES.length);
+  });
+  it("is 0 for a missing or unknown stage", () => {
+    expect(stageStep(undefined)).toBe(0);
+    expect(stageStep("Vibing")).toBe(0);
+  });
+});
+
 describe("projectHue", () => {
   it("gives the same name the same hue, inside 0-359", () => {
     expect(projectHue("weft")).toBe(projectHue("weft"));
@@ -202,5 +208,72 @@ describe("projectHue", () => {
 
   it("tells different projects apart", () => {
     expect(projectHue("weft")).not.toBe(projectHue("blastcp"));
+  });
+});
+
+describe("toolAction for every built-in tool", () => {
+  it.each([
+    ["BashOutput", "command"],
+    ["KillShell", "command"],
+    ["Read", "read"],
+    ["Edit", "edit"],
+    ["NotebookEdit", "edit"],
+    ["Write", "write"],
+    ["Grep", "search"],
+    ["LS", "search"],
+    ["WebSearch", "web"],
+    ["WebFetch", "fetch"],
+    ["Task", "agent"],
+    ["TodoWrite", "plan"],
+    ["TaskCreate", "plan"],
+    ["TaskUpdate", "plan"],
+    ["AskUserQuestion", "question"],
+    ["Skill", "skill"],
+    ["ToolSearch", "tools"],
+    ["SendMessage", "message"],
+  ])("%s is %s", (name, action) => {
+    expect(toolAction(name)).toBe(action);
+  });
+
+  it("reads resize and the remaining browser verbs from the action input", () => {
+    expect(toolAction("mcp__computer__computer", { action: "resize_window" })).toBe("resize");
+    expect(toolAction("mcp__playwright__browser_navigate")).toBe("open");
+    expect(toolAction("mcp__puppeteer__x", { action: "form_input" })).toBe("type");
+    expect(toolAction("mcp__chrome__get_page_text")).toBe("look");
+    // A non-string action falls back to the tool name.
+    expect(toolAction("mcp__browser__click", { action: 3 })).toBe("click");
+  });
+});
+
+describe("describeToolRun phrases", () => {
+  const one = (action: string, times = 1) => describeToolRun(Array.from({ length: times }, () => ({ action }))).text;
+
+  it.each([
+    ["search", "Searched the code", "Searched 2 times"],
+    ["web", "Searched the web", "Searched the web 2 times"],
+    ["fetch", "Fetched a page", "Fetched 2 pages"],
+    ["agent", "Ran an agent", "Ran 2 agents"],
+    ["plan", "Updated the plan", "Updated the plan"],
+    ["question", "Asked you", "Asked you"],
+    ["skill", "Loaded a skill", "Loaded 2 skills"],
+    ["tools", "Loaded tools", "Loaded tools"],
+    ["message", "Sent a message", "Sent 2 messages"],
+    ["open", "Opened a page", "Opened 2 pages"],
+    ["screenshot", "Took a screenshot", "Took 2 screenshots"],
+    ["click", "Clicked", "Clicked 2 times"],
+    ["type", "Typed", "Typed 2 times"],
+    ["key", "Pressed a key", "Pressed 2 keys"],
+    ["scroll", "Scrolled", "Scrolled 2 times"],
+    ["resize", "Resized the browser", "Resized the browser"],
+    ["look", "Read the page", "Read the page 2 times"],
+    ["browser", "Used the browser", "Used the browser 2 times"],
+    ["write", "Wrote a file", "Wrote 2 files"],
+  ])("%s reads %s, then %s", (action, once, twice) => {
+    expect(one(action)).toBe(once);
+    expect(one(action, 2)).toBe(twice);
+  });
+
+  it("names an mcp kind with no tool part after its raw server", () => {
+    expect(one("mcp:0123abcd-9")).toBe("Used 0123abcd-9");
   });
 });

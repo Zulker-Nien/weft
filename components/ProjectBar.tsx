@@ -17,7 +17,6 @@ export const SORTS: { id: SortKey; label: string }[] = [
   { id: "newest", label: "Newest first" },
   { id: "active", label: "Recently active" },
   { id: "oldest", label: "Oldest first" },
-  { id: "cost", label: "Highest cost" },
 ];
 
 const CHIP = "flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px]";

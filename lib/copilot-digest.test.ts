@@ -78,3 +78,31 @@ describe("markSeen", () => {
     expect(boardDigest([card({ id: "a", column: "review" })], lastSeen())).toBe("");
   });
 });
+
+describe("boardDigest edge cases", () => {
+  it("without a snapshot, falls back to updatedAt and reports an error only if the card changed since", () => {
+    const cards = [
+      card({ id: "stale", column: "review", error: "old failure", updatedAt: 100 }),
+      card({ id: "broke", column: "running", error: "Rate limited", updatedAt: 300 }),
+    ];
+    expect(boardDigest(cards, undefined, 200).split("\n").slice(1)).toEqual(['- Error: "Card broke" (broke): Rate limited']);
+  });
+
+  it("names a card that needs you even when it says nothing about why", () => {
+    expect(boardDigest([card({ id: "q", column: "needs_you" })], {})).toContain('- Needs you: "Card q" (q)');
+    expect(boardDigest([card({ id: "q", column: "needs_you" })], {})).not.toContain("(q):");
+  });
+
+  it("doesn't report an error again once the copilot has seen it", () => {
+    const seen = { a: { column: "running" as const, error: "boom" } };
+    expect(boardDigest([card({ id: "a", error: "boom" })], seen)).toBe("");
+  });
+});
+
+describe("markSeen for a card it never saw", () => {
+  it("leaves the snapshot alone", () => {
+    rememberSeen({});
+    markSeen("ghost", "done");
+    expect(lastSeen()).toEqual({});
+  });
+});

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alsoHereLine, busyHere, busyInFolder, editedPath, isBusy, sameTree, sharedFiles, touchFile, TOUCHED_CAP } from "./overlap";
+import { alsoHereLine, busyHere, busyInFolder, editedPath, filesLine, isBusy, sameTree, sharedFiles, touchFile, TOUCHED_CAP } from "./overlap";
 import type { Card } from "./types";
 
 let seq = 0;
@@ -123,5 +123,20 @@ describe("touchFile", () => {
     expect(next).toHaveLength(TOUCHED_CAP);
     expect(next[0]).toBe("/new");
     expect(next).not.toContain(`/f${TOUCHED_CAP - 1}`);
+  });
+});
+
+describe("sameTree at the filesystem root", () => {
+  it("counts a card working in / as sharing a tree with every folder", () => {
+    expect(sameTree("/", "/me/app")).toBe(true);
+    expect(sameTree("/me/app", "/")).toBe(true);
+  });
+});
+
+describe("filesLine", () => {
+  it("names files by their base name, falling back to the whole path when it ends in a slash", () => {
+    expect(filesLine(["/r/lib/a.ts"])).toBe("a.ts");
+    expect(filesLine(["build/"])).toBe("build/");
+    expect(filesLine([])).toBe("");
   });
 });

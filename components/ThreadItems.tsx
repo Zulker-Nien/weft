@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useState } from "react";
-import { describeToolRun, formatCost, shortToolName, toolAction } from "@/lib/format";
+import { describeToolRun, shortToolName, toolAction } from "@/lib/format";
 import type { ThreadItem } from "@/lib/types";
 import Icon, { Spinner } from "./Icon";
 import Markdown from "./Markdown";
@@ -150,8 +150,7 @@ export const ThreadMessage = memo(function ThreadMessage({ item }: { item: Threa
       return <ToolLine item={item} live={false} />;
     case "permission":
       return <PermissionLine item={item} />;
-    case "result": {
-      const cost = formatCost(item.costUsd);
+    case "result":
       return (
         <div className="flex items-center gap-2 py-1 text-[11px] text-faint">
           <div className="h-px flex-1 bg-line" />
@@ -160,10 +159,8 @@ export const ThreadMessage = memo(function ThreadMessage({ item }: { item: Threa
           ) : (
             <span>{item.text === "Stopped" ? "Stopped" : "Turn finished"}</span>
           )}
-          {cost && <span>· {cost} so far</span>}
           <div className="h-px flex-1 bg-line" />
         </div>
       );
-    }
   }
 });

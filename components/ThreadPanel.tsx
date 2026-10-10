@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import { folderName, isLive } from "@/lib/format";
-import type { Card, ThreadItem } from "@/lib/types";
+import { useShortcutHint } from "@/lib/hotkeys";
+import type { Card, PermissionMode, ThreadItem } from "@/lib/types";
 import { BackendBadge } from "./CardView";
 import Icon from "./Icon";
+import ModePicker from "./ModePicker";
 import ReviewPanel from "./ReviewPanel";
 import SkillMenu from "./SkillMenu";
 import ThreadView from "./ThreadView";
@@ -15,12 +17,13 @@ export default function ThreadPanel({
   streaming,
   onSend,
   onAnswer,
-  onStop,
   onRelease,
   onArchive,
   onDelete,
   onClose,
   onRename,
+  onMode,
+  editTitle = false,
   alsoHere,
   resetAt,
 }: {
@@ -29,18 +32,23 @@ export default function ThreadPanel({
   streaming: string;
   onSend: (text: string) => Promise<void>;
   onAnswer: (allow: boolean, answers?: Record<string, string>) => void;
-  onStop: () => void;
   onRelease: () => void;
   onArchive: () => void;
   onDelete: () => void;
-  onClose: () => void;
+  // Left out while the browser shows beside the thread: the window's X sits in the browser's corner.
+  onClose?: () => void;
   onRename: (title: string) => void;
+  // Applies to the open CLI right away, mid-turn included.
+  onMode: (mode: PermissionMode) => void;
+  // Opens with the title already being edited (Rename… in the card's right-click menu).
+  editTitle?: boolean;
   // Other busy cards in this folder (lib/overlap.ts busyHere).
   alsoHere?: Card[];
   // The plan's next 5-hour reset (unix ms), the reply box's default Send later time.
   resetAt?: number;
 }) {
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(editTitle);
+  const hint = useShortcutHint();
   const live = isLive(card);
 
   return (
@@ -79,6 +87,7 @@ export default function ThreadPanel({
           )}
           <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted">
             <BackendBadge backend={card.backend} />
+            <ModePicker small value={card.permissionMode} onChange={onMode} yolo={card.backend === "claude"} />
             <span className="truncate" title={card.cwd}>{folderName(card.cwd)}</span>
             {card.sessionId && (
               <span className="font-mono text-faint" title={card.sessionId}>· {card.sessionId.slice(0, 8)}</span>
@@ -95,18 +104,10 @@ export default function ThreadPanel({
           )}
         </div>
         <SkillMenu cwd={card.cwd} disabled={live} onRun={(skill) => onSend(`/${skill}`)} />
-        {live && (
-          <button
-            onClick={onStop}
-            className="flex items-center gap-1 rounded-md border border-line-strong px-2 py-1 text-[12px] text-ink hover:bg-sunken"
-          >
-            <Icon name="stop" size={12} /> Stop
-          </button>
-        )}
         <button
           onClick={onArchive}
           disabled={live}
-          title={card.archived ? "Unarchive card" : "Archive card"}
+          title={hint("archive", card.archived ? "Unarchive card" : "Archive card")}
           aria-label={card.archived ? "Unarchive card" : "Archive card"}
           className="rounded-md p-1.5 text-muted hover:bg-sunken hover:text-ink disabled:opacity-40"
         >
@@ -122,14 +123,16 @@ export default function ThreadPanel({
         >
           <Icon name="trash" size={15} />
         </button>
-        <button
-          onClick={onClose}
-          title="Close"
-          aria-label="Close thread"
-          className="rounded-md p-1.5 text-muted hover:bg-sunken hover:text-ink"
-        >
-          <Icon name="x" size={15} />
-        </button>
+        {onClose && (
+          <button
+            onClick={onClose}
+            title="Close (Esc)"
+            aria-label="Close thread"
+            className="rounded-md p-1.5 text-muted hover:bg-sunken hover:text-ink"
+          >
+            <Icon name="x" size={15} />
+          </button>
+        )}
       </header>
 
       {card.source === "claude-code" &&

@@ -80,6 +80,35 @@ describe("settings", () => {
     expect(s.dismissedSessions()).toEqual(["a", "b"]);
   });
 
+  it("dismissedSessions is empty on a fresh state, before any dismiss", async () => {
+    const s = await load();
+    expect(s.dismissedSessions()).toEqual([]);
+  });
+
+  it("dismissSession works when dismissedSessions is not yet set, and the read recovers from a deleted entry", async () => {
+    // First dismiss: settings().dismissedSessions is undefined, so the ?? [] inside takes the right.
+    let s = await load();
+    s.dismissSession("a");
+    expect(s.dismissedSessions()).toEqual(["a"]);
+    // Reload from disk: the saved array is loaded as defined; the next dismiss takes the left of ??.
+    s = await load();
+    s.dismissSession("b");
+    expect(s.dismissedSessions()).toEqual(["a", "b"]);
+  });
+
+  it("the ?? [] fallbacks on the read and the dismiss path run when dismissedSessions was set to null", async () => {
+    // The ?? [] on lines 90 and 95 is otherwise dead: settings() initializes the field to []. A legacy
+    // settings.json (or a test that resets it) can leave it as null, and the fallbacks should still
+    // produce a usable array.
+    const s = await load();
+    (g as { __threadboardSettings?: { dismissedSessions?: string[] | null } }).__threadboardSettings = {
+      dismissedSessions: null,
+    };
+    expect(s.dismissedSessions()).toEqual([]);
+    s.dismissSession("a");
+    expect(s.dismissedSessions()).toEqual(["a"]);
+  });
+
   it("touchProject puts the folder first without duplicating; removeProject drops it", async () => {
     const s = await load();
     vi.spyOn(Date, "now").mockReturnValueOnce(1).mockReturnValueOnce(2).mockReturnValueOnce(3);

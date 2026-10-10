@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CHIMES, CHIME_KINDS, type ChimePrefs, chimePrefs, previewChime, setChimePrefs } from "@/lib/chimes";
+import { setShowBacklog, showBacklog } from "@/lib/board-prefs";
 import { api } from "@/lib/client";
 import { SHORTCUTS, bindingFromEvent, currentBinding, formatBinding, setBinding } from "@/lib/shortcuts";
 import { THEMES, type Theme, savedTheme, setTheme } from "@/lib/theme";
@@ -9,6 +10,7 @@ import type { Automation, Backend, CliStatus, PermissionMode, SettingsView } fro
 import AutomationSettings from "./AutomationSettings";
 import Icon, { type IconName, Spinner } from "./Icon";
 import Modal from "./Modal";
+import ModePicker from "./ModePicker";
 
 const THEME_ICONS: Record<Theme, IconName> = { system: "monitor", light: "sun", dark: "moon" };
 
@@ -17,13 +19,6 @@ const KEEP_ALIVE: { minutes: number; label: string }[] = [
   { minutes: 60, label: "1 hour" },
   { minutes: 240, label: "4 hours" },
   { minutes: 15, label: "15 minutes" },
-];
-
-const MODES: { id: PermissionMode; label: string }[] = [
-  { id: "bypassPermissions", label: "YOLO" },
-  { id: "auto", label: "Auto" },
-  { id: "acceptEdits", label: "Accept edits" },
-  { id: "default", label: "Ask me" },
 ];
 
 const CLIS: { id: Backend; label: string }[] = [
@@ -173,6 +168,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [saving, setSaving] = useState(false);
   // The dialog only mounts in the browser, so the cookie is there to read.
   const [theme, setThemeChoice] = useState<Theme>(savedTheme);
+  const [backlog, setBacklog] = useState(showBacklog);
 
   const [login, setLogin] = useState<LoginStatus>({ kind: "loading" });
   const [starting, setStarting] = useState<Backend | null>(null);
@@ -314,6 +310,30 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
               </div>
             </section>
 
+            <section className="flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-0.5">
+                <h3 className={sectionTitle}>Show backlog</h3>
+                <p className={sectionHint}>
+                  A column for threads you add without starting. It still shows while cards wait in it.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={backlog}
+                aria-label="Show backlog"
+                onClick={() => {
+                  setShowBacklog(!backlog);
+                  setBacklog(!backlog);
+                }}
+                className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${backlog ? "bg-accent" : "bg-line-strong"}`}
+              >
+                <span
+                  className={`absolute top-0.5 h-4 w-4 rounded-full bg-panel shadow transition-[left] ${backlog ? "left-[18px]" : "left-0.5"}`}
+                />
+              </button>
+            </section>
+
             <SoundSettings titleClass={sectionTitle} hintClass={sectionHint} />
 
             <section className="flex flex-col gap-2">
@@ -367,21 +387,13 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
                     <h3 className={sectionTitle}>Default permission mode</h3>
                     <p className={sectionHint}>What a new thread starts in. You can still change it per thread.</p>
                   </div>
-                  <select
+                  <ModePicker
                     value={mode}
-                    aria-label="Default permission mode"
-                    onChange={(e) => {
-                      setMode(e.target.value as PermissionMode);
+                    onChange={(next) => {
+                      setMode(next);
                       setSaveError(null);
                     }}
-                    className="w-fit rounded-md border border-line-strong bg-canvas px-2.5 py-[7px] text-[12.5px] text-ink outline-none focus:border-accent"
-                  >
-                    {MODES.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </section>
 
                 <section className="flex flex-col gap-2">

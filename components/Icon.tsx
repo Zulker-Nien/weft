@@ -37,6 +37,18 @@ const PATHS = {
   chevronDown: <path d="m6 9 6 6 6-6" />,
   chevronLeft: <path d="m15 18-6-6 6-6" />,
   chevronRight: <path d="m9 18 6-6-6-6" />,
+  "zoom-in": (
+    <>
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3M11 8v6M8 11h6" />
+    </>
+  ),
+  "zoom-out": (
+    <>
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3M8 11h6" />
+    </>
+  ),
   search: (
     <>
       <circle cx="11" cy="11" r="8" />

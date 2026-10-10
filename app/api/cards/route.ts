@@ -5,6 +5,7 @@ import { prewarm } from "@/lib/copilot";
 import { resolveFolder } from "@/lib/folders";
 import { titleFromPrompt } from "@/lib/format";
 import { fail, guard } from "@/lib/guard";
+import { getItem } from "@/lib/library";
 import { projectRoot } from "@/lib/repos";
 import { sendMessage } from "@/lib/runner";
 import { defaultPermissionMode, listProjects, touchProject } from "@/lib/settings";
@@ -52,7 +53,10 @@ export async function POST(req: Request) {
 
     const effort = backend === "claude" && EFFORTS.includes(body.effort as Effort) ? (body.effort as Effort) : undefined;
 
-    const card = createCard({ title, prompt, cwd, backend, permissionMode, model, effort });
+    // Only a recipe that's really in the library; its runs show on its page.
+    const recipeId = typeof body.recipeId === "string" && getItem(body.recipeId)?.kind === "recipe" ? body.recipeId : undefined;
+
+    const card = createCard({ title, prompt, cwd, backend, permissionMode, model, effort, ...(recipeId ? { recipeId } : {}) });
     touchProject(cwd);
     if (body.start) sendMessage(card.id, firstMessage(card));
     return Response.json({ card: getCard(card.id) });

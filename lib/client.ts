@@ -9,6 +9,9 @@ import type {
   DevServerStatus,
   Effort,
   GithubRepo,
+  LibraryItem,
+  LibraryKind,
+  LibraryScope,
   LocalRepo,
   LoginView,
   PermissionMode,
@@ -25,10 +28,13 @@ export interface BrowserState {
   loading: boolean;
   canGoBack: boolean;
   canGoForward: boolean;
+  // The page's zoom, in percent.
+  zoom: number;
 }
 
-// What the app menu, dock, tray, and global shortcuts ask a window to do. open-card carries a card id.
-export type MenuAction = "new-thread" | "settings" | "open-card" | "find" | "terminal";
+// What the app menu, dock, tray, global shortcuts and weft:// links ask a window to do.
+// open-card and run-recipe carry an id.
+export type MenuAction = "new-thread" | "settings" | "open-card" | "find" | "terminal" | "run-recipe";
 
 // Exposed by electron/preload.cjs; absent when the board runs in a normal browser tab.
 export interface ShellBridge {
@@ -48,6 +54,8 @@ export interface ShellBridge {
     back(): void;
     forward(): void;
     reload(): void;
+    // "in", "out", "reset", or a percentage.
+    zoom(action: "in" | "out" | "reset" | number): void;
     onState(callback: (state: BrowserState) => void): () => void;
   };
   dialog: {
@@ -90,9 +98,12 @@ export interface NewCardInput {
   prompt: string;
   cwd: string;
   backend: Backend;
-  permissionMode: PermissionMode;
+  // Left out, the server uses the default permission mode from settings.
+  permissionMode?: PermissionMode;
   model?: string;
   effort?: Effort;
+  // The library recipe it runs, if it came from one.
+  recipeId?: string;
   start: boolean;
 }
 
@@ -155,6 +166,7 @@ export const api = {
   create: (input: NewCardInput) => call<{ card: Card }>("POST", "/api/cards", input),
   move: (id: string, column: Column) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { column }),
   rename: (id: string, title: string) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { title }),
+  setMode: (id: string, permissionMode: PermissionMode) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { permissionMode }),
   archive: (id: string, archived: boolean) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { archived }),
   remove: (id: string) => call("DELETE", `/api/cards/${id}`),
   send: (id: string, text: string) => call<{ card: Card }>("POST", `/api/cards/${id}/messages`, { text }),
@@ -189,6 +201,16 @@ export const api = {
     call<{ login: LoginView | null }>("POST", "/api/login", { backend, action, text }),
   // Starts a CLI ahead of time: a card's own, or a spare in a project folder.
   warm: (body: { cardId?: string; cwd?: string; backend?: Backend }) => call<{ ok: true }>("POST", "/api/warm", body),
+  // folder picks which project's recipes the page offers.
+  newThreadPage: (folder?: string | null) => call<{ url: string }>("POST", "/api/new-thread-page", { folder }),
+  // The library (lib/library.ts): yours plus one project's, or every project's (all).
+  library: (folder?: string | null, all = false) =>
+    call<{ items: LibraryItem[] }>("GET", `/api/library?${all ? "all=1" : folder ? `folder=${encodeURIComponent(folder)}` : ""}`),
+  star: (cardId: string, kind: LibraryKind, scope: LibraryScope = "project") =>
+    call<{ item: LibraryItem }>("POST", "/api/library", { cardId, kind, scope }),
+  updateLibraryItem: (id: string, patch: { title?: string; kind?: LibraryKind; scope?: LibraryScope; ticked?: number[] }) =>
+    call<{ item: LibraryItem }>("PATCH", `/api/library/${id}`, patch),
+  removeLibraryItem: (id: string) => call("DELETE", `/api/library/${id}`),
   // Prompts the user wrote, in cards on the board. Matched words in each snippet sit between \u0001 and \u0002.
   searchPrompts: (q: string) =>
     call<{ hits: { cardId: string; at: number; snippet: string }[]; indexing: boolean }>("GET", `/api/search?q=${encodeURIComponent(q)}`),

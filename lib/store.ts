@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { publish } from "./bus";
+import { picturesPatch, threadPictures } from "./card-pictures";
 import type { Card, ThreadItem } from "./types";
 
 // The app was called Threadboard and kept its data in ~/.threadboard. Move that folder to
@@ -63,7 +64,36 @@ function threadFile(id: string) {
 }
 
 export function listCards(): Card[] {
+  backfillPictures();
   return [...state().cards.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+const pictured = globalThis as unknown as { __weftPicturesBackfill?: boolean };
+
+// Cards made before thumbnails existed: read their threads once, a card per tick so the server stays
+// responsive, then save the board once. Archived cards are skipped; they're hidden anyway.
+function backfillPictures() {
+  if (pictured.__weftPicturesBackfill) return;
+  pictured.__weftPicturesBackfill = true;
+  const todo = [...state().cards.values()].filter((c) => c.pictures === undefined && !c.archived);
+  if (!todo.length) return;
+  const step = () => {
+    const card = todo.shift();
+    if (!card) return saveBoard();
+    const cached = state().threads.has(card.id);
+    try {
+      const found = threadPictures(getThread(card.id));
+      card.pictures = found.pictures;
+      card.thumb ??= found.thumb;
+      if (found.thumb) publish({ type: "card", card });
+      // A thread read only for this stays out of the cache.
+      if (!cached) state().threads.delete(card.id);
+    } catch {
+      card.pictures = 0;
+    }
+    setImmediate(step);
+  };
+  setImmediate(step);
 }
 
 export function getCard(id: string): Card | undefined {
@@ -124,6 +154,25 @@ function saveThread(id: string) {
 export function replaceThread(id: string, items: ThreadItem[]) {
   state().threads.set(id, items);
   saveThread(id);
+  setPictures(id, threadPictures(items));
+}
+
+// Keeps the card's thumbnail current as its thread changes. Not activity, so updatedAt stays put.
+function setPictures(cardId: string, patch?: Pick<Card, "pictures" | "thumb">) {
+  const card = state().cards.get(cardId);
+  if (!card || !patch || (patch.pictures === card.pictures && patch.thumb === card.thumb)) return;
+  Object.assign(card, patch);
+  saveBoard();
+  publish({ type: "card", card });
+}
+
+// Sets a card's fields that aren't activity (its pane capture, its emoji), leaving updatedAt alone.
+export function decorateCard(id: string, patch: Pick<Card, "thumb" | "emoji">) {
+  const card = state().cards.get(id);
+  if (!card) return;
+  Object.assign(card, patch);
+  saveBoard();
+  publish({ type: "card", card });
 }
 
 export function clearThread(id: string) {
@@ -136,12 +185,17 @@ export function appendThread(cardId: string, item: ThreadItem): number {
   items.push(item);
   saveThread(cardId);
   publish({ type: "thread", cardId, item, index: items.length - 1 });
+  const card = state().cards.get(cardId);
+  if (card) setPictures(cardId, picturesPatch(card, item));
   return items.length - 1;
 }
 
 export function replaceThreadItem(cardId: string, index: number, item: ThreadItem) {
   const items = getThread(cardId);
+  const before = items[index];
   items[index] = item;
   saveThread(cardId);
+  const card = state().cards.get(cardId);
+  if (card) setPictures(cardId, picturesPatch(card, item, before));
   publish({ type: "thread", cardId, item, index });
 }

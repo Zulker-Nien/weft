@@ -241,6 +241,15 @@ export function isBusy(cardId: string) {
   return sessions.get(cardId)?.busy ?? false;
 }
 
+// Saves a card's permission mode and applies it to its open CLI, mid-turn included.
+export function setPermissionMode(cardId: string, mode: PermissionMode) {
+  updateCard(cardId, { permissionMode: mode });
+  const session = sessions.get(cardId);
+  if (!session || session.spec.permissionMode === mode) return;
+  session.spec.permissionMode = mode;
+  void session.query?.setPermissionMode(mode).catch(() => {});
+}
+
 // Starts a card's CLI without sending anything, so its next message starts right away.
 export function warmUp(cardId: string) {
   const card = getCard(cardId);
@@ -354,10 +363,10 @@ export function queueMessages(cardId: string, texts: string[]) {
 }
 
 // Archives the card in Done once the messages queued for it have run (now, if there are none). A
-// stopped or failed turn leaves it in Done, unarchived.
+// stopped or failed turn leaves it in Done, unarchived, and so does a starred one (it's in the library).
 export function archiveWhenIdle(cardId: string) {
   if (queued.has(cardId) || isBusy(cardId)) archiveAfter.add(cardId);
-  else updateCard(cardId, { archived: true });
+  else updateCard(cardId, { archived: !getCard(cardId)?.libraryId });
 }
 
 function sendQueued(cardId: string) {
@@ -775,7 +784,8 @@ function handleResult(id: string, session: Session, msg: Extract<SDKMessage, { t
   if (archiveAfter.has(id) && (stopped || isError)) archiveAfter.delete(id);
   else if (archiveAfter.has(id) && !queued.has(id) && status?.column !== "needs_you") {
     archiveAfter.delete(id);
-    safeUpdate(id, { column: "done", archived: true });
+    // A starred card is in the library, so it stays on the board too.
+    safeUpdate(id, { column: "done", archived: !getCard(id)?.libraryId });
   }
   if (queued.has(id)) {
     if (stopped || isError) queued.delete(id);

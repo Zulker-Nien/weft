@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 
@@ -8,7 +10,8 @@ const SHELL_TOKEN = process.env.THREADBOARD_SHELL_TOKEN;
 export const BROWSER_PROMPT = `You are running inside Weft, a desktop app with a browser pane beside the user's board.
 Use the mcp__browser__* tools to open pages there (for example a dev server you started), read them, take screenshots, and click or type. The user can see that pane.
 Your replies are shown as Markdown. To show the user an image or video file (a screenshot you saved, a chart, a generated picture), put it in your reply as ![what it shows](/absolute/path/to/file.png) and it appears inline in the thread. Screenshots from your tools are shown to the user automatically.
-Every turn, before you reply, make sure the pane shows something current for this turn: no exceptions for quick answers, questions, follow-ups or small fixes. If the pane is blank or shows an earlier step, open or update a page first. When there is no page for your work yet (a commit, a refactor, research, a plan, a diff, a test run), render what you're doing as one self-contained HTML file outside the project folder (e.g. /tmp/weft-show/<topic>.html): a timeline, a diagram, a before/after, stats, the plan as cards. Open it with mcp__browser__open_url and update it as the work moves. Make it worth looking at, not a copy of your reply. Once there's a real page for the work (the app, a dev server), show that instead.`;
+Every turn, before you reply, make sure the pane shows something current for this turn: no exceptions for quick answers, questions, follow-ups or small fixes. If the pane is blank or shows an earlier step, open or update a page first. When there is no page for your work yet (a commit, a refactor, research, a plan, a diff, a test run), render what you're doing as one self-contained HTML file outside the project folder (e.g. /tmp/weft-show/<topic>.html): a timeline, a diagram, a before/after, stats, the plan as cards. Open it with mcp__browser__open_url and update it as the work moves. Make it worth looking at, not a copy of your reply. Once there's a real page for the work (the app, a dev server), show that instead.
+When what you hand back is something the user has to do themselves (set up a domain, click through a dashboard, run commands), make it its own instructions page in its own folder (e.g. /tmp/weft-show/<topic>/index.html): numbered steps as <input type="checkbox"> items, links, commands in <code> to copy, an inline SVG diagram where a flow helps, and a screenshot for each step you can show. To take one, open the real site in the pane (the user is logged in there) and call mcp__browser__screenshot with save_to in that folder and highlight on what to click, then show it with a relative src. The user can star the page into their library and tick the steps off over days, so keep it self-contained.`;
 
 type ToolResult = {
   content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }>;
@@ -41,9 +44,27 @@ export async function paneUrl(key: string): Promise<string | undefined> {
   }
 }
 
+// A small JPEG of a card's pane page for its thumbnail, or undefined (no page, off screen, no desktop app).
+export async function paneThumb(key: string): Promise<Buffer | undefined> {
+  try {
+    const { jpg } = await shell("/browser/thumb", { key });
+    return typeof jpg === "string" && jpg ? Buffer.from(jpg, "base64") : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // Loads a page in a card's browser for Weft itself (not an agent); shown if that card is on screen.
 export async function openInPane(url: string, key: string) {
   await shell("/browser/open", { url, key });
+}
+
+function savePng(file: string, base64: string) {
+  if (!path.isAbsolute(file)) throw new Error(`save_to must be an absolute path, not ${file}`);
+  const out = file.toLowerCase().endsWith(".png") ? file : `${file}.png`;
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  fs.writeFileSync(out, Buffer.from(base64, "base64"));
+  return out;
 }
 
 async function attempt(run: () => Promise<ToolResult>): Promise<ToolResult> {
@@ -76,11 +97,21 @@ export function browserMcpServer(cardId: () => string | undefined) {
           return text(`URL: ${page.url}\nTitle: ${page.title}\n\n${page.text}`);
         }),
       ),
-      tool("screenshot", "Take a screenshot of the browser pane.", {}, () =>
-        attempt(async () => {
-          const shot = await shell("/browser/screenshot", { key: cardId() });
-          return { content: [{ type: "image", data: String(shot.png), mimeType: "image/png" }] };
-        }),
+      tool(
+        "screenshot",
+        "Take a screenshot of the browser pane. save_to also writes it as a PNG (absolute path), so a page you write can show it; highlight draws an orange box around the element a CSS selector matches, e.g. the button a step says to click.",
+        {
+          save_to: z.string().optional().describe("Absolute path to save the PNG at, e.g. /tmp/weft-show/setup/step-2.png"),
+          highlight: z.string().optional().describe("CSS selector of the element to box in orange"),
+        },
+        ({ save_to, highlight }) =>
+          attempt(async () => {
+            const shot = await shell("/browser/screenshot", { key: cardId(), highlight });
+            const content: ToolResult["content"] = [{ type: "image", data: String(shot.png), mimeType: "image/png" }];
+            if (save_to) content.push({ type: "text", text: `Saved to ${savePng(save_to, String(shot.png))}` });
+            if (highlight && shot.found === false) content.push({ type: "text", text: `No element matches ${highlight}; nothing was boxed.` });
+            return { content };
+          }),
       ),
       tool("click", "Click the first element matching a CSS selector in the browser pane.", { selector: z.string() }, ({ selector }) =>
         attempt(async () => {

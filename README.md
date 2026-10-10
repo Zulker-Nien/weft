@@ -26,8 +26,14 @@ same time; Next.js allows one dev server per project folder.
   alive. ⌘Q quits. Opening Weft again just brings the existing window forward.
 - **⌃⌥Space** opens the copilot from any app. In the app: ⌘N new thread, ⌘J copilot, ⇧⌘B
   browser pane, ⌘F find cards, ⌘, settings, ⌘1 board, ⌘2 copilot.
+- **Shortcuts sheet**: `?` (or the "? Shortcuts" link in the footer) lists every shortcut in the app,
+  board, thread, composer, terminal and app menu, and searches them by what they do or by key ("archive",
+  "cmd k", "esc"). Hold ⌘ on the board for a moment, or Shift, and a card lists what that modifier does.
+  Buttons, the filter box and right-click menus show their keys too.
 - **Full screen threads**: clicking a card opens its thread and its browser together in one large
   overlay over the board; Esc (or clicking outside) closes it, and so does sending `/done`.
+- **Browser pane zoom**: the % button in the pane's toolbar zooms the page (Chrome's steps, plus
+  50–200% presets); ⌘+ / ⌘− / ⌘0 and ⌘+scroll work on the page too, and a trackpad pinch magnifies.
 - **Menu bar icon**: shows how many cards need you and lists them; click one to open it.
 - **Dock**: the Needs you count on the icon, and New Thread and Copilot in its menu.
 - **Links**: `weft://new?prompt=…&folder=…&start=1` creates a card (in your most recent project
@@ -94,7 +100,9 @@ The folder picker lists your recent projects, the git repos in `~/dev` and other
 clones it into `~/dev`. You can also paste a path or browse for a folder. Cards are titled from the
 prompt's first line (click the title in the open thread to rename it), and new threads start in the default permission mode from Settings (Auto at first: a classifier
 approves or asks); the menu next to the CLI switch changes that per thread. Effort starts at High and
-then follows whatever the last new thread used.
+then follows whatever the last new thread used. To change it later, even mid-turn,
+use the mode menu in the open thread's header or the card's right-click menu. Sessions picked up from
+Claude Code keep the mode they last ran in (say `auto`).
 
 ## How cards move
 
@@ -106,7 +114,22 @@ then follows whatever the last new thread used.
 | Review    | The turn finishes (or fails, or you stop it) |
 | Done      | You drag it there, and its Done automations run (by default `/weft:done`) |
 
+The Backlog column is hidden by default. Turn it on with Settings → Show backlog. It also shows
+whenever cards are waiting in it.
+
 Replying to a card continues the same CLI session, so the agent keeps its context.
+
+Right-click a card for a native menu where everything is one click: open, rename, start, move to
+Review, Done or Backlog, stop, run `/weft:done`, `/weft:commit` or `/weft:preview`, start, restart or
+stop its dev server, start a new thread in its folder, reveal the folder in Finder, copy the folder path
+or a `claude --resume` command, archive, and delete. Right-click a column's empty space for New thread;
+in Done, also show or hide archived cards and archive all the Done cards on screen. Every item has a key,
+shown beside it, that picks it while the menu is open: right-click, then `D` for Done, `1` for `/weft:done`,
+`Y` for YOLO. (Desktop app only.)
+
+Archive from the keyboard: `Shift+A` archives the card you've moved to with `j`/`k`, or else the
+open thread, and focus steps to the next card, so `Shift+A` three times clears three cards. `Shift+E`
+archives every Done card on screen, and `Z` (or the toast's Undo) brings back the last archive. The command palette (`Cmd+K`) has all of them too.
 
 Cards get no git worktree of their own, on purpose, so two cards in one folder share a working tree.
 Weft warns you instead: a busy card shows "+1 here" next to its folder when another card is running
@@ -135,6 +158,13 @@ reply with a line like `BOARD STATUS: column=review | stage=First shot | remaini
 The board strips that line, moves the card to the column the thread reports (Needs you, Review, or
 Done), and shows the stage and what's left on the card. When a thread asks a question with its
 AskUserQuestion tool, the card shows the question and its options instead of Allow and Deny.
+
+A card leads with what the thread last said, under its title, beside its latest picture: a
+screenshot or image from the thread, or a capture of its browser pane taken after each turn (hover
+to see it bigger; a badge counts the thread's images). A card with no picture shows an emoji Haiku
+picks from its title, or its folder's initial until then. Below that, eight dots show how far
+through the stages it is (Planning to Done) with what's left, and the footer reads
+`● weft 12m · 1t · $1.22` (the dot is the CLI: orange for claude, purple for puku).
 
 ## Skills and automations
 
@@ -173,6 +203,13 @@ More lists every project, opens a folder, or creates a new one. Filter and sort 
 the right. New threads default to the selected project. The New thread dialog drags by its header and
 resizes from any edge or corner; it stays inside the window and remembers its size and position.
 
+The header shows test coverage ("49% coverage") of the project in view: the open card's folder,
+else the selected project, else your latest card's. Hover it for lines, statements, functions and
+branches and when it was measured. It reads `coverage/coverage-summary.json` at the project's root
+(`npm run coverage` in a Vitest or Jest repo with the json-summary reporter); without one it
+becomes a **Set up coverage** button that starts a thread in that folder to add a test runner with
+coverage (`/weft:setup-done`) and run it once.
+
 ## Logging in
 
 When a thread fails because its CLI isn't logged in, the board runs `<cli> auth login` in the
@@ -182,6 +219,24 @@ Once `auth status` reports you're logged in, the thread runs again. Settings sho
 login status. The app also sends a desktop notification when a card needs you or finishes while
 it isn't focused, and shows the Needs you count on the dock icon. A card that moves to Needs you,
 Review or Done without you keeps an accent tint and a pulsing dot until you open it.
+
+## Library: recipes, to-dos and notes
+
+Star the cards worth keeping. Right-click a card (or drag it onto the rail at the board's left edge):
+
+- **Save as Recipe** turns its prompt into one you can run again: Haiku swaps what changes next time for
+  `{blanks}` like `{product}`. A recipe is a Claude Code skill, in `~/.claude/skills` (Mine) or the
+  project's `.claude/skills`, so `/media-kit Zeph` works in any Claude Code too. Click **Run** and the
+  New thread dialog opens filled in, with the recipe's page in the pane: its blanks, what it makes, and
+  its last runs. The plain New thread page lists your recipes too.
+- **Star as To-do** keeps the page the card showed, with its images, as a checklist whose ticks are saved,
+  so you can work through setup steps over days. Threads write steps for you as their own page, with
+  screenshots (the screenshot tool can save them and box what to click) and diagrams.
+- **Star as Note** keeps an answer.
+
+⌘L opens the library; it slides over the board or, pinned, sits beside it. "This project · Mine · All"
+picks what it shows. A starred card shows ★ and is never auto-archived. The copilot can list the library
+and run a recipe. More in [docs/architecture/library.md](docs/architecture/library.md).
 
 ## Copilot
 
@@ -222,10 +277,16 @@ with xterm.js (`components/TerminalDrawer.tsx`). Desktop app only.
 - `lib/browser-tools.ts` gives every thread `mcp__browser__*` tools (open_url, read_page,
   screenshot, click, type_text) that drive the side pane. They're allowed without a prompt.
 - `lib/glance.ts` keeps the pane from ever being empty or stale. A card whose pane has no page gets a
-  starter page (the ask, "working on it") the moment its turn starts. A turn that ends without opening
+  working page the moment its turn starts: a dimmed, slowly drifting scene of the Weft hovercar (one per card, from
+  `electron/assets/backdrop-*.jpg` plus the splash's desert) behind the card's title, your ask with pasted images as
+  thumbnails, and a running clock; the splash screen's desert scene sits beside the New thread
+  dialog while you write the prompt, and starting the thread opens its card. A turn that ends without opening
   anything in the pane gets a teammate's update page (how it's going, what we did, what's next),
   written in the background by Haiku with a bare CLI (~12s) and opened in that card's pane. A live app
   (an http page) and pages the thread opened itself are left alone. Pages live in `~/.weft/glance/`.
+- `electron/pane-pages.cjs` remembers each card's page in `~/.weft/pages/index.json` (pages a thread wrote to
+  `/tmp` are copied beside it), so a card opened after a restart shows its last page again, or its last
+  update page when that page won't load (a dev server that isn't running).
 - `app/api/*` is the backend: cards, threads, permissions, and a server-sent events stream
   (`/api/events`) that keeps the board live. Every route only answers requests addressed to
   127.0.0.1/localhost, and writes need an `x-threadboard` header, so other websites can't drive it.

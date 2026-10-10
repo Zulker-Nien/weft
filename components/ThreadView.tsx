@@ -8,6 +8,7 @@ import Icon, { Spinner } from "./Icon";
 import Markdown from "./Markdown";
 import QuestionForm from "./QuestionForm";
 import ReplyBox from "./ReplyBox";
+import StatusStrip from "./StatusStrip";
 import { ThreadMessage, ToolRun, groupThread } from "./ThreadItems";
 
 // A thread's messages, its pending permission request, and the reply box.
@@ -150,6 +151,7 @@ export default function ThreadView({
       {!replaceReply && (
         <ReplyBox key={card.id} cardId={card.id} cwd={card.cwd} live={live} placeholder={placeholder} alsoHere={alsoHere}
           sendLater={scheduling && { backend: card.backend, resetAt: scheduling.resetAt, scheduled: card.scheduled ?? [] }}
+          status={<StatusStrip stats={card.stats} cwd={card.cwd} backend={card.backend} />}
           onSend={send} onStop={() => api.stop(card.id).then(() => {})} />
       )}
     </>

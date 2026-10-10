@@ -1,11 +1,15 @@
 import { isLive } from "./format";
-import type { Card, Column, DevServerStatus } from "./types";
+import { LIBRARY_KINDS, MODE_OPTIONS, type Card, type Column, type DevServerStatus, type LibraryKind, type PermissionMode } from "./types";
 
 // The right-click menus on the board, as plain data: the board builds them, the desktop shell
 // shows them natively (electron/main.cjs) and hands back the id of the item picked.
 // Everything is one click: no submenus.
 
-export type MenuItem = { id: string; label: string; enabled?: boolean } | { type: "separator" };
+// checked shows a tick (the card's current permission mode). accelerator is the item's key (an Electron
+// accelerator, e.g. "Shift+A"): drawn beside it, and pressing it while the menu is open picks the item.
+export type MenuItem =
+  | { id: string; label: string; enabled?: boolean; checked?: boolean; accelerator?: string }
+  | { type: "separator" };
 
 export type CardAction =
   | "open"
@@ -14,6 +18,7 @@ export type CardAction =
   | `move:${Column}`
   | "stop"
   | `skill:${string}`
+  | `mode:${PermissionMode}`
   | "dev:start"
   | "dev:restart"
   | "dev:stop"
@@ -21,6 +26,9 @@ export type CardAction =
   | "reveal"
   | "copy-path"
   | "copy-resume"
+  | `star:${LibraryKind}`
+  | "unstar"
+  | "show-in-library"
   | "archive"
   | "delete";
 
@@ -35,6 +43,43 @@ const MOVES: { column: Column; label: string }[] = [
   { column: "done", label: "Move to Done" },
   { column: "backlog", label: "Move to Backlog" },
 ];
+
+// Every item's key while its menu is open, by item id. Items with a board shortcut get the board's key
+// instead (components/use-board-menus.ts), so the two always agree. Letters are free here: the board's
+// own keys don't run while a menu is open. Not Return, Escape, Space or arrows: the open menu uses those.
+const MENU_KEYS: Record<string, string> = {
+  open: "O",
+  rename: "R",
+  start: "S",
+  "move:review": "V",
+  "move:done": "D",
+  "move:backlog": "B",
+  stop: "X",
+  "dev:start": "L",
+  "dev:restart": "L",
+  "dev:stop": "Shift+L",
+  "mode:bypassPermissions": "Y",
+  "mode:auto": "U",
+  "mode:acceptEdits": "E",
+  "mode:default": "M",
+  "new-here": "N",
+  reveal: "F",
+  "copy-path": "C",
+  "copy-resume": "Shift+C",
+  "star:recipe": "Shift+R",
+  "star:todo": "T",
+  "star:note": "K",
+  unstar: "Shift+K",
+  "show-in-library": "I",
+  archive: "Shift+A",
+  delete: "CmdOrCtrl+Backspace",
+  // Column menus.
+  new: "N",
+  "toggle-archived": "H",
+  "archive-done": "Shift+E",
+  // The skills go 1, 2, 3 in MENU_SKILLS order.
+  ...Object.fromEntries(MENU_SKILLS.map((skill, i) => [`skill:${skill}`, String(i + 1)])),
+};
 
 // dev is the card's dev server, when its review plan names one.
 export function cardMenu(card: Card, dev?: DevServerStatus | null): MenuItem[] {
@@ -56,13 +101,25 @@ export function cardMenu(card: Card, dev?: DevServerStatus | null): MenuItem[] {
   }
   items.push(SEPARATOR);
 
+  // Applies mid-turn too. Only Claude Code board threads can skip every prompt (YOLO).
+  for (const m of MODE_OPTIONS) {
+    if (m.id === "bypassPermissions" && card.backend !== "claude") continue;
+    items.push({ id: `mode:${m.id}`, label: `Permissions: ${m.label}`, checked: card.permissionMode === m.id });
+  }
+  items.push(SEPARATOR);
+
   items.push({ id: "new-here", label: "New Thread in This Folder" }, { id: "reveal", label: "Reveal Folder in Finder" });
   items.push({ id: "copy-path", label: "Copy Folder Path" });
   if (card.sessionId && card.backend === "claude") items.push({ id: "copy-resume", label: "Copy Resume Command" });
   items.push(SEPARATOR);
 
+  // Starring files the card in the library (lib/library.ts); a starred card is never auto-archived.
+  if (card.libraryId) items.push({ id: "show-in-library", label: "Show in Library" }, { id: "unstar", label: "Unstar (Remove from Library)" });
+  else for (const k of LIBRARY_KINDS) items.push({ id: `star:${k.id}`, label: k.id === "recipe" ? "Save as Recipe" : `Star as ${k.label}` });
+  items.push(SEPARATOR);
+
   items.push({ id: "archive", label: card.archived ? "Unarchive" : "Archive" }, { id: "delete", label: "Delete…" });
-  return items;
+  return withAccelerators(items, MENU_KEYS);
 }
 
 // What to paste in a terminal to pick the thread up in Claude Code.
@@ -79,8 +136,14 @@ export type ColumnAction = "new" | "toggle-archived" | "archive-done";
 // Right-clicking a column's empty space.
 export function columnMenu(column: Column, done: { count: number; archived: number; showArchived: boolean }): MenuItem[] {
   const items: MenuItem[] = [{ id: "new", label: "New Thread" }];
-  if (column !== "done") return items;
-  if (done.archived > 0) items.push({ id: "toggle-archived", label: done.showArchived ? "Hide Archived" : `Show ${done.archived} Archived` });
-  if (done.count > 0) items.push(SEPARATOR, { id: "archive-done", label: `Archive All ${done.count} in Done` });
-  return items;
+  if (column === "done") {
+    if (done.archived > 0) items.push({ id: "toggle-archived", label: done.showArchived ? "Hide Archived" : `Show ${done.archived} Archived` });
+    if (done.count > 0) items.push(SEPARATOR, { id: "archive-done", label: `Archive All ${done.count} in Done` });
+  }
+  return withAccelerators(items, MENU_KEYS);
+}
+
+// Gives items their keys, by item id (Electron accelerators); an id left out or undefined keeps its key.
+export function withAccelerators(items: MenuItem[], keys: Record<string, string | undefined>): MenuItem[] {
+  return items.map((item) => ("id" in item && keys[item.id] ? { ...item, accelerator: keys[item.id] } : item));
 }

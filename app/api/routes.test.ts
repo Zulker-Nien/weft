@@ -12,6 +12,8 @@ const db = vi.hoisted(() => ({ cards: new Map<string, Card>(), threads: new Map<
 vi.mock("next/server", () => ({ connection: async () => {} }));
 
 vi.mock("@/lib/store", () => ({
+  // Read at import by modules the library routes pull in (lib/attachments.ts); nothing is written there.
+  DATA_DIR: "/tmp/weft-api-test-data",
   listCards: vi.fn(() => [...db.cards.values()]),
   getCard: vi.fn((id: string) => db.cards.get(id)),
   createCard: vi.fn((input: Omit<Card, "id" | "column" | "createdAt" | "updatedAt">) => {
@@ -37,6 +39,7 @@ vi.mock("@/lib/runner", () => ({
   endSession: vi.fn(async () => {}),
   stop: vi.fn(async () => {}),
   isBusy: vi.fn(() => false),
+  setPermissionMode: vi.fn((id: string, permissionMode: Card["permissionMode"]) => Object.assign(db.cards.get(id)!, { permissionMode })),
   answerPermission: vi.fn(),
   warmUp: vi.fn(),
   ensureSpare: vi.fn(),
@@ -97,6 +100,19 @@ vi.mock("@/lib/login", () => ({
   cancelLogin: vi.fn(),
 }));
 
+vi.mock("@/lib/library", () => ({
+  getItem: vi.fn(() => undefined),
+  listLibrary: vi.fn(() => []),
+  starCard: vi.fn(async (card: Card, kind: string, scope: string) => ({ id: "lib-1", kind, scope, title: card.title })),
+  updateItem: vi.fn((id: string, patch: Record<string, unknown>) => ({ id, ...patch })),
+  removeItem: vi.fn(),
+  itemDir: vi.fn(() => "/nowhere"),
+  recipePage: vi.fn(() => "<html>recipe page</html>"),
+  recipeRuns: vi.fn(() => []),
+  withTicks: vi.fn((html: string) => `${html}<script>ticks</script>`),
+  PAGE_HEADERS: { "content-security-policy": "script-src 'self' 'unsafe-inline'" },
+}));
+
 const runner = await import("@/lib/runner");
 const settings = await import("@/lib/settings");
 const store = await import("@/lib/store");
@@ -123,6 +139,11 @@ const newProjectRoute = await import("./projects/new/route");
 const importRoute = await import("./import/route");
 const loginRoute = await import("./login/route");
 const cloneRoute = await import("./repos/clone/route");
+const library = await import("@/lib/library");
+const libraryRoute = await import("./library/route");
+const libraryItemRoute = await import("./library/[id]/route");
+const libraryPageRoute = await import("./library/[id]/page/route");
+const libraryFileRoute = await import("./library/[id]/files/[name]/route");
 
 const WRITE = { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" };
 
@@ -180,6 +201,9 @@ const writes: [string, (r: Request) => Promise<Response>][] = [
   ["POST /import", (r) => importRoute.POST(r)],
   ["POST /login", (r) => loginRoute.POST(r)],
   ["POST /repos/clone", (r) => cloneRoute.POST(r)],
+  ["POST /library", (r) => libraryRoute.POST(r)],
+  ["PATCH /library/:id", (r) => libraryItemRoute.PATCH(r, ctx("x"))],
+  ["DELETE /library/:id", (r) => libraryItemRoute.DELETE(r, ctx("x"))],
 ];
 
 describe("guard on write routes", () => {
@@ -200,6 +224,96 @@ describe("guard on write routes", () => {
     for (const fn of Object.values(runner)) expect(fn).not.toHaveBeenCalled();
     expect(store.createCard).not.toHaveBeenCalled();
     expect(store.deleteCard).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /cards from a recipe", () => {
+  it("keeps recipeId only when it names a recipe in the library", async () => {
+    vi.mocked(library.getItem).mockImplementation((id: string) => (id === "r1" ? ({ id, kind: "recipe" } as never) : id === "n1" ? ({ id, kind: "note" } as never) : undefined));
+    await cardsRoute.POST(req("/cards", { method: "POST", body: { prompt: "p", cwd: tmp, recipeId: "r1" } }));
+    expect(store.createCard).toHaveBeenLastCalledWith(expect.objectContaining({ recipeId: "r1" }));
+    for (const recipeId of ["n1", "gone", 7]) {
+      await cardsRoute.POST(req("/cards", { method: "POST", body: { prompt: "p", cwd: tmp, recipeId } }));
+      expect(store.createCard).toHaveBeenLastCalledWith(expect.not.objectContaining({ recipeId: expect.anything() }));
+    }
+  });
+});
+
+describe("/library", () => {
+  it("lists one project's and yours, or every project's with all=1", async () => {
+    await libraryRoute.GET(req("/library?folder=%2Fdev%2Fapp"));
+    expect(library.listLibrary).toHaveBeenLastCalledWith({ folder: "/dev/app", all: false });
+    await libraryRoute.GET(new Request("http://localhost:3457/api/library?all=1", { headers: WRITE }));
+    expect(library.listLibrary).toHaveBeenLastCalledWith({ folder: null, all: true });
+  });
+
+  it("stars a board card, as a note in its project unless told otherwise", async () => {
+    const card = addCard({ title: "Kit" });
+    const res = await libraryRoute.POST(req("/library", { method: "POST", body: { cardId: card.id } }));
+    expect((await res.json()).item).toMatchObject({ kind: "note", scope: "project" });
+    await libraryRoute.POST(req("/library", { method: "POST", body: { cardId: card.id, kind: "recipe", scope: "mine" } }));
+    expect(library.starCard).toHaveBeenLastCalledWith(expect.objectContaining({ id: card.id }), "recipe", "mine", expect.anything());
+    await libraryRoute.POST(req("/library", { method: "POST", body: { cardId: card.id, kind: "bogus", scope: "bogus" } }));
+    expect(library.starCard).toHaveBeenLastCalledWith(expect.anything(), "note", "project", expect.anything());
+  });
+
+  it("won't star a missing card or the copilot", async () => {
+    addCard({ id: "copilot", role: "copilot" });
+    for (const cardId of ["nope", "copilot"]) {
+      expect((await libraryRoute.POST(req("/library", { method: "POST", body: { cardId } }))).status).toBe(404);
+    }
+    expect(library.starCard).not.toHaveBeenCalled();
+  });
+
+  it("PATCH passes on only valid fields", async () => {
+    await libraryItemRoute.PATCH(req("/library/i", { method: "PATCH", body: { title: "  New  ", kind: "todo", scope: "mine", ticked: [0, "x", 2], folder: "/etc" } }), ctx("i"));
+    expect(library.updateItem).toHaveBeenLastCalledWith("i", { title: "New", kind: "todo", scope: "mine", ticked: [0, 2] });
+    await libraryItemRoute.PATCH(req("/library/i", { method: "PATCH", body: { title: " ", kind: "page", scope: "everyone" } }), ctx("i"));
+    expect(library.updateItem).toHaveBeenLastCalledWith("i", {});
+  });
+
+  it("DELETE removes it", async () => {
+    expect((await libraryItemRoute.DELETE(req("/library/i", { method: "DELETE" }), ctx("i"))).status).toBe(200);
+    expect(library.removeItem).toHaveBeenCalledWith("i");
+  });
+});
+
+describe("GET /library/:id/page and files", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-lib-page-"));
+  fs.mkdirSync(path.join(dir, "files"));
+  fs.writeFileSync(path.join(dir, "index.html"), "<html>steps</html>");
+  fs.writeFileSync(path.join(dir, "files", "1-shot.png"), "png");
+  fs.writeFileSync(path.join(dir, "secret.txt"), "no");
+  const read = { host: "localhost:3457" };
+
+  it("serves a recipe's page, and a to-do's saved page with its ticks wired, under the CSP", async () => {
+    vi.mocked(library.getItem).mockReturnValue({ id: "r", kind: "recipe" } as never);
+    let res = await libraryPageRoute.GET(req("/library/r/page", { headers: read }), ctx("r"));
+    expect(await res.text()).toBe("<html>recipe page</html>");
+    expect(res.headers.get("content-security-policy")).toContain("script-src");
+
+    vi.mocked(library.getItem).mockReturnValue({ id: "t", kind: "todo" } as never);
+    vi.mocked(library.itemDir).mockReturnValue(dir);
+    res = await libraryPageRoute.GET(req("/library/t/page", { headers: read }), ctx("t"));
+    expect(await res.text()).toBe("<html>steps</html><script>ticks</script>");
+  });
+
+  it("404s for an item that's gone or a page that wasn't saved", async () => {
+    vi.mocked(library.getItem).mockReturnValue(undefined);
+    expect((await libraryPageRoute.GET(req("/library/x/page", { headers: read }), ctx("x"))).status).toBe(404);
+    vi.mocked(library.getItem).mockReturnValue({ id: "n", kind: "note" } as never);
+    vi.mocked(library.itemDir).mockReturnValue(path.join(dir, "missing"));
+    expect((await libraryPageRoute.GET(req("/library/n/page", { headers: read }), ctx("n"))).status).toBe(404);
+  });
+
+  it("serves a page's files, and nothing outside files/", async () => {
+    vi.mocked(library.getItem).mockReturnValue({ id: "t", kind: "todo" } as never);
+    vi.mocked(library.itemDir).mockReturnValue(dir);
+    const file = (name: string) => libraryFileRoute.GET(req(`/library/t/files/${name}`, { headers: read }), { params: Promise.resolve({ id: "t", name }) });
+    const ok = await file("1-shot.png");
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get("content-type")).toBe("image/png");
+    for (const name of ["../secret.txt", "../index.html", ".hidden", "nope.png"]) expect((await file(name)).status).toBe(404);
   });
 });
 
@@ -365,6 +479,27 @@ describe("PATCH /cards/:id", () => {
     expect((await patch(cop.id, { column: "done" })).status).toBe(400);
     expect(db.cards.get(card.id)!.column).toBe("backlog");
     expect(runner.queueMessages).not.toHaveBeenCalled();
+  });
+
+  it("switches the permission mode through the runner, mid-turn too", async () => {
+    const card = addCard({ permissionMode: "default", column: "running" });
+    vi.mocked(runner.isBusy).mockReturnValue(true);
+    const res = await patch(card.id, { permissionMode: "auto" });
+    vi.mocked(runner.isBusy).mockReturnValue(false);
+    expect(res.status).toBe(200);
+    expect(runner.setPermissionMode).toHaveBeenCalledWith(card.id, "auto");
+    expect((await res.json()).card.permissionMode).toBe("auto");
+  });
+
+  it("refuses unknown modes, and YOLO for the copilot and puku threads", async () => {
+    const card = addCard({ permissionMode: "default" });
+    expect((await patch(card.id, { permissionMode: "plan" })).status).toBe(400);
+    const puku = addCard({ backend: "puku", permissionMode: "default" });
+    expect((await patch(puku.id, { permissionMode: "bypassPermissions" })).status).toBe(400);
+    const cop = addCard({ role: "copilot", permissionMode: "default" });
+    expect((await patch(cop.id, { permissionMode: "bypassPermissions" })).status).toBe(400);
+    expect(runner.setPermissionMode).not.toHaveBeenCalled();
+    expect((await patch(puku.id, { permissionMode: "acceptEdits" })).status).toBe(200);
   });
 
   it("does nothing for a move to the column it's already in", async () => {

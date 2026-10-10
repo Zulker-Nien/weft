@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld("threadboard", {
     back: () => ipcRenderer.send("browser:back"),
     forward: () => ipcRenderer.send("browser:forward"),
     reload: () => ipcRenderer.send("browser:reload"),
+    zoom: (action) => ipcRenderer.send("browser:zoom", action),
     onState: (callback) => listen("browser:state", callback),
   },
   dialog: {

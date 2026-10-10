@@ -48,3 +48,11 @@ describe("fail", () => {
     expect(await res.json()).toEqual({ error: "nope" });
   });
 });
+
+describe("guard without a Host header", () => {
+  it("treats a missing Host as foreign", async () => {
+    const res = guard(new Request("http://x/api"), { write: false });
+    expect(res?.status).toBe(403);
+    expect(await res!.json()).toEqual({ error: "Forbidden host" });
+  });
+});

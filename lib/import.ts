@@ -9,7 +9,7 @@ import { firstLine } from "./format";
 import { extractStatus } from "./status";
 import { addCards, getThread, listCards, replaceThread, updateCard } from "./store";
 import { transcriptToThread } from "./transcript";
-import type { Card, Column } from "./types";
+import { toPermissionMode, type Card, type Column, type PermissionMode } from "./types";
 
 // Picks up the user's existing Claude Code sessions (the ones /resume and the Claude app list) as
 // cards, keeps them in sync, and loads a session's transcript into its thread when it's opened.
@@ -80,6 +80,8 @@ interface Tail {
   busy: boolean;
   // The first line of the assistant's last reply, for the card.
   reply?: string;
+  // The permission mode Claude Code last recorded for the session.
+  mode?: PermissionMode;
 }
 
 const g = globalThis as unknown as {
@@ -155,12 +157,54 @@ function readTail(file: string): Tail | undefined {
     const at = stamps.length ? Date.parse(stamps[stamps.length - 1][1]) : NaN;
     if (Number.isNaN(at)) return undefined;
     const lines = text.split("\n");
-    const tail = { at, busy: midTurn(lines), reply: lastReply(lines) };
+    const tail = { at, busy: midTurn(lines), reply: lastReply(lines), mode: lastPermissionMode(text) };
     tailCache.set(file, { mtimeMs: stat.mtimeMs, tail });
     return tail;
   } catch {
     return undefined;
   }
+}
+
+// The last permission mode in a stretch of session file: user messages and "permission-mode"
+// records carry the mode the session was in.
+export function lastPermissionMode(text: string): PermissionMode | undefined {
+  const modes = [...text.matchAll(/"permissionMode":"([A-Za-z]+)"/g)];
+  for (let i = modes.length - 1; i >= 0; i--) {
+    const mode = toPermissionMode(modes[i][1]);
+    if (mode) return mode;
+  }
+  return undefined;
+}
+
+// The user's default mode for new Claude Code sessions (permissions.defaultMode).
+function defaultMode(): PermissionMode | undefined {
+  try {
+    const settings = JSON.parse(fs.readFileSync(path.join(CONFIG_DIR, "settings.json"), "utf8"));
+    return toPermissionMode(settings?.permissions?.defaultMode);
+  } catch {
+    return undefined;
+  }
+}
+
+// The mode a picked-up session continues in: the one it last ran in, so resuming it doesn't start
+// asking about every command. The tail usually has it; otherwise the file's start, then the user's
+// default, then "default".
+export function sessionMode(file: string | undefined, tailMode?: PermissionMode): PermissionMode {
+  if (tailMode) return tailMode;
+  if (file) {
+    try {
+      const fd = fs.openSync(file, "r");
+      try {
+        const buffer = Buffer.alloc(256 * 1024);
+        const read = fs.readSync(fd, buffer, 0, buffer.length, 0);
+        const mode = lastPermissionMode(buffer.subarray(0, read).toString("utf8"));
+        if (mode) return mode;
+      } finally {
+        fs.closeSync(fd);
+      }
+    } catch {}
+  }
+  return defaultMode() ?? "default";
 }
 
 type SessionStatus = "busy" | "idle" | "waiting";
@@ -337,7 +381,7 @@ async function runSync(): Promise<SyncResult> {
         prompt: session.firstPrompt ?? "",
         cwd: session.cwd ?? os.homedir(),
         backend: "claude",
-        permissionMode: "default",
+        permissionMode: sessionMode(file, tail?.mode),
         column: columnFor(stage, activity, live),
         sessionId: session.sessionId,
         stage,

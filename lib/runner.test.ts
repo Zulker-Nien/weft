@@ -84,6 +84,9 @@ const h = vi.hoisted(() => ({
   skillsForPrompt: [] as string[],
   publish: [] as unknown[],
   execCalls: [] as string[][],
+  // Make the faked which / git / startLogin throw.
+  execFails: false,
+  loginFails: false,
 }));
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
@@ -134,6 +137,7 @@ vi.mock("./settings", () => ({
 vi.mock("./login", () => ({
   isNotLoggedInError: (text: string) => /not logged in|please run \/login|invalid api key/i.test(text),
   startLogin: (backend: string, onDone?: () => void) => {
+    if (h.loginFails) throw new Error("claude isn't on this app's PATH.");
     h.startLogin.push({ backend, onDone });
     return {};
   },
@@ -146,6 +150,7 @@ vi.mock("node:child_process", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:child_process")>();
   const execFileSync = (cmd: string, args: string[]) => {
     h.execCalls.push([cmd, ...args]);
+    if (h.execFails) throw new Error("exec failed");
     if (cmd === "/usr/bin/which") return "/opt/bin/puku-cli\n";
     if (args.includes("rev-parse")) return "main\n";
     if (args.includes("--numstat")) return "3\t1\ta.ts\n2\t0\tb.ts\n";
@@ -236,6 +241,8 @@ beforeEach(async () => {
   h.skillsForPrompt = [];
   h.publish.length = 0;
   h.execCalls.length = 0;
+  h.execFails = false;
+  h.loginFails = false;
   for (const key of GLOBALS) delete g[key];
   cwd = fs.mkdtempSync(path.join(os.tmpdir(), "weft-runner-"));
   vi.resetModules();
@@ -760,6 +767,29 @@ describe("spares", () => {
   });
 });
 
+describe("setPermissionMode", () => {
+  it("saves the mode and switches the open CLI mid-turn", async () => {
+    addCard({ id: "c1", permissionMode: "default" });
+    const q = await send("c1");
+    runner.setPermissionMode("c1", "auto");
+    expect(card("c1").permissionMode).toBe("auto");
+    expect(q.setPermissionMode).toHaveBeenCalledWith("auto");
+    expect(runner.isBusy("c1")).toBe(true);
+    // The same mode again doesn't call the CLI.
+    runner.setPermissionMode("c1", "auto");
+    expect(q.setPermissionMode).toHaveBeenCalledTimes(1);
+  });
+
+  it("only saves it when no CLI is open, and the next one starts in it", async () => {
+    addCard({ id: "c1", permissionMode: "default" });
+    runner.setPermissionMode("c1", "acceptEdits");
+    expect(card("c1").permissionMode).toBe("acceptEdits");
+    const q = await send("c1");
+    expect(q.options.permissionMode).toBe("acceptEdits");
+    expect(q.setPermissionMode).not.toHaveBeenCalled();
+  });
+});
+
 describe("warmUp", () => {
   it("starts a card's CLI without sending anything", async () => {
     addCard({ id: "c1" });
@@ -954,5 +984,201 @@ describe("stale sessions (BUILD)", () => {
     await flush();
     expect(h.queries).toHaveLength(2);
     expect(h.queries[0].aborted).toBe(true);
+  });
+});
+
+describe("edges", () => {
+  it("a puku card fails to start when puku-cli isn't on PATH", async () => {
+    h.execFails = true;
+    addCard({ id: "c1", backend: "puku" });
+    expect(() => runner.sendMessage("c1", "hi")).toThrow("puku-cli isn't on this app's PATH.");
+  });
+
+  it("rate-limit events update the 5-hour and weekly windows; others are ignored", async () => {
+    addCard({ id: "c1" });
+    const q = await send("c1");
+    const limit = (info: Record<string, unknown>) => ({ type: "rate_limit_event", rate_limit_info: info });
+    q.emit(
+      limit({ rateLimitType: "five_hour", utilization: 0.5, resetsAt: 100 }),
+      limit({ rateLimitType: "seven_day", utilization: 0.07, resetsAt: 200 }),
+      limit({ rateLimitType: "seven_day_opus", utilization: 0.9 }),
+      limit({ rateLimitType: "five_hour" }),
+    );
+    await flush();
+    expect(card("c1").stats).toMatchObject({ fiveHour: { used: 50, resetsAt: 100 }, sevenDay: { used: 7, resetsAt: 200 } });
+  });
+
+  it("a turn's stats leave out the branch and changed lines when git fails", async () => {
+    addCard({ id: "c1" });
+    const q = await send("c1");
+    h.execFails = true;
+    q.emit(success("ok"));
+    await flush();
+    expect(card("c1").stats).toMatchObject({ added: undefined, removed: undefined, branch: undefined });
+  });
+
+  it("a turn's stats count git's changed lines and branch", async () => {
+    addCard({ id: "c1" });
+    const q = await send("c1");
+    q.emit(success("ok"));
+    await flush();
+    expect(card("c1").stats).toMatchObject({ added: 5, removed: 1, branch: "main" });
+  });
+
+  it("a stale spare isn't adopted: it's closed and the card opens its own CLI", async () => {
+    runner.ensureSpare(cwd);
+    await flush();
+    const spares = g.__threadboardSpares as Map<string, { build: string }>;
+    [...spares.values()][0].build = "older-build";
+    addCard({ id: "c1" });
+    runner.sendMessage("c1", "go");
+    await flush();
+    expect(h.queries[0].aborted).toBe(true);
+    expect(h.queries[1].received).toEqual(["go"]);
+  });
+
+  it("archiveWhenIdle archives an idle card now, but keeps a starred one on the board", async () => {
+    addCard({ id: "c1" });
+    addCard({ id: "c2", libraryId: "lib-1" });
+    runner.archiveWhenIdle("c1");
+    runner.archiveWhenIdle("c2");
+    expect(card("c1").archived).toBe(true);
+    expect(card("c2").archived).toBe(false);
+  });
+
+  it("a queued text that can't be sent drops the queue and keeps the error on the card", async () => {
+    addCard({ id: "c1", cwd: path.join(cwd, "gone") });
+    runner.queueMessages("c1", ["/a", "/b"]);
+    await flush();
+    expect(h.queries).toHaveLength(0);
+    expect(card("c1").error).toBeTruthy();
+    runner.queueMessages("c1", []);
+    expect(h.queries).toHaveLength(0);
+  });
+
+  it("stop ends the CLI when interrupt throws", async () => {
+    addCard({ id: "c1" });
+    const q = await send("c1");
+    q.interrupt.mockRejectedValue(new Error("gone"));
+    await runner.stop("c1");
+    expect(q.aborted).toBe(true);
+  });
+
+  it("a login that can't start leaves its error on the card", async () => {
+    h.loginFails = true;
+    addCard({ id: "c1" });
+    const q = await send("c1");
+    q.emit(success("Not logged in · Please run /login", { is_error: true }));
+    await flush();
+    expect(card("c1").error).toBe("claude isn't on this app's PATH.");
+  });
+});
+
+describe("more edges", () => {
+  const ask = (q: FakeQuery, toolName: string, input: Record<string, unknown>) => {
+    const controller = new AbortController();
+    return { promise: q.options.canUseTool(toolName, input, { signal: controller.signal }), controller };
+  };
+
+  it("cancelling the request on show brings up the next one; cancelling a later one leaves the card alone", async () => {
+    addCard({ id: "c1" });
+    const q = await send("c1");
+    const a = ask(q, "Bash", { command: "one" });
+    const b = ask(q, "Bash", { command: "two" });
+    const c = ask(q, "Bash", { command: "three" });
+    c.controller.abort();
+    await expect(c.promise).resolves.toMatchObject({ behavior: "deny" });
+    expect(card("c1").pending?.title).toContain("one");
+    a.controller.abort();
+    await a.promise;
+    expect(card("c1")).toMatchObject({ column: "needs_you", lastLine: expect.stringContaining("two") });
+    expect(card("c1").pending?.title).toContain("two");
+    a.controller.abort(); // a second abort of the same request is a no-op
+    runner.answerPermission("c1", true);
+    await expect(b.promise).resolves.toMatchObject({ behavior: "allow" });
+  });
+
+  it("a tool with nothing to summarize is asked about by its short name", async () => {
+    addCard({ id: "c1" });
+    const q = await send("c1");
+    void ask(q, "mcp__x__thing", {});
+    expect(card("c1").pending?.title).toBe("x thing");
+  });
+
+  it("answering a card with no open CLI says nothing is waiting", () => {
+    addCard({ id: "c1" });
+    expect(() => runner.answerPermission("c1", true)).toThrow("Nothing is waiting");
+  });
+
+  it("lifts a weft-review block onto the card", async () => {
+    addCard({ id: "c1" });
+    const q = await send("c1");
+    const tour = '```weft-review\n{"steps":[{"title":"A","look":"B","path":"/"}]}\n```';
+    q.emit(assistant(text(`Done.\n\n${tour}`)));
+    await flush();
+    expect(card("c1").review?.steps[0]).toMatchObject({ title: "A" });
+  });
+
+  it("ignores subagent stream events, and counts context from usage", async () => {
+    addCard({ id: "c1" });
+    const q = await send("c1");
+    h.publish.length = 0;
+    q.emit({
+      type: "stream_event",
+      parent_tool_use_id: "sub",
+      event: { type: "content_block_delta", delta: { type: "text_delta", text: "x" } },
+    });
+    q.emit({ ...assistant(text("hi")), message: { content: [text("hi")], usage: { input_tokens: 10, cache_read_input_tokens: 5 } } });
+    q.emit(success("ok", { modelUsage: { m: { costUSD: 1, inputTokens: 1, outputTokens: 1, contextWindow: 100 } } }));
+    await flush();
+    expect(h.publish.some((e) => (e as { type: string }).type === "delta")).toBe(false);
+    expect(card("c1").stats?.contextUsed).toBe(15);
+  });
+
+  it("tool results skip blocks that aren't results, unknown ids and string content", async () => {
+    addCard({ id: "c1" });
+    const q = await send("c1");
+    q.emit(assistant(toolUse("t1", "Bash", { command: "ls" })));
+    q.emit({ type: "user", parent_tool_use_id: null, message: { role: "user", content: "plain" } });
+    q.emit({
+      type: "user",
+      parent_tool_use_id: null,
+      message: { role: "user", content: [{ type: "text", text: "x" }, { type: "tool_result", tool_use_id: "nope", content: "?" }] },
+    });
+    q.emit(toolResultMsg("t1", "files"));
+    await flush();
+    expect(thread("c1").filter((i) => i.kind === "tool")).toEqual([expect.objectContaining({ id: "t1", result: "files", isError: false })]);
+  });
+
+  it("an empty result reads Done", async () => {
+    addCard({ id: "c1" });
+    const q = await send("c1");
+    q.emit(success(""));
+    await flush();
+    expect(card("c1").lastLine).toBe("Done");
+  });
+
+  it("/done followed by a stop leaves the card unarchived", async () => {
+    addCard({ id: "c1" });
+    runner.sendUserMessage("c1", "/done");
+    await flush();
+    const stopping = runner.stop("c1");
+    lastQuery().emit(failure("error_during_execution"));
+    await stopping;
+    await flush();
+    expect(card("c1")).toMatchObject({ archived: false, column: "review" });
+  });
+
+  it("a picked-up session changed outside Weft in the last 10 minutes is forked", async () => {
+    addCard({ id: "c1", source: "claude-code", sessionId: "s-orig", lastActivity: Date.now(), lastWeftTurn: 0 });
+    const q = await send("c1");
+    expect(q.options).toMatchObject({ resume: "s-orig", forkSession: true });
+  });
+
+  it("one changed outside Weft long ago is resumed in place", async () => {
+    addCard({ id: "c1", source: "claude-code", sessionId: "s-orig", lastActivity: Date.now() - 3_600_000, lastWeftTurn: 0 });
+    const q = await send("c1");
+    expect(q.options).toMatchObject({ resume: "s-orig" });
+    expect(q.options.forkSession).toBeFalsy();
   });
 });

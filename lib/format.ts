@@ -30,11 +30,6 @@ export function worktreeParent(cwd: string) {
   return match ? match[1] : undefined;
 }
 
-export function formatCost(usd?: number) {
-  if (!usd) return null;
-  return usd < 0.01 ? "<$0.01" : `$${usd.toFixed(2)}`;
-}
-
 export function timeAgo(at: number, now: number) {
   const s = Math.max(0, Math.round((now - at) / 1000));
   if (s < 60) return "just now";
@@ -218,4 +213,23 @@ export function summarizeInput(input: Record<string, unknown>) {
   }
   const json = JSON.stringify(input);
   return json === "{}" ? "" : clip(json, 100);
+}
+
+// The BOARD STATUS stages in order (lib/settings.ts); a card shows how far along it is as a segmented bar.
+export const STAGES = [
+  "Planning",
+  "Pre-build refactoring",
+  "First shot",
+  "Going deeper",
+  "Polishing",
+  "Post-build refactoring",
+  "Cleaning up",
+  "Done",
+] as const;
+
+// "First shot" -> 3 (of 8); unknown stages -> 0, so the bar stays empty instead of guessing.
+export function stageStep(stage?: string) {
+  if (!stage) return 0;
+  const i = STAGES.findIndex((s) => s.toLowerCase() === stage.trim().toLowerCase());
+  return i + 1;
 }

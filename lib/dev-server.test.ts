@@ -194,3 +194,11 @@ describe("resolveSpec", () => {
     expect(resolveSpec("react", root)).toBe(pkg);
   });
 });
+
+describe("resolveSpec with a file:// URL", () => {
+  it("resolves the URL's path like an absolute spec, probing extensions", () => {
+    fs.writeFileSync(path.join(root, "mod.tsx"), "");
+    expect(resolveSpec(`file://${root}/mod`, root)).toBe(path.join(root, "mod.tsx"));
+    expect(resolveSpec(`file://${root}/missing`, root)).toBeNull();
+  });
+});

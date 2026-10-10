@@ -24,6 +24,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { registerAboutBridge, showAboutWindow } = require("./about.cjs");
 const { createBrowserPane } = require("./browser-pane.cjs");
+const { createPanePages } = require("./pane-pages.cjs");
 const { fixPath } = require("./env.cjs");
 const { startServer } = require("./server.cjs");
 const { registerTerminal } = require("./terminal.cjs");
@@ -57,6 +58,9 @@ const pane = createBrowserPane({
   getAppView: () => appView,
   token: TOKEN,
   onContents: (contents) => attachContextMenu(contents),
+  pages: createPanePages(dataDir()),
+  // weft:// links clicked inside a pane page, like a recipe page's past runs.
+  onLink: (url) => handleLink(url),
 });
 
 // Only one Weft runs at a time; opening it again brings the existing window forward.
@@ -279,6 +283,7 @@ function toggleCopilot() {
 // ---- weft:// links ----
 // weft://new?prompt=…&folder=…&title=…&cli=puku&start=1   create a card (in the most recent project by default)
 // weft://card/<id>                                        open a card
+// weft://recipe/<id>                                      the New thread dialog, filled in from a library recipe
 // weft://copilot                                          open the copilot
 
 async function handleLink(raw) {
@@ -296,6 +301,7 @@ async function handleLink(raw) {
   if (action === "copilot") return showCopilot();
   showMain();
   if (action === "card") return sendMenu("open-card", url.pathname.replace(/^\/+/, ""));
+  if (action === "recipe") return sendMenu("run-recipe", decodeURIComponent(url.pathname.replace(/^\/+/, "")));
   if (action !== "new") return;
   const prompt = url.searchParams.get("prompt");
   if (!prompt) return sendMenu("new-thread");
@@ -328,6 +334,15 @@ async function handleLink(raw) {
 
 function focusedContents() {
   return webContents.getFocusedWebContents() ?? appView?.webContents;
+}
+
+// The browser pane's pages zoom in Chrome's steps and report it to the pane's toolbar; the board
+// keeps its half-level steps.
+function zoomFocused(action) {
+  const c = focusedContents();
+  if (!c) return;
+  if (pane.owns(c)) return pane.zoom(action);
+  c.setZoomLevel(action === "reset" ? 0 : c.getZoomLevel() + (action === "in" ? 0.5 : -0.5));
 }
 
 function buildMenu() {
@@ -421,22 +436,16 @@ function buildMenu() {
         { label: "Reload", accelerator: "CmdOrCtrl+R", click: () => focusedContents()?.reload() },
         { label: "Developer Tools", accelerator: "Alt+CmdOrCtrl+I", click: () => focusedContents()?.toggleDevTools() },
         { type: "separator" },
-        { label: "Actual Size", accelerator: "CmdOrCtrl+0", click: () => focusedContents()?.setZoomLevel(0) },
+        { label: "Actual Size", accelerator: "CmdOrCtrl+0", click: () => zoomFocused("reset") },
         {
           label: "Zoom In",
           accelerator: "CmdOrCtrl+Plus",
-          click: () => {
-            const c = focusedContents();
-            c?.setZoomLevel(c.getZoomLevel() + 0.5);
-          },
+          click: () => zoomFocused("in"),
         },
         {
           label: "Zoom Out",
           accelerator: "CmdOrCtrl+-",
-          click: () => {
-            const c = focusedContents();
-            c?.setZoomLevel(c.getZoomLevel() - 0.5);
-          },
+          click: () => zoomFocused("out"),
         },
         { type: "separator" },
         { label: "Enter Full Screen", accelerator: "Ctrl+Cmd+F", click: () => win?.setFullScreen(!win.isFullScreen()) },
@@ -571,6 +580,7 @@ ipcMain.on("browser:bounds", (e, rect) => {
 ipcMain.on("browser:back", () => pane.back());
 ipcMain.on("browser:forward", () => pane.forward());
 ipcMain.on("browser:reload", () => pane.reload());
+ipcMain.on("browser:zoom", (_e, action) => pane.zoom(action));
 ipcMain.on("copilot:toggle", () => toggleCopilot());
 const killTerminals = registerTerminal(ipcMain);
 ipcMain.handle("dialog:openFolder", async () => {
@@ -588,7 +598,14 @@ ipcMain.handle("menu:popup", (e, items) =>
     const template = (Array.isArray(items) ? items : []).map((item) =>
       item.type === "separator"
         ? { type: "separator" }
-        : { label: String(item.label), enabled: item.enabled !== false, click: () => (picked = String(item.id)) },
+        : {
+            label: String(item.label),
+            enabled: item.enabled !== false,
+            ...(typeof item.checked === "boolean" ? { type: "checkbox", checked: item.checked } : {}),
+            // Drawn beside the item, and live while the menu is open (a popup's keys go away with it).
+            ...(item.accelerator ? { accelerator: String(item.accelerator) } : {}),
+            click: () => (picked = String(item.id)),
+          },
     );
     // click fires before callback on macOS, but not on every platform; wait a tick for it.
     Menu.buildFromTemplate(template).popup({

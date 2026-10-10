@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import type { BrowserState } from "@/lib/client";
 import { useAnyOverlay } from "@/lib/overlay";
 import Icon, { Spinner } from "./Icon";
+import ZoomMenu from "./ZoomMenu";
 
 const HIDDEN = { x: 0, y: 0, width: 0, height: 0 };
-
 // The page itself is a native Electron view laid over the placeholder below;
 // this component draws the toolbar and tells the shell where to put the view.
 export default function BrowserPane({
@@ -24,6 +24,7 @@ export default function BrowserPane({
   expanded: boolean;
   width: number;
   onWidth: (width: number) => void;
+  // Beside an open card this closes the card too: the card and its browser are one window.
   onClose: () => void;
 }) {
   const holder = useRef<HTMLDivElement>(null);
@@ -31,6 +32,8 @@ export default function BrowserPane({
   const [resizing, setResizing] = useState(false);
   const overlay = useAnyOverlay();
   const hide = obscured || overlay || resizing;
+  // A shell from before zoom reporting sends no zoom.
+  const zoom = state.zoom ?? 100;
 
   useEffect(() => {
     const bridge = window.threadboard;
@@ -115,7 +118,9 @@ export default function BrowserPane({
           placeholder="Type a URL, or ask an agent to open one"
           className="mx-1 min-w-0 flex-1 rounded-md border border-line bg-canvas px-2.5 py-1 font-mono text-[12px] text-ink outline-none placeholder:font-sans placeholder:text-faint focus:border-accent"
         />
-        <button className={nav} onClick={onClose} aria-label="Close browser">
+        {/* Only the page's zoom; ⌘+/−/0, ⌘+scroll and pinch work too. Accent when not 100%. */}
+        <ZoomMenu zoom={zoom} disabled={!state.url} />
+        <button className={nav} onClick={onClose} aria-label={expanded ? "Close thread" : "Close browser"}>
           <Icon name="x" size={15} />
         </button>
       </div>

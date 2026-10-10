@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import { api, mergeThread } from "@/lib/client";
-import { formatCost, isLive } from "@/lib/format";
+import { isLive } from "@/lib/format";
 import { useBoardEvents } from "@/lib/use-events";
 import { COPILOT_ID, type Card, type ThreadItem } from "@/lib/types";
 import Icon, { Spinner } from "./Icon";
@@ -11,7 +11,7 @@ import ThreadView from "./ThreadView";
 const SUGGESTIONS = [
   "What needs my attention?",
   "Summarize the threads in Review",
-  "Which threads have cost the most?",
+  "Which threads are blocked on me?",
 ];
 
 function Status({ card }: { card: Card }) {
@@ -86,7 +86,6 @@ export default function CopilotChat() {
   }
 
   const live = card ? isLive(card) : false;
-  const cost = formatCost(card?.costUsd);
 
   return (
     <div className="flex h-screen flex-col bg-panel">
@@ -97,7 +96,6 @@ export default function CopilotChat() {
         <h1 className="text-[13.5px] font-semibold text-ink">Copilot</h1>
         {card && <Status card={card} />}
         <div className="flex-1" />
-        {cost && <span className="text-[11px] text-faint">{cost}</span>}
         {live && (
           <button
             onClick={() => void api.stop(COPILOT_ID).catch(() => {})}

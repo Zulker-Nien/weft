@@ -15,6 +15,22 @@ export type Backend = "claude" | "puku";
 export type PermissionMode = "default" | "acceptEdits" | "auto" | "bypassPermissions";
 export const MODES: PermissionMode[] = ["default", "acceptEdits", "auto", "bypassPermissions"];
 
+// How the pickers (new thread, thread header, card menu) name each mode, loosest first.
+export const MODE_OPTIONS: { id: PermissionMode; label: string; hint: string }[] = [
+  { id: "bypassPermissions", label: "YOLO", hint: "Runs every tool without asking" },
+  { id: "auto", label: "Auto", hint: "A classifier approves or asks" },
+  { id: "acceptEdits", label: "Accept edits", hint: "Edits files freely, asks before commands" },
+  { id: "default", label: "Ask me", hint: "Asks before each tool" },
+];
+
+// A mode Claude Code recorded (or a setting) as the closest one Weft runs; undefined if unknown.
+// "plan" only reads, so it maps to "default", the mode that asks before anything changes.
+export function toPermissionMode(raw: unknown): PermissionMode | undefined {
+  if (MODES.includes(raw as PermissionMode)) return raw as PermissionMode;
+  if (raw === "plan" || raw === "dontAsk") return "default";
+  return undefined;
+}
+
 export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 
 // A question the agent asked with its AskUserQuestion tool.
@@ -135,6 +151,15 @@ export interface Card {
   forkedFrom?: string;
   // When Weft last finished a turn on this card, to tell its own session writes from other apps'.
   lastWeftTurn?: number;
+  // Starred: filed in the library (lib/library.ts) as this item. A starred card is never auto-archived.
+  libraryId?: string;
+  // The library recipe this card was run from.
+  recipeId?: string;
+  // The card's thumbnail (lib/card-pictures.ts): its latest picture, and how many images its thread holds.
+  thumb?: string;
+  pictures?: number;
+  // Haiku's emoji for the card, shown in place of a thumbnail until it has one.
+  emoji?: string;
   // Messages to send at a set time (lib/schedule.ts), soonest first; lib/scheduler.ts sends them.
   scheduled?: ScheduledMessage[];
   createdAt: number;
@@ -214,7 +239,51 @@ export interface SettingsView {
   projects: Project[];
 }
 
-export type LoginState = "running" | "terminal" | "done" | "failed" | "cancelled";
+// The library (lib/library.ts): starred cards, kept as a recipe to run again, a to-do page, or a note.
+export type LibraryKind = "recipe" | "todo" | "note";
+// "mine" is yours everywhere (like ~/.claude); "project" belongs to one folder.
+export type LibraryScope = "mine" | "project";
+
+export const LIBRARY_KINDS: { id: LibraryKind; label: string; plural: string; icon: string }[] = [
+  { id: "recipe", label: "Recipe", plural: "Recipes", icon: "↻" },
+  { id: "todo", label: "To-do", plural: "To do", icon: "☑" },
+  { id: "note", label: "Note", plural: "Notes", icon: "✎" },
+];
+
+export interface RecipeBlank {
+  name: string;
+  // What to put there, e.g. "investors? press? partners?".
+  hint?: string;
+}
+
+export interface LibraryItem {
+  id: string;
+  kind: LibraryKind;
+  scope: LibraryScope;
+  title: string;
+  // The project folder: where a project item belongs, and where a recipe runs by default.
+  folder: string;
+  // The card it was starred from.
+  cardId?: string;
+  // To-dos and notes: the page was saved (index.html in the item's folder). link is the page the card
+  // showed when it was a live site rather than a file.
+  page?: boolean;
+  link?: string;
+  // To-dos: how many checkboxes the page has, and which ones (by position) you ticked.
+  steps?: number;
+  ticked?: number[];
+  // Recipes: the skill it's saved as, its prompt with {blank}s, and what a run makes.
+  skill?: string;
+  skillPath?: string;
+  prompt?: string;
+  description?: string;
+  blanks?: RecipeBlank[];
+  makes?: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type LoginState ="running" | "terminal" | "done" | "failed" | "cancelled";
 
 // A CLI login in progress (or just finished), shown to the user in a pop-up.
 export interface LoginView {
@@ -241,7 +310,9 @@ export type BoardEvent =
   // Streaming text of the assistant message in progress; cleared by the next assistant item.
   | { type: "delta"; cardId: string; text: string }
   | { type: "login"; login: LoginView }
-  | { type: "projects"; projects: Project[] };
+  | { type: "projects"; projects: Project[] }
+  // Something in the library changed; the rail reloads.
+  | { type: "library" };
 
 // A folder the new-thread picker offers: a recent project, a git repo found on disk, or both.
 export interface LocalRepo {

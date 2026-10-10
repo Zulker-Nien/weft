@@ -6,7 +6,8 @@ export async function POST(req: Request) {
   const denied = guard(req);
   if (denied) return denied;
   try {
-    return Response.json({ url: newThreadUrl() });
+    const body = (await req.json().catch(() => ({}))) as { folder?: unknown };
+    return Response.json({ url: newThreadUrl(typeof body.folder === "string" ? body.folder : null) });
   } catch (err) {
     return fail(err);
   }

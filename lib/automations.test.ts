@@ -32,6 +32,15 @@ describe("firstMessage", () => {
     ];
     expect(firstMessage(card())).toBe("Fix the bug\n\nStart by using these skills, in order: /plan, /weft:preview.");
   });
+
+  it("ignores rules of other triggers, even when they're listed first", () => {
+    rules = [
+      { id: "a", on: "done", skill: "weft:done" },
+      { id: "b", on: "review", skill: "weft:preview" },
+      { id: "c", on: "prompt-matches", skill: "plan", pattern: "." },
+    ];
+    expect(firstMessage(card())).toBe("Fix the bug");
+  });
 });
 
 describe("messagesForMove", () => {
@@ -60,6 +69,13 @@ describe("messagesForMove", () => {
   it("leaves a Claude Code session Weft hasn't run alone", () => {
     expect(messagesForMove(card({ source: "claude-code" }), "done")).toEqual([]);
     expect(messagesForMove(card({ source: "claude-code", lastWeftTurn: 123 }), "done")).toEqual(["/weft:done"]);
+  });
+
+  it("treats a Claude Code card with lastWeftTurn=0 as not yet run by Weft", () => {
+    // !0 is true, so a never-set lastWeftTurn (defaults to 0) skips automations. This is a sharp
+    // edge worth a regression test: a card that *has* been run by Weft gets a real timestamp.
+    expect(messagesForMove(card({ source: "claude-code", lastWeftTurn: 0 }), "done")).toEqual([]);
+    expect(messagesForMove(card({ source: "claude-code", lastWeftTurn: 1 }), "done")).toEqual(["/weft:done"]);
   });
 
   it("returns nothing when no rule matches", () => {
@@ -101,6 +117,11 @@ describe("skillsForPrompt", () => {
     rules = [rule(), rule({ id: "q", pattern: "vercel" })];
     expect(skillsForPrompt(card(), "vercel")).toEqual(["vercel:knowledge-update"]);
     expect(skillsForPrompt(card({ promptSkills: ["vercel:knowledge-update"] }), "vercel")).toEqual([]);
+  });
+
+  it("dedupes matched skills across rules (same skill, different patterns) so each fires once per thread", () => {
+    rules = [rule(), rule({ id: "q", pattern: "deploy" })];
+    expect(skillsForPrompt(card(), "vercel deploy")).toEqual(["vercel:knowledge-update"]);
   });
 });
 

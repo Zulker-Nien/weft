@@ -1,10 +1,10 @@
 import { firstMessage, messagesForMove } from "@/lib/automations";
 import { resolveFolder } from "@/lib/folders";
 import { fail, guard } from "@/lib/guard";
-import { archiveWhenIdle, endSession, isBusy, queueMessages, sendMessage } from "@/lib/runner";
+import { archiveWhenIdle, endSession, isBusy, queueMessages, sendMessage, setPermissionMode } from "@/lib/runner";
 import { dismissSession } from "@/lib/settings";
 import { deleteCard, getCard, updateCard } from "@/lib/store";
-import { COLUMNS, type Column } from "@/lib/types";
+import { COLUMNS, MODES, type Column, type PermissionMode } from "@/lib/types";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -18,13 +18,29 @@ export async function PATCH(req: Request, { params }: Ctx) {
   try {
     const card = getCard(id);
     if (!card) return fail("No such card.", 404);
-    const body = (await req.json()) as { column?: Column; title?: string; cwd?: string; archived?: boolean };
+    const body = (await req.json()) as {
+      column?: Column;
+      title?: string;
+      cwd?: string;
+      archived?: boolean;
+      permissionMode?: PermissionMode;
+    };
 
     if (body.title !== undefined) updateCard(id, { title: String(body.title).trim() || card.title });
 
     if (body.archived !== undefined) {
       if (card.role === "copilot") throw new Error("The copilot isn't on the board.");
       updateCard(id, { archived: Boolean(body.archived) });
+    }
+
+    // Takes effect mid-turn too: the open CLI switches modes right away.
+    if (body.permissionMode !== undefined) {
+      if (!MODES.includes(body.permissionMode)) throw new Error("Unknown permission mode.");
+      // Only board threads on Claude Code start with the flag that lets them skip every prompt.
+      if (body.permissionMode === "bypassPermissions" && (card.role === "copilot" || card.backend !== "claude")) {
+        throw new Error("This thread can't skip permission prompts.");
+      }
+      setPermissionMode(id, body.permissionMode);
     }
 
     // Re-points a thread whose folder moved or was renamed.

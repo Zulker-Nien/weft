@@ -1,34 +1,159 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import type { Backend, Card, LibraryItem, PendingPermission, Question, ThreadItem } from "./types";
 
-const created: Record<string, unknown>[] = [];
+// Capture every tool the SDK MCP server registers, so the tests can call each handler directly.
+// The handler signature is (args, extra) -> { content, isError? } in MCP; the board wraps the result
+// in attempt() (board-tools.ts), which catches errors and isError: true. The same shape comes back.
+interface CapturedTool {
+  name: string;
+  description: string;
+  handler: (args: Record<string, unknown>) => Promise<{ content: { type: "text"; text: string }[]; isError?: true }>;
+}
+
+const captures: CapturedTool[] = [];
+
+vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
+  createSdkMcpServer: (options: { tools?: CapturedTool[] }) => {
+    for (const t of options.tools ?? []) captures.push(t);
+    return { name: "board" } as unknown as { name: string };
+  },
+  // tool() returns an SdkMcpToolDefinition; tests just need its handler and metadata.
+  tool: (name: string, description: string, _schema: unknown, handler: CapturedTool["handler"]) => ({
+    name,
+    description,
+    handler,
+  }),
+}));
+
+// An in-memory store fake. Tests seed it with cards, watch what gets created, and replaceThreadItem
+// just appends a tool result so a test can read it back.
+const cardStore = new Map<string, Card>();
+const threadStore = new Map<string, ThreadItem[]>();
+const created: { input: Record<string, unknown>; out: Card }[] = [];
+const updated: { id: string; patch: Partial<Card> }[] = [];
+
 vi.mock("./store", () => ({
   createCard: (input: Record<string, unknown>) => {
-    const card = { id: "new-1", column: "backlog", ...input };
-    created.push(card);
+    const card: Card = {
+      id: `c${created.length + 1}`,
+      column: "backlog",
+      createdAt: 1,
+      updatedAt: 1,
+      ...input,
+    } as Card;
+    created.push({ input, out: card });
+    cardStore.set(card.id, card);
     return card;
   },
-  getCard: () => undefined,
-  getThread: () => [],
-  listCards: () => [],
-  updateCard: () => undefined,
+  getCard: (id: string) => cardStore.get(id),
+  getThread: (id: string) => threadStore.get(id) ?? [],
+  listCards: () => [...cardStore.values()],
+  updateCard: (id: string, patch: Partial<Card>) => {
+    const card = cardStore.get(id);
+    if (!card) throw new Error(`No card ${id}`);
+    Object.assign(card, patch, { updatedAt: Date.now() });
+    updated.push({ id, patch });
+    return card;
+  },
+  appendThread: (id: string, item: ThreadItem) => {
+    const list = threadStore.get(id) ?? [];
+    list.push(item);
+    threadStore.set(id, list);
+    return list.length - 1;
+  },
+  replaceThreadItem: (id: string, index: number, item: ThreadItem) => {
+    const list = threadStore.get(id) ?? [];
+    list[index] = item;
+    threadStore.set(id, list);
+  },
 }));
-vi.mock("./settings", () => ({ touchProject: vi.fn(), defaultPermissionMode: () => "auto" }));
 
-const { createBoardCard, isTrustedTool } = await import("./board-tools");
+// The library (lib/library.ts) reads ~/.weft at import, so it's a fake list the tests fill.
+const libraryItems: LibraryItem[] = [];
+vi.mock("./library", () => ({
+  getItem: (id: string) => libraryItems.find((i) => i.id === id),
+  listLibrary: ({ folder }: { folder?: string } = {}) =>
+    libraryItems.filter((i) => !folder || i.scope === "mine" || i.folder === folder),
+}));
+
+const touched: string[] = [];
+vi.mock("./settings", () => ({
+  touchProject: (folder: string) => touched.push(folder),
+  defaultPermissionMode: () => "auto",
+  // firstMessage() in the create_card / start_card handlers reads automations(); returning []
+  // keeps the first message equal to the prompt.
+  automations: () => [],
+}));
+
+// folders.resolveFolder() requires an existing directory. Tests use a per-suite temp dir so the
+// "not a folder" test is the only one that ever points at a missing path. The real implementation
+// is short enough to mirror so we can avoid pulling fs/path through a vi.mock factory.
+let testRoot: string;
+vi.mock("./folders", async () => {
+  const fs = await import("node:fs");
+  return {
+    resolveFolder: (raw: unknown) => {
+      const text = String(raw ?? "").trim();
+      const folder = text || ".";
+      if (!fs.existsSync(folder) || !fs.statSync(folder).isDirectory()) throw new Error(`${folder} isn't a folder.`);
+      return folder;
+    },
+  };
+});
+
+import { COPILOT_PROMPT, SAFE_BOARD_TOOLS, boardMcpServer, createBoardCard, describeBoardTool, isTrustedTool, threadBoardMcpServer } from "./board-tools";
+
+const card = (over: Partial<Card> = {}): Card =>
+  ({
+    id: "c1",
+    title: "Fix the bug",
+    prompt: "Fix the bug",
+    cwd: testRoot,
+    backend: "claude" as Backend,
+    permissionMode: "default" as const,
+    column: "backlog" as const,
+    createdAt: 0,
+    updatedAt: 0,
+    promptSkills: [],
+    ...over,
+  }) as Card;
+
+beforeEach(() => {
+  cardStore.clear();
+  threadStore.clear();
+  created.length = 0;
+  updated.length = 0;
+  touched.length = 0;
+  captures.length = 0;
+  libraryItems.length = 0;
+  // Every test gets its own real directory so the boards-tools.ts createBoardCard path can be
+  // exercised end-to-end against the real folders.resolveFolder (only the "missing dir" test
+  // deliberately points at a path that doesn't exist).
+  testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "weft-board-tools-"));
+});
+
+function capturedTool(name: string, after = 0) {
+  // Multiple servers register the same tool name (list_cards, create_card). The 'after' argument
+  // picks the nth match: 0 for the first, 1 for the second.
+  const matches = captures.filter((x) => x.name === name);
+  const t = matches[after];
+  if (!t) throw new Error(`No tool ${name} (after ${after}) captured. Captured: ${captures.map((x) => x.name).join(", ")}`);
+  return t;
+}
 
 describe("createBoardCard", () => {
-  beforeEach(() => {
-    created.length = 0;
-  });
-
   it("titles from the prompt, resolves the folder and records the parent", () => {
-    const card = createBoardCard({ prompt: "Fix the flicker", folder: "/tmp", permissionMode: "default", parentId: "p1" });
-    expect(card).toMatchObject({ title: "Fix the flicker", cwd: "/tmp", backend: "claude", parentId: "p1" });
+    const c = createBoardCard({ prompt: "Fix the flicker", folder: testRoot, permissionMode: "default", parentId: "p1" });
+    expect(c).toMatchObject({ title: "Fix the flicker", cwd: testRoot, backend: "claude", parentId: "p1" });
+    expect(touched).toEqual([testRoot]);
   });
 
   it("keeps an explicit title and cli", () => {
-    const card = createBoardCard({ prompt: "x", title: " Mine ", folder: "/tmp", cli: "puku", permissionMode: "auto" });
-    expect(card).toMatchObject({ title: "Mine", backend: "puku", permissionMode: "auto" });
+    const c = createBoardCard({ prompt: "x", title: " Mine ", folder: testRoot, cli: "puku", permissionMode: "auto" });
+    expect(c).toMatchObject({ title: "Mine", backend: "puku", permissionMode: "auto" });
   });
 
   it("rejects a folder that doesn't exist, creating nothing", () => {
@@ -53,5 +178,441 @@ describe("isTrustedTool", () => {
   it("never trusts a tool from a server that isn't in-process, whatever its name", () => {
     expect(isTrustedTool("mcp__browser__navigate", "stdio")).toBe(false);
     expect(isTrustedTool("mcp__board__list_cards", undefined)).toBe(false);
+  });
+});
+
+describe("describeBoardTool", () => {
+  it("labels the three tools that need the user's OK with the card's title", () => {
+    cardStore.set("c1", card({ title: "Bug fix" }));
+    expect(describeBoardTool("mcp__board__start_card", { card_id: "c1" })).toBe("Start “Bug fix”");
+    expect(describeBoardTool("mcp__board__send_message", { card_id: "c1", text: "hi" })).toBe(
+      "Reply to “Bug fix”: hi",
+    );
+    expect(describeBoardTool("mcp__board__answer_permission", { card_id: "c1", allow: true })).toBe(
+      "Allow its request on “Bug fix”",
+    );
+  });
+
+  it("clips long replies and falls back to a stringified id when the card is gone", () => {
+    const long = "x".repeat(200);
+    expect(describeBoardTool("mcp__board__send_message", { card_id: "missing", text: long })).toContain("…");
+    // card_id present but unknown: label is the id string, not the generic "a card".
+    expect(describeBoardTool("mcp__board__start_card", { card_id: "missing" })).toBe("Start missing");
+    // No card_id at all: label is the generic "a card".
+    expect(describeBoardTool("mcp__board__start_card", {})).toBe("Start a card");
+  });
+
+  it("uses the pending title when denying a permission", () => {
+    cardStore.set("c1", card({ title: "Bug fix" }));
+    const pending: PendingPermission = { id: "p1", toolName: "Bash", title: "run rm -rf", input: {} };
+    cardStore.set("c1", { ...cardStore.get("c1")!, pending });
+    expect(describeBoardTool("mcp__board__answer_permission", { card_id: "c1", allow: false })).toBe(
+      'Deny run rm -rf on “Bug fix”',
+    );
+  });
+
+  it("returns null for tools that don't need a confirmation", () => {
+    expect(describeBoardTool("mcp__board__list_cards", {})).toBeNull();
+    expect(describeBoardTool("mcp__board__create_card", { prompt: "x" })).toBeNull();
+    expect(describeBoardTool("mcp__browser__navigate", { url: "x" })).toBeNull();
+  });
+
+  it("send_message uses a placeholder when text is missing", () => {
+    // A copilot or thread that calls send_message without a text field: the description is
+    // built from String(undefined ?? "") = "".
+    cardStore.set("c1", card({ title: "Bug fix" }));
+    expect(describeBoardTool("mcp__board__send_message", { card_id: "c1" })).toBe("Reply to “Bug fix”: ");
+  });
+
+  it("list_cards shows remaining, pending and error on the card's line; neither shows a cost", async () => {
+    cardStore.set(
+      "c1",
+      card({ id: "c1", title: "Big", remaining: "add tests", error: "boom\nstack trace", costUsd: 1.23 }),
+    );
+    boardMcpServer({ start: vi.fn(), stop: async () => {}, answer: vi.fn(), isBusy: () => false });
+    const r1 = await capturedTool("list_cards").handler({});
+    const text1 = r1.content[0].text;
+    expect(text1).toContain("remaining: add tests");
+    expect(text1).toContain("error: boom");
+    expect(text1).not.toContain("stack trace");
+    expect(text1).not.toContain("cost");
+    const full = await capturedTool("read_thread").handler({ card_id: "c1", last: 1 });
+    expect(full.content[0].text).not.toContain("$1.23");
+    // pending set non-null also shows.
+    cardStore.set("c1", card({ id: "c1", title: "Big", pending: { id: "p", toolName: "Bash", title: "ask", input: {} } }));
+    const r2 = await capturedTool("list_cards").handler({});
+    expect(r2.content[0].text).toContain("waiting on: ask");
+  });
+
+  it("attempt() falls back to String(err) for non-Error throws", async () => {
+    // Make the start action throw a plain string, which is an unusual but real possibility (anything
+    // thrown in user code could be a string). The MCP wrapper should still surface it.
+    cardStore.set("a", card({ id: "a", column: "backlog" }));
+    boardMcpServer({
+      start: () => {
+        throw "string error";
+      },
+      stop: async () => {},
+      answer: vi.fn(),
+      isBusy: () => false,
+    });
+    const r = await capturedTool("start_card").handler({ card_id: "a" });
+    expect(r.isError).toBe(true);
+    expect(r.content[0].text).toBe("string error");
+  });
+});
+
+describe("threadBoardMcpServer", () => {
+  it("registers only list_cards and create_card (no read, start, send, move, stop, answer)", () => {
+    threadBoardMcpServer(() => "parent-1", { start: vi.fn() });
+    expect(captures.map((t) => t.name)).toEqual(["list_cards", "create_card"]);
+    expect(SAFE_BOARD_TOOLS.has("list_cards")).toBe(true);
+    expect(SAFE_BOARD_TOOLS.has("create_card")).toBe(true);
+    expect(SAFE_BOARD_TOOLS.has("start_card")).toBe(false);
+  });
+
+  it("list_cards returns 'No cards' when the board is empty, and a card's metadata when there is one", async () => {
+    threadBoardMcpServer(() => "parent-1", { start: vi.fn() });
+    const empty = await capturedTool("list_cards").handler({});
+    expect(empty.content[0].text).toBe("No cards.");
+    expect(empty.isError).toBeUndefined();
+
+    cardStore.set("c1", card({ title: "A", stage: "First shot", lastLine: "WIP" }));
+    const withOne = await capturedTool("list_cards").handler({});
+    expect(withOne.content[0].text).toBe(`c1 | backlog | A | ${testRoot} | First shot | latest: WIP`);
+  });
+
+  it("list_cards prints one line per card and clips latest to its first short line", async () => {
+    threadBoardMcpServer(() => "parent-1", { start: vi.fn() });
+    const long = `${"word ".repeat(60)}\nsecond line`;
+    cardStore.set("a", card({ id: "a", lastLine: long }));
+    cardStore.set("b", card({ id: "b", lastLine: "\n  done here  \nmore" }));
+    const text = (await capturedTool("list_cards").handler({})).content[0].text;
+    const lines = text.split("\n");
+    expect(lines).toHaveLength(2);
+    expect(lines.find((l: string) => l.startsWith("a "))).toMatch(/latest: (word ){15}.*…$/);
+    expect(lines.find((l: string) => l.startsWith("a "))!.length).toBeLessThan(200);
+    expect(text).toContain("latest: done here");
+    expect(text).not.toContain("second line");
+  });
+
+  it("list_cards leaves out done and archived cards by default and says how many", async () => {
+    threadBoardMcpServer(() => "parent-1", { start: vi.fn() });
+    cardStore.set("a", card({ id: "a", column: "running" }));
+    cardStore.set("b", card({ id: "b", column: "done" }));
+    cardStore.set("c", card({ id: "c", column: "review", archived: true }));
+    const text = (await capturedTool("list_cards").handler({})).content[0].text;
+    expect(text.split("\n")).toEqual([
+      expect.stringMatching(/^a \| running/),
+      "2 done or archived left out; pass include_done=true to list them.",
+    ]);
+  });
+
+  it("list_cards lists done and archived cards with include_done, alone or with a column", async () => {
+    threadBoardMcpServer(() => "parent-1", { start: vi.fn() });
+    cardStore.set("a", card({ id: "a", column: "running", updatedAt: 3 }));
+    cardStore.set("b", card({ id: "b", column: "done", updatedAt: 2 }));
+    cardStore.set("c", card({ id: "c", column: "review", archived: true, updatedAt: 1 }));
+    const every = (await capturedTool("list_cards").handler({ include_done: true })).content[0].text;
+    expect(every.split("\n").map((l: string) => l.split(" ")[0])).toEqual(["a", "b", "c"]);
+    const done = (await capturedTool("list_cards").handler({ column: "done", include_done: true })).content[0].text;
+    expect(done).toMatch(/^b \| done[^\n]*$/);
+    const review = (await capturedTool("list_cards").handler({ column: "review" })).content[0].text;
+    expect(review).toBe("No open cards in review.\n1 done or archived left out; pass include_done=true to list them.");
+  });
+
+  it("list_cards says 'No open cards' when only done ones are on the board", async () => {
+    threadBoardMcpServer(() => "parent-1", { start: vi.fn() });
+    cardStore.set("b", card({ id: "b", column: "done" }));
+    const text = (await capturedTool("list_cards").handler({})).content[0].text;
+    expect(text).toBe("No open cards.\n1 done or archived left out; pass include_done=true to list them.");
+  });
+
+  it("list_cards lists newest first, up to limit, and counts the rest", async () => {
+    threadBoardMcpServer(() => "parent-1", { start: vi.fn() });
+    for (let i = 0; i < 5; i++) cardStore.set(`k${i}`, card({ id: `k${i}`, updatedAt: i }));
+    const lines = (await capturedTool("list_cards").handler({ limit: 2 })).content[0].text.split("\n");
+    expect(lines).toEqual([
+      expect.stringMatching(/^k4 /),
+      expect.stringMatching(/^k3 /),
+      "3 more not shown; raise limit or pass column.",
+    ]);
+  });
+
+  it("list_cards keeps the default under the tool-result limit on a big board", async () => {
+    threadBoardMcpServer(() => "parent-1", { start: vi.fn() });
+    for (let i = 0; i < 300; i++) {
+      cardStore.set(`k${i}`, card({ id: `k${i}`, column: i % 2 ? "done" : "review", lastLine: "x".repeat(2000), remaining: "y".repeat(500) }));
+    }
+    const text = (await capturedTool("list_cards").handler({})).content[0].text;
+    expect(text.length).toBeLessThan(15_000);
+  });
+
+  it("list_cards says 'No cards in <column>' when the column filter matches nothing", async () => {
+    threadBoardMcpServer(() => "parent-1", { start: vi.fn() });
+    const r = await capturedTool("list_cards").handler({ column: "done" });
+    expect(r.content[0].text).toBe("No cards in done.");
+  });
+
+  it("list_cards filters by column when asked", async () => {
+    threadBoardMcpServer(() => "parent-1", { start: vi.fn() });
+    cardStore.set("a", card({ id: "a", column: "backlog" }));
+    cardStore.set("b", card({ id: "b", column: "review" }));
+    const r = await capturedTool("list_cards").handler({ column: "review" });
+    expect(r.content[0].text).toMatch(/^b \| review/);
+    expect(r.content[0].text).not.toMatch(/^a /m);
+  });
+
+  it("create_card on a board thread inherits the parent's folder, permission mode, and id", async () => {
+    cardStore.set("parent-1", card({ id: "parent-1", cwd: testRoot, permissionMode: "bypassPermissions" }));
+    const start = vi.fn();
+    threadBoardMcpServer(() => "parent-1", { start });
+    const r = await capturedTool("create_card").handler({ prompt: "Refactor", title: "Refactor", folder: undefined, start: true });
+    expect(r.content[0].text).toMatch(/^Created and started c\d+: Refactor$/);
+    const input = created[0].input;
+    expect(input).toMatchObject({ prompt: "Refactor", title: "Refactor", cwd: testRoot, parentId: "parent-1", permissionMode: "bypassPermissions" });
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(start.mock.calls[0][1]).toBe("Refactor"); // firstMessage(card) when no start automations: just the prompt
+  });
+
+  it("create_card uses defaults when there's no parent yet (spare CLI)", async () => {
+    const start = vi.fn();
+    threadBoardMcpServer(() => undefined, { start });
+    await capturedTool("create_card").handler({ prompt: "Hello" });
+    const input = created[0].input;
+    // No parent cwd and no folder override: createBoardCard gets folder="", which resolveFolder
+    // maps to "." (the process cwd, which is the project root — an existing dir).
+    expect(input).toMatchObject({ prompt: "Hello", permissionMode: "default", parentId: undefined });
+    expect(typeof input.cwd).toBe("string");
+    expect(input.cwd).not.toBe("");
+  });
+
+  it("create_card with start=false leaves the card in Backlog and doesn't call actions.start", async () => {
+    const start = vi.fn();
+    threadBoardMcpServer(() => undefined, { start });
+    const r = await capturedTool("create_card").handler({ prompt: "x", start: false });
+    expect(r.content[0].text).toMatch(/^Created c\d+ in Backlog: /);
+    expect(start).not.toHaveBeenCalled();
+  });
+});
+
+describe("boardMcpServer (copilot)", () => {
+  it("registers the full set of board tools for the copilot", () => {
+    boardMcpServer({ start: vi.fn(), stop: async () => {}, answer: vi.fn(), isBusy: () => false });
+    expect(captures.map((t) => t.name)).toEqual([
+      "list_cards",
+      "list_library",
+      "read_thread",
+      "create_card",
+      "start_card",
+      "send_message",
+      "move_card",
+      "stop_card",
+      "answer_permission",
+    ]);
+  });
+
+  it("exposes the copilot prompt with the board-tool description", () => {
+    expect(COPILOT_PROMPT).toContain("Weft copilot");
+    expect(COPILOT_PROMPT).toContain("mcp__board__*");
+  });
+
+  it("read_thread formats a thread and reports when it's empty", async () => {
+    cardStore.set("c1", card({ id: "c1", title: "T" }));
+    boardMcpServer({ start: vi.fn(), stop: async () => {}, answer: vi.fn(), isBusy: () => false });
+    const empty = await capturedTool("read_thread").handler({ card_id: "c1", last: 10 });
+    expect(empty.content[0].text).toContain("(empty thread)");
+
+    threadStore.set("c1", [
+      { kind: "user", text: "hi", at: 0 },
+      { kind: "assistant", text: "hello", at: 0 },
+      { kind: "tool", id: "t1", name: "Bash", summary: "ls", at: 0, isError: false },
+      { kind: "tool", id: "t2", name: "Bash", summary: "rm -rf /", at: 0, isError: true },
+      { kind: "permission", id: "p1", toolName: "Bash", title: "run ls", at: 0 },
+      { kind: "permission", id: "p2", toolName: "Bash", title: "run rm", at: 0, decision: "deny" },
+      { kind: "result", text: "ok", at: 0, isError: false },
+      { kind: "result", text: "boom", at: 0, isError: true },
+    ] as ThreadItem[]);
+    const r = await capturedTool("read_thread").handler({ card_id: "c1", last: 10 });
+    const text = r.content[0].text;
+    expect(text).toContain("USER: hi");
+    expect(text).toContain("AGENT: hello");
+    expect(text).toContain("TOOL Bash ls");
+    expect(text).toContain("TOOL Bash rm -rf / (failed)");
+    expect(text).toContain("PERMISSION run ls: waiting");
+    expect(text).toContain("PERMISSION run rm: deny");
+    expect(text).toContain("TURN FINISHED");
+    expect(text).toContain("TURN ENDED: boom");
+  });
+
+  it("read_thread caps to the last N items", async () => {
+    cardStore.set("c1", card({ id: "c1" }));
+    threadStore.set("c1", [
+      { kind: "user", text: "1", at: 0 },
+      { kind: "user", text: "2", at: 0 },
+      { kind: "user", text: "3", at: 0 },
+      { kind: "user", text: "4", at: 0 },
+    ] as ThreadItem[]);
+    boardMcpServer({ start: vi.fn(), stop: async () => {}, answer: vi.fn(), isBusy: () => false });
+    const r = await capturedTool("read_thread").handler({ card_id: "c1", last: 2 });
+    const text = r.content[0].text;
+    expect(text).toContain("USER: 3");
+    expect(text).toContain("USER: 4");
+    expect(text).not.toContain("USER: 1");
+    expect(text).not.toContain("USER: 2");
+  });
+
+  it("read_thread defaults to the last 30 items when last is omitted", async () => {
+    cardStore.set("c1", card({ id: "c1" }));
+    threadStore.set(
+      "c1",
+      Array.from({ length: 35 }, (_, i) => ({ kind: "user", text: `m${i}`, at: 0 }) as ThreadItem),
+    );
+    boardMcpServer({ start: vi.fn(), stop: async () => {}, answer: vi.fn(), isBusy: () => false });
+    const r = await capturedTool("read_thread").handler({ card_id: "c1" });
+    const text = r.content[0].text;
+    expect(text).toContain("m5"); // index 5 of the kept 30
+    expect(text).toContain("m34");
+    expect(text).not.toContain("m4");
+  });
+
+  it("read_thread refuses the copilot's own card and any unknown id", async () => {
+    cardStore.set("copilot", { ...card({ id: "copilot" }), role: "copilot" });
+    boardMcpServer({ start: vi.fn(), stop: async () => {}, answer: vi.fn(), isBusy: () => false });
+    const r = await capturedTool("read_thread").handler({ card_id: "copilot" });
+    expect(r.isError).toBe(true);
+    expect(r.content[0].text).toContain("No card copilot");
+
+    const r2 = await capturedTool("read_thread").handler({ card_id: "missing" });
+    expect(r2.isError).toBe(true);
+    expect(r2.content[0].text).toContain("No card missing");
+  });
+
+  it("create_card lets the copilot pick the cli and overrides permission mode only when given", async () => {
+    boardMcpServer({ start: vi.fn(), stop: async () => {}, answer: vi.fn(), isBusy: () => false });
+    await capturedTool("create_card").handler({ prompt: "X", folder: testRoot, cli: "puku" });
+    expect(created[0].input).toMatchObject({ backend: "puku", permissionMode: "auto", cwd: testRoot });
+
+    await capturedTool("create_card").handler({ prompt: "Y", folder: testRoot, permission_mode: "acceptEdits" });
+    expect(created[1].input).toMatchObject({ permissionMode: "acceptEdits" });
+  });
+
+  it("list_library shows recipes with their prompt and blanks, and to-dos with their ticks", async () => {
+    boardMcpServer({ start: vi.fn(), stop: async () => {}, answer: vi.fn(), isBusy: () => false });
+    expect((await capturedTool("list_library").handler({})).content[0].text).toBe("The library is empty.");
+    libraryItems.push(
+      { id: "r1", kind: "recipe", scope: "mine", title: "Media kit", folder: testRoot, prompt: "Kit for {product}", blanks: [{ name: "product", hint: "which one" }], createdAt: 1, updatedAt: 1 },
+      { id: "t1", kind: "todo", scope: "project", title: "Set up DNS", folder: testRoot, steps: 4, ticked: [0], createdAt: 1, updatedAt: 1 },
+    );
+    const text = (await capturedTool("list_library").handler({})).content[0].text;
+    expect(text).toContain("recipe: Media kit");
+    expect(text).toContain("scope: mine (every project)");
+    expect(text).toContain("blanks: {product} (which one)");
+    expect(text).toContain("prompt: Kit for {product}");
+    expect(text).toContain("todo: Set up DNS");
+    expect(text).toContain("ticked: 1 of 4");
+  });
+
+  it("create_card runs a recipe only with its blanks filled, and records which recipe", async () => {
+    libraryItems.push({ id: "r1", kind: "recipe", scope: "mine", title: "Media kit", folder: testRoot, prompt: "Kit for {product}", createdAt: 1, updatedAt: 1 });
+    boardMcpServer({ start: vi.fn(), stop: async () => {}, answer: vi.fn(), isBusy: () => false });
+    const unfilled = await capturedTool("create_card").handler({ prompt: "Kit for {product}", folder: testRoot, recipe_id: "r1" });
+    expect(unfilled.isError).toBe(true);
+    expect(unfilled.content[0].text).toContain("{product}");
+    const missing = await capturedTool("create_card").handler({ prompt: "Kit for Zeph", folder: testRoot, recipe_id: "nope" });
+    expect(missing.content[0].text).toContain("No recipe nope");
+    expect(created).toHaveLength(0);
+
+    await capturedTool("create_card").handler({ prompt: "Kit for Zeph", folder: testRoot, recipe_id: "r1" });
+    expect(created[0].input).toMatchObject({ prompt: "Kit for Zeph", recipeId: "r1" });
+    // Without a recipe, a prompt with braces is just a prompt.
+    await capturedTool("create_card").handler({ prompt: "Explain {braces}", folder: testRoot });
+    expect(created[1].input).not.toHaveProperty("recipeId");
+  });
+
+  it("start_card moves from Backlog to Running via the first message and refuses other columns", async () => {
+    cardStore.set("a", card({ id: "a", column: "backlog", prompt: "Do it" }));
+    const start = vi.fn();
+    boardMcpServer({ start, stop: async () => {}, answer: vi.fn(), isBusy: () => false });
+    const r = await capturedTool("start_card").handler({ card_id: "a" });
+    expect(r.content[0].text).toBe("Started “Fix the bug”.");
+    expect(start).toHaveBeenCalledWith("a", "Do it");
+
+    cardStore.set("b", card({ id: "b", column: "review" }));
+    const r2 = await capturedTool("start_card").handler({ card_id: "b" });
+    expect(r2.isError).toBe(true);
+    expect(r2.content[0].text).toContain("not Backlog");
+  });
+
+  it("send_message calls actions.start with the text and the card's id", async () => {
+    cardStore.set("a", card({ id: "a" }));
+    const start = vi.fn();
+    boardMcpServer({ start, stop: async () => {}, answer: vi.fn(), isBusy: () => false });
+    const r = await capturedTool("send_message").handler({ card_id: "a", text: "continue" });
+    expect(r.content[0].text).toBe("Sent to “Fix the bug”.");
+    expect(start).toHaveBeenCalledWith("a", "continue");
+  });
+
+  it("move_card calls updateCard and refuses to move a busy card", async () => {
+    cardStore.set("a", card({ id: "a", column: "review" }));
+    let busy = false;
+    boardMcpServer({ start: vi.fn(), stop: async () => {}, answer: vi.fn(), isBusy: () => busy });
+    const r = await capturedTool("move_card").handler({ card_id: "a", column: "done" });
+    expect(r.content[0].text).toBe("Moved “Fix the bug” to done.");
+    expect(cardStore.get("a")!.column).toBe("done");
+    expect(updated.some((u) => u.id === "a" && u.patch.column === "done")).toBe(true);
+
+    busy = true;
+    const r2 = await capturedTool("move_card").handler({ card_id: "a", column: "backlog" });
+    expect(r2.isError).toBe(true);
+    expect(r2.content[0].text).toContain("is running");
+  });
+
+  it("stop_card calls actions.stop and returns a confirmation", async () => {
+    cardStore.set("a", card({ id: "a" }));
+    const stop = vi.fn().mockResolvedValue(undefined);
+    boardMcpServer({ start: vi.fn(), stop, answer: vi.fn(), isBusy: () => false });
+    const r = await capturedTool("stop_card").handler({ card_id: "a" });
+    expect(r.content[0].text).toBe("Stopped “Fix the bug”.");
+    expect(stop).toHaveBeenCalledWith("a");
+  });
+
+  it("answer_permission routes to actions.answer with the right args, building answers from a question", async () => {
+    const questions: Question[] = [{ question: "color?", options: [{ label: "red" }] }];
+    const pending: PendingPermission = { id: "p1", toolName: "AskUserQuestion", title: "q", input: {}, questions };
+    cardStore.set("a", card({ id: "a", pending }));
+    const answer = vi.fn();
+    boardMcpServer({ start: vi.fn(), stop: async () => {}, answer, isBusy: () => false });
+    const r = await capturedTool("answer_permission").handler({ card_id: "a", allow: true, answer: "red" });
+    expect(r.content[0].text).toBe("Allowed on “Fix the bug”.");
+    expect(answer).toHaveBeenCalledWith("a", true, { "color?": "red" });
+
+    const r2 = await capturedTool("answer_permission").handler({ card_id: "a", allow: false });
+    expect(r2.content[0].text).toBe("Denied on “Fix the bug”.");
+    expect(answer.mock.calls[1]).toEqual(["a", false, undefined]);
+  });
+});
+
+describe("createBoardCard ↔ tool handler integration", () => {
+  it("the thread tool's create_card calls createBoardCard and then actions.start with the prompt", async () => {
+    cardStore.set("parent-1", card({ id: "parent-1", cwd: testRoot, permissionMode: "default" }));
+    const start = vi.fn();
+    threadBoardMcpServer(() => "parent-1", { start });
+    await capturedTool("create_card").handler({ prompt: "Hi" });
+    expect(created[0].input).toMatchObject({ prompt: "Hi", cwd: testRoot, parentId: "parent-1" });
+    expect(start).toHaveBeenCalledWith(created[0].out.id, "Hi");
+  });
+});
+
+describe("read_thread card header", () => {
+  it("lists the card's stage, latest line and what it waits on before the thread", async () => {
+    cardStore.set(
+      "c1",
+      card({ id: "c1", column: "needs_you", stage: "First shot", lastLine: "Which db?", pending: { id: "p", toolName: "Bash", title: "Run npm test", input: {} } }),
+    );
+    boardMcpServer({ start: vi.fn(), stop: async () => {}, answer: vi.fn(), isBusy: () => false });
+    const text = (await capturedTool("read_thread").handler({ card_id: "c1" })).content[0].text;
+    const header = text.split("\n\n---\n\n")[0].split("\n");
+    expect(header).toEqual(expect.arrayContaining(["stage: First shot", "latest: Which db?", "waiting on the user for: Run npm test"]));
   });
 });

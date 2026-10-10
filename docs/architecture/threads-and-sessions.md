@@ -20,7 +20,7 @@ every API route shares it), and returns the running `Session`. `drive()` (`lib/r
 - `cwd`: the card's folder
 - `resume`: the existing `sessionId` (or unset for new cards)
 - `forkSession`: true when Weft continues a session that's open elsewhere
-- `permissionMode`: `default` / `acceptEdits` / `auto`
+- `permissionMode`: `default` / `acceptEdits` / `auto` / `bypassPermissions` (`MODES` in `lib/types.ts`)
 - `systemPrompt.preset: "claude_code"` with `BROWSER_PROMPT` + either `threadPrompt()`
   (board threads) or `COPILOT_PROMPT` (the copilot)
 - `mcpServers`: copilot gets `browser` and `board`; board threads get just `browser`
@@ -114,6 +114,17 @@ and a move to any other column does too. The board hides archived cards until "S
 in the Done header (`components/Board.tsx`).
 
 ## Permissions and questions
+
+### Changing a card's mode
+
+`PATCH /api/cards/:id` with `{ permissionMode }` validates it against `MODES` and calls
+`setPermissionMode(cardId, mode)` (`lib/runner.ts`), which saves it on the card and, when the card
+has an open CLI, calls `query.setPermissionMode(mode)` the way `adoptSpare()` does, so it applies
+mid-turn. `bypassPermissions` is refused for the copilot and puku cards, whose CLIs start without
+`allowDangerouslySkipPermissions`. The thread header has a small `ModePicker`
+(`components/ModePicker.tsx`, the same select the new-thread dialog uses) and the card's
+right-click menu lists the modes with the current one ticked (`mode:<id>` in `lib/card-menu.ts`).
+A request already waiting on the card still needs an answer after a switch.
 
 ### `canUseTool` -> `askUser` -> `settle`
 
@@ -211,7 +222,12 @@ and every `SYNC_EVERY_MS` (60s) it calls `runSync()`:
   refactoring, Cleaning up, Done). `columnFor()`: `Done` stage -> `done`, any other
   stage -> `review`, otherwise: `Date.now() - lastActivity < 3 days` -> `review`,
   else `done`.
-- New sessions become cards with `source: "claude-code"`. For existing picked-up cards, a
+- New sessions become cards with `source: "claude-code"`, in the permission mode the session last
+  ran in (`sessionMode()`): the last `"permissionMode"` in the file's tail (user messages and
+  `permission-mode` records carry it), else in its first 256KB, else `permissions.defaultMode` from
+  `~/.claude/settings.json`, else `default`. `toPermissionMode()` (`lib/types.ts`) maps modes Weft
+  doesn't run (`plan`, `dontAsk`) to `default`. Cards picked up before this keep their mode; change
+  it from the thread header or card menu. For existing picked-up cards, a
   newer last message or a new title from outside Weft updates the card (and moves it) unless
   Weft has that thread open (`warm`); cards Weft created, and cards that continued a session
   as a copy (`forkedFrom`), are left alone.

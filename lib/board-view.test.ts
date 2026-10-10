@@ -121,14 +121,6 @@ describe("groupByColumn", () => {
     expect(groups.get("backlog")?.map((c) => c.id)).toEqual(["n", "c", "u"]);
   });
 
-  it("treats missing costUsd as 0 in the cost sort", () => {
-    const free = card({ id: "free", costUsd: undefined });
-    const cheap = card({ id: "cheap", costUsd: 0.5 });
-    const pricey = card({ id: "pricey", costUsd: 5 });
-    const groups = groupByColumn([free, cheap, pricey], view({ sort: "cost" }), identity);
-    expect(groups.get("backlog")?.map((c) => c.id)).toEqual(["pricey", "cheap", "free"]);
-  });
-
   it("places cards into the column their .column says, not by filter outcome", () => {
     const running = card({ id: "run", column: "running" });
     const review = card({ id: "rev", column: "review" });
@@ -534,6 +526,6 @@ describe("exported helpers", () => {
     expect(UNSEEN_COLUMNS).toEqual(["needs_you", "review", "done"]);
   });
   it("SORTERS expose one entry per SortKey", () => {
-    expect(Object.keys(SORTERS).sort()).toEqual(["active", "cost", "newest", "oldest"]);
+    expect(Object.keys(SORTERS).sort()).toEqual(["active", "newest", "oldest"]);
   });
 });

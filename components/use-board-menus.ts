@@ -1,6 +1,7 @@
 import { api } from "@/lib/client";
-import { cardMenu, columnMenu, resumeCommand, type CardAction, type ColumnAction } from "@/lib/card-menu";
-import type { Card, Column, DevServerStatus } from "@/lib/types";
+import { cardMenu, columnMenu, resumeCommand, withAccelerators, type CardAction, type ColumnAction } from "@/lib/card-menu";
+import { toAccelerator, useShortcutList } from "@/lib/hotkeys";
+import type { Card, Column, DevServerStatus, LibraryKind, PermissionMode } from "@/lib/types";
 
 // What the board's right-click menus act through: the same functions its buttons, drag and command palette use.
 export interface BoardMenuDeps {
@@ -13,10 +14,15 @@ export interface BoardMenuDeps {
   renameCard: (card: Card) => void;
   move: (id: string, column: Column) => void;
   toggleArchive: (card: Card) => void;
+  // Archives with an Undo toast.
+  archive: (cards: Card[]) => void;
   remove: (card: Card) => void;
   // cwd left out, the new-thread dialog picks its usual folder.
   openNew: (cwd?: string) => void;
   toggleArchived: () => void;
+  // Files the card in the library (lib/library.ts), and opens the library drawer on a kind.
+  star: (card: Card, kind: LibraryKind) => void;
+  showLibrary: (kind: LibraryKind) => void;
   toast: (message: string) => void;
   notify: (err: unknown) => void;
 }
@@ -24,13 +30,23 @@ export interface BoardMenuDeps {
 // The menus are native (electron/main.cjs). In a plain browser tab there's no shell, so the browser's own menu shows.
 export function useBoardMenus(deps: BoardMenuDeps) {
   const shell = typeof window === "undefined" ? undefined : window.threadboard;
+  // Menu items that have a board shortcut use its key, read from the registry: menu item id -> shortcut id.
+  // Keys the open menu handles itself (Return, arrows…) are skipped, so card-open shows O, not ↩.
+  const shortcuts = useShortcutList();
+  const keys = (map: Record<string, string>) =>
+    Object.fromEntries(
+      Object.entries(map).map(([item, id]) => {
+        const spec = shortcuts.find((s) => s.id === id)?.keys.find((k) => !MENU_OWN_KEYS.test(k));
+        return [item, spec && toAccelerator(spec)];
+      }),
+    );
 
   async function onCardMenu(card: Card, e: React.MouseEvent) {
     if (!shell?.popupMenu) return;
     e.preventDefault();
     e.stopPropagation();
     const dev = card.review?.dev ? await api.devStatus(card.id).then((r) => r.status, () => null) : null;
-    const picked = (await shell.popupMenu(cardMenu(card, dev))) as CardAction | null;
+    const picked = (await shell.popupMenu(withAccelerators(cardMenu(card, dev), keys({ open: "card-open", archive: "archive" })))) as CardAction | null;
     if (picked) runCardAction(card, picked).catch(deps.notify);
   }
 
@@ -38,6 +54,11 @@ export function useBoardMenus(deps: BoardMenuDeps) {
     if (action.startsWith("move:")) return deps.move(card.id, action.slice(5) as Column);
     if (action.startsWith("skill:")) {
       await api.send(card.id, `/${action.slice(6)}`);
+      return;
+    }
+    if (action.startsWith("star:")) return deps.star(card, action.slice(5) as LibraryKind);
+    if (action.startsWith("mode:")) {
+      await api.setMode(card.id, action.slice(5) as PermissionMode);
       return;
     }
     if (action.startsWith("dev:")) {
@@ -64,6 +85,15 @@ export function useBoardMenus(deps: BoardMenuDeps) {
       case "copy-resume":
         await navigator.clipboard.writeText(resumeCommand(card));
         return deps.toast("Copied. Paste it in a terminal to pick the thread up.");
+      case "unstar":
+        if (card.libraryId) await api.removeLibraryItem(card.libraryId);
+        return deps.toast(`Took “${card.title}” out of the library.`);
+      case "show-in-library": {
+        const { items } = await api.library(null, true);
+        const kind = items.find((i) => i.id === card.libraryId)?.kind;
+        if (kind) return deps.showLibrary(kind);
+        return deps.toast("It isn't in the library any more.");
+      }
       case "archive":
         return deps.toggleArchive(card);
       case "delete":
@@ -78,16 +108,17 @@ export function useBoardMenus(deps: BoardMenuDeps) {
     e.preventDefault();
     const done = deps.doneShown.filter((c) => !c.archived);
     const menu = columnMenu(column, { count: done.length, archived: deps.archivedCount, showArchived: deps.showArchived });
-    const picked = (await shell.popupMenu(menu)) as ColumnAction | null;
+    const picked = (await shell.popupMenu(withAccelerators(menu, keys({ new: "new-thread", "archive-done": "archive-done" })))) as ColumnAction | null;
     if (picked === "new") deps.openNew();
     if (picked === "toggle-archived") deps.toggleArchived();
-    if (picked === "archive-done") {
-      await Promise.all(done.map((c) => api.archive(c.id, true))).catch(deps.notify);
-    }
+    if (picked === "archive-done") deps.archive(done);
   }
 
   return { onCardMenu, onColumnMenu };
 }
+
+// Keys a native menu uses to move and pick, so they can't be an item's key.
+const MENU_OWN_KEYS = /^(Enter|Escape|Tab| |Arrow\w+|Home|End)$/;
 
 function devMessage(status: DevServerStatus): string {
   if (status.state === "stopped") return "Dev server stopped.";

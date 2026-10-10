@@ -1,9 +1,11 @@
 import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { firstMessage } from "./automations";
+import { getItem, listLibrary } from "./library";
+import { blanksIn } from "./library-view";
 import { markSeen } from "./copilot-digest";
 import { resolveFolder } from "./folders";
-import { clip, firstLine, formatCost, shortToolName, titleFromPrompt } from "./format";
+import { clip, firstLine, shortToolName, titleFromPrompt } from "./format";
 import { defaultPermissionMode, touchProject } from "./settings";
 import { createCard, getCard, getThread, listCards, updateCard } from "./store";
 import type { Backend, Card, PermissionMode, ThreadItem } from "./types";
@@ -20,11 +22,12 @@ export const COPILOT_PROMPT = `You are the Weft copilot: the orchestrator for th
 Each card on the board is a separate Claude Code or puku-cli thread working in a project folder. Columns: Backlog (not started), Running, Needs you (waiting on a permission answer), Review (turn finished), Done.
 Use the mcp__board__* tools to see and run the board: list_cards and read_thread to check on work, create_card to add a thread to Backlog, start_card to run it, send_message to reply to a thread, move_card, stop_card, and answer_permission when the user tells you to approve or deny something.
 Delegate real work to threads instead of doing it yourself. Give each new thread a self-contained prompt and the right folder; it knows nothing about this chat.
+The user's library (list_library) keeps cards they starred: recipes (prompts they run again, with {blanks}), to-dos and notes. When they ask for something like before ("a media kit like last time"), look for a recipe, fill its blanks in the prompt, and pass its recipe_id to create_card.
 You're in a small chat window, so keep replies short.`;
 
 // The copilot uses these without asking: they read the board or only rearrange it.
 // Starting, replying to, and answering for a thread run agents, so the user approves those.
-export const SAFE_BOARD_TOOLS = new Set(["list_cards", "read_thread", "create_card", "move_card", "stop_card"]);
+export const SAFE_BOARD_TOOLS = new Set(["list_cards", "read_thread", "list_library", "create_card", "move_card", "stop_card"]);
 
 // This app's own tools (the browser pane, and the board tools: list_cards, create_card, and the copilot's others) skip the prompt.
 // source is the MCP server's type; only in-process ("sdk") servers are Weft's own.
@@ -41,7 +44,6 @@ function boardCard(id: string): Card {
 }
 
 function describeCard(card: Card) {
-  const cost = formatCost(card.costUsd);
   return [
     `id: ${card.id}`,
     `title: ${card.title}`,
@@ -53,7 +55,6 @@ function describeCard(card: Card) {
     card.lastLine && `latest: ${card.lastLine}`,
     card.pending && `waiting on the user for: ${card.pending.title}`,
     card.error && `error: ${card.error}`,
-    cost && `cost: ${cost}`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -113,6 +114,8 @@ interface NewBoardCard {
   permissionMode: PermissionMode;
   // The card whose thread asked for this one.
   parentId?: string;
+  // The library recipe it runs (lib/library.ts).
+  recipeId?: string;
 }
 
 // The one place a card is made on behalf of a thread, whether it is the copilot's or a board thread's.
@@ -124,9 +127,39 @@ export function createBoardCard(args: NewBoardCard): Card {
     backend: args.cli ?? "claude",
     permissionMode: args.permissionMode,
     parentId: args.parentId,
+    ...(args.recipeId ? { recipeId: args.recipeId } : {}),
   });
   touchProject(card.cwd);
   return card;
+}
+
+// The library: recipes with their prompts and blanks, so the copilot can run one; to-dos and notes by title.
+function listLibraryTool() {
+  return tool(
+    "list_library",
+    "List the user's library: recipes (prompts they run again, with {blanks} to fill), to-dos (steps for them, with how many are ticked) and notes. Recipes include their prompt.",
+    { folder: z.string().optional().describe("Only this project's and the user's own; left out, every project's") },
+    ({ folder }) =>
+      attempt(() => {
+        const items = listLibrary(folder ? { folder: resolveFolder(folder) } : { all: true });
+        if (!items.length) return "The library is empty.";
+        return items
+          .map((i) =>
+            [
+              `id: ${i.id}`,
+              `${i.kind}: ${i.title}`,
+              `scope: ${i.scope === "mine" ? "mine (every project)" : i.folder}`,
+              i.kind === "recipe" && `folder: ${i.folder}`,
+              i.kind === "recipe" && i.blanks?.length && `blanks: ${i.blanks.map((b) => `{${b.name}}${b.hint ? ` (${b.hint})` : ""}`).join(", ")}`,
+              i.kind === "recipe" && `prompt: ${i.prompt}`,
+              i.kind === "todo" && i.steps && `ticked: ${i.ticked?.length ?? 0} of ${i.steps}`,
+            ]
+              .filter(Boolean)
+              .join("\n"),
+          )
+          .join("\n\n");
+      }),
+  );
 }
 
 // One line per card, so a whole board fits in a tool result (the full detail is read_thread's).
@@ -223,6 +256,7 @@ export function boardMcpServer(actions: BoardActions) {
     alwaysLoad: true,
     tools: [
       listCardsTool(),
+      listLibraryTool(),
       tool(
         "read_thread",
         "Read a thread's conversation: user messages, agent replies, tool calls, and permission requests.",
@@ -243,10 +277,15 @@ export function boardMcpServer(actions: BoardActions) {
           title: z.string().optional(),
           cli: z.enum(["claude", "puku"]).optional(),
           permission_mode: z.enum(["default", "acceptEdits", "auto", "bypassPermissions"]).optional(),
+          recipe_id: z.string().optional().describe("The library recipe this runs (from list_library), with its {blanks} filled in the prompt"),
         },
-        (args) =>
+        ({ recipe_id, ...args }) =>
           attempt(() => {
-            const card = createBoardCard({ ...args, permissionMode: args.permission_mode ?? defaultPermissionMode() });
+            const recipe = recipe_id ? getItem(recipe_id) : undefined;
+            if (recipe_id && recipe?.kind !== "recipe") throw new Error(`No recipe ${recipe_id}. Use list_library to get recipe ids.`);
+            const left = recipe ? blanksIn(args.prompt) : [];
+            if (left.length) throw new Error(`Fill in ${left.map((b) => `{${b}}`).join(", ")} in the prompt first.`);
+            const card = createBoardCard({ ...args, permissionMode: args.permission_mode ?? defaultPermissionMode(), recipeId: recipe?.id });
             return `Created ${card.id} in Backlog: ${card.title}`;
           }),
       ),

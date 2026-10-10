@@ -1,14 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "@/lib/client";
 import { alsoHereLine } from "@/lib/overlap";
 import { formatAt, sendLaterOptions } from "@/lib/schedule";
+import { FIXED_SHORTCUTS } from "@/lib/shortcut-catalog";
 import { useNow } from "@/lib/use-now";
 import type { Backend, Card, ScheduledMessage } from "@/lib/types";
 import Composer, { type ComposerHandle } from "./Composer";
 import Icon, { Spinner } from "./Icon";
+import KeyCaps from "./KeyCaps";
 import SendLater from "./SendLater";
+import Tip from "./Tip";
+
+// The key that stops a running turn from the reply box, as the shortcuts sheet lists it.
+const STOP_KEY = FIXED_SHORTCUTS.find((s) => s.id === "reply-stop")?.keys[0] ?? "ctrl+c";
 
 // What you were writing to a card, kept per card until it's sent.
 const draftKey = (cardId: string) => `weft.reply.${cardId}`;
@@ -37,6 +43,7 @@ export default function ReplyBox({
   placeholder,
   alsoHere = [],
   sendLater,
+  status,
   onSend,
   onStop,
 }: {
@@ -50,6 +57,8 @@ export default function ReplyBox({
   // Board threads can take a message to send at a set time; the copilot can't, so it leaves this out.
   // resetAt is the plan's next 5-hour reset (unix ms), the default time on a Claude thread.
   sendLater?: { backend: Backend; resetAt?: number; scheduled: ScheduledMessage[] };
+  // The thread's statusline (context, tokens, plan limits), under the box where you scope the next message.
+  status?: ReactNode;
   onSend: (text: string) => Promise<void>;
   onStop: () => Promise<void>;
 }) {
@@ -95,6 +104,8 @@ export default function ReplyBox({
       setPaused(false);
       return;
     }
+    // Send now with an empty box sends what's queued instead.
+    if (!text && now && queue.length > 0) return sendQueuedNow();
     if (!text) {
       setError("Write a message first.");
       return;
@@ -117,6 +128,26 @@ export default function ReplyBox({
       writeDraft(cardId, "");
       composer.current?.clear();
     } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  // Stops the running turn and sends queued messages now: the one at `index`, or the whole queue.
+  // Whatever stays queued holds until that send is out, then waits for the turn it starts.
+  async function sendQueuedNow(index?: number) {
+    if (sending) return;
+    const text = index === undefined ? queue.join("\n\n") : queue[index];
+    setQueue((q) => (index === undefined ? [] : q.filter((_, j) => j !== index)));
+    setPaused(true);
+    setSending(true);
+    try {
+      if (live) await onStop();
+      await onSend(text);
+      setPaused(false);
+    } catch (err) {
+      setQueue((q) => [text, ...q]);
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSending(false);
@@ -229,6 +260,15 @@ export default function ReplyBox({
               <span className="min-w-0 flex-1 truncate">{text}</span>
               <button
                 type="button"
+                onClick={() => void sendQueuedNow(i)}
+                disabled={sending}
+                title={live ? "Stop the current turn and send this now" : "Send this now"}
+                className="shrink-0 rounded px-1.5 py-0.5 text-[11.5px] text-ink hover:bg-line disabled:opacity-40"
+              >
+                Send now
+              </button>
+              <button
+                type="button"
                 onClick={() => setQueue((q) => q.filter((_, j) => j !== i))}
                 aria-label="Remove queued message"
                 className="shrink-0 hover:text-ink"
@@ -265,6 +305,24 @@ export default function ReplyBox({
               />
             )}
             {live && (
+              <Tip
+                text={
+                  <span className="flex items-center gap-1.5">
+                    Stop this turn <KeyCaps spec={STOP_KEY} small />
+                  </span>
+                }
+              >
+                <button
+                  type="button"
+                  onClick={() => void onStop().catch((err) => setError(err instanceof Error ? err.message : String(err)))}
+                  aria-label="Stop the current turn"
+                  className="ml-1 flex shrink-0 items-center gap-1 rounded-md border border-line-strong px-2 py-1 text-[12px] text-ink hover:bg-sunken"
+                >
+                  <Icon name="stop" size={12} /> Stop
+                </button>
+              </Tip>
+            )}
+            {live && (
               <button
                 type="button"
                 onClick={() => void submit(true)}
@@ -288,6 +346,7 @@ export default function ReplyBox({
           </>
         }
       />
+      {status && <div className="mt-1.5 px-1">{status}</div>}
       {error && <p className="mt-1.5 text-[12px] text-danger">{error}</p>}
     </div>
   );

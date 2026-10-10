@@ -15,7 +15,7 @@ Discoverability is built on the same registry: tooltips, key badges, native righ
 - `components/ShortcutsDialog.tsx`: the `?` dialog, a searchable two-column list of `shortcutSections`.
 - `components/KeyCaps.tsx`: `Cap` and `KeyCaps`, the one way to draw a key spec as key caps.
 - `components/ModifierHint.tsx`: hold Shift, or ⌘ (Ctrl off macOS) for 0.6s, and a card bottom-left lists the registered shortcuts that use it.
-- `lib/card-menu.ts`: `withAccelerators` adds a key to right-click menu items; `electron/main.cjs` draws it without registering it.
+- `lib/card-menu.ts`: every right-click menu item has a key (`MENU_KEYS`), live only while the menu is open; `electron/main.cjs` sets it as the native item's key equivalent. Items with a board shortcut take the registry's key instead (`components/use-board-menus.ts`), skipping Return, arrows and the other keys the open menu uses itself.
 - `components/Board.tsx`: registers the board shortcuts and mounts the listener once.
 - `components/CardView.tsx`: cards carry `data-card-id`, and `Board` marks each column with `data-column`; keyboard navigation moves DOM focus between them.
 

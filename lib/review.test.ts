@@ -105,3 +105,9 @@ describe("stepUrl", () => {
     expect(stepUrl(plan, { title: "t", look: "Open /tmp/out/report.pdf and check page 2." })).toBe("file:///tmp/out/report.pdf");
   });
 });
+
+describe("stepUrl with a plan url that isn't a URL", () => {
+  it("falls back to the plan's url as written instead of throwing", () => {
+    expect(stepUrl({ url: "localhost:3000", steps: [] }, { title: "t", path: "login" })).toBe("localhost:3000");
+  });
+});
