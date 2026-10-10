@@ -319,7 +319,7 @@ Weft is released under the [Apache License 2.0](LICENSE).
   it was last read from disk, not live, until you reply in Weft.
 - Automated tests are thin: `npm test` runs a Vitest suite over `lib/` (status parser, review tour,
   API guard, automations, formatting, settings, store, board tools) and over the API routes, with the
-  runner and store mocked, and over the runner's SDK loop with a fake `query()`. The UI has none yet. CI runs lint, typecheck and tests; a pre-commit hook type-checks what's staged.
+  runner and store mocked, and over the runner's SDK loop with a fake `query()`. UI tests have only started: the card, the reply box and the new-thread dialog (`components/*.test.tsx`, jsdom + Testing Library); the board and thread view have none. CI runs lint, typecheck and tests; a pre-commit hook type-checks what's staged.
 - The terminal drawer runs in dev mode (`npm run desktop`) only: the packaged `.app` leaves
   `node_modules` out of the Electron bundle, so `node-pty` isn't there to load.
 - No git worktree per card, on purpose: parallel cards in one repo share a working tree. Weft warns

@@ -267,7 +267,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `P1` **Unit tests for the core** — *started: `npm test` (Vitest) covers BOARD STATUS parsing, review tours, the API guard, automations, format helpers, and every API route (`app/api/routes.test.ts`).* Still to do: store reload rules (running cards become Review on restart), and cost accounting across resumed sessions.
 - `Done` **Runner tests** — `lib/runner.test.ts` drives the SDK loop against a fake `query()`: results, permissions and questions, stop, the turn queue, warm spares, login, and the CLI going away. No stub CLI executable yet.
 - `Done` **Coverage per project** — the header's "49% coverage" follows the project in view, hovers a breakdown, and without a report is a **Set up coverage** button that starts a `/weft:setup-done` thread there.
-- `P1` **UI tests** — component tests for the board, thread view, and reply box; the UI has none today.
+- `P1` **UI tests** — *started: behavior tests (jsdom + Testing Library, `components/*.test.tsx`) for the card (busy-folder "+N here", Allow/Deny, Stop), the reply box (send, queue while running, Send now, send later, busy-folder warning) and the new-thread dialog (Start vs backlog, folder, busy-folder hint).* Still to do: the board, the thread view, and the real TipTap composer (stubbed in these tests).
 - `P2` **CI** — lint, typecheck, and tests on every push.
 - `P2` **End-to-end tests** — drive the Electron app: create a card, start it, allow a request, reply, drag it to Done.
 - `P2` **Status-line checks** — measure how often each model and CLI ends replies with a valid BOARD STATUS line, and catch regressions when the prompt changes.

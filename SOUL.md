@@ -40,8 +40,10 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - My Vitest suite (`npm test`, ~1,400 tests) covers every line of `lib/` and `app/api/` (98.6% of branches,
     `npm run coverage`): a test file beside each module, routes with their libs mocked, the runner's SDK loop
     against a fake `query()` (`lib/runner.test.ts`), and browser code and React hooks under happy-dom +
-    @testing-library/react (`// @vitest-environment happy-dom`). `components/` and `electron/` are untested
-    and outside the coverage set; add tests with any risky change, and keep new lib code at 100%.
+    @testing-library/react (`// @vitest-environment happy-dom`). Component tests have started under jsdom
+    (`components/*.test.tsx`: CardView, ReplyBox, NewCardDialog; Composer stubbed by `components/composer-mock.tsx`);
+    the rest of `components/` and `electron/` are untested and outside the coverage set; add tests with any
+    risky change, and keep new lib code at 100%.
 
 ## How I work (file map)
 
@@ -85,15 +87,16 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   Electron on this folder). Run `npm run dist` only to ship a build to someone else; a local
   packaged `.app` goes stale with every commit.
 - When a feature lands, update README.md and docs/ROADMAP.md in the same change.
-- Run `npm run lint`, `npm run typecheck` and `npm test` (Vitest; tests sit beside the code as `lib/*.test.ts`, API routes in `app/api/routes.test.ts`).
+- Run `npm run lint`, `npm run typecheck` and `npm test` (Vitest; tests sit beside the code as `lib/*.test.ts` and `components/*.test.tsx`, the latter in jsdom with `// @vitest-environment jsdom` and `./test-utils`; API routes in `app/api/routes.test.ts`).
 - Stage every new file a change imports. The pre-commit hook (`.githooks/pre-commit`, set up by
   `npm install`) type-checks the staged files alone and refuses a commit that imports an unstaged
   file. Never `git stash` in this tree: other threads' unstaged work lives here too.
 
 ## Known gaps (verified 2026-10-10)
 
-- Coverage counts only `lib/` and `app/api/` (100% lines, 98.6% branches on 2026-10-11); `components/` and
-  `electron/` have no tests. Runner's leftover branches are defensive fallbacks. CI (`.github/workflows/ci.yml`) runs lint,
+- Coverage counts only `lib/` and `app/api/` (100% lines, 98.6% branches on 2026-10-11). `components/` has
+  behavior tests for CardView, ReplyBox and NewCardDialog only (not Board, ThreadView or the real TipTap Composer);
+  `electron/` has none. Runner's leftover branches are defensive fallbacks. CI (`.github/workflows/ci.yml`) runs lint,
   typecheck and tests, but the repo has no upstream branch yet, so it hasn't run.
 - `7b1db11`, `dfdd9c7` and `0e54c6f` don't build on their own (Board.tsx imported files committed later);
   everything from `2766738` on does.

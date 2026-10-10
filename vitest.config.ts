@@ -10,7 +10,8 @@ const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "weft-test-"));
 export default defineConfig({
   resolve: { alias: { "@": path.resolve(__dirname) } },
   test: {
-    include: ["lib/**/*.test.ts", "app/**/*.test.ts"],
+    // Component tests opt into jsdom per file (`// @vitest-environment jsdom`); everything else stays on node.
+    include: ["lib/**/*.test.ts", "app/**/*.test.ts", "components/**/*.test.tsx"],
     environment: "node",
     env: {
       THREADBOARD_DATA: path.join(sandbox, "data"),
