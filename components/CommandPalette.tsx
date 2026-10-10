@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { keyCaps } from "@/lib/hotkeys";
 import { useEscape } from "@/lib/use-escape";
 import Icon, { type IconName } from "./Icon";
+import { NO_DRAG } from "@/lib/no-drag";
 
 export type PaletteItem = {
   id: string;
@@ -138,7 +139,7 @@ export default function CommandPalette({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-[12vh]" onMouseDown={onClose}>
+    <div style={NO_DRAG} className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-[12vh]" onMouseDown={onClose}>
       <div
         role="dialog"
         aria-modal="true"

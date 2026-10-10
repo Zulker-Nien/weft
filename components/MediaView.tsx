@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { mediaKind, mediaUrl } from "@/lib/media";
 import { useOverlay } from "@/lib/overlay";
 import { useEscape } from "@/lib/use-escape";
+import { NO_DRAG } from "@/lib/no-drag";
 
 // An image, video, or sound in a thread message. Images open full size when clicked. Everything here is a
 // span so it can sit inside a Markdown paragraph.
@@ -73,7 +74,7 @@ export default function MediaView({ src, alt = "", thumb = false }: { src: strin
             role="dialog"
             aria-label={alt || "Image"}
             onClick={() => setZoomed(false)}
-            className="fixed inset-0 z-50 flex cursor-zoom-out items-center justify-center bg-black/80 p-8"
+            style={NO_DRAG} className="fixed inset-0 z-50 flex cursor-zoom-out items-center justify-center bg-black/80 p-8"
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- full-size view of the same image */}
             <img src={url} alt={alt} className="max-h-full max-w-full rounded-md object-contain shadow-2xl" />

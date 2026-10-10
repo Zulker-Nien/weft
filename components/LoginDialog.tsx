@@ -5,6 +5,7 @@ import { api } from "@/lib/client";
 import type { Backend, LoginView } from "@/lib/types";
 import Icon, { Spinner } from "./Icon";
 import { useEscape } from "@/lib/use-escape";
+import { NO_DRAG } from "@/lib/no-drag";
 
 const NAMES: Record<Backend, string> = { claude: "Claude Code", puku: "puku-cli" };
 
@@ -97,7 +98,7 @@ export default function LoginDialog({ login, onClose }: { login: LoginView; onCl
   const name = NAMES[login.backend];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div style={NO_DRAG} className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div
         role="dialog"
         aria-modal="true"

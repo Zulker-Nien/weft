@@ -9,6 +9,7 @@ import type { Automation, Backend, CliStatus, SettingsView } from "@/lib/types";
 import AutomationSettings from "./AutomationSettings";
 import Icon, { type IconName, Spinner } from "./Icon";
 import { useEscape } from "@/lib/use-escape";
+import { NO_DRAG } from "@/lib/no-drag";
 
 const THEME_ICONS: Record<Theme, IconName> = { system: "monitor", light: "sun", dark: "moon" };
 
@@ -269,7 +270,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const sectionHint = "text-[12.5px] text-muted";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={onClose}>
+    <div style={NO_DRAG} className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={onClose}>
       <div
         role="dialog"
         aria-modal="true"

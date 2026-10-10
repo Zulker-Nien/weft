@@ -3,6 +3,7 @@
 import { keyCaps, SHORTCUT_GROUPS, useShortcutList } from "@/lib/hotkeys";
 import { useEscape } from "@/lib/use-escape";
 import Icon from "./Icon";
+import { NO_DRAG } from "@/lib/no-drag";
 
 function Keys({ spec }: { spec: string }) {
   return (
@@ -32,7 +33,7 @@ export default function ShortcutsDialog({ onClose }: { onClose: () => void }) {
     .filter((g) => g.items.length > 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={onClose}>
+    <div style={NO_DRAG} className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={onClose}>
       <div
         role="dialog"
         aria-modal="true"
