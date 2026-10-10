@@ -18,6 +18,7 @@ import {
   stepThrough,
   summarizeProjects,
   type ProjectSummary,
+  topMatches,
   type SortKey,
 } from "@/lib/board-view";
 import { useBoardEvents } from "@/lib/use-events";
@@ -37,6 +38,7 @@ import LoginDialog from "./LoginDialog";
 import NewCardDialog from "./NewCardDialog";
 import { useBoardMenus } from "./use-board-menus";
 import ProjectBar, { folderName, SORTS } from "./ProjectBar";
+import FilterBox from "./FilterBox";
 import SettingsDialog from "./SettingsDialog";
 import ShortcutsDialog from "./ShortcutsDialog";
 import StatusStrip from "./StatusStrip";
@@ -68,6 +70,8 @@ const EMPTY_HINT: Record<Column, string> = {
 
 // Cards shown per column until "Show more"; picking up Claude Code sessions can put hundreds in one.
 const COLUMN_LIMIT = 40;
+// Cards the filter box lists under itself while typing.
+const FILTER_MATCHES = 5;
 
 const COVERAGE_SETUP_PROMPT =
   "Set up test coverage for this project so Weft's header can show it. Run /weft:setup-done, and make sure " +
@@ -167,6 +171,7 @@ export default function Board() {
   const [showSettings, setShowSettings] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
+  const [paletteQuery, setPaletteQuery] = useState("");
   const [login, setLogin] = useState<LoginView | null>(null);
   // Columns showing all their cards, for the project and filter they were expanded under.
   const [expanded, setExpanded] = useState<{ view: string; columns: Column[] }>({ view: "", columns: [] });
@@ -442,6 +447,15 @@ export default function Board() {
   // Shortcuts that act on the board stand down while a dialog or the project menu is up.
   const boardKeys = !(showNew || showSettings || showHelp || showPalette || Boolean(login) || menuOpen);
 
+  function filterHasFocus() {
+    return document.activeElement === document.querySelector('input[placeholder="Filter cards"]');
+  }
+
+  function openPalette(initial: string) {
+    setPaletteQuery(initial.trim());
+    setShowPalette(true);
+  }
+
   function focusFilter() {
     const input = document.querySelector<HTMLInputElement>('input[placeholder="Filter cards"]');
     input?.focus();
@@ -595,7 +609,8 @@ export default function Board() {
       description: "Command palette: search cards and run commands",
       group: "General",
       enabled: !(showNew || showSettings || showHelp || Boolean(login)),
-      handler: () => setShowPalette((open) => !open),
+      // From the filter box, the palette picks up what was typed there.
+      handler: () => (showPalette ? setShowPalette(false) : openPalette(filterHasFocus() ? query : "")),
     },
     {
       id: "help",
@@ -1008,8 +1023,15 @@ export default function Board() {
         total={cards.length}
         selected={project}
         onSelect={chooseProject}
-        query={query}
-        onQuery={setQuery}
+        filter={
+          <FilterBox
+            query={query}
+            onQuery={setQuery}
+            matches={query.trim() ? topMatches(byColumn, FILTER_MATCHES) : []}
+            onOpen={openCard}
+            onSearchAll={() => openPalette(query)}
+          />
+        }
         sort={sort}
         onSort={chooseSort}
         home={home}
@@ -1177,7 +1199,7 @@ export default function Board() {
       {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
       {showHelp && <ShortcutsDialog onClose={() => setShowHelp(false)} />}
       <ModifierHint />
-      {showPalette && <CommandPalette items={paletteItems()} findPrompts={findPrompts} currentProject={project ? { path: project, name: folderName(project) } : null} onClose={() => setShowPalette(false)} />}
+      {showPalette && <CommandPalette initialQuery={paletteQuery} items={paletteItems()} findPrompts={findPrompts} currentProject={project ? { path: project, name: folderName(project) } : null} onClose={() => setShowPalette(false)} />}
       {login && <LoginDialog login={login} onClose={() => setLogin(null)} />}
 
       {toast && (

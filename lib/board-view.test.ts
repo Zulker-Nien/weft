@@ -8,6 +8,7 @@ import {
   SORTERS,
   stepThrough,
   summarizeProjects,
+  topMatches,
   UNSEEN_COLUMNS,
 } from "./board-view";
 import { COLUMNS, type Card, type Column, type Project } from "./types";
@@ -128,6 +129,16 @@ describe("groupByColumn", () => {
     expect(groups.get("running")).toEqual([running]);
     expect(groups.get("review")).toEqual([review]);
     expect(groups.get("backlog")).toEqual([]);
+  });
+});
+
+describe("topMatches", () => {
+  it("takes the most recently active cards across every column, up to the limit", () => {
+    const old = card({ column: "done", updatedAt: 1 });
+    const mid = card({ column: "running", updatedAt: 2 });
+    const fresh = card({ column: "review", updatedAt: 1, lastActivity: 3 });
+    const groups = groupByColumn([old, mid, fresh], view(), identity);
+    expect(topMatches(groups, 2)).toEqual([fresh, mid]);
   });
 });
 

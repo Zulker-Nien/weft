@@ -19,6 +19,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 ## Board and organization
 
 - `Now` **Projects bar** — a bar above the columns listing the project folders in use, to filter the board to one or more projects and sort cards by activity or age.
+- `Now` **Filter quick-open** — the filter box shows its `/` key, lists the top matching cards as you type (Enter opens one) and hands the text to the ⌘K palette.
 - `P1` **Order within a column** — drag to reorder cards inside a column and keep that order, so the top of Backlog is what runs next.
 - `P1` **Archive instead of delete** — Done cards move to a searchable archive after N days; today delete also removes the card's thread view for good.
 - `P1` **Undo** — a short undo toast after a move, stop, or delete, since a misplaced drag or delete is easy to make and hard to fix.

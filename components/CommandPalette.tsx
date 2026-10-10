@@ -35,14 +35,14 @@ const PROMPT_MIN_CHARS = 2;
 const CARD_LIMIT = 30;
 const RECENT_CARDS = 6;
 
-const COLUMN_PILL: Record<Column, string> = {
+export const COLUMN_PILL: Record<Column, string> = {
   running: "bg-accent-soft text-accent",
   needs_you: "bg-warn-soft text-warn",
   review: "bg-ok-soft text-ok",
   backlog: "bg-sunken text-muted",
   done: "bg-sunken text-muted",
 };
-const COLUMN_LABEL: Record<Column, string> = {
+export const COLUMN_LABEL: Record<Column, string> = {
   running: "Running",
   needs_you: "Needs you",
   review: "Review",
@@ -102,11 +102,14 @@ function Snippet({ text }: { text: string }) {
 }
 
 export default function CommandPalette({
+  initialQuery = "",
   items,
   findPrompts,
   currentProject,
   onClose,
 }: {
+  // Text to start the search with, e.g. what was typed in the filter box.
+  initialQuery?: string;
   items: PaletteItem[];
   // The project the board shows; cards and prompts stay inside it until the user unticks the scope.
   currentProject?: { path: string; name: string } | null;
@@ -114,7 +117,7 @@ export default function CommandPalette({
   findPrompts: (query: string) => Promise<PaletteItem[]>;
   onClose: () => void;
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [prompts, setPrompts] = useState<{ query: string; items: PaletteItem[] }>({ query: "", items: [] });
   const [active, setActive] = useState(0);
   const [scoped, setScoped] = useState(true);

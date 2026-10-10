@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
+import { type ReactNode, useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { keyLabel, useShortcutHint, useShortcutList } from "@/lib/hotkeys";
 import { useEscape } from "@/lib/use-escape";
 import { api } from "@/lib/client";
 import type { ProjectSummary, SortKey } from "@/lib/board-view";
 import Icon from "./Icon";
-import KeyCaps from "./KeyCaps";
 
 export type { ProjectSummary, SortKey };
 
@@ -71,8 +70,7 @@ export default function ProjectBar({
   total,
   selected,
   onSelect,
-  query,
-  onQuery,
+  filter,
   sort,
   onSort,
   home,
@@ -82,8 +80,7 @@ export default function ProjectBar({
   total: number; // total card count, for the "All" chip
   selected: string | null; // selected project path, null = all projects
   onSelect: (path: string | null) => void;
-  query: string;
-  onQuery: (query: string) => void;
+  filter: ReactNode; // the filter box, drawn before the sort menu
   sort: SortKey;
   onSort: (sort: SortKey) => void;
   home: string; // user's home dir, for shortening paths (~/dev/x) and default parent for new projects
@@ -103,7 +100,6 @@ export default function ProjectBar({
   const hint = useShortcutHint();
   const shortcuts = useShortcutList();
   const keyOf = (id: string) => shortcuts.find((s) => s.id === id)?.keys[0];
-  const filterKey = keyOf("filter");
   const [prevKey, nextKey] = [keyOf("project-previous"), keyOf("project-next")];
   const stepHint = prevKey && nextKey ? `\n${keyLabel(prevKey)} ${keyLabel(nextKey)} step through projects` : "";
 
@@ -374,41 +370,7 @@ export default function ProjectBar({
 
       <div className="min-w-2 flex-1" />
 
-      <div className="relative w-[200px] min-w-[120px] shrink">
-        <Icon
-          name="search"
-          size={13}
-          className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-faint"
-        />
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => onQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape" && query) {
-              e.stopPropagation();
-              onQuery("");
-            }
-          }}
-          placeholder="Filter cards"
-          aria-label="Filter cards"
-          className="peer w-full rounded-md border border-line-strong bg-canvas py-1 pl-7 pr-6 text-[12px] text-ink outline-none placeholder:text-faint focus:border-accent"
-        />
-        {!query && filterKey && (
-          <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 peer-focus:hidden">
-            <KeyCaps spec={filterKey} small />
-          </span>
-        )}
-        {query && (
-          <button
-            onClick={() => onQuery("")}
-            aria-label="Clear filter"
-            className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted hover:bg-sunken hover:text-ink"
-          >
-            <Icon name="x" size={12} />
-          </button>
-        )}
-      </div>
+      {filter}
 
       <select
         value={sort}

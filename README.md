@@ -200,7 +200,9 @@ yours) and sends the one you pick.
 
 The bar under the header lists your most recent project folders. Click one to see only its cards;
 More lists every project, opens a folder, or creates a new one. Filter and sort controls sit on
-the right. New threads default to the selected project. The New thread dialog drags by its header and
+the right: press `/` to filter, and while you type a short list of matching cards drops down (↑↓ and
+Enter open one), ending in a row that carries your text into the ⌘K palette to search prompts,
+projects and commands too. New threads default to the selected project. The New thread dialog drags by its header and
 resizes from any edge or corner; it stays inside the window and remembers its size and position.
 
 The header shows test coverage ("49% coverage") of the project in view: the open card's folder,

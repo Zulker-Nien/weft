@@ -48,6 +48,11 @@ export function groupByColumn(cards: Card[], view: BoardView, rootOf: (cwd: stri
   return groups;
 }
 
+// The cards a filter matches, most recently active first, for the filter box's quick-open list.
+export function topMatches(groups: Map<Column, Card[]>, limit: number): Card[] {
+  return [...groups.values()].flat().toSorted(SORTERS.active).slice(0, limit);
+}
+
 // Recent projects: saved ones plus every folder a card runs in, most recently active first. Worktrees
 // count toward their main repo and never get a chip of their own.
 export function summarizeProjects(projects: Project[], cards: Card[], rootOf: (cwd: string) => string) {
