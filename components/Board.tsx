@@ -19,6 +19,7 @@ import {
   type SortKey,
 } from "@/lib/board-view";
 import { useBoardEvents } from "@/lib/use-events";
+import { useNow } from "@/lib/use-now";
 import { keepTypedText, useEscape } from "@/lib/use-escape";
 import BrowserPane from "./BrowserPane";
 import CardView from "./CardView";
@@ -108,22 +109,6 @@ function announce(card: Card, onClick: () => void) {
 }
 
 const noopSubscribe = () => () => {};
-
-// The clock for "5m ago" labels. It reads 0 during prerender, where the current time isn't allowed,
-// and starts ticking once the board is in the browser.
-let clock = 0;
-function subscribeClock(onTick: () => void) {
-  clock = Date.now();
-  const timer = setInterval(() => {
-    clock = Date.now();
-    onTick();
-  }, 30_000);
-  return () => clearInterval(timer);
-}
-
-function useNow() {
-  return useSyncExternalStore(subscribeClock, () => clock, () => 0);
-}
 
 export default function Board() {
   const [cards, setCards] = useState<Card[]>([]);
