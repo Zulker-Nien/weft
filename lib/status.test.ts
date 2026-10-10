@@ -67,20 +67,43 @@ describe("extractStatus", () => {
     expect(extractStatus(text)).toEqual({ text, status: undefined });
   });
 
-  // KNOWN BUG: the label alone in bold ("**BOARD STATUS:** column=...") leaves "**" glued to the first key,
-  // so the line is stripped but no status is read. Remove `.fails` once lib/status.ts handles it.
-  it.fails("reads a line where only the label is bold", () => {
-    const { status } = extractStatus("hi\n**BOARD STATUS:** column=review | stage=Polishing | remaining=none");
+  it("reads a line where only the label is bold", () => {
+    const { text, status } = extractStatus("hi\n**BOARD STATUS:** column=review | stage=Polishing | remaining=none");
+    expect(status).toEqual({ column: "review", stage: "Polishing", remaining: undefined });
+    expect(text).toBe("hi");
+    expect(extractStatus("**BOARD STATUS**: column=done | stage=Done").status?.column).toBe("done");
+  });
+
+  it("reads a fully bold line with a bold label inside", () => {
+    expect(extractStatus("**BOARD STATUS:** column=needs_you | stage=Planning**").status).toEqual({
+      column: "needs_you",
+      stage: "Planning",
+      remaining: undefined,
+    });
+  });
+
+  it("does not act on a status line quoted inside a code block", () => {
+    const reply = "Example:\n```\nBOARD STATUS: column=done | stage=Done | remaining=none\n```\nBOARD STATUS: column=review | stage=Polishing";
+    const { text, status } = extractStatus(reply);
+    expect(text).toBe("Example:\n```\nBOARD STATUS: column=done | stage=Done | remaining=none\n```");
     expect(status?.column).toBe("review");
   });
 
-  // KNOWN BUG: extractStatus works line by line, so a status line quoted in a fenced code block is
-  // deleted from the text and can move the card. Remove `.fails` once lib/status.ts skips fences.
-  it.fails("does not act on a status line quoted inside a code block", () => {
-    const reply = "Example:\n```\nBOARD STATUS: column=done | stage=Done | remaining=none\n```\nBOARD STATUS: column=review | stage=Polishing";
-    const { text, status } = extractStatus(reply);
-    expect(text).toContain("BOARD STATUS: column=done");
+  it("reads no status when the only line is inside a code block", () => {
+    const reply = "Like this:\n~~~text\nBOARD STATUS: column=done\n~~~";
+    expect(extractStatus(reply)).toEqual({ text: reply, status: undefined });
+  });
+
+  it("only closes a fence on a matching marker", () => {
+    // A shorter or different fence inside the block doesn't end it.
+    const reply = "````md\n```\nBOARD STATUS: column=done\n```\n````\nBOARD STATUS: column=review";
+    const { status, text } = extractStatus(reply);
     expect(status?.column).toBe("review");
+    expect(text).toContain("BOARD STATUS: column=done");
+  });
+
+  it("still reads the line after a fence that never closes", () => {
+    expect(extractStatus("```\nsome code\nBOARD STATUS: column=review").status?.column).toBe("review");
   });
 
   it("folds the blank lines the removed line leaves behind", () => {

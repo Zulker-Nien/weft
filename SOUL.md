@@ -79,8 +79,6 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   typecheck and tests, but the repo has no upstream branch yet, so it hasn't run.
 - `7b1db11`, `dfdd9c7` and `0e54c6f` don't build on their own (Board.tsx imported files committed later);
   everything from `2766738` on does.
-- Two known `lib/status.ts` bugs are pinned as `it.fails` tests: a status line quoted in a code block is
-  stripped and acted on, and `**BOARD STATUS:** column=...` (bold label only) is stripped but not read.
 - No busy-folder or overlap warning yet; parallel cards in one repo share a working tree.
 - Copilot isn't told when threads finish or need you.
 - puku-cli sessions aren't imported; a full puku thread hasn't been verified end to end.

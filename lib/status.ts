@@ -11,7 +11,12 @@ export interface BoardStatus {
   remaining?: string;
 }
 
-const STATUS_LINE = /^[\s>*_`]*BOARD STATUS:\s*(.*?)[\s*_`]*$/i;
+// Markdown may wrap the whole line or just the label ("**BOARD STATUS:** column=..."), so the
+// emphasis marks around the colon are skipped too.
+const STATUS_LINE = /^[\s>*_`]*BOARD STATUS[*_`]*:[\s*_`]*(.*?)[\s*_`]*$/i;
+
+// An opening code fence: three or more backticks or tildes, indented at most three spaces.
+const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 
 function normalizeColumn(raw: string | undefined): StatusColumn | undefined {
   const value = (raw ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
@@ -32,12 +37,35 @@ function parseFields(raw: string): BoardStatus | undefined {
   return { column, stage: fields.stage || undefined, remaining };
 }
 
-// Returns the text without any BOARD STATUS lines, and the last valid status found.
+// Marks the lines inside closed fenced code blocks. A fence that never closes marks nothing, so a
+// stray ``` can't hide the real status line after it.
+function fencedLines(lines: string[]): boolean[] {
+  const inside = lines.map(() => false);
+  let open: { marker: string; at: number } | undefined;
+  lines.forEach((line, i) => {
+    const fence = line.match(FENCE)?.[1];
+    if (!open) {
+      if (fence) open = { marker: fence, at: i };
+      return;
+    }
+    // A closing fence uses the same character, at least as many, and nothing after it.
+    if (fence && fence[0] === open.marker[0] && fence.length >= open.marker.length && !line.trim().slice(fence.length).trim()) {
+      for (let j = open.at; j <= i; j++) inside[j] = true;
+      open = undefined;
+    }
+  });
+  return inside;
+}
+
+// Returns the text without any BOARD STATUS lines, and the last valid status found. A line quoted
+// inside a code block is left alone: the thread is showing it, not declaring it.
 export function extractStatus(text: string): { text: string; status?: BoardStatus } {
   let status: BoardStatus | undefined;
   const kept: string[] = [];
-  for (const line of text.split("\n")) {
-    const match = line.match(STATUS_LINE);
+  const lines = text.split("\n");
+  const inside = fencedLines(lines);
+  for (const [i, line] of lines.entries()) {
+    const match = inside[i] ? null : line.match(STATUS_LINE);
     if (match) {
       status = parseFields(match[1]) ?? status;
       continue;
