@@ -4,18 +4,24 @@
 
 One registry holds the board's keyboard shortcuts. Components register theirs, a single window listener dispatches key presses, and the `?` dialog lists whatever is registered, so a new shortcut shows up in the list with no extra work.
 
-Two other pieces share the name and are separate: `lib/shortcuts.ts` holds user-rebindable bindings (dictation) kept in localStorage, and the native menu accelerators in `electron/main.cjs` (⌘N, ⌘F, ⌘, and so on) are handled by Electron.
+Other pieces share the name and are separate: `lib/shortcuts.ts` holds user-rebindable bindings (dictation) kept in localStorage, and the native menu accelerators in `electron/main.cjs` (⌘N, ⌘F, ⌘, and so on) are handled by Electron. Keys handled where they apply (the composer, reply box, terminal, palette, app menu) are written down in `lib/shortcut-catalog.ts` so the dialog can list them too.
+
+Discoverability is built on the same registry: tooltips, key badges, native right-click menus and the hold-a-modifier card all read keys from it instead of hardcoding them.
 
 ## Key files
 
-- `lib/hotkeys.ts`: the registry, `useShortcuts`, `useShortcutListener`, `useShortcutList`, and `keyCaps` for drawing keys.
-- `components/ShortcutsDialog.tsx`: the `?` dialog, generated from `useShortcutList()`.
+- `lib/hotkeys.ts`: the registry, `useShortcuts`, `useShortcutListener`, `useShortcutList`; `keyCaps`/`keyLabel` for drawing keys, `useShortcutHint` for tooltips ("Copilot (C)"), `toAccelerator` for native menus.
+- `lib/shortcut-catalog.ts`: what the dialog lists. `shortcutSections` merges the registry with the fixed shortcuts handled elsewhere (`FIXED_SHORTCUTS`) and the app menu's keys (`MENU_ALIASES`, desktop only); `filterSections` searches by words or by key ("cmd k", "esc"). Update `FIXED_SHORTCUTS` when a key handled outside the registry changes.
+- `components/ShortcutsDialog.tsx`: the `?` dialog, a searchable two-column list of `shortcutSections`.
+- `components/KeyCaps.tsx`: `Cap` and `KeyCaps`, the one way to draw a key spec as key caps.
+- `components/ModifierHint.tsx`: hold Shift, or ⌘ (Ctrl off macOS) for 0.6s, and a card bottom-left lists the registered shortcuts that use it.
+- `lib/card-menu.ts`: `withAccelerators` adds a key to right-click menu items; `electron/main.cjs` draws it without registering it.
 - `components/Board.tsx`: registers the board shortcuts and mounts the listener once.
 - `components/CardView.tsx`: cards carry `data-card-id`, and `Board` marks each column with `data-column`; keyboard navigation moves DOM focus between them.
 
 ## How it works
 
-- A key is written `"n"`, `"?"`, `"ArrowDown"`, or `"mod+k"` (`mod` is ⌘ on macOS, Ctrl elsewhere; `alt` and `shift` also work). Letters compare case-insensitively; for a symbol like `?`, Shift is whatever it takes to type it.
+- A key is written `"n"`, `"?"`, `"ArrowDown"`, or `"mod+k"` (`mod` is ⌘ on macOS, Ctrl elsewhere; `ctrl`, `alt` and `shift` also work, and `ctrl` is Control on macOS too). Letters compare case-insensitively; for a symbol like `?`, Shift is whatever it takes to type it.
 - Plain keys are ignored while typing in an input, textarea, select, or editor. A shortcut using `mod` or `alt` still fires there, and `allowInInput` opts one in outright.
 - When several shortcuts share a key, the one registered last runs first. A handler returning `false` passes the key on to the next and leaves the browser default alone; anything else counts as handled and prevents the default. This is what Escape handling should build on: a dialog registers Escape with `allowInInput` and returns `false` when it has nothing to close.
 - `useShortcuts` reads keys and descriptions once, at mount; handlers and `enabled` follow the latest render, so they can use current state. The list must keep the same ids on every render.
@@ -27,7 +33,9 @@ General: `?` or ⌘/ help, `n` new thread, `/` filter, `,` settings, `c` copilot
 Board: `j`/`k` or ↓/↑ between cards, `h`/`l` or ←/→ between columns, Home/End first and last card, Enter or `o` open the focused card, `a` jump to a card that needs you, `[`/`]` previous and next project, `s` cycle sort.
 Thread: `r` reply in the open thread, Shift+`A` archive or unarchive it (plain `a` stays "needs you").
 
-Holding Shift (outside a text field) shows a ⇧ shift key cap in the bottom-left corner (`components/ShiftKey.tsx`), so Shift shortcuts feel armed.
+Writing, terminal and app shortcuts (⌘↵, ⌘B, ⌘\\, ⌘J, ⌃⌥Space and more) are listed from `FIXED_SHORTCUTS`.
+
+Buttons and menus that have a shortcut show it: header tooltips, the `N` cap on New thread, the `/` badge in the filter box, "? Shortcuts" in the footer, and the right-click menus. Hold a modifier outside a text field for the cheat card (`ModifierHint`); it renders nothing until first used, since macOS key names differ between server and client.
 
 ## Gotchas
 

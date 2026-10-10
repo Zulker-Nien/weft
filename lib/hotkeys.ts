@@ -6,8 +6,8 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 // window listener dispatches, and the "?" dialog lists whatever is registered.
 //
 // A key is written like "n", "?", "ArrowDown" or "mod+k": "mod" is Cmd on macOS and Ctrl elsewhere, and
-// "alt" and "shift" work as written. Letters and digits compare case-insensitively; for a symbol like "?"
-// Shift is whatever it takes to type it.
+// "ctrl" (Control on macOS too), "alt" and "shift" work as written. Letters and digits compare
+// case-insensitively; for a symbol like "?" Shift is whatever it takes to type it.
 //
 // Plain keys are ignored while typing in an input, textarea, select, or editor. A shortcut with "mod" or
 // "alt" still fires there, and allowInInput lets one opt in outright (Escape will want that).
@@ -16,10 +16,10 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 // ahead of the board). A handler that returns false passes the key on to the next one and leaves the
 // browser's default alone; any other return counts as handled and prevents the default.
 
-export type ShortcutGroup = "General" | "Board" | "Thread";
+export type ShortcutGroup = "General" | "Board" | "Thread" | "Writing" | "Terminal & browser" | "App";
 
 // The order the help dialog lists groups in.
-export const SHORTCUT_GROUPS: ShortcutGroup[] = ["General", "Board", "Thread"];
+export const SHORTCUT_GROUPS: ShortcutGroup[] = ["General", "Board", "Thread", "Writing", "Terminal & browser", "App"];
 
 export type ShortcutDef = {
   // Unique and stable; hooks match their handlers to the registered shortcut by it.
@@ -37,7 +37,7 @@ export type ShortcutDef = {
 // What the help dialog sees.
 export type ShortcutInfo = Pick<ShortcutDef, "id" | "keys" | "description" | "group">;
 
-type Combo = { key: string; mod: boolean; alt: boolean; shift: boolean };
+type Combo = { key: string; mod: boolean; ctrl: boolean; alt: boolean; shift: boolean };
 
 type Entry = ShortcutInfo & {
   combos: Combo[];
@@ -50,7 +50,13 @@ function parse(spec: string): Combo {
   const parts = spec.split("+");
   const key = parts.pop() || "+";
   const mods = parts.map((p) => p.toLowerCase());
-  return { key, mod: mods.includes("mod"), alt: mods.includes("alt"), shift: mods.includes("shift") };
+  return {
+    key,
+    mod: mods.includes("mod"),
+    ctrl: mods.includes("ctrl"),
+    alt: mods.includes("alt"),
+    shift: mods.includes("shift"),
+  };
 }
 
 export function isMac() {
@@ -58,9 +64,9 @@ export function isMac() {
 }
 
 function matches(combo: Combo, e: KeyboardEvent, mac: boolean) {
-  if ((mac ? e.metaKey : e.ctrlKey) !== combo.mod) return false;
-  // The other platform's primary modifier would be a different shortcut.
-  if (mac ? e.ctrlKey : e.metaKey) return false;
+  // Off macOS "mod" and "ctrl" are the same key; the other platform's primary modifier is a different shortcut.
+  if (e.ctrlKey !== (mac ? combo.ctrl : combo.mod || combo.ctrl)) return false;
+  if (e.metaKey !== (mac && combo.mod)) return false;
   if (e.altKey !== combo.alt) return false;
   if (combo.key.length === 1) {
     if (e.key.toLowerCase() !== combo.key.toLowerCase()) return false;
@@ -178,16 +184,58 @@ const KEY_LABELS: Record<string, string> = {
   ArrowDown: "↓",
   Escape: "Esc",
   Enter: "Enter",
+  Backspace: "⌫",
   " ": "Space",
 };
 
-// The key caps to draw for one key spec, e.g. "mod+k" -> ["⌘", "K"].
+// The key caps to draw for one key spec, e.g. "mod+k" -> ["⌘", "K"]. Modifiers go in Apple's order (⌃⌥⇧⌘).
 export function keyCaps(spec: string, mac = isMac()): string[] {
   const combo = parse(spec);
   const caps: string[] = [];
-  if (combo.mod) caps.push(mac ? "⌘" : "Ctrl");
-  if (combo.alt) caps.push(mac ? "⌥" : "Alt");
-  if (combo.shift) caps.push(mac ? "⇧" : "Shift");
+  if (mac) {
+    if (combo.ctrl) caps.push("⌃");
+    if (combo.alt) caps.push("⌥");
+    if (combo.shift) caps.push("⇧");
+    if (combo.mod) caps.push("⌘");
+  } else {
+    if (combo.mod || combo.ctrl) caps.push("Ctrl");
+    if (combo.alt) caps.push("Alt");
+    if (combo.shift) caps.push("Shift");
+  }
   caps.push(KEY_LABELS[combo.key] ?? (combo.key.length === 1 ? combo.key.toUpperCase() : combo.key));
   return caps;
+}
+
+// One key spec as text for a tooltip: "⌘K" on macOS, "Ctrl+K" elsewhere.
+export function keyLabel(spec: string, mac = isMac()): string {
+  return keyCaps(spec, mac).join(mac ? "" : "+");
+}
+
+// A tooltip that names a registered shortcut's key, e.g. hint("copilot", "Copilot") -> "Copilot (C)".
+// Reads the live registry, so a key changed where it's registered shows up here too.
+export function useShortcutHint() {
+  const list = useShortcutList();
+  return (id: string, label: string) => {
+    const spec = list.find((s) => s.id === id)?.keys[0];
+    return spec ? `${label} (${keyLabel(spec)})` : label;
+  };
+}
+
+const ACCELERATOR_KEYS: Record<string, string> = {
+  ArrowLeft: "Left",
+  ArrowRight: "Right",
+  ArrowUp: "Up",
+  ArrowDown: "Down",
+  Escape: "Esc",
+  " ": "Space",
+  "+": "Plus",
+};
+
+// A key spec as an Electron accelerator, for native menus: "shift+a" -> "Shift+A", "mod+k" -> "CmdOrCtrl+K".
+export function toAccelerator(spec: string): string {
+  const combo = parse(spec);
+  const key = ACCELERATOR_KEYS[combo.key] ?? (combo.key.length === 1 ? combo.key.toUpperCase() : combo.key);
+  return [combo.mod && "CmdOrCtrl", combo.ctrl && "Ctrl", combo.alt && "Alt", combo.shift && "Shift", key]
+    .filter(Boolean)
+    .join("+");
 }

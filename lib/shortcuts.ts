@@ -66,6 +66,14 @@ const CODE_LABELS: Record<string, string> = {
   Space: "Space",
 };
 
+// A binding as a key spec for ./hotkeys (keyCaps, the "?" dialog). Command is "mod" on macOS; elsewhere
+// it's the Windows key, which a spec can't name, so it's left out.
+export function bindingSpec(b: Binding, mac: boolean) {
+  const key = CODE_LABELS[b.code] ?? b.code.replace(/^(Key|Digit)/, "").toLowerCase();
+  const mods = [b.ctrl && "ctrl", b.alt && "alt", b.shift && "shift", b.meta && mac && "mod"].filter(Boolean);
+  return [...mods, key === "Space" ? " " : key].join("+");
+}
+
 export function formatBinding(b: Binding) {
   const mac = typeof navigator !== "undefined" && /Mac/.test(navigator.userAgent);
   const key = CODE_LABELS[b.code] ?? b.code.replace(/^(Key|Digit)/, "");

@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
+import { keyLabel, useShortcutHint, useShortcutList } from "@/lib/hotkeys";
 import { useEscape } from "@/lib/use-escape";
 import { api } from "@/lib/client";
 import type { ProjectSummary, SortKey } from "@/lib/board-view";
 import Icon from "./Icon";
+import KeyCaps from "./KeyCaps";
 
 export type { ProjectSummary, SortKey };
 
@@ -99,6 +101,12 @@ export default function ProjectBar({
   const menuRef = useRef<HTMLDivElement>(null);
   const chipsRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+  const hint = useShortcutHint();
+  const shortcuts = useShortcutList();
+  const keyOf = (id: string) => shortcuts.find((s) => s.id === id)?.keys[0];
+  const filterKey = keyOf("filter");
+  const [prevKey, nextKey] = [keyOf("project-previous"), keyOf("project-next")];
+  const stepHint = prevKey && nextKey ? `\n${keyLabel(prevKey)} ${keyLabel(nextKey)} step through projects` : "";
 
   const menuChanged = useEffectEvent((isOpen: boolean) => onMenuOpenChange?.(isOpen));
 
@@ -221,7 +229,7 @@ export default function ProjectBar({
         <button
           onClick={() => onSelect(null)}
           aria-pressed={selected === null}
-          title="All projects"
+          title={`All projects${stepHint}`}
           className={`${CHIP} ${selected === null ? CHIP_ON : CHIP_OFF}`}
         >
           All
@@ -234,7 +242,7 @@ export default function ProjectBar({
               key={project.path}
               onClick={() => onSelect(project.path)}
               aria-pressed={on}
-              title={shortPath(project.path, home)}
+              title={`${shortPath(project.path, home)}${stepHint}`}
               className={`${CHIP} ${on ? CHIP_ON : CHIP_OFF}`}
             >
               <StatusDot project={project} />
@@ -385,8 +393,13 @@ export default function ProjectBar({
           }}
           placeholder="Filter cards"
           aria-label="Filter cards"
-          className="w-full rounded-md border border-line-strong bg-canvas py-1 pl-7 pr-6 text-[12px] text-ink outline-none placeholder:text-faint focus:border-accent"
+          className="peer w-full rounded-md border border-line-strong bg-canvas py-1 pl-7 pr-6 text-[12px] text-ink outline-none placeholder:text-faint focus:border-accent"
         />
+        {!query && filterKey && (
+          <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 peer-focus:hidden">
+            <KeyCaps spec={filterKey} small />
+          </span>
+        )}
         {query && (
           <button
             onClick={() => onQuery("")}
@@ -402,6 +415,7 @@ export default function ProjectBar({
         value={sort}
         onChange={(e) => onSort(e.target.value as SortKey)}
         aria-label="Sort cards"
+        title={hint("sort", "Sort cards")}
         className="shrink-0 rounded-md border border-line-strong bg-canvas px-2 py-1 text-[12px] text-ink outline-none focus:border-accent"
       >
         {SORTS.map((s) => (
