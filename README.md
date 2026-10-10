@@ -104,7 +104,8 @@ Replying to a card continues the same CLI session, so the agent keeps its contex
 Cards get no git worktree of their own, on purpose, so two cards in one folder share a working tree.
 Weft warns you instead: a busy card shows "+1 here" next to its folder when another card is running
 or waiting in the same folder (or one inside it), and a thread's reply box says "Also running here:
-<title>" before you send. It reads this from the board alone, with no git calls.
+<title>" before you send. The New thread dialog says the same beside Start now when the folder you
+picked already has a busy card. It reads this from the board alone, with no git calls.
 
 ## No waiting for CLIs to start
 

@@ -5,6 +5,8 @@ import { api, type NewCardInput } from "@/lib/client";
 import type { Backend, CardStats, Effort, PermissionMode } from "@/lib/types";
 import Composer, { type ComposerHandle } from "./Composer";
 import Icon from "./Icon";
+import { alsoHereLine, busyInFolder } from "@/lib/overlap";
+import type { Card } from "@/lib/types";
 import RepoPicker from "./RepoPicker";
 import StatusStrip from "./StatusStrip";
 import Modal from "./Modal";
@@ -101,6 +103,7 @@ const MODES: { id: PermissionMode; label: string; hint: string }[] = [
 ];
 
 export default function NewCardDialog({
+  cards = [],
   home,
   defaultCwd,
   recentCwd,
@@ -108,6 +111,8 @@ export default function NewCardDialog({
   onClose,
   onCreate,
 }: {
+  // The board's cards, to warn when the chosen folder already has busy ones (lib/overlap.ts).
+  cards?: Card[];
   home: string;
   // The selected project, if any; otherwise the last folder used.
   defaultCwd?: string;
@@ -134,6 +139,8 @@ export default function NewCardDialog({
     return EFFORTS.find((e) => e.id === saved)?.id ?? "";
   });
   const [permissionMode, setPermissionMode] = useState<PermissionMode>("bypassPermissions");
+  // Cards get no worktree, so a busy card in this folder would share its working tree.
+  const alsoHere = busyInFolder(cards, cwd);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // Measured on first render: the dialog only mounts on a click, never during server render.
@@ -359,6 +366,14 @@ export default function NewCardDialog({
           <p className="min-w-0 flex-1 truncate text-[12px]">
             {error ? (
               <span className="text-danger">{error}</span>
+            ) : alsoHere.length > 0 ? (
+              <span
+                className="flex min-w-0 items-center gap-1.5 text-warn"
+                title={`These threads share this folder's working tree:\n${alsoHere.map((c) => c.title).join("\n")}`}
+              >
+                <Icon name="alert" size={12} className="shrink-0" />
+                <span className="truncate">{alsoHereLine(alsoHere)}</span>
+              </span>
             ) : (
               <span className="text-faint">
                 <kbd className="font-sans">⌘↵</kbd> starts it · the title comes from the prompt

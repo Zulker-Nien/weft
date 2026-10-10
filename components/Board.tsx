@@ -913,7 +913,7 @@ export default function Board() {
       </footer>
 
       {showNew && (
-        <NewCardDialog home={home} defaultCwd={project ?? undefined} recentCwd={[...cards].sort((a, b) => b.updatedAt - a.updatedAt).find((c) => c.cwd !== home)?.cwd} limits={latestLimits(cards)} onClose={() => setShowNew(false)} onCreate={create} />
+        <NewCardDialog cards={cards} home={home} defaultCwd={project ?? undefined} recentCwd={[...cards].sort((a, b) => b.updatedAt - a.updatedAt).find((c) => c.cwd !== home)?.cwd} limits={latestLimits(cards)} onClose={() => setShowNew(false)} onCreate={create} />
       )}
       {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
       {showHelp && <ShortcutsDialog onClose={() => setShowHelp(false)} />}
