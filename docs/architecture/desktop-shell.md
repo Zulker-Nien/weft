@@ -123,9 +123,20 @@ A native `WebContentsView` overlaid on the board. Lazily created on first
   (`electron/preload.cjs`).
 - `POST /browser/url` returns the URL a card's page shows ("" with no page).
   `lib/glance.ts` uses it, with `paneUrl()` / `openInPane()` in
-  `lib/browser-tools.ts`, to keep the pane from being empty or stale: a starter
-  page when a card's turn starts with no page, and a Haiku-written update page
-  after a turn that opened nothing (never over a live `http` page).
+  `lib/browser-tools.ts`, to keep the pane from being empty or stale: a working
+  page when a card's turn starts with no page (a dimmed scene picked per card id by
+  `backdropFor()` from `electron/assets/backdrop-*.jpg` plus the splash's own, with the
+  card's ask), and a Haiku-written update page after a turn that opened nothing (never
+  over a live `http` page).
+- `electron/pane-pages.cjs` (`createPanePages(dataDir)`, held as `pages` in `browser-pane.cjs`) remembers
+  each card's page in `~/.weft/pages/index.json`: every `did-navigate` calls `record()`, which stores
+  `{ cardId, url, kind: file|app|web, title, updatedAt, savedUrl? }`. A `file:` page in a temp folder
+  (macOS clears those) is copied to `pages/<card>/` and kept as `savedUrl` (20 MB cap). The index
+  shape mirrors a future `card_pages` table for cloud sync.
+- `setActive(key)` calls `restore(key)` when the card opens with a blank browser (after a restart):
+  `restoreUrl()` gives the saved copy or the url, or (never recorded) the last
+  `mcp__browser__open_url` in `threads/<card>.json`; if that fails to load, `fallbackUrl()` gives
+  `~/.weft/glance/<card>.html`. Nothing is restored at startup.
 
 ## `electron/preload.cjs`
 
