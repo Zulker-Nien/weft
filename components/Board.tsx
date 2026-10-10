@@ -20,6 +20,7 @@ import {
 } from "@/lib/board-view";
 import { useBoardEvents } from "@/lib/use-events";
 import { useNow } from "@/lib/use-now";
+import { useToast } from "@/lib/use-toast";
 import { keepTypedText, useEscape } from "@/lib/use-escape";
 import BrowserPane from "./BrowserPane";
 import CardView from "./CardView";
@@ -115,10 +116,10 @@ export default function Board() {
   const [home, setHome] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { toast, setToast, notify } = useToast();
   const [thread, setThread] = useState<ThreadItem[]>([]);
   const [streaming, setStreaming] = useState("");
   const [showNew, setShowNew] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<Column | null>(null);
   const [browser, setBrowser] = useState<BrowserState>(CLOSED_BROWSER);
   const [webBrowserOpen, setWebBrowserOpen] = useState(false);
@@ -163,16 +164,6 @@ export default function Board() {
 
   // Decode the chime files now, so the first card that moves isn't late to sound.
   useEffect(() => preloadChimes(), []);
-
-  const notify = useCallback((err: unknown) => {
-    setToast(err instanceof Error ? err.message : String(err));
-  }, []);
-
-  useEffect(() => {
-    if (!toast) return;
-    const timer = setTimeout(() => setToast(null), 5000);
-    return () => clearTimeout(timer);
-  }, [toast]);
 
   // merge keeps live items that arrived during the fetch; without it (after a reconnect, when what's
   // shown may be stale) the snapshot replaces the thread.
