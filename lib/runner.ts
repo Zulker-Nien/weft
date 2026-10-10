@@ -103,6 +103,8 @@ interface Session {
   costBase?: number;
   // Tokens the last main-agent request sent in, which is how full the context window is.
   contextTokens?: number;
+  // The CLI's session id from its init, kept while a spare so the card that adopts it can resume.
+  sessionId?: string;
   // Set once the drive loop has finished; the CLI is gone.
   ended?: boolean;
   done: Promise<void>;
@@ -294,7 +296,8 @@ function adoptSpare(card: Card): Session | undefined {
     spare.spec.effort = card.effort;
     void spare.query?.applyFlagSettings({ effortLevel: card.effort }).catch(() => {});
   }
-  safeUpdate(card.id, { warm: true });
+  // The spare's init came before it had a card; without its id a CLI that dies mid-turn can't resume.
+  safeUpdate(card.id, { warm: true, ...(spare.sessionId ? { sessionId: spare.sessionId } : {}) });
   scheduleIdle(spare);
   setTimeout(() => ensureSpare(card.cwd, card.backend), 0);
   return spare;
@@ -584,6 +587,7 @@ async function drive(session: Session, executable: string | undefined) {
     if (session.cardId) safeUpdate(session.cardId, { warm: true });
     for await (const msg of session.query) {
       const cardId = session.cardId;
+      if (msg.type === "system" && msg.subtype === "init") session.sessionId = msg.session_id;
       // A spare's startup messages belong to no card yet.
       if (!cardId) continue;
       if (!getCard(cardId)) {

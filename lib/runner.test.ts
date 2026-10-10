@@ -647,13 +647,46 @@ describe("spares", () => {
     runner.sendMessage("c1", "go");
     expect(h.queries).toHaveLength(1);
     expect(card("c1").warm).toBe(true);
-    expect(card("c1").sessionId).toBeUndefined();
     await flush();
     expect(spare.received).toEqual(["go"]);
     expect(spare.setPermissionMode).not.toHaveBeenCalled();
     // A fresh spare replaces the one taken.
     expect(h.queries).toHaveLength(2);
     expect(h.queries[1].options.cwd).toBe(cwd);
+  });
+
+  it("an adopting card gets the spare's session id before any result, so a CLI that dies mid-turn can resume", async () => {
+    runner.ensureSpare(cwd);
+    await flush();
+    const spare = lastQuery();
+    spare.emit(init("spare-sess"));
+    await flush();
+
+    addCard({ id: "c1", permissionMode: "bypassPermissions" });
+    runner.sendMessage("c1", "go");
+    expect(card("c1").sessionId).toBe("spare-sess");
+    // The spare's init didn't ask for plan limits on the card's behalf.
+    expect(spare.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET).not.toHaveBeenCalled();
+    await flush();
+
+    spare.end();
+    await flush();
+    runner.sendMessage("c1", "again");
+    await flush();
+    expect(lastQuery()).not.toBe(spare);
+    expect(lastQuery().options.resume).toBe("spare-sess");
+  });
+
+  it("a spare adopted before its init leaves the card's session id to the init that follows", async () => {
+    runner.ensureSpare(cwd);
+    await flush();
+    const spare = lastQuery();
+    addCard({ id: "c1", permissionMode: "bypassPermissions" });
+    runner.sendMessage("c1", "go");
+    expect(card("c1").sessionId).toBeUndefined();
+    spare.emit(init("late-sess"));
+    await flush();
+    expect(card("c1").sessionId).toBe("late-sess");
   });
 
   it("switches an adopted spare to the card's mode, model and effort", async () => {
@@ -747,6 +780,38 @@ describe("login", () => {
     // Retried with echo off: the thread still has the one user item.
     expect(thread("c1").filter((i) => i.kind === "user")).toHaveLength(1);
     expect(card("c1").column).toBe("running");
+  });
+
+  it("queued turns wait out a not-logged-in result and run after the login", async () => {
+    addCard({ id: "c1" });
+    runner.queueMessages("c1", ["/a", "/b"]);
+    await flush();
+    lastQuery().emit(success("Not logged in · Please run /login", { is_error: true }));
+    await flush();
+    expect(lastQuery().received).toEqual(["/a"]);
+
+    runner.retryAfterLogin("claude");
+    await flush();
+    expect(h.queries).toHaveLength(2);
+    expect(lastQuery().received).toEqual(["/a"]);
+    lastQuery().emit(success("a done"));
+    await flush();
+    expect(lastQuery().received).toEqual(["/a", "/b"]);
+  });
+
+  it("queued turns also wait out a not-logged-in CLI error", async () => {
+    addCard({ id: "c1" });
+    runner.queueMessages("c1", ["/a", "/b"]);
+    await flush();
+    lastQuery().fail(new Error("Not logged in · Please run /login"));
+    await flush();
+
+    runner.retryAfterLogin("claude");
+    await flush();
+    expect(h.queries).toHaveLength(2);
+    lastQuery().emit(success("a done"));
+    await flush();
+    expect(lastQuery().received).toEqual(["/a", "/b"]);
   });
 
   it("any other CLI error is kept on the card, which leaves running for review", async () => {
