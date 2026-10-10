@@ -15,7 +15,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   Never add work to the start-a-card path without measuring it.
 - **No git worktree per card, on purpose.** Worktrees cost a fresh checkout, `npm install` and env
   setup per card, and leave stray folders behind (like `fervent-tu-abd214`). I prefer cheap safety:
-  busy-folder and overlap warnings. (docs/ROADMAP.md still lists worktrees as P1; my stance wins.)
+  busy-folder and overlap warnings.
 - **Screen space is precious.** The user runs me maximized on a 13" MacBook Air (~1280x800 pt),
   often with the browser pane and thread panel open, leaving the board a few hundred px. Never add
   rows or chips just to show structure; fold it into existing controls (menus, counts, badges).

@@ -6,9 +6,9 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 
 ## Top 10 next
 
-1. **Worktree per card** — each card runs in its own git worktree and branch, so parallel threads in one repo stop overwriting each other's files.
+1. **File overlap warning** — flag two cards editing the same files, the next step after the busy-folder warning; Weft doesn't plan a worktree per card (see SOUL.md).
 2. **Diff view in Review** — show what a card changed since it started, so reviewing a finished turn doesn't mean switching to an editor.
-3. **Copilot event feed** — tell the copilot when cards finish, fail, or need you, so it can follow up instead of waiting to be asked.
+3. **Copilot acts on its own** — the copilot now hears what finished, failed, or needs you with each of your messages; next, let it start a turn when that happens instead of waiting to be asked.
 4. **Markdown in threads** — render agent replies with headings, code blocks, and tables instead of plain text.
 5. **Always-allow rules** — "allow always for this card / this project" on permission prompts, so the same `npm test` doesn't ask twenty times.
 6. **Commit, push, and open a PR from a card** — finish the loop from Review without leaving the board, and keep the PR link on the card.
@@ -38,7 +38,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 
 ## Cards and threads
 
-- `Now` **Managed thread prompt and BOARD STATUS** — every board thread gets a system prompt asking it to end replies with a `BOARD STATUS` line; the board uses it to move the card to Needs you, Review, or Done and to show its stage and what's left.
+- `Now` **Managed thread prompt and BOARD STATUS** — every board thread gets a system prompt asking it to end replies with a `BOARD STATUS` line; the board uses it to move the card to Needs you, Review, or Done and to show its stage and what's left. The parser skips status lines quoted in code blocks and reads the bold-label form (`**BOARD STATUS:** ...`).
 - `P1` **Markdown rendering** — render assistant messages as Markdown with syntax-highlighted code blocks and copy buttons.
 - `P1` **Queue a reply while running** — the reply box is disabled while a turn runs ("Working. Stop it to reply."); let you queue the next message instead.
 - `P1` **Import existing CLI sessions** — list sessions from the CLIs' project folders and turn any of them into a card that resumes it.
@@ -66,16 +66,16 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 
 ## Git, worktrees and code review
 
-- `P1` **Worktree per card** — each card runs in its own git worktree so parallel threads can't overwrite each other's files.
+- `Not planned` **Worktree per card** — a worktree costs a fresh checkout, `npm install` and env setup per card, and leaves stray folders; Weft warns about busy folders and overlapping files instead (SOUL.md).
 - `P1` **Branch per card** — a branch named from the card title (`tb/fix-login-redirect`), shown on the card.
 - `P1` **Diff view in Review** — the files and hunks a card changed since it started, in the thread panel.
 - `P1` **Commit, push, and open a PR** — buttons that commit the card's work, push its branch, and open a PR with `gh`; the PR link is saved on the card.
-- `P1` **Busy-folder warning** — warn before starting a card in a folder with uncommitted changes or another running card, while worktrees are off.
+- `Done` **Busy-folder warning** — a card shows an amber "+N here" on its folder line while another card is busy in the same folder, and the reply box says "Also running here: …" (`lib/overlap.ts`). It doesn't look at uncommitted changes.
 - `P2` **Worktree setup command** — a per-project command run in each fresh worktree (`npm install`, copy `.env.local`) before the thread starts.
 - `P2` **Comment on the diff** — comments on diff lines go back to the thread as a reply, like a code review.
 - `P2` **Merge and clean up** — when a card reaches Done, offer to merge its branch and remove its worktree.
 - `P2` **Rebase button** — when the base branch moves, ask the thread to rebase and resolve conflicts.
-- `P2` **Overlap warning** — flag when two running cards are editing the same files.
+- `P1` **Overlap warning** — flag when two running cards are editing the same files; tool items don't store file paths yet, so that comes first.
 - `P2` **Rewind a turn** — use the SDK's file checkpoints to roll a card's files back to before a turn.
 - `P2` **CI status on the card** — after a push, show GitHub checks; a failed check can send the card back to Needs you with the log attached.
 - `P3` **Reviewer card** — spawn a second thread (another model or CLI) to review a card's diff and attach its findings to the original card.
@@ -101,7 +101,8 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 
 - `Done` **Threads can hand off work** — every board thread has `mcp__board__list_cards` (read-only) and `mcp__board__create_card` (starts in its own folder by default, records `parentId`); no move, stop, archive or read of other cards.
 - `P3` **Show spawned cards** — use `parentId` to show which card started another on the board.
-- `P1` **Copilot event feed** — the copilot is only told things when you ask; send it card finished / failed / needs-you events so it can act on them.
+- `Done` **Copilot event feed** — with each of your messages the copilot gets a digest of cards that finished, need you, or failed since your last one (`lib/copilot-digest.ts`); no extra turns run.
+- `P2` **Copilot acts on its own** — start a copilot turn when a card finishes or needs you, instead of waiting for your next message.
 - `P1` **Away digest** — "what happened while I was away": a short per-card summary of results since you last looked.
 - `P2` **Spec to cards** — paste a spec; the copilot proposes a set of cards with folders and order, and creates them after you approve.
 - `P2` **Review triage** — the copilot reads finished threads and suggests Done, a follow-up reply, or a reviewer card.
@@ -247,8 +248,9 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 
 ## Testing and quality
 
-- `P1` **Unit tests for the core** — *started: `npm test` (Vitest) covers BOARD STATUS parsing, review tours, the API guard, automations and format helpers.* Still to do: store reload rules (running cards become Review on restart), and cost accounting across resumed sessions.
-- `P1` **Runner tests with a fake CLI** — a stub executable that emits scripted SDK messages, to test permission queues, stop, idle close, and resume without spending tokens.
+- `P1` **Unit tests for the core** — *started: `npm test` (Vitest) covers BOARD STATUS parsing, review tours, the API guard, automations, format helpers, and every API route (`app/api/routes.test.ts`).* Still to do: store reload rules (running cards become Review on restart), and cost accounting across resumed sessions.
+- `Done` **Runner tests** — `lib/runner.test.ts` drives the SDK loop against a fake `query()`: results, permissions and questions, stop, the turn queue, warm spares, login, and the CLI going away. No stub CLI executable yet.
+- `P1` **UI tests** — component tests for the board, thread view, and reply box; the UI has none today.
 - `P2` **CI** — lint, typecheck, and tests on every push.
 - `P2` **End-to-end tests** — drive the Electron app: create a card, start it, allow a request, reply, drag it to Done.
 - `P2` **Status-line checks** — measure how often each model and CLI ends replies with a valid BOARD STATUS line, and catch regressions when the prompt changes.
