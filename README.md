@@ -184,6 +184,16 @@ sees, of what finished, needs you or failed on the board since your last message
 (`lib/copilot-digest.ts`); nothing runs a copilot turn on its own. "New chat" starts a fresh copilot session. In a normal browser tab the
 copilot opens as a pop-up at `/copilot`.
 
+## Terminal
+
+Press Control-backtick (⌃\`, as in VS Code) anywhere, `t` on the board, View > Terminal, or the terminal button in the header to
+open a real shell in a drawer along the bottom of the window, for the commands a thread wasn't
+allowed to run. Each folder gets its own shell: the drawer shows the open card's folder, else the
+selected project's, else the latest card's, and switching project or card switches shell. Hidden or
+switched-away shells keep running with their output. Split (or ⌘\\ in a terminal) adds a shell side
+by side, up to three per folder; hover a terminal for its restart and close buttons. It's your login shell on a pty (`node-pty`, `electron/terminal.cjs`), drawn
+with xterm.js (`components/TerminalDrawer.tsx`). Desktop app only.
+
 ## How it fits together
 
 - `electron/main.cjs` starts the Next.js server, shows it in a window, and hosts the side browser
@@ -238,5 +248,7 @@ Weft is released under the [Apache License 2.0](LICENSE).
 - Automated tests are thin: `npm test` runs a Vitest suite over `lib/` (status parser, review tour,
   API guard, automations, formatting, settings, store, board tools) and over the API routes, with the
   runner and store mocked, and over the runner's SDK loop with a fake `query()`. The UI has none yet. CI runs lint, typecheck and tests; a pre-commit hook type-checks what's staged.
+- The terminal drawer runs in dev mode (`npm run desktop`) only: the packaged `.app` leaves
+  `node_modules` out of the Electron bundle, so `node-pty` isn't there to load.
 - No git worktree per card, on purpose: parallel cards in one repo share a working tree. Weft warns
   when they share a folder, but doesn't yet spot two threads editing the same files.

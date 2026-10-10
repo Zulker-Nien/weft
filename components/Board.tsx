@@ -35,7 +35,9 @@ import SettingsDialog from "./SettingsDialog";
 import ShortcutsDialog from "./ShortcutsDialog";
 import StatusStrip from "./StatusStrip";
 import ShiftKey from "./ShiftKey";
+import TerminalDrawer from "./TerminalDrawer";
 import ThreadPanel from "./ThreadPanel";
+import { NO_DRAG } from "@/lib/no-drag";
 
 const CLOSED_BROWSER: BrowserState = {
   visible: false,
@@ -122,6 +124,8 @@ export default function Board() {
   const [dragOver, setDragOver] = useState<Column | null>(null);
   const [webBrowserOpen, setWebBrowserOpen] = useState(false);
   const [browserWidth, setBrowserWidth] = useState(560);
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalHeight, setTerminalHeight] = useState(240);
   const [copilotNeedsYou, setCopilotNeedsYou] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [project, setProject] = useState<string | null>(null);
@@ -325,6 +329,9 @@ export default function Board() {
         case "find":
           focusFilter();
           break;
+        case "terminal":
+          toggleTerminal();
+          break;
       }
     };
   });
@@ -348,6 +355,8 @@ export default function Board() {
   );
 
   const selected = cards.find((c) => c.id === selectedId) ?? null;
+  // Each folder has its own shell; with All projects showing, the latest card's folder.
+  const terminalCwd = selected?.cwd ?? project ?? latestLimits(cards)?.cwd ?? home;
   const browserOpen = desktop ? browser.visible : webBrowserOpen;
   const waiting = cards.filter((c) => c.column === "needs_you").length;
   const running = cards.filter((c) => c.column === "running").length;
@@ -425,6 +434,7 @@ export default function Board() {
       command("filter", "Filter cards", "search", focusFilter, "/"),
       command("copilot", "Toggle the copilot", "sparkles", toggleCopilot, "c"),
       command("browser", "Toggle the browser", "globe", toggleBrowser, "b"),
+      command("terminal", "Toggle the terminal", "terminal", toggleTerminal, "t", "shell console command line"),
       command("settings", "Open settings", "sliders", () => setShowSettings(true), ","),
       command("help", "Show keyboard shortcuts", "zap", () => setShowHelp(true), "?", "hotkeys keys"),
       command("needs-you", "Jump to a card that needs you", "alert", () => void jumpToNeedsYou(), "a", "waiting"),
@@ -516,6 +526,7 @@ export default function Board() {
     },
     { id: "copilot", keys: ["c"], description: "Toggle the copilot", group: "General", enabled: boardKeys, handler: toggleCopilot },
     { id: "browser", keys: ["b"], description: "Toggle the browser", group: "General", enabled: boardKeys, handler: toggleBrowser },
+    { id: "terminal", keys: ["t"], description: "Toggle the terminal", group: "General", enabled: boardKeys, handler: toggleTerminal },
     {
       id: "card-down",
       keys: ["j", "ArrowDown"],
@@ -665,6 +676,10 @@ export default function Board() {
   });
   useEscape(browserOpen && !selectedId, toggleBrowser);
 
+  function toggleTerminal() {
+    setTerminalOpen((open) => !open);
+  }
+
   // The desktop app gives the copilot its own window; in a browser tab it opens as a pop-up.
   function toggleCopilot() {
     if (window.threadboard) window.threadboard.copilot.toggle();
@@ -719,6 +734,14 @@ export default function Board() {
           className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12.5px] ${browserOpen ? "border-accent bg-accent-soft text-accent" : "border-line-strong text-ink hover:bg-sunken"}`}
         >
           <Icon name="globe" size={14} /> Browser
+        </button>
+        <button
+          onClick={toggleTerminal}
+          title="Terminal (⌃`)"
+          aria-label="Terminal"
+          className={`rounded-md border p-1.5 ${terminalOpen ? "border-accent bg-accent-soft text-accent" : "border-line-strong text-muted hover:bg-sunken hover:text-ink"}`}
+        >
+          <Icon name="terminal" size={15} />
         </button>
         <button
           onClick={() => setShowSettings(true)}
@@ -819,7 +842,7 @@ export default function Board() {
         </main>
 
         {selected && <div className="fixed inset-0 z-30 bg-black/40" onClick={() => select(null)} aria-hidden="true" />}
-        <div className={selected ? "fixed inset-4 z-40 flex overflow-hidden rounded-xl border border-line-strong bg-panel shadow-2xl" : "contents"}>
+        <div style={selected && terminalOpen ? { bottom: terminalHeight + 16 } : undefined} className={selected ? "fixed inset-4 z-40 flex overflow-hidden rounded-xl border border-line-strong bg-panel shadow-2xl" : "contents"}>
         {selected && (
           <ThreadPanel
             key={selected.id}
@@ -872,6 +895,12 @@ export default function Board() {
           <a href="mailto:alex@aimhuge.com" className="hover:text-accent">alex@aimhuge.com</a>
         </span>
       </footer>
+      {/* After the footer so an open card can stop just above it; z-40 keeps it over the card's backdrop. */}
+      {terminalOpen && (
+        <div style={NO_DRAG} className="relative z-40">
+          <TerminalDrawer key={terminalCwd} cwd={terminalCwd} height={terminalHeight} onHeight={setTerminalHeight} onClose={toggleTerminal} />
+        </div>
+      )}
 
       {showNew && (
         <NewCardDialog cards={cards} home={home} defaultCwd={project ?? undefined} recentCwd={[...cards].sort((a, b) => b.updatedAt - a.updatedAt).find((c) => c.cwd !== home)?.cwd} limits={latestLimits(cards)} onClose={() => setShowNew(false)} onCreate={create} />

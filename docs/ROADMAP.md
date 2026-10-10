@@ -216,7 +216,8 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `P1` **GitHub issue to card** — create a card from an issue (body as prompt, link kept); comment on or close the issue when the card is done.
 - `P2` **PR review comments back to the card** — new review comments on a card's PR show up as a reply draft on that card.
 - `P2` **Open in editor** — open a card's folder or worktree in VS Code, Cursor, or Zed, and jump to a file and line from a tool row.
-- `P2` **Open in terminal** — open a terminal in the card's folder or worktree.
+- ~~`P2` **Open in terminal** — open a terminal in the card's folder or worktree.~~ Shipped as the terminal drawer (Control-backtick as in VS Code, or `t`): a shell per folder that follows the open card or selected project, split side by side up to three (⌘\\).
+- `P2` **Packaged terminal** — bundle `node-pty` into the packaged app, and a way to close idle folders' shells.
 - `P2` **Board CLI** — `weft add "fix the flaky test" --cwd .` to create cards from a terminal or script.
 - `P2` **Linear** — create cards from Linear issues and keep issue status in step with the card's column.
 - `P2` **Slack** — post Done and Needs-you summaries to a channel, and create cards from a slash command.

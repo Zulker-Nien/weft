@@ -46,6 +46,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `electron/main.cjs`: shell; starts Next, windows, tray, dock, `weft://` links, global hotkey.
 - `electron/browser-pane.cjs`: native browser pane, one page per card; token-guarded control
   server on 127.0.0.1 for agents, IPC for the board (`electron/preload.cjs`).
+- `electron/terminal.cjs` + `components/TerminalDrawer.tsx`: the terminal drawer (node-pty shell over IPC, xterm.js).
 - `lib/runner.ts`: one Agent SDK `query()` per thread, warm spares, permissions, turn queue;
   puku-cli via `pathToClaudeCodeExecutable`.
 - `lib/status.ts` + `lib/settings.ts`: the BOARD STATUS protocol (thread prompt and its parser).

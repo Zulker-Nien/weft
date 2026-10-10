@@ -28,7 +28,7 @@ export interface BrowserState {
 }
 
 // What the app menu, dock, tray, and global shortcuts ask a window to do. open-card carries a card id.
-export type MenuAction = "new-thread" | "settings" | "open-card" | "find";
+export type MenuAction = "new-thread" | "settings" | "open-card" | "find" | "terminal";
 
 // Exposed by electron/preload.cjs; absent when the board runs in a normal browser tab.
 export interface ShellBridge {
@@ -65,6 +65,15 @@ export interface ShellBridge {
   copilot: {
     toggle(): void;
     onState(callback: (state: { open: boolean }) => void): () => void;
+  };
+  // Shells for the terminal drawer, keyed by id. open reattaches to a running one and replays its output.
+  terminal: {
+    open(id: string, cwd: string, cols: number, rows: number): Promise<{ replay?: string; cwd?: string; error?: string }>;
+    write(id: string, data: string): void;
+    resize(id: string, cols: number, rows: number): void;
+    kill(id: string): void;
+    onData(callback: (id: string, data: string) => void): () => void;
+    onExit(callback: (id: string, code: number) => void): () => void;
   };
   onMenu(callback: (action: MenuAction, payload?: string) => void): () => void;
 }

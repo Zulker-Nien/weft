@@ -26,6 +26,7 @@ const { registerAboutBridge, showAboutWindow } = require("./about.cjs");
 const { createBrowserPane } = require("./browser-pane.cjs");
 const { fixPath } = require("./env.cjs");
 const { startServer } = require("./server.cjs");
+const { registerTerminal } = require("./terminal.cjs");
 const { loadWindowState, trackWindowState } = require("./window-state.cjs");
 
 const APP_NAME = "Weft";
@@ -407,6 +408,15 @@ function buildMenu() {
       submenu: [
         { label: "Copilot", accelerator: "CmdOrCtrl+J", click: toggleCopilot },
         { label: "Browser", accelerator: "CmdOrCtrl+Shift+B", click: () => pane.setVisible(!pane.isVisible()) },
+        {
+          label: "Terminal",
+          // VS Code's toggle; Control on macOS too.
+          accelerator: "Ctrl+`",
+          click: () => {
+            showMain();
+            sendMenu("terminal");
+          },
+        },
         { type: "separator" },
         { label: "Reload", accelerator: "CmdOrCtrl+R", click: () => focusedContents()?.reload() },
         { label: "Developer Tools", accelerator: "Alt+CmdOrCtrl+I", click: () => focusedContents()?.toggleDevTools() },
@@ -562,6 +572,7 @@ ipcMain.on("browser:back", () => pane.back());
 ipcMain.on("browser:forward", () => pane.forward());
 ipcMain.on("browser:reload", () => pane.reload());
 ipcMain.on("copilot:toggle", () => toggleCopilot());
+const killTerminals = registerTerminal(ipcMain);
 ipcMain.handle("dialog:openFolder", async () => {
   const result = await dialog.showOpenDialog(win, { properties: ["openDirectory", "createDirectory"] });
   return result.canceled ? null : result.filePaths[0];
@@ -637,6 +648,7 @@ app.on("before-quit", () => {
 
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
+  killTerminals();
   server?.stop();
 });
 

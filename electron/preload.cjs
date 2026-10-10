@@ -34,6 +34,15 @@ contextBridge.exposeInMainWorld("threadboard", {
     toggle: () => ipcRenderer.send("copilot:toggle"),
     onState: (callback) => listen("copilot:state", callback),
   },
+  // The terminal drawer's shells (electron/terminal.cjs).
+  terminal: {
+    open: (id, cwd, cols, rows) => ipcRenderer.invoke("terminal:open", id, cwd, cols, rows),
+    write: (id, data) => ipcRenderer.send("terminal:write", id, data),
+    resize: (id, cols, rows) => ipcRenderer.send("terminal:resize", id, cols, rows),
+    kill: (id) => ipcRenderer.send("terminal:kill", id),
+    onData: (callback) => listen("terminal:data", callback),
+    onExit: (callback) => listen("terminal:exit", callback),
+  },
   onMenu: (callback) => listen("menu", callback),
   // Buttons on the startup screen when the server fails to start.
   splashAction: (action) => ipcRenderer.send("splash:action", action),
