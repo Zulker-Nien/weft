@@ -101,6 +101,11 @@ asking); the menu next to the CLI switch changes that per thread.
 
 Replying to a card continues the same CLI session, so the agent keeps its context.
 
+Cards get no git worktree of their own, on purpose, so two cards in one folder share a working tree.
+Weft warns you instead: a busy card shows "+1 here" next to its folder when another card is running
+or waiting in the same folder (or one inside it), and a thread's reply box says "Also running here:
+<title>" before you send. It reads this from the board alone, with no git calls.
+
 ## No waiting for CLIs to start
 
 A CLI takes 12–50s to start with a full Claude Code setup (MCP servers, plugins, hooks), so the
@@ -173,7 +178,9 @@ Press ⌘J (or the Copilot button) to open the copilot, an orchestrator thread i
 It uses `mcp__board__*` tools to list cards, read threads, create cards, start them, reply to
 them, move and stop them, and answer their permission requests. Reading and rearranging the board
 happen without asking; starting a thread, replying to one, or answering for one asks you first in
-the copilot window. "New chat" starts a fresh copilot session. In a normal browser tab the
+the copilot window. Each message you send it also carries a short note, which only the copilot
+sees, of what finished, needs you or failed on the board since your last message
+(`lib/copilot-digest.ts`); nothing runs a copilot turn on its own. "New chat" starts a fresh copilot session. In a normal browser tab the
 copilot opens as a pop-up at `/copilot`.
 
 ## How it fits together
@@ -215,7 +222,8 @@ Weft is released under the [Apache License 2.0](LICENSE).
 
 - A card in a folder with no spare (or with a different CLI) still waits for its CLI to start the
   first time, unless it was opened or its project picked a little earlier.
-- The copilot only acts when you ask it something; it isn't told when threads finish or need you.
+- The copilot hears what finished or needs you only with your next message to it; it doesn't act
+  on its own when a thread ends.
 - puku-cli connects, but it was logged out during testing, so a full puku thread hasn't run yet.
   Run `puku-cli auth login` first.
 - Only Claude Code sessions are picked up; puku-cli sessions (`~/.puku-cli/projects`) aren't yet.
@@ -224,4 +232,5 @@ Weft is released under the [Apache License 2.0](LICENSE).
 - Automated tests are thin: `npm test` runs a Vitest suite over `lib/` (status parser, review tour,
   API guard, automations, formatting, settings, store, board tools). The runner, API routes and UI have
   none yet. CI runs lint, typecheck and tests; a pre-commit hook type-checks what's staged.
-- No git worktree per card yet, so parallel cards in the same repo share a working tree.
+- No git worktree per card, on purpose: parallel cards in one repo share a working tree. Weft warns
+  when they share a folder, but doesn't yet spot two threads editing the same files.

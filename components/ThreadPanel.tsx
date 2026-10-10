@@ -21,6 +21,7 @@ export default function ThreadPanel({
   onDelete,
   onClose,
   onRename,
+  alsoHere,
 }: {
   card: Card;
   items: ThreadItem[];
@@ -33,6 +34,8 @@ export default function ThreadPanel({
   onDelete: () => void;
   onClose: () => void;
   onRename: (title: string) => void;
+  // Other busy cards in this folder (lib/overlap.ts busyHere).
+  alsoHere?: Card[];
 }) {
   const [editing, setEditing] = useState(false);
   const live = isLive(card);
@@ -153,6 +156,7 @@ export default function ThreadPanel({
         onAnswer={onAnswer}
         footer={card.column === "review" && <ReviewPanel card={card} items={items} onSend={onSend} />}
         replaceReply={card.column === "review" && Boolean(card.review)}
+        alsoHere={alsoHere}
       />
     </aside>
   );

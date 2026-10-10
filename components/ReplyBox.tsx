@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { alsoHereLine } from "@/lib/overlap";
+import type { Card } from "@/lib/types";
 import Composer, { type ComposerHandle } from "./Composer";
 import Icon, { Spinner } from "./Icon";
 
@@ -29,11 +31,14 @@ export default function ReplyBox({
   cwd,
   live,
   placeholder,
+  alsoHere = [],
   onSend,
   onStop,
 }: {
   cardId: string;
   cwd: string;
+  // Other busy cards in this folder: they share the working tree (lib/overlap.ts).
+  alsoHere?: Card[];
   // A turn is running or waiting on a permission answer, so a reply can't go yet.
   live: boolean;
   placeholder: string;
@@ -129,6 +134,15 @@ export default function ReplyBox({
         }
       }}
     >
+      {alsoHere.length > 0 && (
+        <p
+          className="mb-1.5 flex min-w-0 items-center gap-1.5 text-[11.5px] text-warn"
+          title={`These threads share this folder's working tree:\n${alsoHere.map((c) => c.title).join("\n")}`}
+        >
+          <Icon name="alert" size={12} className="shrink-0" />
+          <span className="truncate">{alsoHereLine(alsoHere)}</span>
+        </p>
+      )}
       {queue.length > 0 && (
         <ul className="mb-2 flex flex-col gap-1">
           {queue.map((text, i) => (

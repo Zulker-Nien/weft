@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { api } from "@/lib/client";
 import { folderName, formatCost, isLive, timeAgo } from "@/lib/format";
+import { isBusy } from "@/lib/overlap";
 import type { Card } from "@/lib/types";
 import Icon, { Spinner } from "./Icon";
 
@@ -49,6 +50,7 @@ export default function CardView({
   onOpen,
   onAnswer,
   onStop,
+  alsoHere = [],
 }: {
   card: Card;
   now: number;
@@ -58,6 +60,8 @@ export default function CardView({
   onOpen: () => void;
   onAnswer: (allow: boolean) => void;
   onStop: () => void;
+  // Other busy cards in this folder (lib/overlap.ts busyHere); flagged only while this one is busy too.
+  alsoHere?: Card[];
 }) {
   // The request already answered here, so a second click can't answer it (or the next one) again.
   const [answeredId, setAnsweredId] = useState<string | null>(null);
@@ -103,6 +107,14 @@ export default function CardView({
         )}
         <Icon name="folder" size={12} />
         <span className="truncate" title={card.cwd}>{folderName(card.cwd)}</span>
+        {isBusy(card) && alsoHere.length > 0 && (
+          <span
+            className="shrink-0 font-medium text-warn"
+            title={`Also running in this folder (shared working tree):\n${alsoHere.map((c) => c.title).join("\n")}`}
+          >
+            +{alsoHere.length} here
+          </span>
+        )}
       </div>
 
       {(card.stage || card.remaining) && (
