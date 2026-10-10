@@ -5,6 +5,7 @@ import {
   describeToolRun,
   firstLine,
   folderName,
+  projectHue,
   formatCost,
   formatReset,
   formatTokens,
@@ -187,5 +188,19 @@ describe("summarizeInput", () => {
     expect(summarizeInput({ count: 3 })).toBe('{"count":3}');
     expect(summarizeInput({})).toBe("");
     expect(summarizeInput({ command: "y".repeat(150) })).toHaveLength(100);
+  });
+});
+
+describe("projectHue", () => {
+  it("gives the same name the same hue, inside 0-359", () => {
+    expect(projectHue("weft")).toBe(projectHue("weft"));
+    for (const name of ["weft", "blastcp", "aimhuge", ""]) {
+      expect(projectHue(name)).toBeGreaterThanOrEqual(0);
+      expect(projectHue(name)).toBeLessThan(360);
+    }
+  });
+
+  it("tells different projects apart", () => {
+    expect(projectHue("weft")).not.toBe(projectHue("blastcp"));
   });
 });

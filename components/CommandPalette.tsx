@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { projectHue } from "@/lib/format";
 import { keyCaps } from "@/lib/hotkeys";
+import type { Column } from "@/lib/types";
 import Icon, { type IconName } from "./Icon";
 import Modal from "./Modal";
 
@@ -9,8 +11,12 @@ export type PaletteItem = {
   id: string;
   group: "Commands" | "Projects" | "Cards" | "Prompts";
   label: string;
-  // Dimmer text after the label, e.g. a card's column or a project's path.
+  // Dimmer text after the label, e.g. a project's path.
   detail?: string;
+  // The project folder a card belongs to, drawn as a colored chip; on a project item it tints the icon.
+  project?: string;
+  // A card's column, drawn as a colored status pill.
+  column?: Column;
   // Extra words that match the search without being shown.
   keywords?: string;
   icon: IconName;
@@ -26,6 +32,41 @@ const PROMPT_DELAY_MS = 200;
 const PROMPT_MIN_CHARS = 2;
 const CARD_LIMIT = 30;
 const RECENT_CARDS = 6;
+
+const COLUMN_PILL: Record<Column, string> = {
+  running: "bg-accent-soft text-accent",
+  needs_you: "bg-warn-soft text-warn",
+  review: "bg-ok-soft text-ok",
+  backlog: "bg-sunken text-muted",
+  done: "bg-sunken text-muted",
+};
+const COLUMN_LABEL: Record<Column, string> = {
+  running: "Running",
+  needs_you: "Needs you",
+  review: "Review",
+  backlog: "Backlog",
+  done: "Done",
+};
+
+// The project's own color: deeper on light themes, lighter on dark, same hue on both.
+function projectInk(name: string) {
+  const hue = projectHue(name);
+  return `light-dark(oklch(0.5 0.15 ${hue}), oklch(0.8 0.12 ${hue}))`;
+}
+
+function ProjectChip({ name }: { name: string }) {
+  const hue = projectHue(name);
+  return (
+    <span
+      title={`Project: ${name}`}
+      className="flex max-w-[150px] shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[11.5px] font-semibold"
+      style={{ color: projectInk(name), background: `oklch(0.65 0.14 ${hue} / 0.16)` }}
+    >
+      <span className="size-1.5 shrink-0 rounded-full" style={{ background: "currentColor" }} />
+      <span className="truncate">{name}</span>
+    </span>
+  );
+}
 
 // Every word typed must appear somewhere; earlier and label matches rank higher. null means no match.
 function score(item: PaletteItem, words: string[]): number | null {
@@ -49,7 +90,7 @@ function Snippet({ text }: { text: string }) {
         const [hit, rest] = i === 0 ? ["", part] : part.split("\u0002");
         return (
           <span key={i}>
-            {hit && <b className="font-semibold text-ink">{hit}</b>}
+            {hit && <mark className="rounded-[3px] bg-accent-soft px-0.5 font-semibold text-ink">{hit}</mark>}
             {rest}
           </span>
         );
@@ -164,7 +205,7 @@ export default function CommandPalette({
             return (
               <li key={item.id} role="presentation">
                 {heading && (
-                  <div className="px-2.5 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted">{item.group}</div>
+                  <div className="px-2.5 pb-1 pt-2.5 text-[10.5px] font-semibold uppercase tracking-wider text-faint">{item.group}</div>
                 )}
                 <div
                   id={`palette-${item.id}`}
@@ -173,18 +214,28 @@ export default function CommandPalette({
                   data-index={index}
                   onMouseMove={() => setActive(index)}
                   onClick={() => choose(item)}
-                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 ${index === current ? "bg-sunken" : ""}`}
+                  className={`flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 ${
+                    index === current ? "bg-accent-soft shadow-[inset_2px_0_0_var(--accent)]" : ""
+                  }`}
                 >
-                  <Icon name={item.icon} size={14} className="shrink-0 text-muted" />
-                  <span className="min-w-0 flex-1 truncate text-[13px] text-ink">
+                  <span className={`flex shrink-0 ${item.project ? "" : "text-muted"}`} style={item.project ? { color: projectInk(item.project) } : undefined}>
+                    <Icon name={item.icon} size={14} />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-ink">
                     {item.label}
-                    {item.detail && <span className="ml-2 text-[12px] text-faint">{item.detail}</span>}
+                    {item.column && (
+                      <span className={`ml-2 rounded px-1.5 py-px align-[1px] text-[10.5px] font-semibold ${COLUMN_PILL[item.column]}`}>
+                        {COLUMN_LABEL[item.column]}
+                      </span>
+                    )}
+                    {item.detail && <span className="ml-2 text-[12px] font-normal text-faint">{item.detail}</span>}
                     {item.snippet && (
-                      <span className="mt-0.5 block truncate text-[12px] text-muted">
+                      <span className="mt-1 block truncate text-[12.5px] font-normal text-muted">
                         <Snippet text={item.snippet} />
                       </span>
                     )}
                   </span>
+                  {item.project && item.group !== "Projects" && <ProjectChip name={item.project} />}
                   {item.keys && (
                     <span className="flex shrink-0 items-center gap-0.5">
                       {keyCaps(item.keys).map((cap, i) => (

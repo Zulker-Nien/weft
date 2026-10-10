@@ -16,6 +16,13 @@ export function folderName(cwd: string) {
   return cwd.split("/").filter(Boolean).pop() ?? cwd;
 }
 
+// A steady hue (0-359) for a project name, so the same project always gets the same color.
+export function projectHue(name: string) {
+  let hash = 0;
+  for (const ch of name) hash = (hash * 31 + ch.charCodeAt(0)) | 0;
+  return Math.abs(hash) % 360;
+}
+
 // "/me/app/.claude/worktrees/eager-x/src" -> "/me/app": the repo a Claude Code worktree folder belongs to,
 // read off the path alone, so it works for worktrees that have since been deleted.
 export function worktreeParent(cwd: string) {

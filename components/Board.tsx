@@ -460,6 +460,7 @@ export default function Board() {
       detail: path ? (home && path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path) : undefined,
       keywords: "project folder",
       icon: "folder",
+      project: path ? folderName(path) : undefined,
       run: () => chooseProject(path),
     }));
     const cardItems = cards
@@ -469,7 +470,8 @@ export default function Board() {
         id: `card-${card.id}`,
         group: "Cards",
         label: card.title,
-        detail: COLUMNS.find((c) => c.id === card.column)?.label,
+        project: folderName(card.cwd),
+        column: card.column,
         keywords: [card.prompt, card.lastLine, card.stage, card.remaining, folderName(card.cwd)].filter(Boolean).join(" "),
         icon: "file",
         run: () => openCard(card),
@@ -488,7 +490,8 @@ export default function Board() {
           id: `prompt-${hit.cardId}-${i}`,
           group: "Prompts",
           label: card.title,
-          detail: COLUMNS.find((c) => c.id === card.column)?.label,
+          project: folderName(card.cwd),
+          column: card.column,
           snippet: hit.snippet.replace(/\s+/g, " "),
           icon: "file",
           run: () => openCard(card),
