@@ -472,6 +472,7 @@ export default function Board() {
         label: card.title,
         project: folderName(card.cwd),
         column: card.column,
+        root: rootOf(card.cwd),
         keywords: [card.prompt, card.lastLine, card.stage, card.remaining, folderName(card.cwd)].filter(Boolean).join(" "),
         icon: "file",
         run: () => openCard(card),
@@ -492,6 +493,7 @@ export default function Board() {
           label: card.title,
           project: folderName(card.cwd),
           column: card.column,
+          root: rootOf(card.cwd),
           snippet: hit.snippet.replace(/\s+/g, " "),
           icon: "file",
           run: () => openCard(card),
@@ -911,7 +913,7 @@ export default function Board() {
       {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
       {showHelp && <ShortcutsDialog onClose={() => setShowHelp(false)} />}
       <ShiftKey />
-      {showPalette && <CommandPalette items={paletteItems()} findPrompts={findPrompts} onClose={() => setShowPalette(false)} />}
+      {showPalette && <CommandPalette items={paletteItems()} findPrompts={findPrompts} currentProject={project ? { path: project, name: folderName(project) } : null} onClose={() => setShowPalette(false)} />}
       {login && <LoginDialog login={login} onClose={() => setLogin(null)} />}
 
       {toast && (

@@ -17,6 +17,8 @@ export type PaletteItem = {
   project?: string;
   // A card's column, drawn as a colored status pill.
   column?: Column;
+  // The project folder a card or prompt sits in, for the "only this project" scope.
+  root?: string;
   // Extra words that match the search without being shown.
   keywords?: string;
   icon: IconName;
@@ -102,9 +104,12 @@ function Snippet({ text }: { text: string }) {
 export default function CommandPalette({
   items,
   findPrompts,
+  currentProject,
   onClose,
 }: {
   items: PaletteItem[];
+  // The project the board shows; cards and prompts stay inside it until the user unticks the scope.
+  currentProject?: { path: string; name: string } | null;
   // Prompts the user wrote that match the query; resolves with palette items for the ones on the board.
   findPrompts: (query: string) => Promise<PaletteItem[]>;
   onClose: () => void;
@@ -112,6 +117,8 @@ export default function CommandPalette({
   const [query, setQuery] = useState("");
   const [prompts, setPrompts] = useState<{ query: string; items: PaletteItem[] }>({ query: "", items: [] });
   const [active, setActive] = useState(0);
+  const [scoped, setScoped] = useState(true);
+  const scope = scoped && currentProject ? currentProject.path : null;
   const list = useRef<HTMLUListElement>(null);
   // The board makes a new findPrompts on every render; a pending search shouldn't restart for that.
   const find = useRef(findPrompts);
@@ -138,12 +145,13 @@ export default function CommandPalette({
 
   const results = useMemo(() => {
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-    const byGroup = (group: PaletteItem["group"]) => items.filter((i) => i.group === group);
+    const inScope = (i: PaletteItem) => !scope || i.root === undefined || i.root === scope;
+    const byGroup = (group: PaletteItem["group"]) => items.filter((i) => i.group === group && inScope(i));
     if (words.length === 0) {
       // Nothing typed: every command and project, and only the latest cards (items arrive newest first).
       return [...byGroup("Commands"), ...byGroup("Projects"), ...byGroup("Cards").slice(0, RECENT_CARDS)];
     }
-    const promptItems = prompts.query === query.trim() ? prompts.items : [];
+    const promptItems = prompts.query === query.trim() ? prompts.items.filter(inScope) : [];
     return GROUPS.flatMap((group) => {
       if (group === "Prompts") return promptItems;
       const hits = byGroup(group)
@@ -152,7 +160,7 @@ export default function CommandPalette({
         .sort((a, b) => a.rank - b.rank || a.order - b.order);
       return (group === "Cards" ? hits.slice(0, CARD_LIMIT) : hits).map((h) => h.item);
     });
-  }, [items, query, prompts]);
+  }, [items, query, prompts, scope]);
 
   const current = Math.min(active, Math.max(0, results.length - 1));
 
@@ -173,6 +181,10 @@ export default function CommandPalette({
     if (e.key === "ArrowDown" || (e.ctrlKey && e.key === "n")) setActive(current >= last ? 0 : current + 1);
     else if (e.key === "ArrowUp" || (e.ctrlKey && e.key === "p")) setActive(current <= 0 ? last : current - 1);
     else if (e.key === "Enter") choose(results[current]);
+    else if (e.key === "Tab" && currentProject) {
+      setScoped((v) => !v);
+      setActive(0);
+    }
     else return;
     e.preventDefault();
   }
@@ -196,10 +208,33 @@ export default function CommandPalette({
             aria-activedescendant={results[current] ? `palette-${results[current].id}` : undefined}
             className="min-w-0 flex-1 bg-transparent text-[14px] text-ink outline-none placeholder:text-faint"
           />
+          {currentProject && (
+            <label
+              title={`Tab: search ${scoped ? "every project" : `only ${currentProject.name}`}`}
+              className={`flex shrink-0 cursor-pointer select-none items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11.5px] font-medium ${
+                scoped ? "border-transparent bg-accent-soft text-accent" : "border-line-strong text-muted"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={scoped}
+                onChange={(e) => {
+                  setScoped(e.target.checked);
+                  setActive(0);
+                }}
+                className="size-3 accent-[var(--accent)]"
+              />
+              <span className="max-w-[140px] truncate">Only {currentProject.name}</span>
+            </label>
+          )}
           <kbd className="rounded border border-line-strong bg-sunken px-1.5 py-0.5 font-mono text-[11px] text-muted">Esc</kbd>
         </div>
         <ul id="palette-results" ref={list} role="listbox" className="min-h-0 flex-1 overflow-y-auto p-1.5">
-          {results.length === 0 && <li className="px-3 py-6 text-center text-[13px] text-muted">Nothing matches “{query.trim()}”</li>}
+          {results.length === 0 && (
+            <li className="px-3 py-6 text-center text-[13px] text-muted">
+              Nothing matches “{query.trim()}”{scope && currentProject ? ` in ${currentProject.name}. Press Tab to search every project.` : ""}
+            </li>
+          )}
           {results.map((item, index) => {
             const heading = item.group !== results[index - 1]?.group;
             return (
@@ -235,7 +270,7 @@ export default function CommandPalette({
                       </span>
                     )}
                   </span>
-                  {item.project && item.group !== "Projects" && <ProjectChip name={item.project} />}
+                  {item.project && item.group !== "Projects" && !scope && <ProjectChip name={item.project} />}
                   {item.keys && (
                     <span className="flex shrink-0 items-center gap-0.5">
                       {keyCaps(item.keys).map((cap, i) => (
