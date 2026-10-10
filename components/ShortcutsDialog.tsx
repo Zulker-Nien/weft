@@ -1,9 +1,7 @@
 "use client";
 
 import { keyCaps, SHORTCUT_GROUPS, useShortcutList } from "@/lib/hotkeys";
-import { useEscape } from "@/lib/use-escape";
-import Icon from "./Icon";
-import { NO_DRAG } from "@/lib/no-drag";
+import Modal from "./Modal";
 
 function Keys({ spec }: { spec: string }) {
   return (
@@ -23,8 +21,6 @@ function Keys({ spec }: { spec: string }) {
 export default function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   const shortcuts = useShortcutList();
 
-  useEscape(true, onClose);
-
   const groups = [
     ...SHORTCUT_GROUPS,
     ...new Set(shortcuts.map((s) => s.group).filter((g) => !SHORTCUT_GROUPS.includes(g))),
@@ -33,22 +29,7 @@ export default function ShortcutsDialog({ onClose }: { onClose: () => void }) {
     .filter((g) => g.items.length > 0);
 
   return (
-    <div style={NO_DRAG} className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={onClose}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="shortcuts-title"
-        onMouseDown={(e) => e.stopPropagation()}
-        className="flex max-h-full w-full max-w-[560px] flex-col rounded-xl border border-line bg-panel shadow-2xl"
-      >
-        <div className="flex shrink-0 items-center justify-between border-b border-line px-5 py-3.5">
-          <h2 id="shortcuts-title" className="text-[15px] font-medium text-ink">
-            Keyboard shortcuts
-          </h2>
-          <button onClick={onClose} aria-label="Close" className="rounded-md p-1 text-muted hover:bg-sunken hover:text-ink">
-            <Icon name="x" size={16} />
-          </button>
-        </div>
+    <Modal title="Keyboard shortcuts" onClose={onClose} className="max-h-full w-full max-w-[560px]">
         <div className="flex min-h-0 flex-col gap-5 overflow-y-auto px-5 py-4">
           {groups.map(({ group, items }) => (
             <section key={group}>
@@ -71,7 +52,6 @@ export default function ShortcutsDialog({ onClose }: { onClose: () => void }) {
             </section>
           ))}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

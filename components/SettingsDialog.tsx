@@ -8,8 +8,7 @@ import { THEMES, type Theme, savedTheme, setTheme } from "@/lib/theme";
 import type { Automation, Backend, CliStatus, SettingsView } from "@/lib/types";
 import AutomationSettings from "./AutomationSettings";
 import Icon, { type IconName, Spinner } from "./Icon";
-import { useEscape } from "@/lib/use-escape";
-import { NO_DRAG } from "@/lib/no-drag";
+import Modal from "./Modal";
 
 const THEME_ICONS: Record<Theme, IconName> = { system: "monitor", light: "sun", dark: "moon" };
 
@@ -173,8 +172,6 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [startError, setStartError] = useState<Partial<Record<Backend, string>>>({});
   const timers = useRef(new Map<Backend, ReturnType<typeof setTimeout>>());
 
-  useEscape(true, onClose);
-
   useEffect(() => {
     const pending = timers.current;
     return () => pending.forEach((t) => clearTimeout(t));
@@ -270,22 +267,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const sectionHint = "text-[12.5px] text-muted";
 
   return (
-    <div style={NO_DRAG} className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={onClose}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="settings-title"
-        onMouseDown={(e) => e.stopPropagation()}
-        className="flex max-h-full w-full max-w-[640px] flex-col rounded-xl border border-line bg-panel shadow-2xl"
-      >
-        <div className="flex shrink-0 items-center justify-between border-b border-line px-5 py-3.5">
-          <h2 id="settings-title" className="text-[15px] font-medium text-ink">
-            Settings
-          </h2>
-          <button onClick={onClose} aria-label="Close" className="rounded-md p-1 text-muted hover:bg-sunken hover:text-ink">
-            <Icon name="x" size={16} />
-          </button>
-        </div>
+    <Modal title="Settings" onClose={onClose} className="max-h-full w-full max-w-[640px]">
 
         {settings === null && loadError === null ? (
           <div className="flex items-center justify-center gap-2 px-5 py-16 text-[13px] text-muted">
@@ -479,7 +461,6 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
             Save
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

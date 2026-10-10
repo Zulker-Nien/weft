@@ -59,7 +59,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `lib/import.ts`, `lib/search.ts`: pick up `~/.claude/projects` sessions as cards; search index.
 - `lib/store.ts`: storage in `~/.weft` (board.json, threads/, attachments/).
 - `app/api/*` + `lib/guard.ts`: localhost-only Host check, writes need `x-threadboard: 1`.
-- Components: `Board.tsx`, `ThreadView.tsx`, `ThreadItems.tsx`, `Markdown.tsx`, `ReviewPanel.tsx`.
+- Components: `Board.tsx`, `ThreadView.tsx`, `ThreadItems.tsx`, `Markdown.tsx`, `ReviewPanel.tsx`;
+  every dialog sits in `Modal.tsx` (backdrop, header, close, Escape via `lib/use-escape.ts`).
 - Deeper docs: docs/architecture/*.md.
 
 ## Conventions to keep

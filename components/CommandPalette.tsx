@@ -2,9 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { keyCaps } from "@/lib/hotkeys";
-import { useEscape } from "@/lib/use-escape";
 import Icon, { type IconName } from "./Icon";
-import { NO_DRAG } from "@/lib/no-drag";
+import Modal from "./Modal";
 
 export type PaletteItem = {
   id: string;
@@ -73,7 +72,6 @@ export default function CommandPalette({
   const [prompts, setPrompts] = useState<{ query: string; items: PaletteItem[] }>({ query: "", items: [] });
   const [active, setActive] = useState(0);
   const list = useRef<HTMLUListElement>(null);
-  useEscape(true, onClose);
   // The board makes a new findPrompts on every render; a pending search shouldn't restart for that.
   const find = useRef(findPrompts);
   useEffect(() => {
@@ -139,14 +137,7 @@ export default function CommandPalette({
   }
 
   return (
-    <div style={NO_DRAG} className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-[12vh]" onMouseDown={onClose}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Command palette"
-        onMouseDown={(e) => e.stopPropagation()}
-        className="flex max-h-[min(520px,76vh)] w-full max-w-[600px] flex-col overflow-hidden rounded-xl border border-line bg-panel shadow-2xl"
-      >
+    <Modal label="Command palette" onClose={onClose} placement="top" className="max-h-[min(520px,76vh)] w-full max-w-[600px] overflow-hidden">
         <div className="flex shrink-0 items-center gap-2.5 border-b border-line px-4 py-3">
           <Icon name="search" size={15} className="text-muted" />
           <input
@@ -211,7 +202,6 @@ export default function CommandPalette({
             );
           })}
         </ul>
-      </div>
-    </div>
+    </Modal>
   );
 }

@@ -4,8 +4,7 @@ import { useEffect, useEffectEvent, useRef, useState, type SubmitEvent } from "r
 import { api } from "@/lib/client";
 import type { Backend, LoginView } from "@/lib/types";
 import Icon, { Spinner } from "./Icon";
-import { useEscape } from "@/lib/use-escape";
-import { NO_DRAG } from "@/lib/no-drag";
+import Modal from "./Modal";
 
 const NAMES: Record<Backend, string> = { claude: "Claude Code", puku: "puku-cli" };
 
@@ -53,8 +52,6 @@ export default function LoginDialog({ login, onClose }: { login: LoginView; onCl
 
   const close = useEffectEvent(onClose);
 
-  useEscape(true, onClose);
-
   // Done closes itself after a moment; a cancelled login has nothing left to show.
   useEffect(() => {
     if (login.state === "cancelled") {
@@ -98,21 +95,7 @@ export default function LoginDialog({ login, onClose }: { login: LoginView; onCl
   const name = NAMES[login.backend];
 
   return (
-    <div style={NO_DRAG} className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="login-dialog-title"
-        className="w-full max-w-[520px] rounded-xl border border-line bg-panel shadow-2xl"
-      >
-        <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
-          <h2 id="login-dialog-title" className="text-[15px] font-medium text-ink">
-            Log in to {name}
-          </h2>
-          <button onClick={onClose} aria-label="Close" className="rounded-md p-1 text-muted hover:bg-sunken hover:text-ink">
-            <Icon name="x" size={16} />
-          </button>
-        </div>
+    <Modal title={`Log in to ${name}`} onClose={onClose} keepOnBackdrop className="w-full max-w-[520px]">
 
         <div className="flex flex-col gap-4 px-5 py-4">
           {login.state === "running" && (
@@ -228,7 +211,6 @@ export default function LoginDialog({ login, onClose }: { login: LoginView; onCl
             </button>
           </div>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }

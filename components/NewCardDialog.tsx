@@ -7,7 +7,7 @@ import Composer, { type ComposerHandle } from "./Composer";
 import Icon from "./Icon";
 import RepoPicker from "./RepoPicker";
 import StatusStrip from "./StatusStrip";
-import { useEscape } from "@/lib/use-escape";
+import Modal from "./Modal";
 
 const LAST_CWD = "threadboard.cwd";
 const LAST_BACKEND = "threadboard.backend";
@@ -142,9 +142,6 @@ export default function NewCardDialog({
   const composer = useRef<ComposerHandle>(null);
   const draftTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  // The prompt is saved as a draft as it's typed, so closing keeps it.
-  useEscape(true, onClose);
-
   useEffect(() => () => clearTimeout(draftTimer.current), []);
 
   function place(r: Rect) {
@@ -244,17 +241,17 @@ export default function NewCardDialog({
     }
   }
 
+  // The prompt is saved as a draft as it's typed, so Escape or a click outside keeps it.
   const mode = MODES.find((m) => m.id === permissionMode) ?? MODES[0];
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40" onMouseDown={onClose}>
-      <div
-        role="dialog"
-        aria-labelledby="new-thread-title"
-        onMouseDown={(e) => e.stopPropagation()}
-        style={rect ? { left: rect.x, top: rect.y, width: rect.w, height: rect.h } : { visibility: "hidden" }}
-        className="absolute flex flex-col rounded-xl border border-line bg-panel shadow-2xl"
-      >
+    <Modal
+      title="New thread"
+      onClose={onClose}
+      placement="free"
+      style={rect ? { left: rect.x, top: rect.y, width: rect.w, height: rect.h } : { visibility: "hidden" }}
+      onHeaderPointerDown={(e) => startDrag(e, "move")}
+    >
         {HANDLES.map(({ n, cls, cursor, ...sides }) => (
           <div
             key={n}
@@ -264,20 +261,7 @@ export default function NewCardDialog({
             className={`absolute z-10 ${cls}`}
           />
         ))}
-        <div
-          onPointerDown={(e) => !(e.target as HTMLElement).closest("button") && startDrag(e, "move")}
-          style={{ touchAction: "none" }}
-          className="flex shrink-0 cursor-move select-none items-center justify-between px-5 pb-2 pt-4"
-        >
-          <h2 id="new-thread-title" className="text-[15px] font-medium text-ink">
-            New thread
-          </h2>
-          <button onClick={onClose} aria-label="Close" className="rounded-md p-1 text-muted hover:bg-sunken hover:text-ink">
-            <Icon name="x" size={16} />
-          </button>
-        </div>
-
-        <div className="flex min-h-0 flex-1 flex-col px-5">
+        <div className="flex min-h-0 flex-1 flex-col px-5 pt-3">
           <Composer
             ref={composer}
             variant="dialog"
@@ -396,7 +380,6 @@ export default function NewCardDialog({
             Start now
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

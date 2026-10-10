@@ -379,7 +379,7 @@ export default function ProjectBar({
           onChange={(e) => onQuery(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Escape" && query) {
-              e.preventDefault();
+              e.stopPropagation();
               onQuery("");
             }
           }}

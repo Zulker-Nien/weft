@@ -1,0 +1,81 @@
+"use client";
+
+import { useId, type CSSProperties, type PointerEvent, type ReactNode } from "react";
+import { NO_DRAG } from "@/lib/no-drag";
+import { useEscape } from "@/lib/use-escape";
+import Icon from "./Icon";
+
+const PLACEMENT = {
+  center: "flex items-center justify-center p-4",
+  top: "flex items-start justify-center p-4 pt-[12vh]",
+  // The panel places itself with `style` (a dialog the user moves and resizes).
+  free: "",
+};
+
+// The chrome every dialog shares: a dimmed backdrop over the whole window, a panel, a header with the
+// title and a close button, and Escape. Escape always closes the newest dialog; so does a click on the
+// backdrop, unless `keepOnBackdrop`. Without a title there's no header, and `label` names the dialog.
+export default function Modal({
+  title,
+  label,
+  onClose,
+  placement = "center",
+  keepOnBackdrop = false,
+  className = "",
+  style,
+  onHeaderPointerDown,
+  children,
+}: {
+  title?: ReactNode;
+  label?: string;
+  onClose: () => void;
+  placement?: keyof typeof PLACEMENT;
+  keepOnBackdrop?: boolean;
+  // Width and height for the panel, e.g. "w-full max-w-[560px]".
+  className?: string;
+  style?: CSSProperties;
+  // Makes the header a drag handle (presses on its buttons are left alone).
+  onHeaderPointerDown?: (e: PointerEvent<HTMLDivElement>) => void;
+  children: ReactNode;
+}) {
+  const titleId = useId();
+  useEscape(true, onClose);
+
+  return (
+    <div
+      style={NO_DRAG}
+      className={`fixed inset-0 z-50 bg-black/40 ${PLACEMENT[placement]}`}
+      onMouseDown={keepOnBackdrop ? undefined : onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title ? titleId : undefined}
+        aria-label={title ? undefined : label}
+        onMouseDown={(e) => e.stopPropagation()}
+        style={style}
+        className={`flex flex-col rounded-xl border border-line bg-panel shadow-2xl ${placement === "free" ? "absolute" : ""} ${className}`}
+      >
+        {title && (
+          <div
+            onPointerDown={
+              onHeaderPointerDown && ((e) => !(e.target as HTMLElement).closest("button") && onHeaderPointerDown(e))
+            }
+            style={onHeaderPointerDown ? { touchAction: "none" } : undefined}
+            className={`flex shrink-0 items-center justify-between border-b border-line px-5 py-3.5 ${
+              onHeaderPointerDown ? "cursor-move select-none" : ""
+            }`}
+          >
+            <h2 id={titleId} className="text-[15px] font-medium text-ink">
+              {title}
+            </h2>
+            <button onClick={onClose} aria-label="Close" className="rounded-md p-1 text-muted hover:bg-sunken hover:text-ink">
+              <Icon name="x" size={16} />
+            </button>
+          </div>
+        )}
+        {children}
+      </div>
+    </div>
+  );
+}

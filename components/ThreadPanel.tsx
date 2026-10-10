@@ -53,7 +53,7 @@ export default function ThreadPanel({
                 if (e.key === "Enter") e.currentTarget.blur();
                 if (e.key === "Escape") {
                   // Cancels the rename only; the thread stays open.
-                  e.preventDefault();
+                  e.stopPropagation();
                   e.currentTarget.value = card.title;
                   e.currentTarget.blur();
                 }
