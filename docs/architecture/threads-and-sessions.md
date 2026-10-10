@@ -57,6 +57,11 @@ CLI processes keyed by `backend|cwd`. `adoptSpare()` (`lib/runner.ts`) hands a
 spare to a new card, flips its `permissionMode` via `query.setPermissionMode`, marks
 the card `warm: true`, and immediately starts a fresh spare for that folder.
 
+Spares open in the default permission mode (`defaultPermissionMode()` in `lib/settings.ts`, Auto unless
+changed in Settings), the same mode `POST /api/cards`, the New thread dialog and the copilot's `create_card`
+start a card in, so adopting one rarely needs a mode switch. The dialog's effort starts at High and then
+follows the last card's (`weft.effort` in localStorage).
+
 `prewarm()` (`lib/copilot.ts`) runs once per server start: it starts the Claude Code
 session sync, ensures the copilot card and warms it, and starts a spare in the most recent
 project (or the folder of the first non-copilot card).

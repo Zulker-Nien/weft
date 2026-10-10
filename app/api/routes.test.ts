@@ -50,6 +50,8 @@ vi.mock("@/lib/settings", () => ({
   dismissSession: vi.fn(),
   setThreadPrompt: vi.fn(),
   setKeepAliveMinutes: vi.fn(),
+  setDefaultPermissionMode: vi.fn(),
+  defaultPermissionMode: vi.fn(() => "auto"),
   setAutomations: vi.fn(),
   settingsView: vi.fn(() => ({ threadPrompt: "tp", keepAliveMinutes: 5, automations: [] })),
 }));
@@ -242,7 +244,7 @@ describe("POST /cards", () => {
     const res = await cardsRoute.POST(req("/cards", { method: "POST", body: { prompt: "  fix the bug  ", cwd: tmp } }));
     expect(res.status).toBe(200);
     const { card } = await res.json();
-    expect(card).toMatchObject({ prompt: "fix the bug", cwd: tmp, backend: "claude", permissionMode: "bypassPermissions", column: "backlog" });
+    expect(card).toMatchObject({ prompt: "fix the bug", cwd: tmp, backend: "claude", permissionMode: "auto", column: "backlog" });
     expect(card.title).toBeTruthy();
     expect(settings.touchProject).toHaveBeenCalledWith(tmp);
     expect(runner.sendMessage).not.toHaveBeenCalled();
@@ -265,7 +267,7 @@ describe("POST /cards", () => {
       req("/cards", { method: "POST", body: { prompt: "p", cwd: tmp, model: "bad model; rm", effort: "huge", permissionMode: "yolo", backend: "nope" } }),
     );
     expect(store.createCard).toHaveBeenLastCalledWith(
-      expect.objectContaining({ model: undefined, effort: undefined, permissionMode: "bypassPermissions", backend: "claude" }),
+      expect.objectContaining({ model: undefined, effort: undefined, permissionMode: "auto", backend: "claude" }),
     );
   });
 
@@ -587,10 +589,11 @@ describe("/settings", () => {
     expect(await (await settingsRoute.GET(req("/settings"))).json()).toEqual({ threadPrompt: "tp", keepAliveMinutes: 5, automations: [] });
   });
 
-  it("PATCH saves the prompt, keep-alive and automations", async () => {
+  it("PATCH saves the prompt, keep-alive, default mode and automations", async () => {
     const res = await patch({
       threadPrompt: "be brief",
       keepAliveMinutes: 10,
+      defaultPermissionMode: "acceptEdits",
       automations: [
         { id: "a1", on: "done", skill: "/weft:done" },
         { on: "prompt-matches", skill: "deploy", pattern: "ship it" },
@@ -599,6 +602,7 @@ describe("/settings", () => {
     expect(res.status).toBe(200);
     expect(settings.setThreadPrompt).toHaveBeenCalledWith("be brief");
     expect(settings.setKeepAliveMinutes).toHaveBeenCalledWith(10);
+    expect(settings.setDefaultPermissionMode).toHaveBeenCalledWith("acceptEdits");
     const [rules] = vi.mocked(settings.setAutomations).mock.calls[0];
     expect(rules[0]).toEqual({ id: "a1", on: "done", skill: "weft:done" });
     expect(rules[1]).toMatchObject({ on: "prompt-matches", skill: "deploy", pattern: "ship it" });
@@ -610,6 +614,7 @@ describe("/settings", () => {
       { threadPrompt: 5 },
       { keepAliveMinutes: -1 },
       { keepAliveMinutes: "10" },
+      { defaultPermissionMode: "yolo" },
       { automations: "nope" },
       { automations: [{ on: "sometimes", skill: "x" }] },
       { automations: [{ on: "done", skill: "bad skill!" }] },
@@ -622,6 +627,7 @@ describe("/settings", () => {
     }
     expect(settings.setThreadPrompt).not.toHaveBeenCalled();
     expect(settings.setKeepAliveMinutes).not.toHaveBeenCalled();
+    expect(settings.setDefaultPermissionMode).not.toHaveBeenCalled();
     expect(settings.setAutomations).not.toHaveBeenCalled();
   });
 });

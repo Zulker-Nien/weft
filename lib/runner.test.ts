@@ -127,6 +127,7 @@ vi.mock("./import", () => ({ isOpenElsewhere: () => h.openElsewhere }));
 vi.mock("./settings", () => ({
   keepAliveMinutes: () => h.keepAlive,
   threadPrompt: () => "THREAD PROMPT",
+  defaultPermissionMode: () => "bypassPermissions",
   touchProject: () => {},
   automations: () => [],
 }));

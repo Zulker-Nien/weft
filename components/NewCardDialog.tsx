@@ -86,6 +86,7 @@ const MODELS = [
 const DEFAULT_MODEL = "claude-opus-5-5";
 
 // "" leaves it to the model's own default.
+const DEFAULT_EFFORT: Effort = "high";
 const EFFORTS: { id: Effort | ""; label: string }[] = [
   { id: "", label: "Default effort" },
   { id: "low", label: "Low effort" },
@@ -136,9 +137,11 @@ export default function NewCardDialog({
   });
   const [effort, setEffort] = useState<Effort | "">(() => {
     const saved = remembered(LAST_EFFORT);
-    return EFFORTS.find((e) => e.id === saved)?.id ?? "";
+    return EFFORTS.find((e) => e.id === saved)?.id ?? DEFAULT_EFFORT;
   });
-  const [permissionMode, setPermissionMode] = useState<PermissionMode>("bypassPermissions");
+  // Starts in Settings' default mode, unless you pick one before it loads.
+  const [permissionMode, setPermissionMode] = useState<PermissionMode>("auto");
+  const pickedMode = useRef(false);
   // Cards get no worktree, so a busy card in this folder would share its working tree.
   const alsoHere = busyInFolder(cards, cwd);
   const [error, setError] = useState<string | null>(null);
@@ -150,6 +153,15 @@ export default function NewCardDialog({
   const draftTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => () => clearTimeout(draftTimer.current), []);
+
+  useEffect(() => {
+    api.settings().then(
+      (s) => {
+        if (!pickedMode.current) setPermissionMode(s.defaultPermissionMode);
+      },
+      () => {},
+    );
+  }, []);
 
   function place(r: Rect) {
     rectRef.current = r;
@@ -240,7 +252,8 @@ export default function NewCardDialog({
       remember(LAST_CWD, cwd);
       remember(LAST_BACKEND, backend);
       remember(LAST_MODEL, model);
-      remember(LAST_EFFORT, effort || null);
+      // Kept even when it's "", so picking Default effort sticks too.
+      remember(LAST_EFFORT, effort);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -336,7 +349,10 @@ export default function NewCardDialog({
             <span className="sr-only">Permissions</span>
             <select
               value={permissionMode}
-              onChange={(e) => setPermissionMode(e.target.value as PermissionMode)}
+              onChange={(e) => {
+                pickedMode.current = true;
+                setPermissionMode(e.target.value as PermissionMode);
+              }}
               className="cursor-pointer appearance-none bg-transparent pr-4 font-medium outline-none"
             >
               {MODES.map((m) => (

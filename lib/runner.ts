@@ -13,7 +13,7 @@ import { glanceAfterTurn, showStarter } from "./glance";
 import { isOpenElsewhere } from "./import";
 import { isNotLoggedInError, startLogin } from "./login";
 import { editedPath, touchFile } from "./overlap";
-import { keepAliveMinutes, threadPrompt } from "./settings";
+import { defaultPermissionMode, keepAliveMinutes, threadPrompt } from "./settings";
 import { PLUGIN_DIR } from "./skills";
 import { extractReview, REVIEW_PROMPT } from "./review";
 import { extractStatus, type BoardStatus } from "./status";
@@ -268,8 +268,8 @@ export function ensureSpare(cwd: string, backend: Backend = "claude") {
     close(oldest);
   }
   try {
-    // New cards default to bypassPermissions, so most take over a spare without a mode switch.
-    spares.set(key, open({ cwd, backend, permissionMode: "bypassPermissions", copilot: false }, null));
+    // Spares start in the default mode new cards get, so most take one over without a mode switch.
+    spares.set(key, open({ cwd, backend, permissionMode: defaultPermissionMode(), copilot: false }, null));
   } catch {}
 }
 

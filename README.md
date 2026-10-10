@@ -86,8 +86,9 @@ The new-thread dialog (⌘N) and every card's reply box use the same editor:
 The folder picker lists your recent projects, the git repos in `~/dev` and other usual code folders
 (with their branch), and your GitHub repos from `gh`. Picking a GitHub repo that isn't on this Mac
 clones it into `~/dev`. You can also paste a path or browse for a folder. Cards are titled from the
-prompt's first line (click the title in the open thread to rename it), and new threads default to YOLO (`bypassPermissions`: every tool runs without
-asking); the menu next to the CLI switch changes that per thread.
+prompt's first line (click the title in the open thread to rename it), and new threads start in the default permission mode from Settings (Auto at first: a classifier
+approves or asks); the menu next to the CLI switch changes that per thread. Effort starts at High and
+then follows whatever the last new thread used.
 
 ## How cards move
 

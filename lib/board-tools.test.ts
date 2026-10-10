@@ -12,7 +12,7 @@ vi.mock("./store", () => ({
   listCards: () => [],
   updateCard: () => undefined,
 }));
-vi.mock("./settings", () => ({ touchProject: vi.fn() }));
+vi.mock("./settings", () => ({ touchProject: vi.fn(), defaultPermissionMode: () => "auto" }));
 
 const { createBoardCard, isTrustedTool } = await import("./board-tools");
 

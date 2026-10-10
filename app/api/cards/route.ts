@@ -7,12 +7,11 @@ import { titleFromPrompt } from "@/lib/format";
 import { fail, guard } from "@/lib/guard";
 import { projectRoot } from "@/lib/repos";
 import { sendMessage } from "@/lib/runner";
-import { listProjects, touchProject } from "@/lib/settings";
+import { defaultPermissionMode, listProjects, touchProject } from "@/lib/settings";
 import { createCard, getCard, listCards } from "@/lib/store";
-import type { Backend, Effort, PermissionMode } from "@/lib/types";
+import { MODES, type Backend, type Effort, type PermissionMode } from "@/lib/types";
 
 const BACKENDS: Backend[] = ["claude", "puku"];
-const MODES: PermissionMode[] = ["default", "acceptEdits", "auto", "bypassPermissions"];
 const EFFORTS: Effort[] = ["low", "medium", "high", "xhigh", "max"];
 
 const MODEL_ID = /^[\w.\-\[\]]{1,60}$/;
@@ -47,7 +46,7 @@ export async function POST(req: Request) {
     const backend = BACKENDS.includes(body.backend as Backend) ? (body.backend as Backend) : "claude";
     const permissionMode = MODES.includes(body.permissionMode as PermissionMode)
       ? (body.permissionMode as PermissionMode)
-      : "bypassPermissions";
+      : defaultPermissionMode();
 
     const model = backend === "claude" && typeof body.model === "string" && MODEL_ID.test(body.model) ? body.model : undefined;
 

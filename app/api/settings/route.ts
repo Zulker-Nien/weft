@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import { connection } from "next/server";
 import { patternRegex } from "@/lib/automations";
 import { fail, guard } from "@/lib/guard";
-import { setAutomations, setKeepAliveMinutes, setThreadPrompt, settingsView } from "@/lib/settings";
+import { setAutomations, setDefaultPermissionMode, setKeepAliveMinutes, setThreadPrompt, settingsView } from "@/lib/settings";
 import { SKILL_NAME } from "@/lib/skills";
-import { AUTOMATION_TRIGGERS, type Automation } from "@/lib/types";
+import { AUTOMATION_TRIGGERS, MODES, type Automation, type PermissionMode } from "@/lib/types";
 
 // The rules as sent, checked; a leading slash on a skill name is dropped.
 function readAutomations(value: unknown): Automation[] {
@@ -35,7 +35,12 @@ export async function PATCH(req: Request) {
   const denied = guard(req);
   if (denied) return denied;
   try {
-    const body = (await req.json()) as { threadPrompt?: unknown; keepAliveMinutes?: unknown; automations?: unknown };
+    const body = (await req.json()) as {
+      threadPrompt?: unknown;
+      keepAliveMinutes?: unknown;
+      defaultPermissionMode?: unknown;
+      automations?: unknown;
+    };
 
     if (body.threadPrompt !== undefined && typeof body.threadPrompt !== "string") {
       throw new Error("threadPrompt must be text.");
@@ -46,10 +51,14 @@ export async function PATCH(req: Request) {
     ) {
       throw new Error("keepAliveMinutes must be a number of minutes, 0 or more.");
     }
+    if (body.defaultPermissionMode !== undefined && !MODES.includes(body.defaultPermissionMode as PermissionMode)) {
+      throw new Error(`defaultPermissionMode must be one of ${MODES.join(", ")}.`);
+    }
     const rules = body.automations === undefined ? undefined : readAutomations(body.automations);
 
     if (typeof body.threadPrompt === "string") setThreadPrompt(body.threadPrompt);
     if (typeof body.keepAliveMinutes === "number") setKeepAliveMinutes(body.keepAliveMinutes);
+    if (body.defaultPermissionMode !== undefined) setDefaultPermissionMode(body.defaultPermissionMode as PermissionMode);
     if (rules) setAutomations(rules);
     return Response.json(settingsView());
   } catch (err) {

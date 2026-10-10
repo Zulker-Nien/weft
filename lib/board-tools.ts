@@ -4,7 +4,7 @@ import { firstMessage } from "./automations";
 import { markSeen } from "./copilot-digest";
 import { resolveFolder } from "./folders";
 import { clip, formatCost, shortToolName, titleFromPrompt } from "./format";
-import { touchProject } from "./settings";
+import { defaultPermissionMode, touchProject } from "./settings";
 import { createCard, getCard, getThread, listCards, updateCard } from "./store";
 import type { Backend, Card, PermissionMode, ThreadItem } from "./types";
 
@@ -214,7 +214,7 @@ export function boardMcpServer(actions: BoardActions) {
         },
         (args) =>
           attempt(() => {
-            const card = createBoardCard({ ...args, permissionMode: args.permission_mode ?? "default" });
+            const card = createBoardCard({ ...args, permissionMode: args.permission_mode ?? defaultPermissionMode() });
             return `Created ${card.id} in Backlog: ${card.title}`;
           }),
       ),

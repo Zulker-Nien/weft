@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { publish } from "./bus";
 import { DATA_DIR } from "./store";
-import type { Automation, Project, SettingsView } from "./types";
+import { MODES, type Automation, type PermissionMode, type Project, type SettingsView } from "./types";
 
 // Appended to every board thread's system prompt (not the copilot's). The user can edit it in
 // Settings; lib/status.ts parses the BOARD STATUS line it asks for, so keep that format.
@@ -27,6 +27,8 @@ const DEFAULT_AUTOMATIONS: Automation[] = [{ id: "default-done", on: "done", ski
 interface Settings {
   threadPrompt?: string;
   keepAliveMinutes?: number;
+  // The mode a new thread starts in; unset means Auto.
+  defaultPermissionMode?: PermissionMode;
   // Unset means the defaults; an empty list means the user removed them all.
   automations?: Automation[];
   projects: Project[];
@@ -43,6 +45,7 @@ function settings(): Settings {
     g.__threadboardSettings = {
       threadPrompt: saved.threadPrompt,
       keepAliveMinutes: saved.keepAliveMinutes,
+      defaultPermissionMode: saved.defaultPermissionMode,
       automations: saved.automations,
       projects: saved.projects ?? [],
       dismissedSessions: saved.dismissedSessions ?? [],
@@ -74,6 +77,16 @@ export function keepAliveMinutes() {
 export function setKeepAliveMinutes(minutes: number) {
   // At most a week; 0 means until the app quits.
   settings().keepAliveMinutes = Math.min(7 * 24 * 60, Math.max(0, Math.round(minutes)));
+  save();
+}
+
+export function defaultPermissionMode(): PermissionMode {
+  const saved = settings().defaultPermissionMode;
+  return saved && MODES.includes(saved) ? saved : "auto";
+}
+
+export function setDefaultPermissionMode(mode: PermissionMode) {
+  settings().defaultPermissionMode = mode;
   save();
 }
 
@@ -123,6 +136,7 @@ export function settingsView(): SettingsView {
     threadPrompt: threadPrompt(),
     defaultThreadPrompt: DEFAULT_THREAD_PROMPT,
     keepAliveMinutes: keepAliveMinutes(),
+    defaultPermissionMode: defaultPermissionMode(),
     automations: automations(),
     projects: listProjects(),
   };

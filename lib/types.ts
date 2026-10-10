@@ -13,6 +13,7 @@ export type Column = (typeof COLUMNS)[number]["id"];
 export type Backend = "claude" | "puku";
 // bypassPermissions is "YOLO": every tool runs without asking.
 export type PermissionMode = "default" | "acceptEdits" | "auto" | "bypassPermissions";
+export const MODES: PermissionMode[] = ["default", "acceptEdits", "auto", "bypassPermissions"];
 
 export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 
@@ -198,6 +199,8 @@ export interface SettingsView {
   defaultThreadPrompt: string;
   // Minutes a thread's CLI stays open with no messages before it closes; 0 keeps it open.
   keepAliveMinutes: number;
+  // The mode the new-thread dialog, the API and the copilot's create_card start a card in.
+  defaultPermissionMode: PermissionMode;
   automations: Automation[];
   projects: Project[];
 }

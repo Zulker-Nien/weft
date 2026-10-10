@@ -170,7 +170,12 @@ export const api = {
   copilot: () => call<{ card: Card }>("GET", "/api/copilot"),
   resetCopilot: () => call<{ card: Card }>("POST", "/api/copilot/reset"),
   settings: () => call<SettingsView>("GET", "/api/settings"),
-  saveSettings: (patch: { threadPrompt?: string; keepAliveMinutes?: number; automations?: Automation[] }) =>
+  saveSettings: (patch: {
+    threadPrompt?: string;
+    keepAliveMinutes?: number;
+    defaultPermissionMode?: PermissionMode;
+    automations?: Automation[];
+  }) =>
     call<SettingsView>("PATCH", "/api/settings", patch),
   addProject: (path: string) => call<{ path: string; projects: Project[] }>("POST", "/api/projects", { path }),
   newProject: (parent: string, name: string) =>

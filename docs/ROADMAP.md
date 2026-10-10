@@ -134,6 +134,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 
 ## Permissions, safety and sandboxing
 
+- `Done` **Default permission mode** — set in Settings (Auto out of the box); the new-thread dialog, the API, the copilot's `create_card` and warm spares all start in it.
 - `P1` **Always-allow rules** — "allow always for this card / this project" on a prompt, saved as tool-plus-pattern rules you can edit in settings.
 - `P1` **Full request detail** — expand a pending request on the card to see the whole command, the file diff for an edit, or the full URL before answering.
 - `P1` **Deny with a reason** — deny and tell the agent what to do instead, rather than the fixed "The user denied this in Weft."

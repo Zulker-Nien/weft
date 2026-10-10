@@ -5,7 +5,7 @@ import { CHIMES, CHIME_KINDS, type ChimePrefs, chimePrefs, previewChime, setChim
 import { api } from "@/lib/client";
 import { SHORTCUTS, bindingFromEvent, currentBinding, formatBinding, setBinding } from "@/lib/shortcuts";
 import { THEMES, type Theme, savedTheme, setTheme } from "@/lib/theme";
-import type { Automation, Backend, CliStatus, SettingsView } from "@/lib/types";
+import type { Automation, Backend, CliStatus, PermissionMode, SettingsView } from "@/lib/types";
 import AutomationSettings from "./AutomationSettings";
 import Icon, { type IconName, Spinner } from "./Icon";
 import Modal from "./Modal";
@@ -17,6 +17,13 @@ const KEEP_ALIVE: { minutes: number; label: string }[] = [
   { minutes: 60, label: "1 hour" },
   { minutes: 240, label: "4 hours" },
   { minutes: 15, label: "15 minutes" },
+];
+
+const MODES: { id: PermissionMode; label: string }[] = [
+  { id: "bypassPermissions", label: "YOLO" },
+  { id: "auto", label: "Auto" },
+  { id: "acceptEdits", label: "Accept edits" },
+  { id: "default", label: "Ask me" },
 ];
 
 const CLIS: { id: Backend; label: string }[] = [
@@ -160,6 +167,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [keepAlive, setKeepAlive] = useState(0);
+  const [mode, setMode] = useState<PermissionMode>("auto");
   const [rules, setRules] = useState<Automation[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -195,6 +203,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
         setSettings(s);
         setPrompt(s.threadPrompt);
         setKeepAlive(s.keepAliveMinutes);
+        setMode(s.defaultPermissionMode);
         setRules(s.automations);
       },
       (err) => {
@@ -234,6 +243,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const isDefaultPrompt = settings !== null && prompt.trim() === settings.defaultThreadPrompt.trim();
   const promptChanged = settings !== null && prompt.trim() !== settings.threadPrompt.trim();
   const keepAliveChanged = settings !== null && keepAlive !== settings.keepAliveMinutes;
+  const modeChanged = settings !== null && mode !== settings.defaultPermissionMode;
   // A rule left without a skill is dropped rather than refused.
   const rulesToSave = rules.filter((r) => r.skill.trim());
   const rulesChanged = settings !== null && JSON.stringify(rulesToSave) !== JSON.stringify(settings.automations);
@@ -243,10 +253,11 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
 
   async function save() {
     if (!settings) return;
-    const patch: { threadPrompt?: string; keepAliveMinutes?: number; automations?: Automation[] } = {};
+    const patch: Parameters<typeof api.saveSettings>[0] = {};
     // Saving the default text clears the custom prompt, so later default changes still apply.
     if (promptChanged) patch.threadPrompt = isDefaultPrompt ? "" : prompt;
     if (keepAliveChanged) patch.keepAliveMinutes = keepAlive;
+    if (modeChanged) patch.defaultPermissionMode = mode;
     if (rulesChanged) patch.automations = rulesToSave;
     if (Object.keys(patch).length === 0) {
       onClose();
@@ -349,6 +360,28 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
                       Reset to default
                     </button>
                   </div>
+                </section>
+
+                <section className="flex items-center justify-between gap-4">
+                  <div className="flex flex-col gap-0.5">
+                    <h3 className={sectionTitle}>Default permission mode</h3>
+                    <p className={sectionHint}>What a new thread starts in. You can still change it per thread.</p>
+                  </div>
+                  <select
+                    value={mode}
+                    aria-label="Default permission mode"
+                    onChange={(e) => {
+                      setMode(e.target.value as PermissionMode);
+                      setSaveError(null);
+                    }}
+                    className="w-fit rounded-md border border-line-strong bg-canvas px-2.5 py-[7px] text-[12.5px] text-ink outline-none focus:border-accent"
+                  >
+                    {MODES.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
                 </section>
 
                 <section className="flex flex-col gap-2">

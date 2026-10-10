@@ -57,6 +57,15 @@ describe("settings", () => {
     expect(s.keepAliveMinutes()).toBe(7 * 24 * 60);
   });
 
+  it("new threads start in Auto until another default mode is saved", async () => {
+    let s = await load();
+    expect(s.defaultPermissionMode()).toBe("auto");
+    s.setDefaultPermissionMode("acceptEdits");
+    s = await load();
+    expect(s.defaultPermissionMode()).toBe("acceptEdits");
+    expect(s.settingsView().defaultPermissionMode).toBe("acceptEdits");
+  });
+
   it("an empty automations list is kept, not replaced by the defaults", async () => {
     const s = await load();
     s.setAutomations([]);
