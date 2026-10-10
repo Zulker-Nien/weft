@@ -33,9 +33,10 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - tests before refactoring; small behavior-preserving steps
   - "make the change easy, then make the easy change"
   - name the smell (Long Function, Large Class, Duplicated Code, Feature Envy) before fixing it
-  - hotspots: components/Board.tsx (~950 lines), lib/runner.ts (~800), electron/main.cjs (~620).
+  - hotspots: components/Board.tsx (~900 lines), lib/runner.ts (~800), electron/main.cjs (~620).
     Pure logic already moved out: `lib/board-view.ts` (columns, project chips, chime/unseen rules) and
-    `lib/turn.ts` (how a turn's result reads, cost, limits). Next: Board's state into hooks.
+    `lib/turn.ts` (how a turn's result reads, cost, limits); Board's hooks into `lib/use-*.ts` (`use-now`,
+    `use-toast`, `use-desktop-bridge`). Next: live events/chimes, view prefs, shortcuts, command palette.
   - I have a small Vitest suite (`npm test`) over the pure logic in `lib/` and the API routes
     (`app/api/routes.test.ts`, runner and store mocked), plus characterization tests of the runner's
     SDK loop (`lib/runner.test.ts`, fake `query()`). The UI is still untested; add tests with any risky change.
