@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alsoHereLine, busyHere, busyInFolder, isBusy, sameTree } from "./overlap";
+import { alsoHereLine, busyHere, busyInFolder, editedPath, isBusy, sameTree, sharedFiles, touchFile, TOUCHED_CAP } from "./overlap";
 import type { Card } from "./types";
 
 let seq = 0;
@@ -78,5 +78,50 @@ describe("alsoHereLine", () => {
     expect(alsoHereLine([])).toBe("");
     expect(alsoHereLine([card({ title: "Fix login" })])).toBe("Also running here: Fix login");
     expect(alsoHereLine([card({ title: "Fix login" }), card(), card()])).toBe("Also running here: Fix login and 2 more");
+  });
+
+  it("says which files busy cards both edited, naming a card that did first", () => {
+    const me = card({ touchedFiles: ["/repo/lib/a.ts", "/repo/b.ts", "/repo/c.ts", "/repo/d.ts"] });
+    const quiet = card({ title: "Docs", touchedFiles: ["/repo/README.md"] });
+    const clash = card({ title: "Fix login", touchedFiles: ["/repo/b.ts", "/repo/lib/a.ts"] });
+    expect(alsoHereLine(busyHere([me, quiet, clash], me))).toBe("Also running here: Fix login and 1 more — both edited a.ts and b.ts");
+    const wide = card({ touchedFiles: ["/repo/c.ts", "/repo/d.ts"] });
+    expect(alsoHereLine(busyHere([me, clash, wide], me))).toBe("Also running here: Fix login and 1 more — both edited a.ts, b.ts and 2 more");
+    expect(alsoHereLine(busyHere([me, quiet], me))).toBe("Also running here: Docs");
+  });
+});
+
+describe("sharedFiles", () => {
+  it("lists the card's files any other card edited, in the card's order", () => {
+    const me = card({ touchedFiles: ["/r/a", "/r/b", "/r/c"] });
+    expect(sharedFiles(me, [card({ touchedFiles: ["/r/c"] }), card({ touchedFiles: ["/r/a", "/r/x"] })])).toEqual(["/r/a", "/r/c"]);
+    expect(sharedFiles(card(), [me])).toEqual([]);
+  });
+});
+
+describe("editedPath", () => {
+  it("reads the path from file-editing tools only", () => {
+    expect(editedPath("Edit", { file_path: "/r/a.ts" })).toBe("/r/a.ts");
+    expect(editedPath("Write", { file_path: "/r/a.ts" })).toBe("/r/a.ts");
+    expect(editedPath("MultiEdit", { file_path: "/r/a.ts" })).toBe("/r/a.ts");
+    expect(editedPath("NotebookEdit", { notebook_path: "/r/n.ipynb" })).toBe("/r/n.ipynb");
+    expect(editedPath("Read", { file_path: "/r/a.ts" })).toBeUndefined();
+    expect(editedPath("Edit", {})).toBeUndefined();
+  });
+});
+
+describe("touchFile", () => {
+  it("moves the file to the front, and returns undefined when it's already there", () => {
+    expect(touchFile(undefined, "/a")).toEqual(["/a"]);
+    expect(touchFile(["/b", "/a"], "/a")).toEqual(["/a", "/b"]);
+    expect(touchFile(["/a", "/b"], "/a")).toBeUndefined();
+  });
+
+  it("keeps at most TOUCHED_CAP files", () => {
+    const full = Array.from({ length: TOUCHED_CAP }, (_, i) => `/f${i}`);
+    const next = touchFile(full, "/new")!;
+    expect(next).toHaveLength(TOUCHED_CAP);
+    expect(next[0]).toBe("/new");
+    expect(next).not.toContain(`/f${TOUCHED_CAP - 1}`);
   });
 });

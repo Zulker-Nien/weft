@@ -6,16 +6,15 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 
 ## Top 10 next
 
-1. **File overlap warning** — flag two cards editing the same files, the next step after the busy-folder warning; Weft doesn't plan a worktree per card (see SOUL.md).
-2. **Diff view in Review** — show what a card changed since it started, so reviewing a finished turn doesn't mean switching to an editor.
-3. **Copilot acts on its own** — the copilot now hears what finished, failed, or needs you with each of your messages; next, let it start a turn when that happens instead of waiting to be asked.
-4. **Markdown in threads** — render agent replies with headings, code blocks, and tables instead of plain text.
-5. **Always-allow rules** — "allow always for this card / this project" on permission prompts, so the same `npm test` doesn't ask twenty times.
-6. **Commit, push, and open a PR from a card** — finish the loop from Review without leaving the board, and keep the PR link on the card.
-7. **Browser tab per card** — each card gets its own tab in the pane, so two agents testing two apps don't navigate over each other.
-8. **Import existing CLI sessions** — turn threads started in a terminal (`~/.claude/projects`, `~/.puku-cli/projects`) into cards that resume them.
-9. **Queue a reply while running** — let you type the next instruction while a turn is working; it's sent when the turn ends.
-10. **Concurrency cap and run queue** — limit how many cards run at once and start the rest from Backlog in order, so a batch of cards doesn't swamp the machine or the rate limit.
+1. **Diff view in Review** — show what a card changed since it started, so reviewing a finished turn doesn't mean switching to an editor.
+2. **Copilot acts on its own** — the copilot now hears what finished, failed, or needs you with each of your messages; next, let it start a turn when that happens instead of waiting to be asked.
+3. **Markdown in threads** — render agent replies with headings, code blocks, and tables instead of plain text.
+4. **Always-allow rules** — "allow always for this card / this project" on permission prompts, so the same `npm test` doesn't ask twenty times.
+5. **Commit, push, and open a PR from a card** — finish the loop from Review without leaving the board, and keep the PR link on the card.
+6. **Browser tab per card** — each card gets its own tab in the pane, so two agents testing two apps don't navigate over each other.
+7. **Import existing CLI sessions** — turn threads started in a terminal (`~/.claude/projects`, `~/.puku-cli/projects`) into cards that resume them.
+8. **Queue a reply while running** — let you type the next instruction while a turn is working; it's sent when the turn ends.
+9. **Concurrency cap and run queue** — limit how many cards run at once and start the rest from Backlog in order, so a batch of cards doesn't swamp the machine or the rate limit.
 
 ## Board and organization
 
@@ -71,6 +70,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `P1` **Diff view in Review** — the files and hunks a card changed since it started, in the thread panel.
 - `P1` **Commit, push, and open a PR** — buttons that commit the card's work, push its branch, and open a PR with `gh`; the PR link is saved on the card.
 - `Done` **Busy-folder warning** — a card shows an amber "+N here" on its folder line while another card is busy in the same folder, and the reply box says "Also running here: …" (`lib/overlap.ts`). It doesn't look at uncommitted changes.
+- `Done` **File overlap warning** — each card keeps the files its thread edited (Edit, Write, MultiEdit, NotebookEdit; `card.touchedFiles`, last 50), and when busy cards in one folder edited the same files the warning says so: "Also running here: Fix login — both edited a.ts" (`lib/overlap.ts`). It counts edits for the card's whole life, committed or not.
 - `P2` **Worktree setup command** — a per-project command run in each fresh worktree (`npm install`, copy `.env.local`) before the thread starts.
 - `P2` **Comment on the diff** — comments on diff lines go back to the thread as a reply, like a code review.
 - `P2` **Merge and clean up** — when a card reaches Done, offer to merge its branch and remove its worktree.

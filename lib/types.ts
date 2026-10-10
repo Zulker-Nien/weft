@@ -113,6 +113,9 @@ export interface Card {
   remaining?: string;
   // From the thread's weft-review block; replaced each time it sends a new one.
   review?: ReviewPlan;
+  // Files the thread has edited (Edit, Write, MultiEdit, NotebookEdit), most recent first, capped
+  // (lib/overlap.ts), for the warning when busy cards in one folder edit the same files.
+  touchedFiles?: string[];
   // Set on cards picked up from existing Claude Code sessions (see lib/import.ts).
   source?: "claude-code";
   // When the session last changed (its last message), and when its transcript was last read into the thread.

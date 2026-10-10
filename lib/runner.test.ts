@@ -359,6 +359,31 @@ describe("a turn's messages", () => {
     expect(thread("c1")[index]).toMatchObject({ kind: "tool", id: "t1", result: "a.txt", isError: true });
   });
 
+  it("keeps the files edit tools touch on the card, most recent first, across turns", async () => {
+    addCard({ id: "c1" });
+    const q = await send("c1");
+    q.emit(assistant(toolUse("t1", "Edit", { file_path: "/repo/a.ts" }), toolUse("t2", "Bash", { command: "ls" })));
+    q.emit(assistant(toolUse("t3", "Write", { file_path: "/repo/b.ts" }), toolUse("t4", "NotebookEdit", { notebook_path: "/repo/n.ipynb" })));
+    q.emit(success("ok"));
+    await flush();
+    runner.sendMessage("c1", "more", { echo: false });
+    await flush();
+    q.emit(assistant(toolUse("t5", "MultiEdit", { file_path: "/repo/a.ts" }), toolUse("t6", "Read", { file_path: "/repo/c.ts" })));
+    await flush();
+    expect(card("c1").touchedFiles).toEqual(["/repo/a.ts", "/repo/n.ipynb", "/repo/b.ts"]);
+  });
+
+  it("doesn't rewrite the card when the same file is edited again", async () => {
+    addCard({ id: "c1" });
+    const q = await send("c1");
+    q.emit(assistant(toolUse("t1", "Edit", { file_path: "/repo/a.ts" })));
+    await flush();
+    const list = card("c1").touchedFiles;
+    q.emit(assistant(toolUse("t2", "Edit", { file_path: "/repo/a.ts" })));
+    await flush();
+    expect(card("c1").touchedFiles).toBe(list);
+  });
+
   it("keeps subagent assistant turns out of the thread", async () => {
     addCard({ id: "c1" });
     const q = await send("c1");

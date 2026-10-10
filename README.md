@@ -105,7 +105,10 @@ Cards get no git worktree of their own, on purpose, so two cards in one folder s
 Weft warns you instead: a busy card shows "+1 here" next to its folder when another card is running
 or waiting in the same folder (or one inside it), and a thread's reply box says "Also running here:
 <title>" before you send. The New thread dialog says the same beside Start now when the folder you
-picked already has a busy card. It reads this from the board alone, with no git calls.
+picked already has a busy card. When the busy cards there have edited the same files, the reply box
+names them too: "Also running here: Fix login — both edited a.ts". Each card remembers the files its
+thread edited (the last 50, for the card's whole life, since Weft can't cheaply tell what got committed).
+It reads all this from the board alone, with no git calls.
 
 ## No waiting for CLIs to start
 

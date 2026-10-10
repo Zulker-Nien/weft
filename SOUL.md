@@ -85,8 +85,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   typecheck and tests, but the repo has no upstream branch yet, so it hasn't run.
 - `7b1db11`, `dfdd9c7` and `0e54c6f` don't build on their own (Board.tsx imported files committed later);
   everything from `2766738` on does.
-- Busy-folder warning exists (`lib/overlap.ts`: "+N here" on the card, "Also running here" in the reply box),
-  but no file-overlap check: tool items keep only a clipped `summary`, and other cards' threads aren't loaded.
+- The overlap warning (`lib/overlap.ts`) counts a card's edits for its whole life, committed or not, and
+  shows shared files only in the reply box: the card's "+N here" tooltip and the New thread dialog don't name them.
 - The copilot learns what finished or needs you only with your next message (`lib/copilot-digest.ts`);
   it never runs a turn on its own.
 - puku-cli sessions aren't imported; a full puku thread hasn't been verified end to end.

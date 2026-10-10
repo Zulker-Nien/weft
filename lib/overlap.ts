@@ -2,7 +2,8 @@ import type { Card } from "./types";
 
 // Busy-folder warnings: Weft gives cards no git worktree of their own (see SOUL.md), so two cards
 // working in one folder share a working tree. These helpers find the other busy cards in a card's
-// folder from the board data alone, with no git calls, so they cost nothing on the start-a-card path.
+// folder, and the files they've both edited, from the board data alone, with no git calls, so they
+// cost nothing on the start-a-card path.
 
 // "/a/b/" -> "/a/b", so trailing slashes don't hide a match.
 function trim(cwd: string) {
@@ -31,19 +32,69 @@ export function isBusy(card: Card) {
   return (card.column === "running" || card.column === "needs_you") && !card.archived && card.role !== "copilot";
 }
 
+// Busy cards in a folder, plus the files they share with the card asked about (if any), so the
+// warning spots can render alsoHereLine(others) without being handed the card too.
+export type BusyCards = Card[] & { sharedFiles?: string[] };
+
 // The other busy cards working in this folder (pass the card's id to leave it out).
 export function busyInFolder(cards: Card[], cwd: string, exceptId?: string) {
   return cards.filter((c) => c.id !== exceptId && isBusy(c) && sameTree(c.cwd, cwd));
 }
 
-// The other busy cards in this card's folder.
-export function busyHere(cards: Card[], card: Card) {
-  return busyInFolder(cards, card.cwd, card.id);
+// The other busy cards in this card's folder, the ones that edited the same files as it first.
+export function busyHere(cards: Card[], card: Card): BusyCards {
+  const others = busyInFolder(cards, card.cwd, card.id);
+  const overlapping = others.filter((c) => sharedFiles(card, [c]).length > 0);
+  if (overlapping.length === 0) return others;
+  const ordered: BusyCards = [...overlapping, ...others.filter((c) => !overlapping.includes(c))];
+  ordered.sharedFiles = sharedFiles(card, overlapping);
+  return ordered;
 }
 
-// "Also running here: Fix login" or "Also running here: Fix login and 2 more".
-export function alsoHereLine(others: Card[]) {
+// How many edited files a card remembers (see touchFile).
+export const TOUCHED_CAP = 50;
+
+const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
+
+// The file a tool call edits, for the tools that edit files; paths stay as given (absolute).
+export function editedPath(toolName: string, input: Record<string, unknown>) {
+  if (!EDIT_TOOLS.has(toolName)) return undefined;
+  const path = input.file_path ?? input.notebook_path;
+  return typeof path === "string" && path ? path : undefined;
+}
+
+// The card's edited files with this one moved to the front, or undefined when that changes nothing
+// (it's already first), so the caller can skip the write.
+export function touchFile(list: string[] | undefined, path: string) {
+  if (list?.[0] === path) return undefined;
+  return [path, ...(list ?? []).filter((p) => p !== path)].slice(0, TOUCHED_CAP);
+}
+
+// The files this card edited that any of the others edited too, in the card's order (most recent first).
+export function sharedFiles(card: Card, others: Card[]) {
+  const theirs = new Set(others.flatMap((c) => c.touchedFiles ?? []));
+  return (card.touchedFiles ?? []).filter((p) => theirs.has(p));
+}
+
+function basename(path: string) {
+  return path.slice(path.lastIndexOf("/") + 1) || path;
+}
+
+// "a.ts", "a.ts and b.ts", "a.ts, b.ts and 3 more".
+export function filesLine(paths: string[]) {
+  const names = paths.slice(0, 2).map(basename);
+  const more = paths.length - names.length;
+  if (more > 0) return `${names.join(", ")} and ${more} more`;
+  return names.join(" and ");
+}
+
+// "Also running here: Fix login", "Also running here: Fix login and 2 more", and when busyHere found
+// shared edits, "Also running here: Fix login — both edited a.ts".
+export function alsoHereLine(others: BusyCards) {
   if (others.length === 0) return "";
   const more = others.length - 1;
-  return `Also running here: ${others[0].title}${more ? ` and ${more} more` : ""}`;
+  const line = `Also running here: ${others[0].title}${more ? ` and ${more} more` : ""}`;
+  const shared = others.sharedFiles ?? [];
+  if (shared.length === 0) return line;
+  return `${line} — both edited ${filesLine(shared)}`;
 }

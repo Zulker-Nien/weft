@@ -12,6 +12,7 @@ import { cliEnv } from "./env";
 import { glanceAfterTurn, showStarter } from "./glance";
 import { isOpenElsewhere } from "./import";
 import { isNotLoggedInError, startLogin } from "./login";
+import { editedPath, touchFile } from "./overlap";
 import { keepAliveMinutes, threadPrompt } from "./settings";
 import { PLUGIN_DIR } from "./skills";
 import { extractReview, REVIEW_PROMPT } from "./review";
@@ -135,7 +136,7 @@ const MAX_TIMER_MS = 2 ** 31 - 1;
 // rules in turn.ts count too: a session started before they changed would still run the old ones.
 const BUILD = createHash("sha1")
   .update(
-    [drive, queryOptions, handle, handleAssistant, handleToolResults, handleResult, askUser, settle, sendMessage, ...Object.values(turnRules)]
+    [drive, queryOptions, handle, handleAssistant, recordEdit, handleToolResults, handleResult, askUser, settle, sendMessage, ...Object.values(turnRules)]
       .map(String)
       .join("\n"),
   )
@@ -699,11 +700,23 @@ function handleAssistant(id: string, session: Session, msg: Extract<SDKMessage, 
       const summary = summarizeInput(input);
       const action = toolAction(block.name, input);
       if (block.name === "mcp__browser__open_url") session.openedPane = true;
+      recordEdit(id, block.name, input);
       const index = appendThread(id, { kind: "tool", id: block.id, name: block.name, summary, action, at: Date.now() });
       session.toolIndex.set(block.id, index);
       safeUpdate(id, { lastLine: `${shortToolName(block.name)} ${summary}`.trim() });
     }
   }
+}
+
+// Keeps the file an edit tool call names on the card, for the shared-files warning (lib/overlap.ts).
+// It's recorded when the call is made, so a denied edit counts too; the list lasts the card's life,
+// across turns, because the warning is about uncommitted edits in a shared tree and Weft can't
+// cheaply tell what got committed. Writes only when the list changes: this runs on every tool call.
+function recordEdit(id: string, toolName: string, input: Record<string, unknown>) {
+  const path = editedPath(toolName, input);
+  if (!path) return;
+  const touched = touchFile(getCard(id)?.touchedFiles, path);
+  if (touched) safeUpdate(id, { touchedFiles: touched });
 }
 
 // Tool results fill in the tool items the assistant message added.
