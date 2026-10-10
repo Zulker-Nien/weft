@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, mergeThread, type BrowserState, type MenuAction, type NewCardInput } from "@/lib/client";
 import { worktreeParent } from "@/lib/format";
 import { busyHere } from "@/lib/overlap";
@@ -19,6 +19,7 @@ import {
   type SortKey,
 } from "@/lib/board-view";
 import { useBoardEvents } from "@/lib/use-events";
+import { useDesktopBridge } from "@/lib/use-desktop-bridge";
 import { useNow } from "@/lib/use-now";
 import { useToast } from "@/lib/use-toast";
 import { keepTypedText, useEscape } from "@/lib/use-escape";
@@ -109,8 +110,6 @@ function announce(card: Card, onClick: () => void) {
   };
 }
 
-const noopSubscribe = () => () => {};
-
 export default function Board() {
   const [cards, setCards] = useState<Card[]>([]);
   const [home, setHome] = useState("");
@@ -121,10 +120,8 @@ export default function Board() {
   const [streaming, setStreaming] = useState("");
   const [showNew, setShowNew] = useState(false);
   const [dragOver, setDragOver] = useState<Column | null>(null);
-  const [browser, setBrowser] = useState<BrowserState>(CLOSED_BROWSER);
   const [webBrowserOpen, setWebBrowserOpen] = useState(false);
   const [browserWidth, setBrowserWidth] = useState(560);
-  const [copilotOpen, setCopilotOpen] = useState(false);
   const [copilotNeedsYou, setCopilotNeedsYou] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [project, setProject] = useState<string | null>(null);
@@ -153,9 +150,7 @@ export default function Board() {
   // Folders the server has already resolved into roots.
   const resolvedFolders = useRef(new Set<string>());
   const now = useNow();
-  const desktop = useSyncExternalStore(noopSubscribe, () => Boolean(window.threadboard), () => false);
-  // On macOS the header doubles as the title bar, under the window's traffic lights.
-  const mac = useSyncExternalStore(noopSubscribe, () => window.threadboard?.platform ?? "", () => "") === "darwin";
+  const { desktop, mac, browser, copilotOpen } = useDesktopBridge(CLOSED_BROWSER, selectedId, cards);
   const onMenu = useRef<(action: MenuAction, payload?: string) => void>(() => {});
 
   useEffect(() => {
@@ -310,31 +305,6 @@ export default function Board() {
       if (selectedRef.current) loadThread(selectedRef.current);
     },
   );
-
-  useEffect(() => {
-    const bridge = window.threadboard;
-    if (!bridge) return;
-    void bridge.browser.getState().then(setBrowser);
-    const offBrowser = bridge.browser.onState(setBrowser);
-    const offCopilot = bridge.copilot.onState((state) => setCopilotOpen(state.open));
-    return () => {
-      offBrowser();
-      offCopilot();
-    };
-  }, []);
-
-  // Each card has its own browser: show the open card's, and close those of cards that are gone.
-  useEffect(() => {
-    window.threadboard?.browser.setActive(selectedId);
-  }, [selectedId]);
-
-  useEffect(() => {
-    if (cards.length) window.threadboard?.browser.prune(cards.map((c) => c.id));
-  }, [cards]);
-
-  useEffect(() => {
-    window.threadboard?.setBadge(cards.filter((c) => c.column === "needs_you").length);
-  }, [cards]);
 
   // The menu, dock, tray, and shortcuts reach the board through onMenu, which always sees the latest state.
   useEffect(() => {
