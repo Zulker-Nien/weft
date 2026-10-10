@@ -36,8 +36,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
     Pure logic already moved out: `lib/board-view.ts` (columns, project chips, chime/unseen rules) and
     `lib/turn.ts` (how a turn's result reads, cost, limits). Next: Board's state into hooks.
   - I have a small Vitest suite (`npm test`) over the pure logic in `lib/` and the API routes
-    (`app/api/routes.test.ts`, runner and store mocked). The runner's SDK loop and UI are still
-    untested; add tests with any risky change.
+    (`app/api/routes.test.ts`, runner and store mocked), plus characterization tests of the runner's
+    SDK loop (`lib/runner.test.ts`, fake `query()`). The UI is still untested; add tests with any risky change.
 
 ## How I work (file map)
 
@@ -77,7 +77,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 
 - Tests cover `lib/status.ts`, `review.ts`, `guard.ts`, `automations.ts`, `format.ts`, `settings.ts`, `store.ts`,
   `board-tools.ts`, `board-view.ts` and `turn.ts`, plus the state-changing API routes (`app/api/routes.test.ts`;
-  events, search, transcribe, attachments and repos GET aren't covered); none for runner.ts's SDK loop or UI. CI (`.github/workflows/ci.yml`) runs lint,
+  events, search, transcribe, attachments and repos GET aren't covered); `lib/runner.test.ts` pins runner.ts's SDK loop with a fake `query()`; none for the UI. CI (`.github/workflows/ci.yml`) runs lint,
   typecheck and tests, but the repo has no upstream branch yet, so it hasn't run.
 - `7b1db11`, `dfdd9c7` and `0e54c6f` don't build on their own (Board.tsx imported files committed later);
   everything from `2766738` on does.
