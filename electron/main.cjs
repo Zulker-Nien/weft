@@ -569,6 +569,27 @@ ipcMain.handle("dialog:openFolder", async () => {
 ipcMain.on("shell:openExternal", (_e, url) => {
   if (/^https?:\/\//i.test(String(url))) shell.openExternal(String(url));
 });
+// The board's right-click menus (lib/card-menu.ts): shown natively so the narrow board never clips them.
+// Resolves to the picked item's id, or null when dismissed.
+ipcMain.handle("menu:popup", (e, items) =>
+  new Promise((resolve) => {
+    let picked = null;
+    const template = (Array.isArray(items) ? items : []).map((item) =>
+      item.type === "separator"
+        ? { type: "separator" }
+        : { label: String(item.label), enabled: item.enabled !== false, click: () => (picked = String(item.id)) },
+    );
+    // click fires before callback on macOS, but not on every platform; wait a tick for it.
+    Menu.buildFromTemplate(template).popup({
+      window: BrowserWindow.fromWebContents(e.sender) ?? undefined,
+      callback: () => setTimeout(() => resolve(picked), 0),
+    });
+  }),
+);
+ipcMain.on("shell:reveal", (_e, folder) => {
+  const dir = String(folder);
+  if (path.isAbsolute(dir) && fs.existsSync(dir)) shell.openPath(dir);
+});
 ipcMain.on("badge:set", (_e, count) => refreshWaiting(Number(count) || 0));
 ipcMain.on("splash:action", async (_e, action) => {
   if (action === "quit") return app.quit();

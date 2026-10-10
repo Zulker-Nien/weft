@@ -50,6 +50,7 @@ export default function CardView({
   onOpen,
   onAnswer,
   onStop,
+  onContextMenu,
   alsoHere = [],
 }: {
   card: Card;
@@ -60,6 +61,8 @@ export default function CardView({
   onOpen: () => void;
   onAnswer: (allow: boolean) => void;
   onStop: () => void;
+  // Right-click: the card's menu (lib/card-menu.ts).
+  onContextMenu?: (e: React.MouseEvent) => void;
   // Other busy cards in this folder (lib/overlap.ts busyHere); flagged only while this one is busy too.
   alsoHere?: Card[];
 }) {
@@ -94,6 +97,7 @@ export default function CardView({
       }}
       data-card-id={card.id}
       onClick={onOpen}
+      onContextMenu={onContextMenu}
       className={`relative rounded-lg border bg-card px-3 py-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent ${border} ${live ? "" : "cursor-grab active:cursor-grabbing"}`}
     >
       {unseen && (

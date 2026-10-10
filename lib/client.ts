@@ -1,3 +1,4 @@
+import type { MenuItem } from "./card-menu";
 import type { MediaKind } from "./media";
 import type {
   Automation,
@@ -55,6 +56,10 @@ export interface ShellBridge {
   };
   // Opens an http(s) URL in the default browser.
   openExternal(url: string): void;
+  // Opens a local folder in Finder.
+  revealFolder(folder: string): void;
+  // A native context menu at the pointer (lib/card-menu.ts); resolves to the picked id, or null.
+  popupMenu(items: MenuItem[]): Promise<string | null>;
   // The dock badge, e.g. how many cards need the user.
   setBadge(count: number): void;
   copilot: {

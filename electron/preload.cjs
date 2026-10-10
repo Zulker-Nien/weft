@@ -27,6 +27,8 @@ contextBridge.exposeInMainWorld("threadboard", {
     openFolder: () => ipcRenderer.invoke("dialog:openFolder"),
   },
   openExternal: (url) => ipcRenderer.send("shell:openExternal", url),
+  revealFolder: (folder) => ipcRenderer.send("shell:reveal", folder),
+  popupMenu: (items) => ipcRenderer.invoke("menu:popup", items),
   setBadge: (count) => ipcRenderer.send("badge:set", count),
   copilot: {
     toggle: () => ipcRenderer.send("copilot:toggle"),

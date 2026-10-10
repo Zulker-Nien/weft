@@ -49,7 +49,9 @@ lives in `electron/server.cjs`.
     `/api/settings` (falling back to `os.homedir()`).
 - IPC handlers at the bottom: `browser:open` (url, card key), `browser:active`, `browser:prune`, `browser:state`, `browser:visible`,
   `browser:bounds`, `browser:back/forward/reload`, `copilot:toggle`,
-  `dialog:openFolder`, `shell:openExternal` (http/https only), `badge:set`, and
+  `dialog:openFolder`, `shell:openExternal` (http/https only), `shell:reveal` (opens an existing
+  absolute folder in Finder), `menu:popup` (shows a native context menu from the items the board
+  sends, see `lib/card-menu.ts`, and resolves to the picked item's id or null), `badge:set`, and
   `splash:action` (`retry` re-runs `boot()`; `logs` opens the logs folder; `quit`
   quits).
 - `prewarm()` is not called from here — it's called by the Next server from
@@ -129,7 +131,7 @@ A native `WebContentsView` overlaid on the board. Lazily created on first
 
 The single `contextBridge.exposeInMainWorld("threadboard", …)` call. The UI's only
 door into the shell: `browser.*` (open / state / setVisible / setBounds / back /
-forward / reload / onState), `dialog.openFolder`, `openExternal`, `setBadge`,
+forward / reload / onState), `dialog.openFolder`, `openExternal`, `revealFolder`, `popupMenu`, `setBadge`,
 `copilot.toggle` and `copilot.onState`, `onMenu`, and `splashAction` (only used by
 the splash screen's retry/logs/quit buttons). Typed in `lib/client.ts` as
 `ShellBridge`; when `window.threadboard` is absent the board is running in a normal
@@ -225,3 +227,11 @@ The server in packaged builds is launched as `Weft Helper` (Electron's helper bi
 `ELECTRON_RUN_AS_NODE=1`) instead of the main `Weft` executable. Started from the main
 executable, macOS saw a second app named Weft, and quitting by name (`osascript -e 'quit app
 "Weft"'`) went to the wrong one; as a helper it doesn't register as an app.
+
+## Right-click menus
+
+The board's card and column menus are native, so the narrow board never clips them.
+`lib/card-menu.ts` builds them as plain data (`cardMenu`, `columnMenu`; flat, no submenus, tested in
+`lib/card-menu.test.ts`); `components/use-board-menus.ts` passes them to `threadboard.popupMenu` and runs
+the picked id through the board's own move, archive, open and API calls. In a plain browser tab there is
+no shell, so the browser's own menu shows.
