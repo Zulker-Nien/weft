@@ -1,6 +1,7 @@
 import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { firstMessage } from "./automations";
+import { markSeen } from "./copilot-digest";
 import { resolveFolder } from "./folders";
 import { clip, formatCost, shortToolName, titleFromPrompt } from "./format";
 import { touchProject } from "./settings";
@@ -247,6 +248,7 @@ export function boardMcpServer(actions: BoardActions) {
             const card = boardCard(card_id);
             if (actions.isBusy(card.id)) throw new Error(`“${card.title}” is running. Stop it first.`);
             updateCard(card.id, { column });
+            markSeen(card.id, column);
             return `Moved “${card.title}” to ${column}.`;
           }),
       ),

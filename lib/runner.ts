@@ -295,7 +295,8 @@ function adoptSpare(card: Card): Session | undefined {
   return spare;
 }
 
-export function sendMessage(cardId: string, text: string, { echo = true } = {}) {
+// `cli` is what the CLI gets when it differs from what the thread shows (the copilot's board digest).
+export function sendMessage(cardId: string, text: string, { echo = true, cli = text } = {}) {
   const card = getCard(cardId);
   if (!card) throw new Error("No such card.");
   let session = currentSession(cardId);
@@ -315,15 +316,15 @@ export function sendMessage(cardId: string, text: string, { echo = true } = {}) 
   clearTimeout(session.idle);
   session.busy = true;
   session.status = undefined;
-  session.inbox.push(text);
+  session.inbox.push(cli);
 }
 
 // A message you typed: sent now (a /done one archives the card once it's run), then the skills that "a prompt matches" rules want for it follow as
 // their own turns, once per thread per skill.
-export function sendUserMessage(cardId: string, text: string) {
+export function sendUserMessage(cardId: string, text: string, { cli = text } = {}) {
   const card = getCard(cardId);
   if (!card) throw new Error("No such card.");
-  sendMessage(cardId, text);
+  sendMessage(cardId, text, { cli });
   // /done files the card away when its turn ends, as a move to Done does.
   if (isDoneCommand(text)) archiveWhenIdle(cardId);
   const skills = skillsForPrompt(card, text);

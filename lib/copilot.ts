@@ -1,7 +1,8 @@
 import os from "node:os";
 import { startSessionSync } from "./import";
 import { startSearchIndex } from "./search";
-import { endSession, ensureSpare, warmUp } from "./runner";
+import { boardDigest, lastSeen, rememberSeen, snapshot, withDigest } from "./copilot-digest";
+import { endSession, ensureSpare, sendUserMessage, warmUp } from "./runner";
 import { listProjects } from "./settings";
 import { clearThread, createCard, getCard, listCards, updateCard } from "./store";
 import { COPILOT_ID } from "./types";
@@ -21,6 +22,15 @@ export function ensureCopilot() {
       COPILOT_ID,
     )
   );
+}
+
+// A message you typed to the copilot. Its CLI also gets what finished, needs you or failed on the
+// board since your last message; the thread shows only your text.
+export function sendToCopilot(text: string) {
+  const cards = listCards();
+  const digest = boardDigest(cards, lastSeen(), getCard(COPILOT_ID)?.lastWeftTurn);
+  sendUserMessage(COPILOT_ID, text, { cli: withDigest(digest, text) });
+  rememberSeen(snapshot(cards));
 }
 
 // Starts a fresh conversation: closes the CLI and forgets the session.
