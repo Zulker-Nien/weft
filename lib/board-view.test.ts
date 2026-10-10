@@ -195,31 +195,35 @@ describe("summarizeProjects", () => {
 });
 
 describe("latestLimits", () => {
-  it("returns undefined when no card has fiveHour or sevenDay", () => {
-    expect(latestLimits([card(), card({ stats: { model: "x" } })])).toBeUndefined();
+  it("returns undefined when no card has stats", () => {
+    expect(latestLimits([card(), card()])).toBeUndefined();
   });
 
-  it("returns the stats of the card with the newest updatedAt among those that have limits", () => {
+  it("returns the latest card's stats along with its cwd and backend", () => {
     const a = card({
       id: "a",
       updatedAt: 100,
-      stats: { fiveHour: { used: 10, resetsAt: 1 }, sevenDay: { used: 20, resetsAt: 2 } },
+      cwd: "/old",
+      backend: "puku",
+      stats: { model: "opus", fiveHour: { used: 10, resetsAt: 1 } },
     });
     const b = card({
       id: "b",
       updatedAt: 300,
-      stats: { fiveHour: { used: 30, resetsAt: 3 }, sevenDay: { used: 40, resetsAt: 4 } },
+      cwd: "/new",
+      backend: "claude",
+      stats: { model: "sonnet", fiveHour: { used: 30, resetsAt: 3 } },
     });
     const c = card({
       id: "c",
       updatedAt: 200,
-      stats: { fiveHour: { used: 50, resetsAt: 5 }, sevenDay: { used: 60, resetsAt: 6 } },
+      stats: { model: "haiku", fiveHour: { used: 50, resetsAt: 5 } },
     });
     const result = latestLimits([a, b, c]);
-    expect(result).toEqual({ fiveHour: { used: 30, resetsAt: 3 }, sevenDay: { used: 40, resetsAt: 4 } });
+    expect(result).toEqual({ model: "sonnet", fiveHour: { used: 30, resetsAt: 3 }, cwd: "/new", backend: "claude" });
   });
 
-  it("only returns fiveHour and sevenDay keys, nothing else from stats", () => {
+  it("passes the latest card's full stats through (model, branch, tokens, lines, limits)", () => {
     const a = card({
       id: "a",
       updatedAt: 100,
@@ -227,17 +231,28 @@ describe("latestLimits", () => {
         model: "opus",
         branch: "main",
         tokens: 12345,
+        added: 12,
+        removed: 3,
         fiveHour: { used: 1, resetsAt: 9 },
         sevenDay: { used: 2, resetsAt: 10 },
       },
     });
-    const result = latestLimits([a]);
-    expect(Object.keys(result!).sort()).toEqual(["fiveHour", "sevenDay"]);
+    expect(latestLimits([a])).toEqual({
+      model: "opus",
+      branch: "main",
+      tokens: 12345,
+      added: 12,
+      removed: 3,
+      fiveHour: { used: 1, resetsAt: 9 },
+      sevenDay: { used: 2, resetsAt: 10 },
+      cwd: "/repo",
+      backend: "claude",
+    });
   });
 
-  it("counts a card that has only fiveHour (no sevenDay) as having limits", () => {
-    const a = card({ id: "a", updatedAt: 100, stats: { fiveHour: { used: 1, resetsAt: 9 } } });
-    expect(latestLimits([a])).toEqual({ fiveHour: { used: 1, resetsAt: 9 }, sevenDay: undefined });
+  it("returns whatever stats the latest card has, even without fiveHour or sevenDay", () => {
+    const a = card({ id: "a", updatedAt: 100, stats: { model: "haiku" } });
+    expect(latestLimits([a])).toEqual({ model: "haiku", cwd: "/repo", backend: "claude" });
   });
 });
 

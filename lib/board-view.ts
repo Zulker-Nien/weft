@@ -69,11 +69,14 @@ export function summarizeProjects(projects: Project[], cards: Card[], rootOf: (c
   return [...byPath.values()].sort((a, b) => b.lastActivity - a.lastActivity);
 }
 
-// The newest plan rate limits any thread has seen; they're account-wide.
-export function latestLimits(cards: Card[]): Pick<CardStats, "fiveHour" | "sevenDay"> | undefined {
-  const withLimits = cards.filter((c) => c.stats?.fiveHour || c.stats?.sevenDay);
-  const latest = withLimits.sort((a, b) => b.updatedAt - a.updatedAt)[0]?.stats;
-  return latest && { fiveHour: latest.fiveHour, sevenDay: latest.sevenDay };
+// The most recent card's stats, plus the folder and backend the stats came from, so the bottom
+// bar can show "last thread: <folder> [model] 5hr/7d" when no card is open. Limits are
+// account-wide; the rest is the last thread's snapshot.
+export function latestLimits(cards: Card[]): (CardStats & { cwd: string; backend: Card["backend"] }) | undefined {
+  const withStats = cards.filter((c) => c.stats);
+  const latest = withStats.sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  if (!latest) return undefined;
+  return { ...latest.stats, cwd: latest.cwd, backend: latest.backend };
 }
 
 // The item `by` steps away from `current`, wrapping at both ends; an unknown current counts as the first.

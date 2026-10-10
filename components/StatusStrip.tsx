@@ -3,7 +3,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { folderName, formatReset, formatTokens } from "@/lib/format";
-import type { CardStats, LimitWindow } from "@/lib/types";
+import type { Backend, CardStats, LimitWindow } from "@/lib/types";
 
 // Green while plenty is left, then warn, then danger (same cut-offs as the terminal statusline).
 function tone(left: number) {
@@ -83,13 +83,16 @@ function Limit({
 export default function StatusStrip({
   stats = {},
   cwd,
+  backend,
   className = "",
 }: {
   stats?: CardStats;
   cwd?: string;
+  // Which CLI the thread runs on, so the model label knows whether to say "claude-…" or "puku".
+  backend?: Backend;
   className?: string;
 }) {
-  if (!stats && !cwd) return null;
+  if (!stats && !cwd && !backend) return null;
   const left =
     stats.contextUsed === undefined ? undefined : 100 - stats.contextUsed;
   const hasLines = Boolean(stats.added || stats.removed);
@@ -97,7 +100,7 @@ export default function StatusStrip({
 
   return (
     <div
-      className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-0.5 font-mono text-[11px] text-muted ${className}`}
+      className={`flex flex-wrap items-center gap-x-4 gap-y-0.5 font-mono text-[11px] text-muted ${className}`}
     >
       <div className="flex items-center gap-x-3 whitespace-nowrap">
         {cwd && (
@@ -108,7 +111,14 @@ export default function StatusStrip({
         )}
         {stats.model && (
           <Tip text={`Model: ${stats.model}`}>
-            <span className="text-warn">[{stats.model.replace(/^claude-/, "")}]</span>
+            <span className={backend === "puku" ? "text-puku" : "text-warn"}>[{stats.model.replace(/^claude-/, "")}]</span>
+          </Tip>
+        )}
+        {/* Puku forwards a model name through the SDK only on some turns; when it doesn't, show
+            the backend so the strip isn't blank. */}
+        {backend === "puku" && !stats.model && (
+          <Tip text="Backend: puku-cli">
+            <span className="text-puku">[puku]</span>
           </Tip>
         )}
         {left !== undefined && (
@@ -127,13 +137,13 @@ export default function StatusStrip({
             <span className="text-danger">-{stats.removed}</span>
           </Tip>
         )}
+        {limits && (
+          <>
+            <Limit label="5hr" name="5-hour plan limit" window={stats.fiveHour} />
+            <Limit label="7d" name="Weekly plan limit" window={stats.sevenDay} />
+          </>
+        )}
       </div>
-      {limits && (
-        <div className="flex items-center gap-x-3 whitespace-nowrap">
-          <Limit label="5hr" name="5-hour plan limit" window={stats.fiveHour} />
-          <Limit label="7d" name="Weekly plan limit" window={stats.sevenDay} />
-        </div>
-      )}
     </div>
   );
 }

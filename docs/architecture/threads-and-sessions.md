@@ -235,11 +235,12 @@ don't appear in the Claude app's session list.
 
 ## Status strip
 
-`components/StatusStrip.tsx` shows a thread's numbers under the reply box (`ReplyBox`) and under the composer in `NewCardDialog`: project folder and branch, model, context left, tokens, changed lines, and the plan's 5-hour and weekly quota with reset times. The data is `card.stats` (`CardStats` in `lib/types.ts`), written by `lib/runner.ts`:
+`components/StatusStrip.tsx` shows a thread's numbers under the reply box (`ReplyBox`): project folder and branch, model, context left, tokens, changed lines, and the plan's 5-hour and weekly quota with reset times. The data is `card.stats` (`CardStats` in `lib/types.ts`), written by `lib/runner.ts`:
 
 - After each turn, `turnStats()` fills the model, tokens and context fill from the result's `modelUsage` and the last main-agent request's usage, and `changedLines()` / `gitBranch()` read `git diff HEAD --numstat` and the branch from the folder.
 - `refreshLimits()` calls the SDK's experimental `usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET` at CLI init and after each result to get the 5hr/7d windows (null on API-key logins). `rate_limit_event` messages update the same fields when they carry a utilization. A failure leaves the limits blank.
-- Quota is account-wide, so the new-thread dialog takes it from the most recently updated card (`latestLimits()` in `Board.tsx`).
+- Quota is account-wide, so the bottom bar takes it from the most recently updated card via `latestLimits(cards)` in `lib/board-view.ts`, which returns the latest card's full `CardStats` plus its `cwd` and `backend` (`(CardStats & { cwd: string; backend: Card["backend"] }) | undefined`) so the bar can show "last thread: <folder> [model] 5hr/7d" when no card is open. `components/Board.tsx` derives `footerStats`, `footerCwd` and `footerBackend` from that result and passes them down.
+- `StatusStrip` takes an optional `backend?: Backend` prop. When `backend === "puku"`, the model label uses puku purple (`text-puku`) instead of warn amber, and when no `stats.model` is reported puku still renders a `[puku]` label with a "Backend: puku-cli" tooltip so the strip isn't blank.
 - Native `title` tooltips don't show in the desktop app, so `Tip` draws its own bubble in a portal, clamped to the window.
 
 ## Review tour
