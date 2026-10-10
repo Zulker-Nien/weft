@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractHtml, glancePrompt, shouldWriteGlance, starterPage } from "./glance";
+import { extractHtml, glancePrompt, newThreadPage, shouldWriteGlance, starterPage } from "./glance";
 
 describe("extractHtml", () => {
   it("takes the page out of a code fence and chat around it", () => {
@@ -61,5 +61,20 @@ describe("starterPage", () => {
     expect(html).toContain("say &quot;hi&quot; &amp; &lt;script&gt;");
     expect(html).not.toContain("<script>");
     expect(html).toContain("Started 12:05");
+  });
+
+  it("uses the splash screen's art", () => {
+    const html = starterPage("Fix", "ask");
+    expect(html).toMatch(/url\("file:\/\/[^"]*\/assets\/splash-speeder\.jpg"\)/);
+    expect(html).toMatch(/src="file:\/\/[^"]*\/assets\/emblem\.png"/);
+  });
+});
+
+describe("newThreadPage", () => {
+  it("is the splash with no ask yet", () => {
+    const html = newThreadPage();
+    expect(html).toContain("<h1>New thread</h1>");
+    expect(html).toContain("Waiting for your prompt…");
+    expect(html).not.toContain('class="ask"');
   });
 });
