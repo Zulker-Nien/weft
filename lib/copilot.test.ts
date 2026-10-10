@@ -1,0 +1,143 @@
+import os from "node:os";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { COPILOT_ID, type Card } from "./types";
+
+const db = vi.hoisted(() => ({ cards: new Map<string, Card>(), projects: [] as Array<{ path: string }> }));
+
+vi.mock("./store", () => ({
+  getCard: vi.fn((id: string) => db.cards.get(id)),
+  listCards: vi.fn(() => [...db.cards.values()]),
+  createCard: vi.fn((input: Partial<Card>, id: string) => {
+    const card = { ...input, id, column: "backlog", createdAt: 1, updatedAt: 1 } as Card;
+    db.cards.set(id, card);
+    return card;
+  }),
+  updateCard: vi.fn((id: string, patch: Partial<Card>) => Object.assign(db.cards.get(id)!, patch)),
+  clearThread: vi.fn(),
+}));
+vi.mock("./runner", () => ({ sendUserMessage: vi.fn(), endSession: vi.fn(async () => {}), warmUp: vi.fn(), ensureSpare: vi.fn() }));
+vi.mock("./import", () => ({ startSessionSync: vi.fn() }));
+vi.mock("./search", () => ({ startSearchIndex: vi.fn() }));
+vi.mock("./scheduler", () => ({ startScheduler: vi.fn() }));
+vi.mock("./settings", () => ({ listProjects: vi.fn(() => db.projects) }));
+
+const store = await import("./store");
+const runner = await import("./runner");
+const { startSessionSync } = await import("./import");
+const { startSearchIndex } = await import("./search");
+const { startScheduler } = await import("./scheduler");
+const { lastSeen } = await import("./copilot-digest");
+const { ensureCopilot, sendToCopilot, resetCopilot, prewarm } = await import("./copilot");
+
+const g = globalThis as unknown as { __threadboardPrewarmed?: boolean; __weftCopilotSeen?: unknown };
+const card = (id: string, over: Partial<Card> = {}) => {
+  const c = { id, title: id, prompt: "", cwd: `/dev/${id}`, backend: "claude", permissionMode: "default", column: "running", createdAt: 0, updatedAt: 0, ...over } as Card;
+  db.cards.set(id, c);
+  return c;
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  db.cards.clear();
+  db.projects = [];
+  delete g.__threadboardPrewarmed;
+  delete g.__weftCopilotSeen;
+});
+
+describe("ensureCopilot", () => {
+  it("creates the copilot card in the home folder the first time", () => {
+    const c = ensureCopilot();
+    expect(store.createCard).toHaveBeenCalledWith(
+      { title: "Copilot", prompt: "", cwd: os.homedir(), backend: "claude", permissionMode: "default", role: "copilot" },
+      COPILOT_ID,
+    );
+    expect(c.id).toBe(COPILOT_ID);
+  });
+
+  it("returns the existing card after that", () => {
+    const existing = card(COPILOT_ID, { role: "copilot", title: "Mine" });
+    expect(ensureCopilot()).toBe(existing);
+    expect(store.createCard).not.toHaveBeenCalled();
+  });
+});
+
+describe("sendToCopilot", () => {
+  it("sends the plain text when nothing on the board changed, and remembers the board", () => {
+    card(COPILOT_ID, { role: "copilot" });
+    card("a", { column: "running" });
+    g.__weftCopilotSeen = { a: { column: "running" } };
+    sendToCopilot("hello");
+    expect(runner.sendUserMessage).toHaveBeenCalledWith(COPILOT_ID, "hello", { cli: "hello" });
+    expect(lastSeen()).toEqual({ a: { column: "running", error: undefined } });
+  });
+
+  it("puts what finished since the last message in front of the CLI's copy only", () => {
+    card(COPILOT_ID, { role: "copilot" });
+    card("a", { column: "review", lastLine: "Done the thing" });
+    g.__weftCopilotSeen = { a: { column: "running" } };
+    sendToCopilot("what's new?");
+    const [id, text, opts] = vi.mocked(runner.sendUserMessage).mock.calls[0];
+    expect([id, text]).toEqual([COPILOT_ID, "what's new?"]);
+    expect(opts!.cli).toMatch(/^\[Weft board update.*\n- Finished, in Review: "a" \(a\): Done the thing\n\nwhat's new\?$/);
+    expect(lastSeen()).toEqual({ a: { column: "review", error: undefined } });
+  });
+
+  it("with no snapshot yet, counts cards that changed after the copilot's last turn", () => {
+    card(COPILOT_ID, { role: "copilot", lastWeftTurn: 100 });
+    card("old", { column: "review", updatedAt: 50 });
+    card("new", { column: "review", updatedAt: 150 });
+    sendToCopilot("hi");
+    const cli = vi.mocked(runner.sendUserMessage).mock.calls[0][2]!.cli!;
+    expect(cli).toContain("(new)");
+    expect(cli).not.toContain("(old)");
+  });
+});
+
+describe("resetCopilot", () => {
+  it("ends the session, clears the thread, zeroes the card and warms a fresh CLI, in that order", async () => {
+    card(COPILOT_ID, { role: "copilot", sessionId: "s1", column: "review", costUsd: 3, turns: 9, lastLine: "x", error: "e" });
+    const order: string[] = [];
+    vi.mocked(runner.endSession).mockImplementationOnce(async () => void order.push("end"));
+    vi.mocked(store.clearThread).mockImplementationOnce(() => void order.push("clear"));
+    vi.mocked(runner.warmUp).mockImplementationOnce(() => void order.push("warm"));
+    const c = await resetCopilot();
+    expect(order).toEqual(["end", "clear", "warm"]);
+    expect(runner.endSession).toHaveBeenCalledWith(COPILOT_ID);
+    expect(c).toMatchObject({ sessionId: undefined, column: "backlog", costUsd: 0, turns: 0, lastLine: undefined, error: undefined, pending: null });
+  });
+
+  it("creates the copilot first when there isn't one", async () => {
+    const c = await resetCopilot();
+    expect(store.createCard).toHaveBeenCalledOnce();
+    expect(c.column).toBe("backlog");
+  });
+});
+
+describe("prewarm", () => {
+  it("starts session sync, search, the scheduler and the copilot's CLI, once per server", () => {
+    prewarm();
+    prewarm();
+    for (const fn of [startSessionSync, startSearchIndex, startScheduler]) expect(fn).toHaveBeenCalledOnce();
+    expect(db.cards.get(COPILOT_ID)?.role).toBe("copilot");
+    expect(runner.warmUp).toHaveBeenCalledExactlyOnceWith(COPILOT_ID);
+  });
+
+  it("opens a spare in the most recent project", () => {
+    db.projects = [{ path: "/dev/recent" }, { path: "/dev/older" }];
+    card("a");
+    prewarm();
+    expect(runner.ensureSpare).toHaveBeenCalledExactlyOnceWith("/dev/recent");
+  });
+
+  it("falls back to the first non-copilot card's folder with no projects", () => {
+    card(COPILOT_ID, { role: "copilot", cwd: "/home" });
+    card("a", { cwd: "/dev/a" });
+    prewarm();
+    expect(runner.ensureSpare).toHaveBeenCalledExactlyOnceWith("/dev/a");
+  });
+
+  it("opens no spare on an empty board", () => {
+    prewarm();
+    expect(runner.ensureSpare).not.toHaveBeenCalled();
+  });
+});
