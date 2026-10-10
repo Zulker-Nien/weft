@@ -35,8 +35,9 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - hotspots: components/Board.tsx (~950 lines), lib/runner.ts (~800), electron/main.cjs (~620).
     Pure logic already moved out: `lib/board-view.ts` (columns, project chips, chime/unseen rules) and
     `lib/turn.ts` (how a turn's result reads, cost, limits). Next: Board's state into hooks.
-  - I have a small Vitest suite (`npm test`) over the pure logic in `lib/`. Runner, store and UI are
-    still untested; add tests with any risky change.
+  - I have a small Vitest suite (`npm test`) over the pure logic in `lib/` and the API routes
+    (`app/api/routes.test.ts`, runner and store mocked). The runner's SDK loop and UI are still
+    untested; add tests with any risky change.
 
 ## How I work (file map)
 
@@ -67,7 +68,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - This Next.js differs from your training data: read `node_modules/next/dist/docs/` first.
   Leave the managed block in AGENTS.md alone.
 - When a feature lands, update README.md and docs/ROADMAP.md in the same change.
-- Run `npm run lint`, `npm run typecheck` and `npm test` (Vitest; tests sit beside the code as `lib/*.test.ts`).
+- Run `npm run lint`, `npm run typecheck` and `npm test` (Vitest; tests sit beside the code as `lib/*.test.ts`, API routes in `app/api/routes.test.ts`).
 - Stage every new file a change imports. The pre-commit hook (`.githooks/pre-commit`, set up by
   `npm install`) type-checks the staged files alone and refuses a commit that imports an unstaged
   file. Never `git stash` in this tree: other threads' unstaged work lives here too.
@@ -75,7 +76,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 ## Known gaps (verified 2026-10-10)
 
 - Tests cover `lib/status.ts`, `review.ts`, `guard.ts`, `automations.ts`, `format.ts`, `settings.ts`, `store.ts`,
-  `board-tools.ts`, `board-view.ts` and `turn.ts`; none for runner.ts's SDK loop, API routes or UI. CI (`.github/workflows/ci.yml`) runs lint,
+  `board-tools.ts`, `board-view.ts` and `turn.ts`, plus the state-changing API routes (`app/api/routes.test.ts`;
+  events, search, transcribe, attachments and repos GET aren't covered); none for runner.ts's SDK loop or UI. CI (`.github/workflows/ci.yml`) runs lint,
   typecheck and tests, but the repo has no upstream branch yet, so it hasn't run.
 - `7b1db11`, `dfdd9c7` and `0e54c6f` don't build on their own (Board.tsx imported files committed later);
   everything from `2766738` on does.

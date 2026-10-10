@@ -230,7 +230,7 @@ Weft is released under the [Apache License 2.0](LICENSE).
 - Picked-up cards open with the last 400 items of the conversation, and show the conversation as
   it was last read from disk, not live, until you reply in Weft.
 - Automated tests are thin: `npm test` runs a Vitest suite over `lib/` (status parser, review tour,
-  API guard, automations, formatting, settings, store, board tools). The runner, API routes and UI have
-  none yet. CI runs lint, typecheck and tests; a pre-commit hook type-checks what's staged.
+  API guard, automations, formatting, settings, store, board tools) and over the API routes, with the
+  runner and store mocked. The runner's SDK loop and the UI have none yet. CI runs lint, typecheck and tests; a pre-commit hook type-checks what's staged.
 - No git worktree per card, on purpose: parallel cards in one repo share a working tree. Weft warns
   when they share a folder, but doesn't yet spot two threads editing the same files.
