@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
-import { query, type ModelUsage, type PermissionResult, type Query, type SDKMessage, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
+import { query, type ModelUsage, type Options, type PermissionResult, type Query, type SDKMessage, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { messageContent } from "./attachments";
 import { isDoneCommand, skillsForPrompt } from "./automations";
 import { COPILOT_PROMPT, boardMcpServer, describeBoardTool, isTrustedTool, threadBoardMcpServer } from "./board-tools";
@@ -128,7 +128,7 @@ const MAX_TIMER_MS = 2 ** 31 - 1;
 // rules in turn.ts count too: a session started before they changed would still run the old ones.
 const BUILD = createHash("sha1")
   .update(
-    [drive, handle, handleAssistant, handleToolResults, handleResult, askUser, settle, sendMessage, ...Object.values(turnRules)]
+    [drive, queryOptions, handle, handleAssistant, handleToolResults, handleResult, askUser, settle, sendMessage, ...Object.values(turnRules)]
       .map(String)
       .join("\n"),
   )
@@ -528,50 +528,51 @@ function askUser(
   });
 }
 
-async function drive(session: Session, executable: string | undefined) {
+// What a session's CLI is started with: its spec, Weft's prompts, tools and skills, and the permission hook.
+function queryOptions(session: Session, executable: string | undefined): Options {
   const { spec } = session;
+  const cardId = () => session.cardId ?? undefined;
+  return {
+    cwd: spec.cwd,
+    resume: spec.sessionId,
+    forkSession: spec.sessionId ? spec.forkSession : undefined,
+    env: cliEnv(),
+    abortController: session.abort,
+    includePartialMessages: true,
+    permissionMode: spec.permissionMode,
+    model: spec.model,
+    effort: spec.effort,
+    // So a card can switch to bypassPermissions later, including a spare it takes over.
+    // Puku-cli's CLI doesn't accept this flag, so only forward it to the Claude Code binary.
+    allowDangerouslySkipPermissions: spec.backend === "claude" && !spec.copilot ? true : undefined,
+    pathToClaudeCodeExecutable: executable,
+    // Weft's own skills (plugin/skills), so board threads can run /weft:done and the like.
+    plugins: !spec.copilot && fs.existsSync(PLUGIN_DIR) ? [{ type: "local", path: PLUGIN_DIR }] : undefined,
+    systemPrompt: {
+      type: "preset",
+      preset: "claude_code",
+      append: spec.copilot ? `${BROWSER_PROMPT}\n\n${COPILOT_PROMPT}` : `${BROWSER_PROMPT}\n\n${threadPrompt()}\n\n${REVIEW_PROMPT}`,
+    },
+    mcpServers: {
+      browser: browserMcpServer(cardId),
+      board: spec.copilot ? boardMcpServer(boardActions) : threadBoardMcpServer(cardId, boardActions),
+    },
+    canUseTool: (toolName, input, opts) => {
+      if (isTrustedTool(toolName, opts.mcpServer?.source)) {
+        return Promise.resolve({ behavior: "allow", updatedInput: input });
+      }
+      if (!session.cardId) return Promise.resolve({ behavior: "deny", message: "No card is attached yet." });
+      return askUser(session.cardId, session, toolName, input, opts.signal, opts.title);
+    },
+    stderr: (data) => console.error(`[thread ${(session.cardId ?? "spare").slice(0, 8)}] ${data.trimEnd()}`),
+  };
+}
+
+async function drive(session: Session, executable: string | undefined) {
   // Let open() finish registering the session before anything below can fail and clean it up.
   await Promise.resolve();
   try {
-    session.query = query({
-      prompt: session.inbox,
-      options: {
-        cwd: spec.cwd,
-        resume: spec.sessionId,
-        forkSession: spec.sessionId ? spec.forkSession : undefined,
-        env: cliEnv(),
-        abortController: session.abort,
-        includePartialMessages: true,
-        permissionMode: spec.permissionMode,
-        model: spec.model,
-        effort: spec.effort,
-        // So a card can switch to bypassPermissions later, including a spare it takes over.
-        // Puku-cli's CLI doesn't accept this flag, so only forward it to the Claude Code binary.
-        allowDangerouslySkipPermissions: spec.backend === "claude" && !spec.copilot ? true : undefined,
-        pathToClaudeCodeExecutable: executable,
-        // Weft's own skills (plugin/skills), so board threads can run /weft:done and the like.
-        plugins: !spec.copilot && fs.existsSync(PLUGIN_DIR) ? [{ type: "local", path: PLUGIN_DIR }] : undefined,
-        systemPrompt: {
-          type: "preset",
-          preset: "claude_code",
-          append: spec.copilot ? `${BROWSER_PROMPT}\n\n${COPILOT_PROMPT}` : `${BROWSER_PROMPT}\n\n${threadPrompt()}\n\n${REVIEW_PROMPT}`,
-        },
-        mcpServers: spec.copilot
-          ? { browser: browserMcpServer(() => session.cardId ?? undefined), board: boardMcpServer(boardActions) }
-          : {
-              browser: browserMcpServer(() => session.cardId ?? undefined),
-              board: threadBoardMcpServer(() => session.cardId ?? undefined, boardActions),
-            },
-        canUseTool: (toolName, input, opts) => {
-          if (isTrustedTool(toolName, opts.mcpServer?.source)) {
-            return Promise.resolve({ behavior: "allow", updatedInput: input });
-          }
-          if (!session.cardId) return Promise.resolve({ behavior: "deny", message: "No card is attached yet." });
-          return askUser(session.cardId, session, toolName, input, opts.signal, opts.title);
-        },
-        stderr: (data) => console.error(`[thread ${(session.cardId ?? "spare").slice(0, 8)}] ${data.trimEnd()}`),
-      },
-    });
+    session.query = query({ prompt: session.inbox, options: queryOptions(session, executable) });
     if (session.cardId) safeUpdate(session.cardId, { warm: true });
     for await (const msg of session.query) {
       const cardId = session.cardId;
@@ -587,7 +588,7 @@ async function drive(session: Session, executable: string | undefined) {
     const cardId = session.cardId;
     if (cardId && !session.abort.signal.aborted) {
       const message = err instanceof Error ? err.message : String(err);
-      if (isNotLoggedInError(message)) needLogin(cardId, spec.backend, message);
+      if (isNotLoggedInError(message)) needLogin(cardId, session.spec.backend, message);
       else safeUpdate(cardId, { error: message });
     }
   } finally {
