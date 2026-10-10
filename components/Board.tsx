@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { api, mergeThread, type BrowserState, type MenuAction, type NewCardInput } from "@/lib/client";
 import { worktreeParent } from "@/lib/format";
+import { busyHere } from "@/lib/overlap";
 import { COLUMNS, type BoardEvent, type Card, type Column, type LoginView, type Project, type ThreadItem } from "@/lib/types";
 import { useShortcutListener, useShortcuts } from "@/lib/hotkeys";
 import { setTheme, THEMES } from "@/lib/theme";
@@ -840,6 +841,7 @@ export default function Board() {
                       now={now}
                       selected={card.id === selectedId}
                       unseen={unseen.has(card.id)}
+                      alsoHere={busyHere(cards, card)}
                       onOpen={() => openCard(card)}
                       onAnswer={(allow) => api.answer(card.id, allow, undefined, card.pending?.id).catch(notify)}
                       onStop={() => api.stop(card.id).catch(notify)}
@@ -876,6 +878,7 @@ export default function Board() {
           <ThreadPanel
             key={selected.id}
             card={selected}
+            alsoHere={busyHere(cards, selected)}
             items={thread}
             streaming={streaming}
             onSend={async (text) => {
