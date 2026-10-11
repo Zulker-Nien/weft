@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { blanksIn, fillBlanks, isFinished, libraryCounts, libraryGroups, libraryItemMenu, libraryPinned, setLibraryPinned, todoProgress } from "./library-view";
+import { blanksIn, fillBlanks, isFinished, leavesBoard, libraryCounts, libraryGroups, libraryItemMenu, libraryPinned, setLibraryPinned, todoProgress } from "./library-view";
 import type { LibraryItem } from "./types";
 
 let seq = 0;
@@ -13,6 +13,19 @@ describe("isFinished", () => {
     expect(isFinished(item({ kind: "todo", steps: 2 }))).toBe(false);
     expect(isFinished(item({ kind: "todo", ticked: [] }))).toBe(false);
     expect(isFinished(item({ kind: "note", steps: 1, ticked: [0] }))).toBe(false);
+  });
+});
+
+describe("leavesBoard", () => {
+  it("takes a card filed as a to-do off the board", () => {
+    expect(leavesBoard("todo", { column: "review" })).toBe(true);
+    expect(leavesBoard("todo", { column: "needs_you" })).toBe(true);
+  });
+  it("leaves recipes, notes, running cards and archived cards alone", () => {
+    expect(leavesBoard("recipe", { column: "review" })).toBe(false);
+    expect(leavesBoard("note", { column: "done" })).toBe(false);
+    expect(leavesBoard("todo", { column: "running" })).toBe(false);
+    expect(leavesBoard("todo", { column: "done", archived: true })).toBe(false);
   });
 });
 

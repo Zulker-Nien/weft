@@ -1,5 +1,5 @@
 import type { MenuItem } from "./card-menu";
-import type { LibraryItem, LibraryKind } from "./types";
+import type { Card, LibraryItem, LibraryKind } from "./types";
 
 // How the library rail reads (components/LibraryRail.tsx). Pure, so it's testable and safe in the browser.
 
@@ -15,6 +15,12 @@ function inView(item: LibraryItem, view: LibraryView, project: string | null) {
 // A to-do with every step ticked is finished.
 export function isFinished(item: LibraryItem) {
   return item.kind === "todo" && Boolean(item.steps) && (item.ticked?.length ?? 0) >= (item.steps ?? 0);
+}
+
+// Filing a card as a to-do takes it off the board (archives it): the to-do is where you pick it up now. A
+// running card stays until its turn ends, so a question it asks isn't hidden.
+export function leavesBoard(kind: LibraryKind, card: Pick<Card, "column" | "archived">) {
+  return kind === "todo" && card.column !== "running" && !card.archived;
 }
 
 // The rail's badges: recipes and notes in view, and to-dos still open.

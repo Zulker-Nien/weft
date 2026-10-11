@@ -33,7 +33,7 @@ import CommandPalette, { type PaletteItem } from "./CommandPalette";
 import { boardPaletteItems, promptItems } from "./board-palette";
 import { boardShortcuts } from "./board-shortcuts";
 import Icon from "./Icon";
-import { libraryPinned } from "@/lib/library-view";
+import { leavesBoard, libraryPinned } from "@/lib/library-view";
 import LibraryRail from "./LibraryRail";
 import PileBadge from "./PileBadge";
 import QualityBadge from "./QualityBadge";
@@ -618,7 +618,7 @@ export default function Board() {
 
   // Archives the cards and offers an Undo (the toast's button, or Z). Keyboard focus moves to the next card
   // in the column, so E, E, E clears a column.
-  function archiveCards(list: Card[]) {
+  function archiveCards(list: Card[], message = archivedMessage(list.map((c) => c.title))) {
     if (!list.length) return;
     const ids = list.map((c) => c.id);
     const column = document.querySelector(`[data-card-id="${ids[0]}"]`)?.closest<HTMLElement>("[data-column]");
@@ -628,7 +628,7 @@ export default function Board() {
     shown.find((el) => el.dataset.cardId === next)?.focus();
     Promise.all(ids.map((id) => api.archive(id, true))).catch(notify);
     setLastArchived(ids);
-    setToast(archivedMessage(list.map((c) => c.title)), { label: "Undo", run: () => unarchive(ids) });
+    setToast(message, { label: "Undo", run: () => unarchive(ids) });
   }
 
   function unarchive(ids: string[]) {
@@ -685,6 +685,10 @@ export default function Board() {
     api
       .star(card.id, kind, scope)
       .then(({ item }) => {
+        if (leavesBoard(kind, card)) {
+          archiveCards([card], `Starred “${item.title}” as a to-do and took it off the board.`);
+          return;
+        }
         setToast(
           kind === "recipe" ? `Saved as the recipe “${item.title}”, /${item.skill}.` : `Starred “${item.title}” as a ${kind === "todo" ? "to-do" : "note"}.`,
           { label: "Show", run: () => setLibraryOpen(kind) },

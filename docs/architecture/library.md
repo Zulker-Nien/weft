@@ -11,7 +11,9 @@ the library as one of three kinds:
 | ✎ Note | The same, for an answer you just want to keep | That page in the pane |
 
 A starred card shows ★ and is never auto-archived (`archiveWhenIdle` and the Done automations in
-`lib/runner.ts` skip it).
+`lib/runner.ts` skip it). The exception is a to-do: filing a card as one archives it right away, since the
+to-do is where you pick it up now (`leavesBoard` in `lib/library-view.ts`; a running card stays until its turn
+ends). The toast's Undo, or Z, puts it back.
 
 ## Two levels, like Claude Code
 

@@ -275,7 +275,8 @@ or drag it onto the rail at the board's left edge, which lights up while you dra
   New thread dialog opens filled in, with the recipe's page in the pane: its blanks, what it makes, and
   its last runs. The plain New thread page lists your recipes too.
 - **Star as To-do** keeps the page the card showed, with its images, as a checklist whose ticks are saved,
-  so you can work through setup steps over days. Threads write steps for you as their own page, with
+  so you can work through setup steps over days. The card leaves the board (archived; Undo or Z brings it
+  back), since the to-do is where you pick it up now. Threads write steps for you as their own page, with
   screenshots (the screenshot tool can save them and box what to click) and diagrams.
 - **Star as Note** keeps an answer.
 
