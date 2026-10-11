@@ -1,13 +1,13 @@
 // A stand-in for Composer in component tests: the real one is a TipTap editor, which jsdom can't type
 // into reliably. Same handle and props; a plain textarea where Enter submits and Shift+Enter is a
-// newline, as Composer's own keymap does.
+// newline, as Composer's own keymap does; Ctrl+Enter is onSubmitAlt (⌃↵).
 import { forwardRef, useImperativeHandle, useRef, type ReactNode } from "react";
 import type { ComposerHandle } from "./Composer";
 
 const ComposerMock = forwardRef<
   ComposerHandle,
-  { initial?: string; placeholder?: string; onSubmit: () => void; onChange?: (markdown: string) => void; actions?: ReactNode }
->(function ComposerMock({ initial, placeholder, onSubmit, onChange, actions }, ref) {
+  { initial?: string; placeholder?: string; autoFocus?: boolean; onSubmit: () => void; onSubmitAlt?: () => void; onChange?: (markdown: string) => void; actions?: ReactNode }
+>(function ComposerMock({ initial, placeholder, autoFocus, onSubmit, onSubmitAlt, onChange, actions }, ref) {
   const box = useRef<HTMLTextAreaElement>(null);
   useImperativeHandle(ref, () => ({
     focus: () => box.current?.focus(),
@@ -26,10 +26,14 @@ const ComposerMock = forwardRef<
         ref={box}
         aria-label="Message"
         placeholder={placeholder}
+        autoFocus={autoFocus}
         defaultValue={initial}
         onChange={(e) => onChange?.(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
+          if (e.key === "Enter" && e.ctrlKey && onSubmitAlt) {
+            e.preventDefault();
+            onSubmitAlt();
+          } else if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             onSubmit();
           }
