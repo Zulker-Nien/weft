@@ -131,10 +131,19 @@ describe("pilePrompt", () => {
   it("speaks in commit, push and /done, never save", () => {
     const prompt = pilePrompt({ ...base, map: { cards: [], shared: [], busy: [], unclaimed: [] } });
     expect(prompt).toContain('"2 of 7 committed"');
-    expect(prompt).toContain('Buttons: "Commit", "Commit and push", "Commit and run /done"');
+    expect(prompt).toContain('"Commit", "Commit and push" and "Commit and run /done" run with no turn');
     expect(prompt).toContain('A "Committed" stamp');
-    expect(prompt).toContain('looks good, commit it.');
-    expect(prompt).toContain("run `git push` and stamp it Pushed");
+    expect(prompt).toContain("skip it for now.");
+    expect(prompt).toContain("run `git push` if I asked");
+  });
+
+  it("puts the paths and message on each commit button, and has the page listen for the result", () => {
+    const prompt = pilePrompt({ ...base, map: { cards: [], shared: [], busy: [], unclaimed: [] } });
+    expect(prompt).toContain("weft://commit?change=<n>&label=<url-encoded title>&message=<url-encoded commit message>&path=<file>&path=<file>");
+    expect(prompt).toContain("`&push=1`");
+    expect(prompt).toContain("`&done=<that card's id>`");
+    expect(prompt).toContain("`weft-commit` event on window: `detail` is `{ change, ok, hash, pushed, done, failed, error }`");
+    expect(prompt).toContain("don't commit it yourself unless I ask");
     expect(prompt).not.toMatch(/\bsav(e|ed)\b/i);
   });
 

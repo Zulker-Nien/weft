@@ -193,11 +193,14 @@ export function pilePrompt({ pile, map, commitScript, origin }: PilePromptInput)
     "   - At the top: a big progress line in plain words (\"2 of 7 committed\") and what happens next, one sentence.",
     "   - One visual card per change, no card ids, short enough to take in at a glance: its picture (the `picture:` URL above; else its emoji on a big colored tile), its title as a headline, ONE plain sentence (under 25 words) on what it changes for the person using the app (no file names, no jargon), and at most two \"Try it\" bullets of under 15 words each, from its `try:` steps.",
     "   - Checks as three small badges: Style, Types, Tests, each ✓, ✗ (with a few plain words why) or … waiting. A \"Committed\" stamp once committed (\"Pushed\" once pushed).",
-    "   - Under each card, a review bar so I can act right there instead of typing in the thread. Each button is a link to `weft://reply?text=<url-encoded message>`: Weft sends that text to this thread as my reply (it only works from a local page in this card's own pane). Name the change in every message, like `Change 3 (\"Tooltips slide under the pane\"): looks good, commit it.` Buttons: \"Commit\", \"Commit and push\", \"Commit and run /done\" (commit it, then move the card to Done so its Done automations run /weft:done), \"Skip for now\", and a one-line text box with Send for \"Tell me what to change\" (on submit, set location.href to the weft://reply link with the typed words). After a click, grey out that bar and show \"Sent, working on it…\" until you rewrite the page.",
+    "   - Under each card, a review bar so I can act right there instead of typing in the thread. Its buttons are links Weft runs itself (they only work from a local page in this card's own pane):",
+    "     - \"Commit\", \"Commit and push\" and \"Commit and run /done\" run with no turn: link each to `weft://commit?change=<n>&label=<url-encoded title>&message=<url-encoded commit message>&path=<file>&path=<file>…`, adding `&push=1` to push after the commit and `&done=<that card's id>` to move it to Done after (its Done automations run /weft:done). Put the proposed message and the exact path list on the buttons as soon as you have them; until then show the buttons disabled with \"Checking…\". Weft commits exactly those paths with the script above, pushes, moves the card, adds a Commit item to this thread, and tells the page with a `weft-commit` event on window: `detail` is `{ change, ok, hash, pushed, done, failed, error }`. Add a small script that listens for it and, for that change, stamps \"Committed <hash>\" (\"Pushed\", \"Done\") or shows the error in plain words, so the page is current without a turn. On a failure I get your help in this thread: fix it and rewrite the page.",
+    "     - \"Skip for now\" and a one-line text box with Send for \"Tell me what to change\" are `weft://reply?text=<url-encoded message>` links: Weft sends that text to this thread as my reply. Name the change, like `Change 3 (\"Tooltips slide under the pane\"): skip it for now.` (On submit, set location.href to the weft://reply link with the typed words.)",
+    "     - After any click, grey out that bar and show \"Working on it…\" until the event arrives or you rewrite the page.",
     "   - Tuck the engineering detail into a closed <details> \"Technical details\" per card: files, diff stats, commit message, commit hash.",
     "   - Shared, busy and unclaimed files go in one short \"Needs a decision\" section at the end, each with its question in plain words and a review bar of answer buttons (weft://reply links) instead of free text where the choices are known.",
-    "3. Then card by card, in the order above: show what changed (`git diff HEAD --stat -- <files>` and a short summary of the diff), run lint, typecheck and tests for that card's files where the project's scripts allow (say when a check can only run on the whole project), and mark the results on the page. Propose a commit message and the exact path list, and wait for my OK before committing.",
-    `4. After a commit, show its hash and tick it on the page. After "Commit and push", run \`git push\` and stamp it Pushed. After "Commit and run /done", or when I say the card is done, move it to Done: \`curl -s -X PATCH ${origin}/api/cards/<card id> -H 'x-threadboard: 1' -H 'content-type: application/json' -d '{"column":"done"}'\` (Done runs that card's own Done automations).`,
+    "3. Then card by card, in the order above: show what changed (`git diff HEAD --stat -- <files>` and a short summary of the diff), run lint, typecheck and tests for that card's files where the project's scripts allow (say when a check can only run on the whole project), and mark the results on the page. Propose a commit message and the exact path list on that card's buttons; the buttons commit, so don't commit it yourself unless I ask in the thread.",
+    `4. Button commits show up in this thread as Commit items, and the page already marks them. When I ask in words instead, commit with the script above, run \`git push\` if I asked, and to move a card to Done: \`curl -s -X PATCH ${origin}/api/cards/<card id> -H 'x-threadboard: 1' -H 'content-type: application/json' -d '{"column":"done"}'\` (Done runs that card's own Done automations). Rewrite the page after each.`,
     "5. Finish with what is still uncommitted and why.",
   );
   return out.join("\n");
@@ -207,10 +210,15 @@ function git(cwd: string, args: string[]) {
   return execFileSync("git", ["-C", cwd, "--no-optional-locks", ...args], { encoding: "utf8", timeout: 5000 });
 }
 
+// The top of the git repo holding cwd; throws when cwd isn't in one.
+export function repoRoot(cwd: string) {
+  return git(cwd, ["rev-parse", "--show-toplevel"]).trim();
+}
+
 // The pile for the repo holding cwd, or null when cwd isn't in a git repo or the tree is clean.
 export function readPile(cwd: string): Pile | null {
   try {
-    const root = git(cwd, ["rev-parse", "--show-toplevel"]).trim();
+    const root = repoRoot(cwd);
     const files = parseStatus(git(root, ["status", "--porcelain", "-z", "--untracked-files=all"]));
     if (!files.length) return null;
     // A repo with no commits yet has no HEAD to diff against: count no lines then.
