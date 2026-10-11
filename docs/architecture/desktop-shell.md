@@ -38,8 +38,8 @@ lives in `electron/server.cjs`.
   startup. If the OS refuses it, a warning is logged.
 - The application menu, the context menu (`attachContextMenu`), the tray
   (`createTray` + `updateTray`), the dock menu and badge (`setupDock`,
-  `refreshWaiting`), and the splash → main view transition (`boot`, `showSplash`,
-  `showFailure`) are all in this file.
+  `refreshWaiting`), and the splash → main view transition (`boot`, with the splash's
+  `startup.show`/`fail`/`loadBoard`/`watch` in `startup-screen.cjs`) are all in this file.
 - `weft://` links (`handleLink`):
   - `weft://copilot` → `showCopilot()`
   - `weft://card/<id>` → `sendMenu("open-card", id)`
@@ -175,6 +175,13 @@ and `showError()` are called via `webContents.executeJavaScript()`. On a fatal
 startup error, the splash shows an error line and three buttons wired to
 `splashAction`: `retry` (re-runs `boot()` or calls `server.restart()`), `logs`
 (`shell.openPath(app.getPath("logs"))`), `quit`.
+
+`electron/startup-screen.cjs` (`createStartupScreen`) drives it: `show(status)` and `fail(message)` load the
+splash if it isn't up and call `setStatus`/`showError` (`fail` also brings the window forward and names the server log);
+`loadBoard(url)` loads the board and swallows a rejected load. `watch(webContents)` turns two failures that used to
+leave a stuck splash or a blank window into `fail()`: the board's main frame failing to load (except ERR_ABORTED, a load
+replaced by another one such as Fast Refresh's reload) and its renderer dying (any reason but a clean exit).
+Tested against a fake window in `electron/startup-screen.test.ts`.
 
 ## About window (`about.cjs`, `about.html`, `about.js`, `about-preload.cjs`)
 
