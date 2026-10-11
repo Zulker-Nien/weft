@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { BrowserState } from "@/lib/client";
+import { setPaneBox } from "@/lib/float-place";
 import { useAnyOverlay } from "@/lib/overlay";
 import Icon, { Spinner } from "./Icon";
 import ZoomMenu from "./ZoomMenu";
@@ -41,7 +42,10 @@ export default function BrowserPane({
     if (!bridge || !el) return;
     const report = () => {
       const r = el.getBoundingClientRect();
-      bridge.browser.setBounds(hide ? HIDDEN : { x: r.left, y: r.top, width: r.width, height: r.height });
+      const box = hide ? HIDDEN : { x: r.left, y: r.top, width: r.width, height: r.height };
+      bridge.browser.setBounds(box);
+      // Hover bubbles keep clear of the native view; they read this rather than asking the shell.
+      setPaneBox(box);
     };
     report();
     const observer = new ResizeObserver(report);
@@ -51,6 +55,7 @@ export default function BrowserPane({
       observer.disconnect();
       window.removeEventListener("resize", report);
       bridge.browser.setBounds(HIDDEN);
+      setPaneBox(null);
     };
   }, [hide, expanded]);
 

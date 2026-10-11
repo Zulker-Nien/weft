@@ -37,7 +37,7 @@ describe("store cards", () => {
     await new Promise((r) => setTimeout(r, 5));
     store.updateCard("a", { title: "a2" });
     expect(store.listCards().map((c) => c.id)).toEqual(["a", "b"]);
-    const saved = JSON.parse(fs.readFileSync(path.join(dir, "board.json"), "utf8"));
+    const saved = JSON.parse(fs.readFileSync(path.join(dir, "board.json"), "utf8")) as { cards: Card[] };
     expect(saved.cards.map((c: Card) => c.title).sort()).toEqual(["a2", "b"]);
   });
 

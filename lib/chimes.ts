@@ -59,7 +59,7 @@ export function chimePrefs(): ChimePrefs {
   const match = document.cookie.match(new RegExp(`(?:^|; )${CHIMES_COOKIE}=([^;]*)`));
   if (!match) return prefs;
   try {
-    const saved = JSON.parse(decodeURIComponent(match[1])) as Partial<ChimePrefs>;
+    const saved = JSON.parse(decodeURIComponent(match[1] ?? "")) as Partial<ChimePrefs>;
     if (typeof saved.on === "boolean") prefs.on = saved.on;
     if (typeof saved.volume === "number") prefs.volume = Math.min(100, Math.max(0, saved.volume));
     for (const k of CHIME_KINDS) if (typeof saved.kinds?.[k] === "boolean") prefs.kinds[k] = saved.kinds[k];

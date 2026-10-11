@@ -126,9 +126,8 @@ describe("useDesktopBridge in the desktop app", () => {
 
   it("shows the selected card's browser, or the board's own with none selected", () => {
     const { bridge } = installBridge();
-    const { rerender } = renderHook(({ id }) => useDesktopBridge(closed, id, []), {
-      initialProps: { id: "c1" as string | null },
-    });
+    const initialProps: { id: string | null } = { id: "c1" };
+    const { rerender } = renderHook(({ id }) => useDesktopBridge(closed, id, []), { initialProps });
     expect(bridge.browser.setActive).toHaveBeenLastCalledWith("c1");
     rerender({ id: null });
     expect(bridge.browser.setActive).toHaveBeenLastCalledWith(null);

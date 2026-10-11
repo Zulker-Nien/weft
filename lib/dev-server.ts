@@ -44,8 +44,8 @@ export function parseDevServerError(buf: string, repoRoot: string): DevServerErr
   }
   // Walk all matches; the last one wins so a later missing-path supersedes an earlier one.
   const misses = [...tail.matchAll(MISSING_RE)];
-  if (misses.length) {
-    const spec = misses[misses.length - 1][1];
+  const spec = misses.at(-1)?.[1];
+  if (spec !== undefined) {
     const resolved = resolveSpec(spec, repoRoot);
     // `resolved` is a candidate path. The file actually existing is what makes the error
     // recoverable as cache rot; otherwise it's a real missing-file bug.

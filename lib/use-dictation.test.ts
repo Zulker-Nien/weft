@@ -68,7 +68,7 @@ const getUserMedia = vi.fn();
 let frames: FrameRequestCallback[];
 
 function recorder() {
-  return FakeRecorder.instances[FakeRecorder.instances.length - 1];
+  return FakeRecorder.instances[FakeRecorder.instances.length - 1]!;
 }
 
 // ---- Fake browser speech recognition ----------------------------------------------------------
@@ -95,7 +95,7 @@ function final(transcript: string, isFinal = true): Result {
 
 beforeEach(() => {
   supportedTypes = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
-  samples = new Array(512).fill(128);
+  samples = new Array<number>(512).fill(128);
   frames = [];
   FakeRecorder.instances = [];
   FakeRecognizer.instances = [];
@@ -157,7 +157,7 @@ describe("useDictation with whisper", () => {
     act(() => result.current.toggle());
     await flush();
     expect(api.transcribe).toHaveBeenCalledOnce();
-    const blob = api.transcribe.mock.calls[0][0] as Blob;
+    const blob = api.transcribe.mock.calls[0]![0] as Blob;
     expect(blob.type).toBe("audio/webm;codecs=opus");
     expect(onText).toHaveBeenCalledWith("hello world");
     expect(result.current.state).toBe("idle");
@@ -169,7 +169,7 @@ describe("useDictation with whisper", () => {
     recorder().emit("audio");
     act(() => result.current.toggle());
     await flush();
-    expect((api.transcribe.mock.calls[0][0] as Blob).type).toBe("audio/webm");
+    expect((api.transcribe.mock.calls[0]![0] as Blob).type).toBe("audio/webm");
   });
 
   it("reads transcribing while whisper works", async () => {
@@ -271,19 +271,21 @@ describe("useDictation with whisper", () => {
   });
 
   it("meters mic loudness from 0 to 1 every animation frame", async () => {
-    samples = new Array(512).fill(128);
+    samples = new Array<number>(512).fill(128);
     samples[3] = 160; // a peak of 32 out of 64
     const { result } = await startRecording();
     expect(result.current.level).toBe(0.5);
     samples[3] = 0; // a peak of 128 caps at 1
-    act(() => frames[frames.length - 1](0));
+    act(() => frames[frames.length - 1]!(0));
     expect(result.current.level).toBe(1);
   });
 
   it("counts whole seconds while recording", async () => {
     vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
     const { result } = await startRecording();
-    act(() => vi.advanceTimersByTime(2750));
+    act(() => {
+      vi.advanceTimersByTime(2750);
+    });
     expect(result.current.seconds).toBe(2);
   });
 
@@ -291,9 +293,13 @@ describe("useDictation with whisper", () => {
     vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
     const { result, onText } = await startRecording();
     recorder().emit("audio");
-    act(() => vi.advanceTimersByTime(10 * 60 * 1000 - 250));
+    act(() => {
+      vi.advanceTimersByTime(10 * 60 * 1000 - 250);
+    });
     expect(recorder().stop).not.toHaveBeenCalled();
-    act(() => vi.advanceTimersByTime(250));
+    act(() => {
+      vi.advanceTimersByTime(250);
+    });
     expect(recorder().stop).toHaveBeenCalledOnce();
     await flush();
     expect(onText).toHaveBeenCalledWith("hello world");
@@ -386,7 +392,7 @@ describe("useDictation without whisper", () => {
   it("uses the browser's SpeechRecognition in a normal tab", async () => {
     vi.stubGlobal("SpeechRecognition", FakeRecognizer);
     const { result } = await startRecording();
-    const [rec] = FakeRecognizer.instances;
+    const rec = FakeRecognizer.instances[0]!;
     expect(rec).toMatchObject({ continuous: true, interimResults: false, lang: navigator.language });
     expect(rec.start).toHaveBeenCalledOnce();
     expect(result.current.state).toBe("recording");
@@ -403,7 +409,7 @@ describe("useDictation without whisper", () => {
     vi.stubGlobal("SpeechRecognition", FakeRecognizer);
     const language = vi.spyOn(navigator, "language", "get").mockReturnValue("");
     await startRecording();
-    expect(FakeRecognizer.instances[0].lang).toBe("en-US");
+    expect(FakeRecognizer.instances[0]!.lang).toBe("en-US");
     language.mockRestore();
   });
 
@@ -418,7 +424,7 @@ describe("useDictation without whisper", () => {
   it("hands over each final, non-blank result trimmed", async () => {
     vi.stubGlobal("SpeechRecognition", FakeRecognizer);
     const { onText } = await startRecording();
-    const [rec] = FakeRecognizer.instances;
+    const rec = FakeRecognizer.instances[0]!;
     act(() =>
       rec.onresult?.({
         resultIndex: 1,
@@ -432,14 +438,14 @@ describe("useDictation without whisper", () => {
     vi.stubGlobal("SpeechRecognition", FakeRecognizer);
     const { result } = await startRecording();
     act(() => result.current.toggle());
-    expect(FakeRecognizer.instances[0].stop).toHaveBeenCalledOnce();
+    expect(FakeRecognizer.instances[0]!.stop).toHaveBeenCalledOnce();
     expect(result.current.state).toBe("idle");
   });
 
   it("drops results that arrive after cancel", async () => {
     vi.stubGlobal("SpeechRecognition", FakeRecognizer);
     const { result, onText } = await startRecording();
-    const [rec] = FakeRecognizer.instances;
+    const rec = FakeRecognizer.instances[0]!;
     rec.stop.mockImplementation(() => {}); // onend comes later, as in Chrome
     act(() => result.current.cancel());
     act(() => rec.onresult?.({ resultIndex: 0, results: [final("too late")] }));
@@ -451,7 +457,7 @@ describe("useDictation without whisper", () => {
   it("shows recognition errors but not aborted or no-speech", async () => {
     vi.stubGlobal("SpeechRecognition", FakeRecognizer);
     const { result } = await startRecording();
-    const [rec] = FakeRecognizer.instances;
+    const rec = FakeRecognizer.instances[0]!;
     act(() => rec.onerror?.({ error: "aborted" }));
     act(() => rec.onerror?.({ error: "no-speech" }));
     expect(result.current.error).toBeNull();
@@ -463,10 +469,14 @@ describe("useDictation without whisper", () => {
     vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
     vi.stubGlobal("SpeechRecognition", FakeRecognizer);
     const { result } = await startRecording();
-    act(() => vi.advanceTimersByTime(3000));
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
     expect(result.current.seconds).toBe(3);
     act(() => result.current.toggle());
-    act(() => vi.advanceTimersByTime(3000));
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
     expect(result.current.seconds).toBe(3);
   });
 });

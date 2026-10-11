@@ -47,7 +47,7 @@ export function shouldWriteGlance(turn: { openedPane: boolean; isError: boolean;
   return !/^https?:/i.test(turn.paneUrl);
 }
 
-const escape = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+const escape = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c);
 
 // The splash screen's art (electron/splash.html), reused so a new card opens on the same scene.
 const ASSETS = process.env.WEFT_ASSETS_DIR ?? path.join(process.cwd(), "electron", "assets");
@@ -105,7 +105,7 @@ function backdrops() {
 export function backdropFor(cardId: string, names = backdrops()) {
   let hash = 0;
   for (const ch of cardId) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
-  return names[hash % names.length];
+  return names[hash % names.length] ?? "splash-speeder.jpg";
 }
 
 // Your ask, escaped, with pasted images (`![name](/abs/path.png)`) shown as thumbnails.
@@ -215,7 +215,6 @@ function retitleAfterTurn(cardId: string, turn: { ask: string; reply: string }) 
     })
     .catch(() => {});
 }
-
 
 // How long a page just opened in the pane gets to paint before it's captured.
 const PAINT_MS = 1200;

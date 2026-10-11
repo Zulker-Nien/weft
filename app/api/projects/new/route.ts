@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { resolveFolder } from "@/lib/folders";
+import { asText } from "@/lib/format";
 import { fail, guard } from "@/lib/guard";
 import { listProjects, touchProject } from "@/lib/settings";
 
@@ -13,10 +14,10 @@ export async function POST(req: Request) {
   if (denied) return denied;
   try {
     const body = (await req.json()) as Record<string, unknown>;
-    const name = String(body.name ?? "").trim();
+    const name = asText(body.name).trim();
     if (!NAME.test(name)) throw new Error("Use letters, numbers, dots, dashes, and underscores for the name.");
     // resolveFolder treats an empty path as the home folder, which is never what's meant here.
-    if (!String(body.parent ?? "").trim()) throw new Error("Choose a parent folder.");
+    if (!asText(body.parent).trim()) throw new Error("Choose a parent folder.");
     const parent = resolveFolder(body.parent);
 
     const folder = path.join(parent, name);

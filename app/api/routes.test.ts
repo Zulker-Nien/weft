@@ -36,8 +36,8 @@ vi.mock("@/lib/runner", () => ({
   sendUserMessage: vi.fn(),
   queueMessages: vi.fn(),
   archiveWhenIdle: vi.fn(),
-  endSession: vi.fn(async () => {}),
-  stop: vi.fn(async () => {}),
+  endSession: vi.fn(() => Promise.resolve()),
+  stop: vi.fn(() => Promise.resolve()),
   isBusy: vi.fn(() => false),
   setPermissionMode: vi.fn((id: string, permissionMode: Card["permissionMode"]) => Object.assign(db.cards.get(id)!, { permissionMode })),
   answerPermission: vi.fn(),
@@ -69,30 +69,30 @@ vi.mock("@/lib/copilot", () => ({
   prewarm: vi.fn(),
   sendToCopilot: vi.fn(),
   ensureCopilot: vi.fn(() => ({ id: "copilot", role: "copilot" })),
-  resetCopilot: vi.fn(async () => ({ id: "copilot", role: "copilot", title: "fresh" })),
+  resetCopilot: vi.fn(() => Promise.resolve({ id: "copilot", role: "copilot", title: "fresh" })),
 }));
 
 vi.mock("@/lib/repos", () => ({
   projectRoot: vi.fn((cwd: string) => cwd),
-  cloneRepo: vi.fn(async (name: string) => `/dev/${name.split("/")[1]}`),
+  cloneRepo: vi.fn((name: string) => Promise.resolve(`/dev/${name.split("/")[1]}`)),
   localRepos: vi.fn(() => []),
 }));
 
 vi.mock("@/lib/import", () => ({
   releaseSession: vi.fn(() => 1),
-  loadTranscript: vi.fn(async () => {}),
-  syncSessions: vi.fn(async () => ({ added: 2 })),
+  loadTranscript: vi.fn(() => Promise.resolve()),
+  syncSessions: vi.fn(() => Promise.resolve({ added: 2 })),
 }));
 
 vi.mock("@/lib/devserver", () => ({
-  devStatus: vi.fn(async () => ({ state: "running" })),
-  reachable: vi.fn(async () => false),
+  devStatus: vi.fn(() => Promise.resolve({ state: "running" })),
+  reachable: vi.fn(() => Promise.resolve(false)),
   startDev: vi.fn(),
   stopDev: vi.fn(),
 }));
 
 vi.mock("@/lib/login", () => ({
-  authStatus: vi.fn(async () => ({ loggedIn: true })),
+  authStatus: vi.fn(() => Promise.resolve({ loggedIn: true })),
   loginRuns: vi.fn(() => []),
   startLogin: vi.fn((backend: string) => ({ backend, state: "running" })),
   openLoginInTerminal: vi.fn((backend: string) => ({ backend, state: "terminal" })),
@@ -103,7 +103,7 @@ vi.mock("@/lib/login", () => ({
 vi.mock("@/lib/library", () => ({
   getItem: vi.fn(() => undefined),
   listLibrary: vi.fn(() => []),
-  starCard: vi.fn(async (card: Card, kind: string, scope: string) => ({ id: "lib-1", kind, scope, title: card.title })),
+  starCard: vi.fn((card: Card, kind: string, scope: string) => Promise.resolve({ id: "lib-1", kind, scope, title: card.title })),
   updateItem: vi.fn((id: string, patch: Record<string, unknown>) => ({ id, ...patch })),
   removeItem: vi.fn(),
   itemDir: vi.fn(() => "/nowhere"),
@@ -154,10 +154,13 @@ function req(url: string, { method = "GET", body, headers = WRITE }: { method?: 
     body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body),
   });
 }
+/** The fields of a route's JSON reply these tests read. */
+type Body = { card: Card; cards: Card[]; error: string; item: unknown; login: unknown; path: string; stopped: number; home: string; roots: Record<string, string> };
+const body = async (res: Response) => (await res.json()) as Body;
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
 
 function addCard(patch: Partial<Card> = {}): Card {
-  const card = {
+  const card: Card = {
     id: `card-${++db.seq}`,
     title: "T",
     prompt: "do it",
@@ -168,7 +171,7 @@ function addCard(patch: Partial<Card> = {}): Card {
     createdAt: 1,
     updatedAt: 1,
     ...patch,
-  } as Card;
+  };
   db.cards.set(card.id, card);
   return card;
 }
@@ -210,13 +213,13 @@ describe("guard on write routes", () => {
   it.each(writes)("%s rejects a foreign host", async (_name, call) => {
     const res = await call(req("/x", { method: "POST", body: {}, headers: { host: "evil.com", "x-threadboard": "1" } }));
     expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({ error: "Forbidden host" });
+    expect(await body(res)).toEqual({ error: "Forbidden host" });
   });
 
   it.each(writes)("%s rejects a write without x-threadboard", async (_name, call) => {
     const res = await call(req("/x", { method: "POST", body: {}, headers: { host: "localhost:3457" } }));
     expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({ error: "Missing x-threadboard header" });
+    expect(await body(res)).toEqual({ error: "Missing x-threadboard header" });
   });
 
   it("calls nothing when denied", async () => {
@@ -234,23 +237,23 @@ describe("POST /cards from a recipe", () => {
     expect(store.createCard).toHaveBeenLastCalledWith(expect.objectContaining({ recipeId: "r1" }));
     for (const recipeId of ["n1", "gone", 7]) {
       await cardsRoute.POST(req("/cards", { method: "POST", body: { prompt: "p", cwd: tmp, recipeId } }));
-      expect(store.createCard).toHaveBeenLastCalledWith(expect.not.objectContaining({ recipeId: expect.anything() }));
+      expect(store.createCard).toHaveBeenLastCalledWith(expect.not.objectContaining({ recipeId: expect.anything() as unknown }));
     }
   });
 });
 
 describe("/library", () => {
-  it("lists one project's and yours, or every project's with all=1", async () => {
-    await libraryRoute.GET(req("/library?folder=%2Fdev%2Fapp"));
+  it("lists one project's and yours, or every project's with all=1", () => {
+    libraryRoute.GET(req("/library?folder=%2Fdev%2Fapp"));
     expect(library.listLibrary).toHaveBeenLastCalledWith({ folder: "/dev/app", all: false });
-    await libraryRoute.GET(new Request("http://localhost:3457/api/library?all=1", { headers: WRITE }));
+    libraryRoute.GET(new Request("http://localhost:3457/api/library?all=1", { headers: WRITE }));
     expect(library.listLibrary).toHaveBeenLastCalledWith({ folder: null, all: true });
   });
 
   it("stars a board card, as a note in its project unless told otherwise", async () => {
     const card = addCard({ title: "Kit" });
     const res = await libraryRoute.POST(req("/library", { method: "POST", body: { cardId: card.id } }));
-    expect((await res.json()).item).toMatchObject({ kind: "note", scope: "project" });
+    expect((await body(res)).item).toMatchObject({ kind: "note", scope: "project" });
     await libraryRoute.POST(req("/library", { method: "POST", body: { cardId: card.id, kind: "recipe", scope: "mine" } }));
     expect(library.starCard).toHaveBeenLastCalledWith(expect.objectContaining({ id: card.id }), "recipe", "mine", expect.anything());
     await libraryRoute.POST(req("/library", { method: "POST", body: { cardId: card.id, kind: "bogus", scope: "bogus" } }));
@@ -345,7 +348,7 @@ describe("GET /cards", () => {
     vi.mocked(repos.projectRoot).mockImplementation((cwd) => (cwd === "/repo-wt" ? "/repo" : cwd));
     const res = await cardsRoute.GET(req("/cards"));
     expect(res.status).toBe(200);
-    const json = await res.json();
+    const json = await body(res);
     expect(json.cards.map((c: Card) => c.id)).toEqual([card.id]);
     expect(json.home).toBe(os.homedir());
     expect(json.roots).toEqual({ "/repo-wt": "/repo" });
@@ -357,7 +360,7 @@ describe("POST /cards", () => {
   it("creates a card with defaults and doesn't start it unless asked", async () => {
     const res = await cardsRoute.POST(req("/cards", { method: "POST", body: { prompt: "  fix the bug  ", cwd: tmp } }));
     expect(res.status).toBe(200);
-    const { card } = await res.json();
+    const { card } = await body(res);
     expect(card).toMatchObject({ prompt: "fix the bug", cwd: tmp, backend: "claude", permissionMode: "auto", column: "backlog" });
     expect(card.title).toBeTruthy();
     expect(card.titleBy).toBeUndefined();
@@ -367,7 +370,7 @@ describe("POST /cards", () => {
 
   it("starts the thread with its first message when start is set", async () => {
     const res = await cardsRoute.POST(req("/cards", { method: "POST", body: { prompt: "go", title: "Go", cwd: tmp, start: true } }));
-    const { card } = await res.json();
+    const { card } = await body(res);
     expect(card.title).toBe("Go");
     expect(card.titleBy).toBe("user");
     expect(runner.sendMessage).toHaveBeenCalledWith(card.id, "first:go");
@@ -387,16 +390,16 @@ describe("POST /cards", () => {
     );
   });
 
-  it("ignores model and effort for puku", async () => {
-    await cardsRoute.POST(req("/cards", { method: "POST", body: { prompt: "p", cwd: tmp, backend: "puku", model: "opus", effort: "high" } }));
-    expect(store.createCard).toHaveBeenLastCalledWith(expect.objectContaining({ backend: "puku", model: undefined, effort: undefined }));
+  it("keeps the model for puku but ignores effort", async () => {
+    await cardsRoute.POST(req("/cards", { method: "POST", body: { prompt: "p", cwd: tmp, backend: "puku", model: "opus-4.8", effort: "high" } }));
+    expect(store.createCard).toHaveBeenLastCalledWith(expect.objectContaining({ backend: "puku", model: "opus-4.8", effort: undefined }));
   });
 
   it("rejects a missing prompt, a missing folder and bad JSON with 400", async () => {
-    for (const body of [{ cwd: tmp }, { prompt: "   ", cwd: tmp }, { prompt: "p", cwd: path.join(tmp, "nope") }, "{not json"]) {
-      const res = await cardsRoute.POST(req("/cards", { method: "POST", body }));
+    for (const payload of [{ cwd: tmp }, { prompt: "   ", cwd: tmp }, { prompt: "p", cwd: path.join(tmp, "nope") }, "{not json"]) {
+      const res = await cardsRoute.POST(req("/cards", { method: "POST", body: payload }));
       expect(res.status).toBe(400);
-      expect((await res.json()).error).toBeTruthy();
+      expect((await body(res)).error).toBeTruthy();
     }
     expect(store.createCard).not.toHaveBeenCalled();
   });
@@ -408,7 +411,7 @@ describe("PATCH /cards/:id", () => {
   it("404s an unknown card", async () => {
     const res = await patch("ghost", { title: "x" });
     expect(res.status).toBe(404);
-    expect(await res.json()).toEqual({ error: "No such card." });
+    expect(await body(res)).toEqual({ error: "No such card." });
   });
 
   it("400s bad JSON", async () => {
@@ -419,7 +422,7 @@ describe("PATCH /cards/:id", () => {
   it("renames, keeping the old title when the new one is blank", async () => {
     const card = addCard({ title: "Old" });
     const res = await patch(card.id, { title: "  New  " });
-    expect((await res.json()).card.title).toBe("New");
+    expect((await body(res)).card.title).toBe("New");
     expect(db.cards.get(card.id)!.titleBy).toBe("user");
     await patch(card.id, { title: "   " });
     expect(db.cards.get(card.id)!.title).toBe("New");
@@ -441,7 +444,7 @@ describe("PATCH /cards/:id", () => {
     vi.mocked(runner.isBusy).mockReturnValueOnce(true);
     const res = await patch(card.id, { cwd: os.tmpdir() });
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toMatch(/Stop the thread/);
+    expect((await body(res)).error).toMatch(/Stop the thread/);
   });
 
   it("moving to Running from Backlog sends the first message", async () => {
@@ -459,7 +462,7 @@ describe("PATCH /cards/:id", () => {
   it("moving to Review queues that column's automations and unarchives", async () => {
     const card = addCard({ archived: true });
     const res = await patch(card.id, { column: "review" });
-    expect((await res.json()).card).toMatchObject({ column: "review", archived: false });
+    expect((await body(res)).card).toMatchObject({ column: "review", archived: false });
     expect(runner.queueMessages).toHaveBeenCalledWith(card.id, ["/move-review"]);
     expect(runner.archiveWhenIdle).not.toHaveBeenCalled();
   });
@@ -491,7 +494,7 @@ describe("PATCH /cards/:id", () => {
     vi.mocked(runner.isBusy).mockReturnValue(false);
     expect(res.status).toBe(200);
     expect(runner.setPermissionMode).toHaveBeenCalledWith(card.id, "auto");
-    expect((await res.json()).card.permissionMode).toBe("auto");
+    expect((await body(res)).card.permissionMode).toBe("auto");
   });
 
   it("refuses unknown modes, and YOLO for the copilot and puku threads", async () => {
@@ -519,7 +522,7 @@ describe("DELETE /cards/:id", () => {
     const card = addCard();
     const res = await del(card.id);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true });
+    expect(await body(res)).toEqual({ ok: true });
     expect(runner.endSession).toHaveBeenCalledWith(card.id);
     expect(store.deleteCard).toHaveBeenCalledWith(card.id);
     expect(settings.dismissSession).not.toHaveBeenCalled();
@@ -543,7 +546,7 @@ describe("POST /cards/:id/messages", () => {
     const card = addCard();
     const res = await messagesRoute.POST(req(`/cards/${card.id}/messages`, { method: "POST", body: { text: "  hi  " } }), ctx(card.id));
     expect(res.status).toBe(200);
-    expect((await res.json()).card.id).toBe(card.id);
+    expect((await body(res)).card.id).toBe(card.id);
     expect(runner.sendUserMessage).toHaveBeenCalledWith(card.id, "hi");
   });
 
@@ -560,7 +563,7 @@ describe("POST /cards/:id/messages", () => {
     });
     const res = await messagesRoute.POST(req("/cards/ghost/messages", { method: "POST", body: { text: "hi" } }), ctx("ghost"));
     expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ error: "No card ghost" });
+    expect(await body(res)).toEqual({ error: "No card ghost" });
   });
 });
 
@@ -569,7 +572,7 @@ describe("POST /cards/:id/permission", () => {
 
   it("answers with allow, answers and pendingId", async () => {
     const res = await answer("c1", { allow: true, answers: { q: "a" }, pendingId: "p1" });
-    expect(await res.json()).toEqual({ ok: true });
+    expect(await body(res)).toEqual({ ok: true });
     expect(runner.answerPermission).toHaveBeenCalledWith("c1", true, { q: "a" }, "p1");
   });
 
@@ -584,7 +587,7 @@ describe("POST /cards/:id/permission", () => {
     });
     const res = await answer("c1", { allow: true });
     expect(res.status).toBe(409);
-    expect((await res.json()).error).toMatch(/Nothing is waiting/);
+    expect((await body(res)).error).toMatch(/Nothing is waiting/);
     expect((await answer("c1", "{")).status).toBe(409);
   });
 });
@@ -592,7 +595,7 @@ describe("POST /cards/:id/permission", () => {
 describe("POST /cards/:id/stop", () => {
   it("stops the thread", async () => {
     const res = await stopRoute.POST(req("/cards/c9/stop", { method: "POST" }), ctx("c9"));
-    expect(await res.json()).toEqual({ ok: true });
+    expect(await body(res)).toEqual({ ok: true });
     expect(runner.stop).toHaveBeenCalledWith("c9");
   });
 });
@@ -601,7 +604,7 @@ describe("POST /cards/:id/release", () => {
   it("releases the session and marks the card as no longer open elsewhere", async () => {
     const card = addCard({ sessionId: "s-2", openElsewhere: true });
     const res = await releaseRoute.POST(req(`/cards/${card.id}/release`, { method: "POST" }), ctx(card.id));
-    const json = await res.json();
+    const json = await body(res);
     expect(json.stopped).toBe(1);
     expect(json.card.openElsewhere).toBe(false);
     expect(importLib.releaseSession).toHaveBeenCalledWith("s-2");
@@ -619,7 +622,7 @@ describe("GET /cards/:id/thread", () => {
     const card = addCard();
     db.threads.set(card.id, [{ kind: "user", text: "hi" }]);
     const res = await threadRoute.GET(req(`/cards/${card.id}/thread`), ctx(card.id));
-    expect(await res.json()).toEqual({ items: [{ kind: "user", text: "hi" }] });
+    expect(await body(res)).toEqual({ items: [{ kind: "user", text: "hi" }] });
     expect(importLib.loadTranscript).toHaveBeenCalledWith(card);
   });
 
@@ -643,7 +646,7 @@ describe("/cards/:id/dev", () => {
   it("GET returns the status for the review url", async () => {
     const card = addCard({ review });
     const res = await devRoute.GET(req("/x"), ctx(card.id));
-    expect(await res.json()).toEqual({ status: { state: "running" } });
+    expect(await body(res)).toEqual({ status: { state: "running" } });
     expect(dev.devStatus).toHaveBeenCalledWith(card.id, "http://localhost:3000");
   });
 
@@ -686,13 +689,13 @@ describe("/cards/:id/dev", () => {
 describe("copilot", () => {
   it("GET ensures the copilot and warms it", async () => {
     const res = await copilotRoute.GET(req("/copilot"));
-    expect((await res.json()).card.id).toBe("copilot");
+    expect((await body(res)).card.id).toBe("copilot");
     expect(runner.warmUp).toHaveBeenCalledWith("copilot");
   });
 
   it("POST /reset returns the fresh copilot", async () => {
     const res = await copilotResetRoute.POST(req("/copilot/reset", { method: "POST" }));
-    expect((await res.json()).card.title).toBe("fresh");
+    expect((await body(res)).card.title).toBe("fresh");
     expect(copilot.resetCopilot).toHaveBeenCalled();
   });
 });
@@ -741,10 +744,10 @@ describe("/settings", () => {
     expect(settings.setThreadPrompt).toHaveBeenCalledWith("be brief");
     expect(settings.setKeepAliveMinutes).toHaveBeenCalledWith(10);
     expect(settings.setDefaultPermissionMode).toHaveBeenCalledWith("acceptEdits");
-    const [rules] = vi.mocked(settings.setAutomations).mock.calls[0];
+    const [rules] = vi.mocked(settings.setAutomations).mock.calls[0]!;
     expect(rules[0]).toEqual({ id: "a1", on: "done", skill: "weft:done" });
     expect(rules[1]).toMatchObject({ on: "prompt-matches", skill: "deploy", pattern: "ship it" });
-    expect(rules[1].id).toBeTruthy();
+    expect(rules[1]!.id).toBeTruthy();
   });
 
   it("PATCH rejects bad values with 400 and saves nothing", async () => {
@@ -773,7 +776,7 @@ describe("/settings", () => {
 describe("/projects", () => {
   it("POST adds an existing folder", async () => {
     const res = await projectsRoute.POST(req("/projects", { method: "POST", body: { path: tmp } }));
-    expect(await res.json()).toEqual({ path: tmp, projects: [] });
+    expect(await body(res)).toEqual({ path: tmp, projects: [] });
     expect(settings.touchProject).toHaveBeenCalledWith(tmp);
   });
 
@@ -792,7 +795,7 @@ describe("/projects", () => {
   it("POST /new creates the folder, and reuses one that exists", async () => {
     const res = await newProjectRoute.POST(req("/projects/new", { method: "POST", body: { parent: tmp, name: "app-1" } }));
     const folder = path.join(tmp, "app-1");
-    expect((await res.json()).path).toBe(folder);
+    expect((await body(res)).path).toBe(folder);
     expect(fs.statSync(folder).isDirectory()).toBe(true);
     expect(settings.touchProject).toHaveBeenCalledWith(folder);
     expect((await newProjectRoute.POST(req("/projects/new", { method: "POST", body: { parent: tmp, name: "app-1" } }))).status).toBe(200);
@@ -825,14 +828,14 @@ describe("/login", () => {
   const post = (body: unknown) => loginRoute.POST(req("/login", { method: "POST", body }));
 
   it("GET returns both CLIs' status and runs", async () => {
-    const json = await (await loginRoute.GET(req("/login"))).json();
+    const json = await body(await loginRoute.GET(req("/login")));
     expect(json).toEqual({ status: { claude: { loggedIn: true }, puku: { loggedIn: true } }, runs: [] });
   });
 
   it("start begins a login that retries the CLI's cards when done", async () => {
     const res = await post({ backend: "claude", action: "start" });
-    expect((await res.json()).login).toEqual({ backend: "claude", state: "running" });
-    const onDone = vi.mocked(login.startLogin).mock.calls[0][1]!;
+    expect((await body(res)).login).toEqual({ backend: "claude", state: "running" });
+    const onDone = vi.mocked(login.startLogin).mock.calls[0]![1]!;
     onDone();
     expect(runner.retryAfterLogin).toHaveBeenCalledWith("claude");
   });
@@ -856,7 +859,7 @@ describe("/login", () => {
 describe("POST /repos/clone", () => {
   it("clones and adds the folder to projects", async () => {
     const res = await cloneRoute.POST(req("/repos/clone", { method: "POST", body: { fullName: " aimhuge/weft " } }));
-    expect((await res.json()).path).toBe("/dev/weft");
+    expect((await body(res)).path).toBe("/dev/weft");
     expect(repos.cloneRepo).toHaveBeenCalledWith("aimhuge/weft");
     expect(settings.touchProject).toHaveBeenCalledWith("/dev/weft");
   });
@@ -865,7 +868,7 @@ describe("POST /repos/clone", () => {
     vi.mocked(repos.cloneRepo).mockRejectedValueOnce(new Error("Not a repo."));
     const res = await cloneRoute.POST(req("/repos/clone", { method: "POST", body: { fullName: "x" } }));
     expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ error: "Not a repo." });
+    expect(await body(res)).toEqual({ error: "Not a repo." });
     expect(settings.touchProject).not.toHaveBeenCalled();
   });
 });

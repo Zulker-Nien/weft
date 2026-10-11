@@ -3,6 +3,7 @@ import path from "node:path";
 import { publish } from "./bus";
 import { DATA_DIR } from "./store";
 import { MODES, type Automation, type PermissionMode, type Project, type SettingsView } from "./types";
+import { globalSingleton } from "./global-singleton";
 
 // Appended to every board thread's system prompt (not the copilot's). The user can edit it in
 // Settings; lib/status.ts parses the BOARD STATUS line it asks for, so keep that format.
@@ -37,12 +38,10 @@ interface Settings {
 }
 
 const FILE = path.join(DATA_DIR, "settings.json");
-const g = globalThis as unknown as { __threadboardSettings?: Settings };
-
 function settings(): Settings {
-  if (!g.__threadboardSettings) {
+  return globalSingleton("__threadboardSettings", () => {
     const saved = fs.existsSync(FILE) ? (JSON.parse(fs.readFileSync(FILE, "utf8")) as Partial<Settings>) : {};
-    g.__threadboardSettings = {
+    return {
       threadPrompt: saved.threadPrompt,
       keepAliveMinutes: saved.keepAliveMinutes,
       defaultPermissionMode: saved.defaultPermissionMode,
@@ -50,8 +49,7 @@ function settings(): Settings {
       projects: saved.projects ?? [],
       dismissedSessions: saved.dismissedSessions ?? [],
     };
-  }
-  return g.__threadboardSettings;
+  });
 }
 
 function save() {

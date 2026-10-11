@@ -20,8 +20,9 @@ import { extractStatus, type BoardStatus } from "./status";
 import { appendThread, getCard, getThread, replaceThreadItem, updateCard } from "./store";
 import { adoptLocalMedia, toolResult } from "./thread-media";
 import * as turnRules from "./turn";
-import { columnAfterTurn, eventWindow, modelStats, readQuestions, readResult, turnCost, usageWindow } from "./turn";
-import type { Backend, Card, CardStats, Effort, PermissionMode, Question } from "./types";
+import { cacheAfter, columnAfterTurn, eventWindow, modelStats, readQuestions, readResult, turnCost, usageWindow } from "./turn";
+import type { Backend, CacheState, Card, CardStats, Effort, PermissionMode, Question } from "./types";
+import { globalSingleton } from "./global-singleton";
 
 // Spare CLIs started ahead of time, one per recent project folder, so a new card doesn't wait.
 const MAX_SPARES = 3;
@@ -57,8 +58,8 @@ class Inbox implements AsyncIterable<SDKUserMessage> {
   }
 
   async *[Symbol.asyncIterator]() {
-    while (true) {
-      while (this.queue.length) yield this.queue.shift()!;
+    for (;;) {
+      for (let next = this.queue.shift(); next !== undefined; next = this.queue.shift()) yield next;
       if (this.closed) return;
       await new Promise<void>((resolve) => (this.wake = resolve));
       this.wake = undefined;
@@ -102,8 +103,9 @@ interface Session {
   idle?: ReturnType<typeof setTimeout>;
   // What this CLI process's cumulative cost totals are added to (see the result handler).
   costBase?: number;
-  // Tokens the last main-agent request sent in, which is how full the context window is.
-  contextTokens?: number;
+  // The prompt cache after the last main-agent request: how long it stays warm, and its size in
+  // tokens, which is how full the context window is.
+  cache?: CacheState;
   // The CLI's session id from its init, kept while a spare so the card that adopts it can resume.
   sessionId?: string;
   // Set once the drive loop has finished; the CLI is gone.
@@ -111,21 +113,14 @@ interface Session {
   done: Promise<void>;
 }
 
-const g = globalThis as unknown as {
-  __threadboardSessions?: Map<string, Session>;
-  __threadboardSpares?: Map<string, Session>;
-  __threadboardLoginWaiters?: Map<Backend, Set<string>>;
-  __weftQueued?: Map<string, string[]>;
-  __weftArchiveAfter?: Set<string>;
-};
-const sessions = (g.__threadboardSessions ??= new Map<string, Session>());
-const spares = (g.__threadboardSpares ??= new Map<string, Session>());
+const sessions = globalSingleton("__threadboardSessions", () => new Map<string, Session>());
+const spares = globalSingleton("__threadboardSpares", () => new Map<string, Session>());
 // Cards waiting for a CLI login to finish, to run again afterwards.
-const loginWaiters = (g.__threadboardLoginWaiters ??= new Map<Backend, Set<string>>());
+const loginWaiters = globalSingleton("__threadboardLoginWaiters", () => new Map<Backend, Set<string>>());
 // Messages waiting to run on a card one turn at a time, such as the skills of board automations.
-const queued = (g.__weftQueued ??= new Map<string, string[]>());
+const queued = globalSingleton("__weftQueued", () => new Map<string, string[]>());
 // Cards moved to Done: archived once the queued Done skills have all run.
-const archiveAfter = (g.__weftArchiveAfter ??= new Set<string>());
+const archiveAfter = globalSingleton("__weftArchiveAfter", () => new Set<string>());
 
 // setTimeout fires at once for anything longer than this.
 const MAX_TIMER_MS = 2 ** 31 - 1;
@@ -271,10 +266,10 @@ export function ensureSpare(cwd: string, backend: Backend = "claude") {
     spares.delete(key);
     close(existing);
   }
-  if (spares.size >= MAX_SPARES) {
-    const [oldestKey, oldest] = spares.entries().next().value!;
-    spares.delete(oldestKey);
-    close(oldest);
+  const oldest = spares.entries().next().value;
+  if (spares.size >= MAX_SPARES && oldest) {
+    spares.delete(oldest[0]);
+    close(oldest[1]);
   }
   try {
     // Spares start in the default mode new cards get, so most take one over without a mode switch.
@@ -431,7 +426,7 @@ const boardActions = {
 async function retry(cardId: string) {
   if (isBusy(cardId)) return;
   await endSession(cardId);
-  const last = [...getThread(cardId)].reverse().find((item) => item?.kind === "user");
+  const last = [...getThread(cardId)].reverse().find((item) => item.kind === "user");
   if (last?.kind === "user" && getCard(cardId) && !isBusy(cardId)) sendMessage(cardId, last.text, { echo: false });
 }
 
@@ -441,7 +436,7 @@ export function retryAfterLogin(backend: Backend) {
   if (!waiting?.size) return;
   loginWaiters.delete(backend);
   for (const cardId of waiting) {
-    retry(cardId).catch((err) => safeUpdate(cardId, { error: err instanceof Error ? err.message : String(err) }));
+    retry(cardId).catch((err: unknown) => safeUpdate(cardId, { error: err instanceof Error ? err.message : String(err) }));
   }
 }
 
@@ -703,8 +698,7 @@ function handleSuggestion(id: string, suggestion: string) {
 // The agent's reply: its text goes to the thread (status and review blocks lifted onto the card), and
 // each tool call gets a thread item its result fills in later.
 function handleAssistant(id: string, session: Session, msg: Extract<SDKMessage, { type: "assistant" }>) {
-  const u = msg.message.usage;
-  if (u) session.contextTokens = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
+  session.cache = cacheAfter(msg.message.usage, Date.now(), session.cache?.ttl) ?? session.cache;
   for (const block of msg.message.content) {
     if (block.type === "text") {
       const { text: withReview, status } = extractStatus(block.text);
@@ -834,7 +828,8 @@ function updateStats(id: string, patch: Partial<CardStats>) {
 function turnStats(id: string, session: Session, modelUsage: Record<string, ModelUsage>): CardStats {
   return {
     ...getCard(id)?.stats,
-    ...modelStats(modelUsage, session.contextTokens),
+    ...modelStats(modelUsage, session.cache?.tokens),
+    ...(session.cache && { cache: session.cache }),
     ...changedLines(session.spec.cwd),
     branch: gitBranch(session.spec.cwd),
   };

@@ -28,8 +28,8 @@ export interface BrowserState {
   loading: boolean;
   canGoBack: boolean;
   canGoForward: boolean;
-  // The page's zoom, in percent.
-  zoom: number;
+  // The page's zoom, in percent. A shell from before zoom reporting sends none.
+  zoom?: number;
 }
 
 // What the app menu, dock, tray, global shortcuts and weft:// links ask a window to do.
@@ -129,7 +129,7 @@ function upload(file: Blob, name: string, onProgress?: (fraction: number) => voi
     xhr.onload = () => {
       let data: { error?: string } & Partial<UploadedAttachment> = {};
       try {
-        data = JSON.parse(xhr.responseText);
+        data = JSON.parse(xhr.responseText) as typeof data;
       } catch {}
       if (xhr.status >= 200 && xhr.status < 300 && data.path) resolve(data as UploadedAttachment);
       else reject(new Error(data.error ?? `Upload failed (${xhr.status}).`));
@@ -156,9 +156,9 @@ async function call<T>(method: string, url: string, body?: unknown): Promise<T> 
     headers: { "content-type": "application/json", "x-threadboard": "1" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const data = await res.json();
+  const data = (await res.json()) as T & { error?: string };
   if (!res.ok) throw new Error(data.error ?? res.statusText);
-  return data as T;
+  return data;
 }
 
 export const api = {
@@ -227,7 +227,7 @@ export const api = {
 };
 
 // A thread snapshot with the live items that arrived while it loaded, which are newer than it.
-export function mergeThread(snapshot: ThreadItem[], live: ThreadItem[]): ThreadItem[] {
+export function mergeThread(snapshot: ThreadItem[], live: (ThreadItem | undefined)[]): ThreadItem[] {
   const next = snapshot.slice();
   live.forEach((item, i) => {
     if (item) next[i] = item;

@@ -88,7 +88,8 @@ export function latestLimits(cards: Card[]): (CardStats & { cwd: string; backend
 // The item `by` steps away from `current`, wrapping at both ends; an unknown current counts as the first.
 export function stepThrough<T>(options: readonly T[], current: T, by: number): T {
   const at = Math.max(0, options.indexOf(current));
-  return options[(at + by + options.length) % options.length];
+  const next = options[(at + by + options.length) % options.length];
+  return next === undefined ? current : next;
 }
 
 // Columns whose arrival marks a card unseen: the ones that want you to look.

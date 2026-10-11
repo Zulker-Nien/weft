@@ -18,10 +18,7 @@ vi.mock("@/lib/login", () => ({
 }));
 vi.mock("@/lib/glance", () => ({ newThreadUrl: vi.fn((folder: string | null) => `file:///new?${folder}`) }));
 vi.mock("@/lib/repos", () => ({
-  cloneRepo: vi.fn(async (name: string) => {
-    if (!name) throw new Error("Pick a repo.");
-    return `/dev/${name}`;
-  }),
+  cloneRepo: vi.fn((name: string) => (name ? Promise.resolve(`/dev/${name}`) : Promise.reject(new Error("Pick a repo.")))),
 }));
 vi.mock("@/lib/settings", () => ({
   listProjects: vi.fn(() => []),
@@ -66,8 +63,8 @@ describe("POST /cards/:id/messages", () => {
 describe("POST /login", () => {
   it("terminal opens the login in Terminal, which retries the CLI's cards when done", async () => {
     const res = await loginRoute.POST(post("/login", { backend: "claude", action: "terminal" }));
-    expect((await res.json()).login).toEqual({ backend: "claude", state: "terminal" });
-    vi.mocked(login.openLoginInTerminal).mock.calls[0][1]!();
+    expect(((await res.json()) as { login: unknown }).login).toEqual({ backend: "claude", state: "terminal" });
+    vi.mocked(login.openLoginInTerminal).mock.calls[0]![1]!();
     expect(runner.retryAfterLogin).toHaveBeenCalledWith("claude");
   });
 
@@ -75,12 +72,12 @@ describe("POST /login", () => {
     expect((await loginRoute.POST(post("/login", { backend: "claude", action: "input", text: 42 }))).status).toBe(400);
     expect(login.sendLoginInput).not.toHaveBeenCalled();
     const res = await loginRoute.POST(post("/login", { backend: "claude", action: "input", text: "code" }));
-    expect((await res.json()).login).toEqual({ backend: "claude", state: "terminal" });
+    expect(((await res.json()) as { login: unknown }).login).toEqual({ backend: "claude", state: "terminal" });
   });
 
   it("input for a CLI with no run returns no login", async () => {
     const res = await loginRoute.POST(post("/login", { backend: "puku", action: "input", text: "code" }));
-    expect((await res.json()).login).toBeNull();
+    expect(((await res.json()) as { login: unknown }).login).toBeNull();
   });
 });
 

@@ -1,10 +1,30 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { createPanePages, kindOf, isTemp } = require("../electron/pane-pages.cjs");
+interface PanePage {
+  cardId: string;
+  url: string;
+  kind: "file" | "app" | "web";
+  title: string;
+  updatedAt: string;
+  savedUrl?: string;
+}
+
+interface PanePagesModule {
+  createPanePages: (dataDir: string) => {
+    record(cardId: string, url: string, title?: string): void;
+    restoreUrl(cardId: string): string | undefined;
+    fallbackUrl(cardId: string): string | undefined;
+    get(cardId: string): PanePage | undefined;
+  };
+  kindOf: (url: string) => PanePage["kind"];
+  isTemp: (file: string) => boolean;
+}
+
+const { createPanePages, kindOf, isTemp } = createRequire(import.meta.url)("../electron/pane-pages.cjs") as PanePagesModule;
 
 let dataDir: string;
 let tmpPage: string;
@@ -43,7 +63,7 @@ describe("createPanePages", () => {
     const restored = pages.restoreUrl("card1");
     expect(restored).toBe(pathToFileURL(path.join(dataDir, "pages", "card1", "plan.html")).href);
     fs.rmSync(tmpPage);
-    expect(fs.readFileSync(new URL(restored), "utf8")).toBe("<h1>plan</h1>");
+    expect(fs.readFileSync(new URL(restored!), "utf8")).toBe("<h1>plan</h1>");
   });
 
   it("keeps the url itself for apps and files outside temp folders", () => {
@@ -85,8 +105,8 @@ describe("createPanePages", () => {
     const pages = createPanePages(dataDir);
     expect(pages.get("card1")).toBeUndefined();
     const restored = pages.restoreUrl("card1");
-    expect(pages.get("card1").url).toBe(url);
-    expect(restored).toBe(pages.get("card1").savedUrl ?? url);
+    expect(pages.get("card1")!.url).toBe(url);
+    expect(restored).toBe(pages.get("card1")!.savedUrl ?? url);
     expect(pages.restoreUrl("card2")).toBeUndefined();
   });
 });

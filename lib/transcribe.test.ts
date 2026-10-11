@@ -5,13 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // whisper.cpp, ffmpeg and `which` are all mocked: execFileSync answers `which`, execFile plays
 // ffmpeg and whisper-cli. Nothing is ever transcribed for real.
-const sys = vi.hoisted(() => ({
-  bins: {} as Record<string, string>,
-  stdout: "",
-  fail: null as string | null,
-}));
+const sys = vi.hoisted(() => {
+  const bins: Record<string, string> = {};
+  return { bins, stdout: "", fail: null as string | null };
+});
 vi.mock("node:child_process", () => ({
-  execFileSync: vi.fn((_which: string, [bin]: string[]) => {
+  execFileSync: vi.fn((_which: string, [bin = ""]: string[]) => {
     if (!(bin in sys.bins)) throw new Error("not found");
     return `${sys.bins[bin]}\n`;
   }),
@@ -127,7 +126,7 @@ describe("transcribe", () => {
     const { transcribe } = await load();
     let input = "";
     vi.mocked(child.execFile).mockImplementationOnce(((_bin: string, args: string[], _o: unknown, cb: (e: null, o: unknown) => void) => {
-      input = args[args.indexOf("-i") + 1];
+      input = args[args.indexOf("-i") + 1]!;
       expect(fs.readFileSync(input, "utf8")).toBe("audio bytes");
       cb(null, { stdout: "" });
     }) as never);
@@ -168,7 +167,7 @@ describe("transcribe", () => {
     const { transcribe } = await load();
     const input = () => {
       const args = call("/bin/ffmpeg")[1] as string[];
-      return path.basename(args[args.indexOf("-i") + 1]);
+      return path.basename(args[args.indexOf("-i") + 1]!);
     };
     await transcribe(Buffer.from("a"));
     expect(input()).toBe("input.webm");
@@ -186,7 +185,7 @@ describe("transcribe", () => {
     const { transcribe } = await load();
     await expect(transcribe(Buffer.from("a"))).rejects.toThrow("/bin/ffmpeg crashed");
     const args = call("/bin/ffmpeg")[1] as string[];
-    expect(fs.existsSync(path.dirname(args[args.indexOf("-i") + 1]))).toBe(false);
+    expect(fs.existsSync(path.dirname(args[args.indexOf("-i") + 1]!))).toBe(false);
     expect(call("/bin/whisper-cli")).toBeUndefined();
   });
 });

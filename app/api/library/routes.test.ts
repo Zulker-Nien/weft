@@ -20,8 +20,8 @@ vi.mock("@/lib/store", () => ({
   getThread: vi.fn(() => [{ kind: "result", text: "The answer" }]),
   updateCard: vi.fn((id: string, patch: Partial<Card>) => Object.assign(db.cards.get(id)!, patch)),
 }));
-vi.mock("@/lib/browser-tools", () => ({ paneUrl: vi.fn(async () => "") }));
-vi.mock("@/lib/haiku", () => ({ complete: vi.fn(async () => JSON.stringify({ name: "pitch", title: "Pitch", prompt: "Pitch {product}" })) }));
+vi.mock("@/lib/browser-tools", () => ({ paneUrl: vi.fn(() => Promise.resolve("")) }));
+vi.mock("@/lib/haiku", () => ({ complete: vi.fn(() => Promise.resolve(JSON.stringify({ name: "pitch", title: "Pitch", prompt: "Pitch {product}" }))) }));
 
 const lib = await import("@/lib/library");
 const store = await import("@/lib/store");
@@ -48,7 +48,7 @@ const card = (over: Partial<Card> = {}) => {
   return c;
 };
 const add = (over: Partial<LibraryItem> = {}, id = "n") =>
-  lib.addItem({ kind: "note", scope: "mine", title: "A note", folder: "/dev/app", ...over } as Omit<LibraryItem, "id" | "createdAt" | "updatedAt">, id);
+  lib.addItem({ kind: "note", scope: "mine", title: "A note", folder: "/dev/app", ...over }, id);
 
 beforeEach(() => {
   fs.rmSync(process.env.THREADBOARD_DATA!, { recursive: true, force: true });
@@ -58,8 +58,8 @@ beforeEach(() => {
 });
 
 describe("GET /api/library", () => {
-  it("refuses a foreign host", async () => {
-    const res = await listRoute.GET(req("/library", { headers: { host: "evil.com" } }));
+  it("refuses a foreign host", () => {
+    const res = listRoute.GET(req("/library", { headers: { host: "evil.com" } }));
     expect(res.status).toBe(403);
   });
 
@@ -67,7 +67,7 @@ describe("GET /api/library", () => {
     add({}, "mine");
     add({ scope: "project", folder: "/dev/app" }, "app");
     add({ scope: "project", folder: "/dev/other" }, "other");
-    const ids = async (q: string) => ((await (await listRoute.GET(req(`/library${q}`, { headers: READ }))).json()).items as LibraryItem[]).map((i) => i.id).sort();
+    const ids = async (q: string) => ((await listRoute.GET(req(`/library${q}`, { headers: READ })).json()) as { items: LibraryItem[] }).items.map((i) => i.id).sort();
     expect(await ids("")).toEqual(["mine"]);
     expect(await ids("?folder=%2Fdev%2Fapp")).toEqual(["app", "mine"]);
     expect(await ids("?all=1")).toEqual(["app", "mine", "other"]);

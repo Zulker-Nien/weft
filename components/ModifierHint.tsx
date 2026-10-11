@@ -35,7 +35,10 @@ export default function ModifierHint() {
       // A held modifier repeats on some systems; that's still the same hold.
       if (e.repeat) return;
       clearTimeout(timer);
-      if (isTyping(e.target)) return hide();
+      if (isTyping(e.target)) {
+        hide();
+        return;
+      }
       if (e.key === "Shift" && !e.metaKey && !e.ctrlKey && !e.altKey) show("shift");
       else if (e.key === modKey && !e.shiftKey && !e.altKey) {
         hide();

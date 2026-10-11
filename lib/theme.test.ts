@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { runInThisContext } from "node:vm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyTheme, DARK_QUERY, savedTheme, setTheme, THEME_COOKIE, THEME_SCRIPT, THEMES } from "./theme";
 
@@ -83,16 +84,16 @@ describe("setTheme", () => {
 describe("THEME_SCRIPT", () => {
   it("does what applyTheme does, before the page paints", () => {
     systemDark(true);
-    new Function(THEME_SCRIPT)();
+    runInThisContext(THEME_SCRIPT);
     expect(document.documentElement.dataset.theme).toBe("dark");
     document.cookie = `${THEME_COOKIE}=light; path=/`;
-    new Function(THEME_SCRIPT)();
+    runInThisContext(THEME_SCRIPT);
     expect(document.documentElement.dataset.theme).toBe("light");
   });
 
   it("swallows errors, e.g. no matchMedia", () => {
     vi.stubGlobal("matchMedia", undefined);
-    expect(() => new Function(THEME_SCRIPT)()).not.toThrow();
+    expect(() => { runInThisContext(THEME_SCRIPT); }).not.toThrow();
   });
 });
 

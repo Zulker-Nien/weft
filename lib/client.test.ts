@@ -6,7 +6,7 @@ import type { ThreadItem } from "./types";
 type FetchCall = [string, RequestInit];
 
 function respond(body: unknown, init: { status?: number; statusText?: string } = {}) {
-  const fetch = vi.fn(async () => new Response(JSON.stringify(body), { status: init.status ?? 200, statusText: init.statusText }));
+  const fetch = vi.fn(() => Promise.resolve(new Response(JSON.stringify(body), { status: init.status ?? 200, statusText: init.statusText })));
   vi.stubGlobal("fetch", fetch);
   return fetch;
 }

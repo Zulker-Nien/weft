@@ -40,7 +40,7 @@ function scopeDir(scope: LibraryScope, folder: string) {
 
 function readIndex(dir: string): LibraryItem[] {
   try {
-    return (JSON.parse(fs.readFileSync(path.join(dir, INDEX), "utf8")) as { items: LibraryItem[] }).items ?? [];
+    return (JSON.parse(fs.readFileSync(path.join(dir, INDEX), "utf8")) as { items?: LibraryItem[] }).items ?? [];
   } catch {
     return [];
   }
@@ -165,7 +165,8 @@ export function localAsset(ref: string, baseDir: string): string | undefined {
   if (!raw || raw.startsWith("#") || raw.startsWith("//") || (!fileUrl && /^[a-z][a-z0-9+.-]*:/i.test(raw))) return undefined;
   let file: string;
   try {
-    file = fileUrl ? fileURLToPath(raw.split(/[?#]/)[0]) : path.resolve(baseDir, decodeURI(raw.split(/[?#]/)[0]));
+    const bare = raw.split(/[?#]/)[0] ?? "";
+    file = fileUrl ? fileURLToPath(bare) : path.resolve(baseDir, decodeURI(bare));
   } catch {
     return undefined;
   }
@@ -224,6 +225,7 @@ export function countCheckboxes(html: string) {
 export function lastReply(items: ThreadItem[]): string {
   for (let i = items.length - 1; i >= 0; i--) {
     const item = items[i];
+    if (!item) continue;
     if ((item.kind === "result" || item.kind === "assistant") && item.text.trim()) return item.text;
   }
   return "";
@@ -238,7 +240,7 @@ function withoutWeftLines(text: string) {
     .trim();
 }
 
-const escapeHtml = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+const escapeHtml = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c);
 
 const PAGE_STYLE = `body{margin:0;background:#f6f1e7;color:#2a2420;font:15px/1.6 -apple-system,system-ui,sans-serif;padding:28px 32px;max-width:760px}
 h1{font:600 26px/1.25 Georgia,serif;margin:0 0 4px}h2,h3{font-family:Georgia,serif}
@@ -330,7 +332,7 @@ export function parseRecipeDraft(text: string, card: Pick<Card, "title" | "promp
   }
   const prompt = typeof raw.prompt === "string" && raw.prompt.trim() ? raw.prompt.trim() : fallback.prompt;
   const hints = new Map(
-    (Array.isArray(raw.blanks) ? raw.blanks : [])
+    (Array.isArray(raw.blanks) ? (raw.blanks as (Partial<RecipeBlank> | null)[]) : [])
       .filter((b): b is RecipeBlank => typeof b?.name === "string")
       .map((b) => [b.name.trim(), typeof b.hint === "string" ? b.hint.trim() : undefined]),
   );
@@ -414,7 +416,7 @@ export async function starCard(card: Card, kind: LibraryKind, scope: LibraryScop
     let link: string | undefined;
     if (/^file:\/\//i.test(url)) {
       try {
-        const file = fileURLToPath(url.split(/[?#]/)[0]);
+        const file = fileURLToPath(url.split(/[?#]/)[0] ?? "");
         if (fs.statSync(file).size <= MAX_FILE_BYTES) html = bundlePage(fs.readFileSync(file, "utf8"), path.dirname(file), out);
       } catch {}
     } else if (/^https?:/i.test(url) && !isWeftPage(url)) {

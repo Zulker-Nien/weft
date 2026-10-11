@@ -34,7 +34,7 @@ export default function AutomationSettings({
     let ignore = false;
     api.skills().then(
       (r) => !ignore && setSkills(r.skills),
-      (err) => !ignore && setLoadError(err instanceof Error ? err.message : String(err)),
+      (err: unknown) => !ignore && setLoadError(err instanceof Error ? err.message : String(err)),
     );
     return () => {
       ignore = true;

@@ -16,7 +16,7 @@ export const ATTACHMENT_NAME = /^[a-z0-9][a-z0-9_-]*\.[a-z0-9]{1,8}$/;
 export const MEDIA_REF = /!\[([^\]\n]*)\]\((?:<([^>\n]+)>|([^)\s]+))\)/g;
 
 export function extensionOf(src: string) {
-  const base = src.split(/[?#]/)[0];
+  const base = src.split(/[?#]/)[0] ?? "";
   const dot = base.lastIndexOf(".");
   return dot > base.lastIndexOf("/") ? base.slice(dot + 1).toLowerCase() : "";
 }
@@ -32,7 +32,8 @@ export function mediaKind(src: string): MediaKind {
 // The attachment's file name, when src is a path in an attachments folder.
 export function attachmentName(src: string) {
   const match = /\/attachments\/([^/]+)$/.exec(src);
-  return match && ATTACHMENT_NAME.test(match[1]) ? match[1] : null;
+  const name = match?.[1];
+  return name && ATTACHMENT_NAME.test(name) ? name : null;
 }
 
 // Where the board loads an attachment from: "/…/.weft/attachments/x.png" -> "/api/attachments/x.png".

@@ -5,7 +5,7 @@ const sdk = vi.hoisted(() => ({ messages: [] as unknown[], calls: [] as unknown[
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
   query: (args: unknown) => {
     sdk.calls.push(args);
-    return (async function* () {
+    return (function* () {
       yield* sdk.messages;
     })();
   },

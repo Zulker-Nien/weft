@@ -14,20 +14,21 @@ export const SKILL_NAME = /^[\w.-]+(:[\w.-]+)?$/;
 
 // The name and description from a SKILL.md's frontmatter, including folded (>) and block (|) values.
 function frontmatter(text: string): Record<string, string> {
-  const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-  if (!match) return {};
+  const body = text.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1];
+  if (body === undefined) return {};
   const fields: Record<string, string> = {};
-  const lines = match[1].split(/\r?\n/);
+  const lines = body.split(/\r?\n/);
+  const isContinuation = (line: string | undefined) => line !== undefined && (/^\s+\S/.test(line) || line.trim() === "");
   for (let i = 0; i < lines.length; i++) {
-    const field = lines[i].match(/^([\w-]+):\s*(.*)$/);
-    if (!field) continue;
-    let value = field[2].trim();
+    const [, key, rest] = lines[i]?.match(/^([\w-]+):\s*(.*)$/) ?? [];
+    if (key === undefined || rest === undefined) continue;
+    let value = rest.trim();
     if (value === "" || /^[|>][-+]?$/.test(value)) {
       const block: string[] = [];
-      while (i + 1 < lines.length && (/^\s+\S/.test(lines[i + 1]) || lines[i + 1].trim() === "")) block.push(lines[++i].trim());
+      while (isContinuation(lines[i + 1])) block.push((lines[++i] ?? "").trim());
       value = block.join(" ").trim();
     }
-    fields[field[1]] = value.replace(/^(["'])(.*)\1$/, "$2");
+    fields[key] = value.replace(/^(["'])(.*)\1$/, "$2");
   }
   return fields;
 }

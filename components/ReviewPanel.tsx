@@ -4,8 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { stepUrl } from "@/lib/review";
 import { api } from "@/lib/client";
 import type { Card, DevServerStatus, ReviewPlan, ThreadItem } from "@/lib/types";
+import { readDraft, writeDraft } from "@/lib/drafts";
 import Composer, { type ComposerHandle } from "./Composer";
 import Icon from "./Icon";
+
+// What you were typing as feedback on a step, kept until it's sent.
+const feedbackKey = (cardId: string, step: number) => `weft.review.${cardId}.${step}`;
 
 // The tour a thread left for its Review card: one step at a time, with what to look for, the page
 // opened in the browser pane when it's a web product, and a box to send feedback on that step.
@@ -92,8 +96,8 @@ function DevServer({ cardId, plan }: { cardId: string; plan: ReviewPlan }) {
     api
       .devAction(cardId, "start")
       .then((r) => alive && setStatus(r.status))
-      .catch((err) => alive && setError(err instanceof Error ? err.message : String(err)));
-    const timer = setInterval(poll, 3000);
+      .catch((err: unknown) => alive && setError(err instanceof Error ? err.message : String(err)));
+    const timer = setInterval(() => void poll(), 3000);
     return () => {
       alive = false;
       clearInterval(timer);
@@ -153,14 +157,16 @@ function Tour({
   const [index, setIndex] = useState(0);
   const [approved, setApproved] = useState<Set<number>>(new Set());
   const composer = useRef<ComposerHandle>(null);
-  const [empty, setEmpty] = useState(true);
+  const [empty, setEmpty] = useState(() => !readDraft(feedbackKey(cardId, 0)).trim());
+  // The step the box belongs to, so a change saves under it even while go() is switching steps.
+  const boxStep = useRef(0);
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
   const steps = plan.steps;
   const step = steps[Math.min(index, steps.length - 1)];
-  const url = stepUrl(plan, step);
+  const url = step ? stepUrl(plan, step) : undefined;
 
   // Show each step's page as you reach it.
   useEffect(() => {
@@ -170,18 +176,23 @@ function Tour({
   const last = index >= steps.length - 1;
 
   function go(to: number) {
-    setIndex(Math.max(0, Math.min(steps.length - 1, to)));
-    composer.current?.clear();
-    setEmpty(true);
+    const next = Math.max(0, Math.min(steps.length - 1, to));
+    setIndex(next);
+    boxStep.current = next;
+    const draft = readDraft(feedbackKey(cardId, next));
+    if (draft) composer.current?.write(draft);
+    else composer.current?.clear();
+    setEmpty(!draft.trim());
     setError("");
   }
 
   // The feedback box is the same composer as the reply box: screenshots paste or drop right in.
   async function sendFeedback() {
-    if (sending || !composer.current || composer.current.isEmpty()) return;
+    const box = composer.current;
+    if (sending || !step || !box || box.isEmpty()) return;
     let text: string;
     try {
-      text = composer.current.read();
+      text = box.read();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       return;
@@ -191,6 +202,7 @@ function Tour({
     try {
       await onSend(`Review feedback on step ${index + 1} of ${steps.length}, “${step.title}”:\n${text}`);
       composer.current?.clear();
+      writeDraft(feedbackKey(cardId, boxStep.current), "");
       setEmpty(true);
       setError("");
     } finally {
@@ -204,6 +216,9 @@ function Tour({
     if (!last) go(index + 1);
     else void onSend("/weft:done");
   }
+
+  // A tour always has a step (lib/review.ts drops one without any).
+  if (!step) return null;
 
   return (
     <section className="border-t border-line bg-accent-soft/40">
@@ -239,9 +254,11 @@ function Tour({
               ref={composer}
               variant="reply"
               cwd={cwd}
+              initial={readDraft(feedbackKey(cardId, index))}
               placeholder="Anything wrong or missing here? Paste a screenshot to show it. (Enter to send)"
               onSubmit={() => void sendFeedback()}
               onChange={(markdown) => {
+                writeDraft(feedbackKey(cardId, boxStep.current), markdown);
                 setEmpty(!markdown.trim());
                 setError("");
               }}

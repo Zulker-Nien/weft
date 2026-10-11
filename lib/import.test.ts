@@ -124,7 +124,7 @@ let board: Card[] = [];
 
 async function sync(sessions: ReturnType<typeof info>[], cards: Card[] = []) {
   board = cards;
-  vi.mocked(sdk.listSessions).mockResolvedValue(sessions as never);
+  vi.mocked(sdk.listSessions).mockResolvedValue(sessions);
   return syncSessions();
 }
 
@@ -138,7 +138,7 @@ function ps(out = "") {
   vi.mocked(execFile).mockImplementation(((...args: unknown[]) => {
     (args[3] as (err: Error | null, stdout: string) => void)(null, out);
   }) as never);
-  vi.mocked(execFileSync).mockReturnValue(out as never);
+  vi.mocked(execFileSync).mockReturnValue(out);
 }
 
 function runningEntry(name: string, entry: unknown) {
@@ -435,7 +435,7 @@ describe("syncSessions: cards already on the board", () => {
     const id = onDisk([said("go", ago(20_000))]);
     const card = boardCard(id, { column: "needs_you", pending: { id: "p" } as Card["pending"] });
     await sync([info(id, { customTitle: "Renamed" })], [card]);
-    expect(patchFor(card)).toEqual({ title: "Renamed", stage: undefined, lastActivity: expect.any(Number) });
+    expect(patchFor(card)).toEqual({ title: "Renamed", stage: undefined, lastActivity: expect.any(Number) as unknown });
   });
 
   it("leaves Weft's own cards and cards that continued a session as a copy alone", async () => {
@@ -586,7 +586,7 @@ describe("startSessionSync", () => {
     board = [liveCard, quietCard, warmCard, ...skipped];
     vi.advanceTimersByTime(5_000);
     await flush();
-    expect(patchFor(liveCard)).toMatchObject({ column: "running", lastLine: "Working in another app", lastActivity: expect.any(Number) });
+    expect(patchFor(liveCard)).toMatchObject({ column: "running", lastLine: "Working in another app", lastActivity: expect.any(Number) as unknown });
     expect(patchFor(quietCard)).toEqual({ openElsewhere: true });
     expect(patchFor(warmCard)).toEqual({});
     expect(vi.mocked(store.updateCard).mock.calls.map(([id]) => id).sort()).toEqual([liveCard.id, quietCard.id].sort());

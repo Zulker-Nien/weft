@@ -14,14 +14,14 @@ describe("guard", () => {
     for (const host of ["evil.com", "evil.com:3456", "127.0.0.1.evil.com", "localhost.evil.com:80", "0.0.0.0:3456", ""]) {
       const res = guard(req({ host, "x-threadboard": "1" }));
       expect(res?.status, host).toBe(403);
-      expect((await res!.json()).error).toBe("Forbidden host");
+      expect(((await res!.json()) as { error: string }).error).toBe("Forbidden host");
     }
   });
 
   it("requires x-threadboard: 1 for writes", async () => {
     const res = guard(req({ host: "localhost:3456" }));
     expect(res?.status).toBe(403);
-    expect((await res!.json()).error).toBe("Missing x-threadboard header");
+    expect(((await res!.json()) as { error: string }).error).toBe("Missing x-threadboard header");
     expect(guard(req({ host: "localhost:3456", "x-threadboard": "0" }))?.status).toBe(403);
     expect(guard(req({ host: "localhost:3456", "x-threadboard": "true" }))?.status).toBe(403);
   });

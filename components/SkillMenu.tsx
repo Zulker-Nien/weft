@@ -38,7 +38,7 @@ export default function SkillMenu({
     let ignore = false;
     api.skills(cwd).then(
       (r) => !ignore && setLoad({ kind: "ready", skills: r.skills }),
-      (err) => !ignore && setLoad({ kind: "error", error: err instanceof Error ? err.message : String(err) }),
+      (err: unknown) => !ignore && setLoad({ kind: "error", error: err instanceof Error ? err.message : String(err) }),
     );
     const onDown = (e: MouseEvent) => {
       if (!menuRef.current?.contains(e.target as Node)) setOpen(false);

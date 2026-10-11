@@ -11,7 +11,7 @@ vi.mock("node:child_process", async () => {
   return {
     execFile: vi.fn(),
     execFileSync: vi.fn((_bin: string, args: string[]) => {
-      if (sips.preview) writeFileSync(args[args.length - 1], sips.preview);
+      if (sips.preview) writeFileSync(args[args.length - 1]!, sips.preview);
       else throw new Error("sips failed");
     }),
   };
@@ -127,7 +127,7 @@ describe("saveAttachment", () => {
       expect.any(Function),
     );
     // The callback ignores sips's result.
-    const done = vi.mocked(child.execFile).mock.calls[0][2] as unknown as () => void;
+    const done = vi.mocked(child.execFile).mock.calls[0]![2] as unknown as () => void;
     expect(() => done()).not.toThrow();
   });
 

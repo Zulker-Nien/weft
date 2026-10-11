@@ -25,7 +25,7 @@ export default function ModePicker({
       className={`relative flex items-center rounded-md border ${
         small ? "gap-1 py-px pl-1.5 pr-1 text-[11px]" : "gap-1.5 py-1.5 pl-2.5 pr-1.5 text-[12px]"
       } ${loose ? "border-warn/50 bg-warn-soft text-warn" : small ? "border-line text-muted" : "border-line-strong text-ink"}`}
-      title={`Permissions: ${mode.hint}`}
+      title={`Permissions: ${mode?.hint ?? ""}`}
     >
       <Icon name={loose ? "zap" : "shield"} size={small ? 11 : 13} />
       <span className="sr-only">Permissions</span>

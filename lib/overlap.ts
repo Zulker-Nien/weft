@@ -91,9 +91,10 @@ export function filesLine(paths: string[]) {
 // "Also running here: Fix login", "Also running here: Fix login and 2 more", and when busyHere found
 // shared edits, "Also running here: Fix login — both edited a.ts".
 export function alsoHereLine(others: BusyCards) {
-  if (others.length === 0) return "";
+  const first = others[0];
+  if (!first) return "";
   const more = others.length - 1;
-  const line = `Also running here: ${others[0].title}${more ? ` and ${more} more` : ""}`;
+  const line = `Also running here: ${first.title}${more ? ` and ${more} more` : ""}`;
   const shared = others.sharedFiles ?? [];
   if (shared.length === 0) return line;
   return `${line} — both edited ${filesLine(shared)}`;

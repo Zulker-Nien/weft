@@ -1,5 +1,6 @@
 import { firstMessage, messagesForMove } from "@/lib/automations";
 import { resolveFolder } from "@/lib/folders";
+import { asText } from "@/lib/format";
 import { fail, guard } from "@/lib/guard";
 import { archiveWhenIdle, endSession, isBusy, queueMessages, sendMessage, setPermissionMode } from "@/lib/runner";
 import { dismissSession } from "@/lib/settings";
@@ -20,14 +21,14 @@ export async function PATCH(req: Request, { params }: Ctx) {
     if (!card) return fail("No such card.", 404);
     const body = (await req.json()) as {
       column?: Column;
-      title?: string;
+      title?: unknown;
       cwd?: string;
-      archived?: boolean;
+      archived?: unknown;
       permissionMode?: PermissionMode;
     };
 
     if (body.title !== undefined) {
-      const title = String(body.title).trim();
+      const title = asText(body.title).trim();
       if (title) updateCard(id, { title, titleBy: "user" });
     }
 

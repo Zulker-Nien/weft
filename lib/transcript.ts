@@ -63,7 +63,7 @@ function typedText(raw: string, localCommand: boolean): string | undefined {
   // Local commands (/clear, /model) only changed the CLI; commands that prompt the model stay.
   if (/^<command-(?:name|message|args)>/.test(text)) return localCommand ? undefined : slashCommand(text);
   const bash = text.match(/^<bash-input>([\s\S]*?)<\/bash-input>/);
-  if (bash) return `! ${bash[1].trim()}`;
+  if (bash) return `! ${(bash[1] ?? "").trim()}`;
   if (INJECTED.test(text)) return undefined;
   return text;
 }
@@ -88,7 +88,7 @@ function blocksOf(content: unknown): Block[] {
 
 // True when text refers to a file in the attachments folder, as messages sent from Weft do.
 function hasAttachmentRef(text: string) {
-  return [...text.matchAll(MEDIA_REF)].some((m) => attachmentName(m[2] ?? m[3]));
+  return [...text.matchAll(MEDIA_REF)].some((m) => attachmentName(m[2] ?? m[3] ?? ""));
 }
 
 // cwd resolves relative paths in the images the agent shows.
@@ -152,6 +152,7 @@ export function transcriptToThread(messages: SessionMessage[], options?: { maxIt
   let moved = false;
   for (let i = items.length - 1; i >= 0; i--) {
     const item = items[i];
+    if (!item) continue;
     if (item.kind !== "tool") moved = true;
     else if (moved && item.result === undefined) items[i] = { ...item, result: "" };
   }

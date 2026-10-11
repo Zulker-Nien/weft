@@ -1,8 +1,9 @@
 "use client";
 
 import Tip from "./Tip";
-import { folderName, formatReset, formatTokens } from "@/lib/format";
-import type { Backend, CardStats, LimitWindow } from "@/lib/types";
+import { cacheMinutesLeft, folderName, formatReset, formatTokens } from "@/lib/format";
+import type { Backend, CacheState, CardStats, LimitWindow } from "@/lib/types";
+import { useNow } from "@/lib/use-now";
 
 // Green while plenty is left, then warn, then danger (same cut-offs as the terminal statusline).
 function tone(left: number) {
@@ -36,7 +37,29 @@ function Limit({
   );
 }
 
-// Session numbers for the open thread: model, context left, tokens, changed lines, plan limits.
+// How long the prompt cache stays warm, or "cold" with what the next message sends again at full price.
+function Cache({ cache }: { cache?: CacheState }) {
+  const now = useNow();
+  if (!cache || !now) return null;
+  const minutes = cacheMinutesLeft(cache, now);
+  const size = formatTokens(cache.tokens);
+  const life = cache.ttl >= 3600 ? "an hour" : `${Math.round(cache.ttl / 60)} minutes`;
+  if (!minutes) {
+    return (
+      <Tip text={`Prompt cache gone cold: it lasts ${life} after the last request. Your next message sends this thread's ${size} tokens again at full price instead of about a tenth, which takes a bigger bite of the 5-hour limit. For a new topic, a fresh card is cheaper.`}>
+        cache:<span className="text-warn">cold {size}</span>
+      </Tip>
+    );
+  }
+  return (
+    <Tip text={`Prompt cache warm for ${minutes} more min (it lasts ${life} after each request). The last request read ${cache.hit}% of its ${size} tokens from cache, at about a tenth of the price. Reply before it runs out to keep it cheap.`}>
+      cache:<span className="text-ok">{minutes}m</span>
+    </Tip>
+  );
+}
+
+// Session numbers for the open thread: model, context left, cache, tokens, plan limits. The folder's
+// uncommitted lines moved to the header (components/PileBadge.tsx).
 export default function StatusStrip({
   stats = {},
   cwd,
@@ -49,10 +72,8 @@ export default function StatusStrip({
   backend?: Backend;
   className?: string;
 }) {
-  if (!stats && !cwd && !backend) return null;
   const left =
     stats.contextUsed === undefined ? undefined : 100 - stats.contextUsed;
-  const hasLines = Boolean(stats.added || stats.removed);
   const limits = stats.fiveHour || stats.sevenDay;
 
   return (
@@ -83,15 +104,10 @@ export default function StatusStrip({
             ctx:<span className={tone(left)}>{left}%</span>
           </Tip>
         )}
+        <Cache cache={stats.cache} />
         {stats.tokens && (
           <Tip text={`${stats.tokens.toLocaleString()} input and output tokens used in this thread`}>
             tok:{formatTokens(stats.tokens)}
-          </Tip>
-        )}
-        {hasLines && (
-          <Tip text={`Uncommitted changes in the folder vs HEAD: ${stats.added} lines added, ${stats.removed} removed`}>
-            <span className="text-ok">+{stats.added}</span>/
-            <span className="text-danger">-{stats.removed}</span>
           </Tip>
         )}
         {limits && (

@@ -25,7 +25,7 @@ class FakeQuery {
   setPermissionMode = vi.fn(async () => {});
   setModel = vi.fn(async () => {});
   applyFlagSettings = vi.fn(async () => {});
-  usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET = vi.fn(async (): Promise<unknown> => ({}));
+  usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET = vi.fn((): Promise<unknown> => Promise.resolve({}));
   private queue: unknown[] = [];
   private wake?: () => void;
   private done = false;
@@ -64,7 +64,7 @@ class FakeQuery {
   }
 
   async *[Symbol.asyncIterator]() {
-    while (true) {
+    for (;;) {
       while (this.queue.length) yield this.queue.shift();
       if (this.error) throw this.error;
       if (this.done) return;
@@ -190,7 +190,13 @@ function addCard(over: Partial<Card> = {}): Card {
 
 const card = (id: string) => h.cards.get(id)!;
 const thread = (id: string) => h.threads.get(id) ?? [];
-const lastQuery = () => h.queries[h.queries.length - 1];
+// The item at index i (negative counts from the end); throws a clear error when it doesn't exist.
+function nth<T>(arr: readonly T[], i: number, what = "item"): T {
+  const item = arr.at(i);
+  if (item === undefined) throw new Error(`No ${what} at index ${String(i)} (have ${String(arr.length)})`);
+  return item;
+}
+const lastQuery = () => nth(h.queries, -1, "query");
 
 // SDK messages, with only the fields runner reads.
 const init = (sessionId = "sess-1") => ({ type: "system", subtype: "init", session_id: sessionId });
@@ -243,7 +249,7 @@ beforeEach(async () => {
   h.execCalls.length = 0;
   h.execFails = false;
   h.loginFails = false;
-  for (const key of GLOBALS) delete g[key];
+  for (const key of GLOBALS) Reflect.deleteProperty(g, key);
   cwd = fs.mkdtempSync(path.join(os.tmpdir(), "weft-runner-"));
   vi.resetModules();
   runner = await import("./runner");
@@ -687,7 +693,7 @@ describe("spares", () => {
     expect(spare.setPermissionMode).not.toHaveBeenCalled();
     // A fresh spare replaces the one taken.
     expect(h.queries).toHaveLength(2);
-    expect(h.queries[1].options.cwd).toBe(cwd);
+    expect(nth(h.queries, 1, "query").options.cwd).toBe(cwd);
   });
 
   it("an adopting card gets the spare's session id before any result, so a CLI that dies mid-turn can resume", async () => {
@@ -744,7 +750,7 @@ describe("spares", () => {
     runner.sendMessage("cp", "go");
     await flush();
     expect(h.queries).toHaveLength(3);
-    expect(h.queries[0].received).toEqual([]);
+    expect(nth(h.queries, 0, "query").received).toEqual([]);
   });
 
   it("a spare denies tool requests until a card takes it", async () => {
@@ -757,14 +763,14 @@ describe("spares", () => {
 
   it("keeps one spare per folder and at most three, closing the oldest", async () => {
     const dirs = [cwd, ...[1, 2, 3].map(() => fs.mkdtempSync(path.join(os.tmpdir(), "weft-runner-")))];
-    runner.ensureSpare(dirs[0]);
-    runner.ensureSpare(dirs[0]);
+    runner.ensureSpare(cwd);
+    runner.ensureSpare(cwd);
     await flush();
     expect(h.queries).toHaveLength(1);
     for (const dir of dirs.slice(1)) runner.ensureSpare(dir);
     await flush();
     expect(h.queries).toHaveLength(4);
-    expect(h.queries[0].aborted).toBe(true);
+    expect(nth(h.queries, 0, "query").aborted).toBe(true);
     expect(h.queries.slice(1).every((q) => !q.aborted)).toBe(true);
   });
 });
@@ -831,7 +837,7 @@ describe("login", () => {
     expect(card("c1")).toMatchObject({ column: "needs_you", lastLine: "Log in to Claude Code to run this thread" });
     expect(card("c1").error).toContain("Invalid API key");
 
-    h.startLogin[0].onDone?.();
+    nth(h.startLogin, 0, "login").onDone?.();
     await flush();
     expect(h.queries).toHaveLength(2);
     expect(lastQuery().received).toEqual(["please"]);
@@ -981,16 +987,16 @@ describe("stale sessions (BUILD)", () => {
     runner.ensureSpare(cwd);
     await flush();
     const spares = g.__threadboardSpares as Map<string, Session>;
-    [...spares.values()][0].build = "older-build";
+    nth([...spares.values()], 0, "spare").build = "older-build";
     runner.ensureSpare(cwd);
     await flush();
     expect(h.queries).toHaveLength(2);
-    expect(h.queries[0].aborted).toBe(true);
+    expect(nth(h.queries, 0, "query").aborted).toBe(true);
   });
 });
 
 describe("edges", () => {
-  it("a puku card fails to start when puku-cli isn't on PATH", async () => {
+  it("a puku card fails to start when puku-cli isn't on PATH", () => {
     h.execFails = true;
     addCard({ id: "c1", backend: "puku" });
     expect(() => runner.sendMessage("c1", "hi")).toThrow("puku-cli isn't on this app's PATH.");
@@ -1044,15 +1050,15 @@ describe("edges", () => {
     runner.ensureSpare(cwd);
     await flush();
     const spares = g.__threadboardSpares as Map<string, { build: string }>;
-    [...spares.values()][0].build = "older-build";
+    nth([...spares.values()], 0, "spare").build = "older-build";
     addCard({ id: "c1" });
     runner.sendMessage("c1", "go");
     await flush();
-    expect(h.queries[0].aborted).toBe(true);
-    expect(h.queries[1].received).toEqual(["go"]);
+    expect(nth(h.queries, 0, "query").aborted).toBe(true);
+    expect(nth(h.queries, 1, "query").received).toEqual(["go"]);
   });
 
-  it("archiveWhenIdle archives an idle card now, but keeps a starred one on the board", async () => {
+  it("archiveWhenIdle archives an idle card now, but keeps a starred one on the board", () => {
     addCard({ id: "c1" });
     addCard({ id: "c2", libraryId: "lib-1" });
     runner.archiveWhenIdle("c1");
@@ -1106,7 +1112,8 @@ describe("more edges", () => {
     expect(card("c1").pending?.title).toContain("one");
     a.controller.abort();
     await a.promise;
-    expect(card("c1")).toMatchObject({ column: "needs_you", lastLine: expect.stringContaining("two") });
+    expect(card("c1").column).toBe("needs_you");
+    expect(card("c1").lastLine).toContain("two");
     expect(card("c1").pending?.title).toContain("two");
     a.controller.abort(); // a second abort of the same request is a no-op
     runner.answerPermission("c1", true);
@@ -1148,6 +1155,18 @@ describe("more edges", () => {
     await flush();
     expect(h.publish.some((e) => (e as { type: string }).type === "delta")).toBe(false);
     expect(card("c1").stats?.contextUsed).toBe(15);
+    expect(card("c1").stats?.cache).toMatchObject({ ttl: 300, hit: 33, tokens: 15 });
+  });
+
+  it("keeps the last cache through a request with no input, and reads its life from the next write", async () => {
+    addCard({ id: "c1" });
+    const q = await send("c1");
+    const usage = { input_tokens: 2, cache_read_input_tokens: 8, cache_creation: { ephemeral_1h_input_tokens: 2 } };
+    q.emit({ ...assistant(text("a")), message: { content: [text("a")], usage } });
+    q.emit({ ...assistant(text("b")), message: { content: [text("b")], usage: { output_tokens: 3 } } });
+    q.emit(success("ok"));
+    await flush();
+    expect(card("c1").stats?.cache).toMatchObject({ ttl: 3600, hit: 80, tokens: 10 });
   });
 
   it("tool results skip blocks that aren't results, unknown ids and string content", async () => {

@@ -1,4 +1,4 @@
-import type { Card } from "./types";
+import type { CacheState, Card } from "./types";
 
 // Display helpers shared by the server and the board UI.
 
@@ -136,7 +136,7 @@ function serverLabel(server: string) {
 function phrase(kind: string, n: number) {
   if (PHRASES[kind]) return PHRASES[kind](n);
   const [scope, rest = ""] = kind.split(":");
-  const [server, tool] = rest.split("__");
+  const [server = "", tool] = rest.split("__");
   const label = scope === "mcp" ? (serverLabel(server) ?? tool ?? server) : rest;
   return count(n, `used ${label}`, `used ${label} # times`);
 }
@@ -186,12 +186,24 @@ export function formatTokens(n: number) {
   return String(n);
 }
 
+// Whole minutes the prompt cache stays warm at `now` (unix ms), rounded up; 0 once it has gone cold.
+export function cacheMinutesLeft(cache: CacheState, now: number) {
+  return Math.max(0, Math.ceil((cache.at + cache.ttl * 1000 - now) / 60_000));
+}
+
 // "6am" or "fri 2pm", from unix seconds.
 export function formatReset(resetsAt: number, now = Date.now()) {
   const d = new Date(resetsAt * 1000);
   const time = d.toLocaleTimeString("en-US", { hour: "numeric" }).replace(" ", "").toLowerCase();
   const sameDay = d.getTime() - now < 20 * 3600_000;
   return sameDay ? time : `${d.toLocaleDateString("en-US", { weekday: "short" }).toLowerCase()} ${time}`;
+}
+
+// Untyped JSON as text: strings as they are, numbers and booleans spelled out, anything else the fallback.
+export function asText(value: unknown, fallback = ""): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return fallback;
 }
 
 // Cuts text to max characters, ending in an ellipsis when it had to cut.

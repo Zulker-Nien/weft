@@ -109,7 +109,9 @@ export default function LoginDialog({ login, onClose }: { login: LoginView; onCl
 
               {login.url && (
                 <div>
-                  <button onClick={() => openUrl(login.url!)} className={primary}>
+                  <button onClick={() => {
+                      if (login.url) openUrl(login.url);
+                    }} className={primary}>
                     <Icon name="globe" size={14} /> Open login page
                   </button>
                 </div>

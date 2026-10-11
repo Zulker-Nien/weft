@@ -53,19 +53,19 @@ describe("extractReview", () => {
 
   it("prefers path over url on a step", () => {
     const { review } = extractReview(block('{"steps":[{"title":"A","path":"/a","url":"https://b"}]}'));
-    expect(review?.steps[0].path).toBe("/a");
+    expect(review?.steps[0]!.path).toBe("/a");
   });
 
   it("uses the last valid plan and strips every block", () => {
     const text = [block('{"steps":[{"title":"One"}]}'), block("oops"), block('{"steps":[{"title":"Two"}]}')].join("\n");
     const out = extractReview(text);
-    expect(out.review?.steps[0].title).toBe("Two");
+    expect(out.review?.steps[0]!.title).toBe("Two");
     expect(out.text).not.toContain("```");
   });
 
   it("keeps the earlier plan when a later block is broken", () => {
     const out = extractReview(block('{"steps":[{"title":"One"}]}') + "\n" + block("oops"));
-    expect(out.review?.steps[0].title).toBe("One");
+    expect(out.review?.steps[0]!.title).toBe("One");
   });
 });
 

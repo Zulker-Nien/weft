@@ -2,9 +2,10 @@
 // goes after it, what it cost and how close the plan is to its limits. Pure, so runner.ts keeps only
 // the SDK loop and the store writes.
 import type { ModelUsage } from "@anthropic-ai/claude-agent-sdk";
+import { asText } from "./format";
 import { extractReview } from "./review";
 import { extractStatus, type BoardStatus } from "./status";
-import type { CardStats, Column, LimitWindow, Question } from "./types";
+import type { CacheState, CardStats, Column, LimitWindow, Question } from "./types";
 
 // The questions from an AskUserQuestion call, cleaned up for the board.
 export function readQuestions(input: Record<string, unknown>): Question[] | undefined {
@@ -12,12 +13,12 @@ export function readQuestions(input: Record<string, unknown>): Question[] | unde
   const questions = input.questions
     .filter((q): q is Record<string, unknown> => Boolean(q) && typeof q === "object")
     .map((q) => ({
-      question: String(q.question ?? ""),
+      question: asText(q.question),
       header: typeof q.header === "string" ? q.header : undefined,
       multiSelect: q.multiSelect === true,
       options: (Array.isArray(q.options) ? q.options : [])
         .filter((o): o is Record<string, unknown> => Boolean(o) && typeof o === "object")
-        .map((o) => ({ label: String(o.label ?? ""), description: typeof o.description === "string" ? o.description : undefined }))
+        .map((o) => ({ label: asText(o.label), description: typeof o.description === "string" ? o.description : undefined }))
         .filter((o) => o.label),
     }))
     .filter((q) => q.question);
@@ -63,6 +64,26 @@ export function eventWindow(info: { utilization?: number; resetsAt?: number }): 
 // A window from the CLI's usage report; utilization is a percentage there and the reset an ISO date.
 export function usageWindow(w?: { utilization: number | null; resets_at: string | null } | null): LimitWindow | undefined {
   return w?.utilization == null ? undefined : { used: Math.round(w.utilization), resetsAt: w.resets_at ? Date.parse(w.resets_at) / 1000 : undefined };
+}
+
+// One API request's usage, as the assistant message carries it.
+export interface RequestUsage {
+  input_tokens?: number | null;
+  cache_read_input_tokens?: number | null;
+  cache_creation_input_tokens?: number | null;
+  cache_creation?: { ephemeral_5m_input_tokens?: number; ephemeral_1h_input_tokens?: number } | null;
+}
+
+// The prompt cache after a request. Its lifetime is read from what the request wrote: an hour for the
+// 1-hour cache, five minutes for the 5-minute one, else the lifetime seen before (five minutes at first).
+export function cacheAfter(u: RequestUsage | undefined, at: number, previousTtl = 300): CacheState | undefined {
+  if (!u) return undefined;
+  const read = u.cache_read_input_tokens ?? 0;
+  const tokens = (u.input_tokens ?? 0) + read + (u.cache_creation_input_tokens ?? 0);
+  if (!tokens) return undefined;
+  const written = u.cache_creation;
+  const ttl = written?.ephemeral_1h_input_tokens ? 3600 : written?.ephemeral_5m_input_tokens ? 300 : previousTtl;
+  return { at, ttl, hit: Math.round((read / tokens) * 100), tokens };
 }
 
 // The model that cost the most this turn, how full its context is, and the turn's tokens.

@@ -18,7 +18,7 @@
     "desktop": "electron .",
     "build": "next build",
     "start": "electron .",
-    "lint": "eslint",
+    "lint": "eslint --max-warnings 0",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "prepare": "git config core.hooksPath .githooks || true",

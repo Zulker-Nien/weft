@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 type Chimes = typeof import("./chimes");
 
@@ -9,10 +9,11 @@ class FakeAudioContext {
   static startState: AudioContextState = "running";
   state: AudioContextState = FakeAudioContext.startState;
   destination = { name: "speakers" };
-  resume = vi.fn(async () => {
+  resume = vi.fn(() => {
     this.state = "running";
+    return Promise.resolve();
   });
-  decodeAudioData = vi.fn(async (data: ArrayBuffer) => ({ decodedFrom: data }));
+  decodeAudioData = vi.fn((data: ArrayBuffer) => Promise.resolve({ decodedFrom: data }));
   played: { buffer: unknown; gain: number; to: unknown }[] = [];
   constructor() {
     FakeAudioContext.made.push(this);
@@ -36,7 +37,7 @@ class FakeAudioContext {
 }
 
 let chimes: Chimes;
-let fetchMock: ReturnType<typeof vi.fn>;
+let fetchMock: Mock<(url: string) => Promise<unknown>>;
 let fail = new Set<string>();
 
 const played = () => FakeAudioContext.made.flatMap((c) => c.played);
@@ -57,8 +58,10 @@ beforeEach(async () => {
   FakeAudioContext.made = [];
   FakeAudioContext.startState = "running";
   fail = new Set();
-  fetchMock = vi.fn(async (url: string) =>
-    fail.has(url) ? { ok: false, status: 404 } : { ok: true, status: 200, arrayBuffer: async () => new TextEncoder().encode(url).buffer },
+  fetchMock = vi.fn((url: string) =>
+    Promise.resolve(
+      fail.has(url) ? { ok: false, status: 404 } : { ok: true, status: 200, arrayBuffer: () => Promise.resolve(new TextEncoder().encode(url).buffer) },
+    ),
   );
   vi.stubGlobal("fetch", fetchMock);
   vi.stubGlobal("AudioContext", FakeAudioContext);
@@ -124,7 +127,7 @@ describe("playChime", () => {
     await vi.advanceTimersByTimeAsync(0);
     await settle();
     expect(fetchMock).toHaveBeenCalledWith("/sounds/done.m4a");
-    expect(played()).toEqual([{ buffer: expect.anything(), gain: 0.36, to: { name: "speakers" } }]);
+    expect(played()).toEqual([{ buffer: expect.anything() as unknown, gain: 0.36, to: { name: "speakers" } }]);
     expect(playedFiles()).toEqual(["/sounds/done.m4a"]);
   });
 
@@ -182,7 +185,7 @@ describe("playChime", () => {
     chimes.setChimePrefs({ ...chimes.chimePrefs(), volume: 50 });
     await vi.advanceTimersByTimeAsync(0);
     await settle();
-    expect(played()[0].gain).toBe(0.25);
+    expect(played()[0]!.gain).toBe(0.25);
   });
 
   it("makes no sound at volume 0", async () => {
@@ -203,7 +206,7 @@ describe("audio loading", () => {
     await settle();
     expect(FakeAudioContext.made).toHaveLength(1);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(FakeAudioContext.made[0].decodeAudioData).toHaveBeenCalledTimes(1);
+    expect(FakeAudioContext.made[0]!.decodeAudioData).toHaveBeenCalledTimes(1);
     expect(played()).toHaveLength(2);
   });
 
@@ -211,7 +214,7 @@ describe("audio loading", () => {
     FakeAudioContext.startState = "suspended";
     chimes.previewChime("done");
     await settle();
-    expect(FakeAudioContext.made[0].resume).toHaveBeenCalled();
+    expect(FakeAudioContext.made[0]!.resume).toHaveBeenCalled();
   });
 
   it("stays silent on a missing file, and tries again next time", async () => {

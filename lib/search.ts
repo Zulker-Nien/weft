@@ -146,7 +146,7 @@ async function indexThread(db: DatabaseSync, cardId: string, file: string) {
 async function refresh() {
   const db = open();
   for (const [sessionId, file] of sessionFiles()) {
-    await indexSession(db, sessionId, file).catch((err) => console.error(`Couldn't index ${file}:`, err));
+    await indexSession(db, sessionId, file).catch((err: unknown) => console.error(`Couldn't index ${file}:`, err));
     // Let requests through between files; the first pass can read gigabytes.
     await new Promise((resolve) => setImmediate(resolve));
   }
@@ -157,7 +157,7 @@ async function refresh() {
     // No threads yet.
   }
   for (const name of names) {
-    await indexThread(db, name.slice(0, -5), path.join(THREADS_DIR, name)).catch((err) => console.error(`Couldn't index ${name}:`, err));
+    await indexThread(db, name.slice(0, -5), path.join(THREADS_DIR, name)).catch((err: unknown) => console.error(`Couldn't index ${name}:`, err));
   }
   g.__weftSearchReady = true;
 }
@@ -173,7 +173,7 @@ function refreshIndex(): Promise<void> {
 export function startSearchIndex() {
   if (g.__weftSearchTimer) return;
   g.__weftSearchTimer = setInterval(() => void refreshIndex().catch(() => {}), REFRESH_EVERY_MS);
-  void refreshIndex().catch((err) => console.error("Search indexing failed:", err));
+  void refreshIndex().catch((err: unknown) => console.error("Search indexing failed:", err));
 }
 
 // Every word must match, and the last one as a prefix so results appear while typing.

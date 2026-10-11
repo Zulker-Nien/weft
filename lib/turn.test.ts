@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ModelUsage } from "@anthropic-ai/claude-agent-sdk";
 import {
+  cacheAfter,
   columnAfterTurn,
   eventWindow,
   modelStats,
@@ -74,7 +75,7 @@ describe("readQuestions", () => {
         },
       ],
     });
-    expect(out?.[0].multiSelect).toBe(false);
+    expect(out?.[0]!.multiSelect).toBe(false);
   });
 
   it("drops null and non-object questions", () => {
@@ -82,7 +83,7 @@ describe("readQuestions", () => {
       questions: [null, "x", 42, true, { question: "OK", options: [{ label: "L" }] }],
     });
     expect(out).toHaveLength(1);
-    expect(out?.[0].question).toBe("OK");
+    expect(out?.[0]!.question).toBe("OK");
   });
 
   it("drops options without a label and non-object options", () => {
@@ -101,7 +102,7 @@ describe("readQuestions", () => {
         },
       ],
     });
-    expect(out?.[0].options).toEqual([{ label: "Keep", description: undefined }]);
+    expect(out?.[0]!.options).toEqual([{ label: "Keep", description: undefined }]);
   });
 
   it("drops questions with an empty question string", () => {
@@ -113,7 +114,7 @@ describe("readQuestions", () => {
       ],
     });
     expect(out).toHaveLength(1);
-    expect(out?.[0].question).toBe("OK");
+    expect(out?.[0]!.question).toBe("OK");
   });
 
   it("returns undefined when nothing valid remains", () => {
@@ -263,7 +264,7 @@ describe("modelStats", () => {
       "claude-opus": { costUSD: 1.2, inputTokens: 0, outputTokens: 0, contextWindow: 0 },
       "claude-sonnet": { costUSD: 0.4, inputTokens: 0, outputTokens: 0, contextWindow: 0 },
     } as unknown as Record<string, ModelUsage>;
-    expect(modelStats(u, undefined)?.model).toBe("claude-opus");
+    expect(modelStats(u, undefined).model).toBe("claude-opus");
   });
 
   it("sums input+output tokens across all models", () => {
@@ -271,7 +272,7 @@ describe("modelStats", () => {
       a: { costUSD: 1, inputTokens: 100, outputTokens: 50, contextWindow: 0 },
       b: { costUSD: 0.1, inputTokens: 25, outputTokens: 75, contextWindow: 0 },
     } as unknown as Record<string, ModelUsage>;
-    expect(modelStats(u, undefined)?.tokens).toBe(250);
+    expect(modelStats(u, undefined).tokens).toBe(250);
   });
 
   it("reports contextUsed from the top model, rounded and capped at 100", () => {
@@ -284,13 +285,36 @@ describe("modelStats", () => {
 
   it("contextUsed is undefined without contextTokens or contextWindow", () => {
     const u1 = { a: usage({ contextWindow: 200_000 }) };
-    expect(modelStats(u1, undefined)?.contextUsed).toBeUndefined();
+    expect(modelStats(u1, undefined).contextUsed).toBeUndefined();
     const u2 = { a: usage({ contextWindow: 0 }) };
-    expect(modelStats(u2, 50_000)?.contextUsed).toBeUndefined();
+    expect(modelStats(u2, 50_000).contextUsed).toBeUndefined();
   });
 
   it("returns tokens as undefined when the sum is 0", () => {
     const u = { a: usage({ inputTokens: 0, outputTokens: 0, contextWindow: 0 }) };
-    expect(modelStats(u, undefined)?.tokens).toBeUndefined();
+    expect(modelStats(u, undefined).tokens).toBeUndefined();
+  });
+});
+
+describe("cacheAfter", () => {
+  it("reads the hit share and size, and an hour's life from a 1-hour cache write", () => {
+    const u = { input_tokens: 10, cache_read_input_tokens: 900, cache_creation_input_tokens: 90, cache_creation: { ephemeral_1h_input_tokens: 90 } };
+    expect(cacheAfter(u, 1000)).toEqual({ at: 1000, ttl: 3600, hit: 90, tokens: 1000 });
+  });
+
+  it("reads five minutes from a 5-minute cache write", () => {
+    const u = { input_tokens: 100, cache_creation: { ephemeral_5m_input_tokens: 50, ephemeral_1h_input_tokens: 0 } };
+    expect(cacheAfter(u, 0, 3600)?.ttl).toBe(300);
+  });
+
+  it("keeps the earlier life when the request wrote nothing, five minutes at first", () => {
+    expect(cacheAfter({ cache_read_input_tokens: 500 }, 0, 3600)).toEqual({ at: 0, ttl: 3600, hit: 100, tokens: 500 });
+    expect(cacheAfter({ input_tokens: 5, cache_creation: null }, 0)?.ttl).toBe(300);
+  });
+
+  it("is undefined for a request with no input", () => {
+    expect(cacheAfter(undefined, 0)).toBeUndefined();
+    expect(cacheAfter({}, 0)).toBeUndefined();
+    expect(cacheAfter({ input_tokens: null }, 0)).toBeUndefined();
   });
 });

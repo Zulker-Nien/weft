@@ -22,7 +22,7 @@ const { scheduleMessage, sendDueMessages, startScheduler, unscheduleMessage } = 
 
 const NOW = Date.now();
 const card = (id: string, over: Partial<Card> = {}) =>
-  cards.set(id, { id, title: id, prompt: "", cwd: "/tmp", backend: "claude", permissionMode: "default", column: "review", createdAt: 0, updatedAt: 0, ...over } as Card);
+  cards.set(id, { id, title: id, prompt: "", cwd: "/tmp", backend: "claude", permissionMode: "default", column: "review", createdAt: 0, updatedAt: 0, ...over });
 
 beforeEach(() => {
   cards.clear();
@@ -48,7 +48,7 @@ describe("scheduleMessage", () => {
 
   it("takes one back, clearing the list when it was the last", () => {
     card("a");
-    const id = scheduleMessage("a", "x", NOW + 1000).scheduled![0].id;
+    const id = scheduleMessage("a", "x", NOW + 1000).scheduled![0]!.id;
     unscheduleMessage("a", id);
     expect(cards.get("a")!.scheduled).toBeUndefined();
   });
@@ -101,8 +101,9 @@ describe("sendDueMessages with a non-Error failure", () => {
   it("still puts it on the card", async () => {
     const runner = await import("./runner");
     const spy = vi.spyOn(runner, "sendUserMessage");
+    const notAnError: unknown = "offline";
     spy.mockImplementationOnce(() => {
-      throw "offline";
+      throw notAnError;
     });
     card("a", { scheduled: [{ id: "1", text: "hi", at: NOW - 1 }] });
     sendDueMessages(NOW);

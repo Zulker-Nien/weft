@@ -3,7 +3,7 @@ import { connection } from "next/server";
 import { firstMessage } from "@/lib/automations";
 import { prewarm } from "@/lib/copilot";
 import { resolveFolder } from "@/lib/folders";
-import { titleFromPrompt } from "@/lib/format";
+import { asText, titleFromPrompt } from "@/lib/format";
 import { fail, guard } from "@/lib/guard";
 import { getItem } from "@/lib/library";
 import { projectRoot } from "@/lib/repos";
@@ -38,9 +38,9 @@ export async function POST(req: Request) {
   if (denied) return denied;
   try {
     const body = (await req.json()) as Record<string, unknown>;
-    const prompt = String(body.prompt ?? "").trim();
+    const prompt = asText(body.prompt).trim();
     if (!prompt) throw new Error("Write a prompt for this thread.");
-    const typedTitle = String(body.title ?? "").trim();
+    const typedTitle = asText(body.title).trim();
     const title = typedTitle || titleFromPrompt(prompt);
 
     const cwd = resolveFolder(body.cwd);
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
       ? (body.permissionMode as PermissionMode)
       : defaultPermissionMode();
 
-    const model = backend === "claude" && typeof body.model === "string" && MODEL_ID.test(body.model) ? body.model : undefined;
+    const model = typeof body.model === "string" && MODEL_ID.test(body.model) ? body.model : undefined;
 
     const effort = backend === "claude" && EFFORTS.includes(body.effort as Effort) ? (body.effort as Effort) : undefined;
 

@@ -1,3 +1,4 @@
+import { asText } from "@/lib/format";
 import { fail, guard } from "@/lib/guard";
 import { cloneRepo } from "@/lib/repos";
 import { listProjects, touchProject } from "@/lib/settings";
@@ -8,7 +9,7 @@ export async function POST(req: Request) {
   if (denied) return denied;
   try {
     const body = (await req.json()) as Record<string, unknown>;
-    const folder = await cloneRepo(String(body.fullName ?? "").trim());
+    const folder = await cloneRepo(asText(body.fullName).trim());
     touchProject(folder);
     return Response.json({ path: folder, projects: listProjects() });
   } catch (err) {

@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import type { DevServerStatus } from "./types";
+import { globalSingleton } from "./global-singleton";
 
 // The dev server a card's review tour points at: started from the card's folder, kept running
 // while the user reviews, and probed so the board can say whether the app really answers.
@@ -11,8 +12,8 @@ interface Run {
   failed: boolean;
 }
 
-const g = globalThis as unknown as { __threadboardDevServers?: Map<string, Run> };
-const runs = (g.__threadboardDevServers ??= new Map<string, Run>());
+const g = globalThis as unknown as { __threadboardDevExit?: boolean };
+const runs = globalSingleton("__threadboardDevServers", () => new Map<string, Run>());
 
 const LOG_LIMIT = 4000;
 
@@ -40,7 +41,8 @@ export function stopDev(cardId: string) {
   if (run.exited) return;
   // The shell leads a process group, so one signal takes down the server and whatever it spawned.
   try {
-    process.kill(-run.child.pid!, "SIGTERM");
+    if (run.child.pid === undefined) run.child.kill("SIGTERM");
+    else process.kill(-run.child.pid, "SIGTERM");
   } catch {
     run.child.kill("SIGTERM");
   }
@@ -55,8 +57,8 @@ export function startDev(cardId: string, command: string, cwd: string) {
   const collect = (chunk: Buffer) => {
     run.log = (run.log + chunk.toString()).slice(-LOG_LIMIT);
   };
-  child.stdout?.on("data", collect);
-  child.stderr?.on("data", collect);
+  child.stdout.on("data", collect);
+  child.stderr.on("data", collect);
   child.on("error", (err) => {
     run.log += `\n${err.message}`;
     run.exited = run.failed = true;
@@ -69,8 +71,8 @@ export function startDev(cardId: string, command: string, cwd: string) {
 }
 
 // Servers Weft started shouldn't outlive it.
-if (!(g as { __threadboardDevExit?: boolean }).__threadboardDevExit) {
-  (g as { __threadboardDevExit?: boolean }).__threadboardDevExit = true;
+if (!g.__threadboardDevExit) {
+  g.__threadboardDevExit = true;
   process.on("exit", () => {
     for (const id of [...runs.keys()]) stopDev(id);
   });

@@ -25,11 +25,17 @@ describe("useNow", () => {
 
   it("ticks every 30 seconds", () => {
     const { result } = renderHook(() => useNow());
-    act(() => vi.advanceTimersByTime(29_999));
+    act(() => {
+      vi.advanceTimersByTime(29_999);
+    });
     expect(result.current).toBe(START);
-    act(() => vi.advanceTimersByTime(1));
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
     expect(result.current).toBe(START + 30_000);
-    act(() => vi.advanceTimersByTime(30_000));
+    act(() => {
+      vi.advanceTimersByTime(30_000);
+    });
     expect(result.current).toBe(START + 60_000);
   });
 

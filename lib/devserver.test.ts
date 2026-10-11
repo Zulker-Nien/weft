@@ -28,7 +28,7 @@ vi.spyOn(process, "on").mockImplementation(((event: string, fn: () => void) => {
 const dev = await import("./devserver");
 
 const kill = vi.spyOn(process, "kill").mockImplementation(() => true);
-const fetchMock = vi.fn();
+const fetchMock = vi.fn<typeof fetch>();
 vi.stubGlobal("fetch", fetchMock);
 
 let nextPid = 1000;
@@ -46,14 +46,14 @@ afterEach(() => {
   children.length = 0;
 });
 
-const last = () => children[children.length - 1];
+const last = () => children[children.length - 1]!;
 
 describe("reachable", () => {
   it("is true when anything answers, without following redirects", async () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 404 }));
     expect(await dev.reachable("http://localhost:3000")).toBe(true);
     expect(fetchMock).toHaveBeenCalledWith("http://localhost:3000", expect.objectContaining({ redirect: "manual" }));
-    expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+    expect(fetchMock.mock.calls[0]![1]!.signal).toBeInstanceOf(AbortSignal);
   });
 
   it("is false when the request fails", async () => {
@@ -113,8 +113,8 @@ describe("devStatus", () => {
 
   it("keeps only the last 4000 characters of output", async () => {
     dev.startDev("a", "npm run dev", "/app");
-    last().stdout.emit("data", Buffer.from(`${"a".repeat(3000)}`));
-    last().stdout.emit("data", Buffer.from(`${"b".repeat(3000)}`));
+    last().stdout.emit("data", Buffer.from("a".repeat(3000)));
+    last().stdout.emit("data", Buffer.from("b".repeat(3000)));
     const { log } = await dev.devStatus("a");
     expect(log).toHaveLength(4000);
     expect(log).toBe("a".repeat(1000) + "b".repeat(3000));
@@ -192,7 +192,7 @@ describe("on exit", () => {
     const a = last();
     dev.startDev("b", "y", "/app");
     const b = last();
-    exitHooks[0]();
+    exitHooks[0]!();
     expect(kill).toHaveBeenCalledWith(-a.pid, "SIGTERM");
     expect(kill).toHaveBeenCalledWith(-b.pid, "SIGTERM");
   });

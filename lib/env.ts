@@ -7,7 +7,7 @@ const INHERITED = /^(CLAUDECODE$|CLAUDE_CODE_|CLAUDE_AGENT_SDK_|CLAUDE_PID$|CLAU
 export function cliEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
   const insideClaude = Boolean(env.CLAUDECODE || env.CLAUDE_CODE_DESKTOP_APP_VERSION);
-  for (const key of Object.keys(env)) if (INHERITED.test(key)) delete env[key];
+  for (const key of Object.keys(env)) if (INHERITED.test(key)) Reflect.deleteProperty(env, key);
   // The Claude app routes its own sessions through a local proxy; that address isn't ours to use.
   if (insideClaude) delete env.ANTHROPIC_BASE_URL;
   env.CLAUDE_CODE_ENTRYPOINT = "sdk-ts";

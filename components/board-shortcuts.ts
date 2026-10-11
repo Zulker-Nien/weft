@@ -1,0 +1,200 @@
+import type { Dispatch, SetStateAction } from "react";
+import type { ShortcutDef } from "@/lib/hotkeys";
+import type { Card, LibraryKind, LoginView } from "@/lib/types";
+
+// The board's keyboard shortcuts (Board.tsx), from the state and actions they read.
+export interface BoardShortcutContext {
+  showNew: boolean;
+  showSettings: boolean;
+  showHelp: boolean;
+  showPalette: boolean;
+  login: LoginView | null;
+  query: string;
+  // Shortcuts that act on the board stand down while a dialog or the project menu is up.
+  boardKeys: boolean;
+  doneToArchive: Card[];
+  lastArchived: string[];
+  setShowPalette: (open: boolean) => void;
+  setShowHelp: Dispatch<SetStateAction<boolean>>;
+  setShowSettings: (open: boolean) => void;
+  setLibraryOpen: Dispatch<SetStateAction<LibraryKind | null>>;
+  openPalette: (initial: string) => void;
+  filterHasFocus: () => boolean;
+  openNew: () => void;
+  focusFilter: () => void;
+  toggleCopilot: () => void;
+  toggleBrowser: () => void;
+  toggleTerminal: () => void;
+  moveFocus: (move: { dx?: number; dy?: number; edge?: "first" | "last" }) => void;
+  openFocused: (e: KeyboardEvent) => false | undefined;
+  jumpToNeedsYou: () => false | undefined;
+  stepProject: (by: number) => void;
+  stepSort: () => void;
+  archiveTarget: () => Card | undefined;
+  toggleArchive: (card: Card) => void;
+  archiveCards: (list: Card[]) => void;
+  unarchive: (ids: string[]) => void;
+}
+
+export function boardShortcuts(c: BoardShortcutContext): ShortcutDef[] {
+  return [
+    {
+      id: "palette",
+      keys: ["mod+k"],
+      description: "Command palette: search cards and run commands",
+      group: "General",
+      enabled: !(c.showNew || c.showSettings || c.showHelp || Boolean(c.login)),
+      // From the filter box, the palette picks up what was typed there.
+      handler: () => (c.showPalette ? c.setShowPalette(false) : c.openPalette(c.filterHasFocus() ? c.query : "")),
+    },
+    {
+      id: "help",
+      keys: ["?", "mod+/"],
+      description: "Show keyboard shortcuts",
+      group: "General",
+      enabled: !(c.showNew || c.showSettings || c.showPalette || Boolean(c.login)),
+      handler: () => c.setShowHelp((open) => !open),
+    },
+    { id: "new-thread", keys: ["n"], description: "New thread", group: "General", enabled: c.boardKeys, handler: () => c.openNew() },
+    {
+      id: "library",
+      keys: ["mod+l"],
+      description: "Library: recipes, to-dos and notes",
+      group: "General",
+      enabled: !(c.showNew || c.showSettings || c.showPalette || c.showHelp || Boolean(c.login)),
+      handler: () => c.setLibraryOpen((open) => (open ? null : "recipe")),
+    },
+    { id: "filter", keys: ["/"], description: "Filter cards", group: "General", enabled: c.boardKeys, handler: c.focusFilter },
+    {
+      id: "settings",
+      keys: [","],
+      description: "Open settings",
+      group: "General",
+      enabled: c.boardKeys,
+      handler: () => c.setShowSettings(true),
+    },
+    { id: "copilot", keys: ["c"], description: "Toggle the copilot", group: "General", enabled: c.boardKeys, handler: c.toggleCopilot },
+    { id: "browser", keys: ["b"], description: "Toggle the browser", group: "General", enabled: c.boardKeys, handler: c.toggleBrowser },
+    { id: "terminal", keys: ["t"], description: "Toggle the terminal", group: "General", enabled: c.boardKeys, handler: c.toggleTerminal },
+    {
+      id: "card-down",
+      keys: ["j", "ArrowDown"],
+      description: "Next card in the column",
+      group: "Board",
+      enabled: c.boardKeys,
+      handler: () => c.moveFocus({ dy: 1 }),
+    },
+    {
+      id: "card-up",
+      keys: ["k", "ArrowUp"],
+      description: "Previous card in the column",
+      group: "Board",
+      enabled: c.boardKeys,
+      handler: () => c.moveFocus({ dy: -1 }),
+    },
+    {
+      id: "column-right",
+      keys: ["l", "ArrowRight"],
+      description: "Move to the next column",
+      group: "Board",
+      enabled: c.boardKeys,
+      handler: () => c.moveFocus({ dx: 1 }),
+    },
+    {
+      id: "column-left",
+      keys: ["h", "ArrowLeft"],
+      description: "Move to the previous column",
+      group: "Board",
+      enabled: c.boardKeys,
+      handler: () => c.moveFocus({ dx: -1 }),
+    },
+    {
+      id: "card-first",
+      keys: ["Home"],
+      description: "First card in the column",
+      group: "Board",
+      enabled: c.boardKeys,
+      handler: () => c.moveFocus({ edge: "first" }),
+    },
+    {
+      id: "card-last",
+      keys: ["End"],
+      description: "Last card in the column",
+      group: "Board",
+      enabled: c.boardKeys,
+      handler: () => c.moveFocus({ edge: "last" }),
+    },
+    {
+      id: "card-open",
+      keys: ["Enter", "o"],
+      description: "Open the focused card",
+      group: "Board",
+      enabled: c.boardKeys,
+      handler: c.openFocused,
+    },
+    {
+      id: "needs-you",
+      keys: ["a"],
+      description: "Jump to a card that needs you",
+      group: "Board",
+      enabled: c.boardKeys,
+      handler: c.jumpToNeedsYou,
+    },
+    { id: "project-next", keys: ["]"], description: "Next project", group: "Board", enabled: c.boardKeys, handler: () => c.stepProject(1) },
+    {
+      id: "project-previous",
+      keys: ["["],
+      description: "Previous project",
+      group: "Board",
+      enabled: c.boardKeys,
+      handler: () => c.stepProject(-1),
+    },
+    { id: "sort", keys: ["s"], description: "Change the sort order", group: "Board", enabled: c.boardKeys, handler: c.stepSort },
+    {
+      id: "reply",
+      keys: ["r"],
+      description: "Reply in the open thread",
+      group: "Thread",
+      enabled: c.boardKeys,
+      handler: () => {
+        const input = document.querySelector<HTMLElement>('aside [contenteditable="true"], aside textarea');
+        if (!input) return false;
+        input.focus();
+      },
+    },
+    {
+      id: "archive",
+      keys: ["shift+a"],
+      description: "Archive the focused card, or the open thread",
+      group: "Board",
+      enabled: c.boardKeys,
+      handler: () => {
+        const card = c.archiveTarget();
+        if (!card) return false;
+        c.toggleArchive(card);
+      },
+    },
+    {
+      id: "archive-done",
+      keys: ["shift+e"],
+      description: "Archive every card shown in Done",
+      group: "Board",
+      enabled: c.boardKeys,
+      handler: () => {
+        if (!c.doneToArchive.length) return false;
+        c.archiveCards(c.doneToArchive);
+      },
+    },
+    {
+      id: "archive-undo",
+      keys: ["z"],
+      description: "Undo the last archive",
+      group: "Board",
+      enabled: c.boardKeys,
+      handler: () => {
+        if (!c.lastArchived.length) return false;
+        c.unarchive(c.lastArchived);
+      },
+    },
+  ];
+}

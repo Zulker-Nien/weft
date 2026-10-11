@@ -104,7 +104,7 @@ describe("searchPrompts", () => {
     });
   });
 
-  it("returns nothing for a query with no words", async () => {
+  it("returns nothing for a query with no words", () => {
     expect(searchPrompts("  ?! -- ")).toEqual({ hits: [], indexing: false });
   });
 
@@ -138,7 +138,7 @@ describe("searchPrompts", () => {
   it("uses 0 as the time of a prompt with no timestamp", async () => {
     session([JSON.stringify({ type: "user", message: { content: "no clock quokka" } })]);
     await reindex();
-    expect(searchPrompts("quokka").hits[0].at).toBe(0);
+    expect(searchPrompts("quokka").hits[0]!.at).toBe(0);
   });
 
   it("only returns prompts from cards on the board, and never the copilot's", async () => {
@@ -210,7 +210,7 @@ describe("searchPrompts", () => {
 
   it("shows a prompt once per card when its session and thread both have it", async () => {
     const { card } = session([prompt("Ship  the   Lemur")]);
-    threadFile(card.id!, [{ kind: "user", text: "ship the lemur" }]);
+    threadFile(card.id, [{ kind: "user", text: "ship the lemur" }]);
     await reindex();
     expect(cardsOf("lemur")).toEqual([card.id]);
   });
@@ -240,8 +240,9 @@ describe("searchPrompts", () => {
 
   it("stops at the end of a file that got shorter than it was when it started reading", async () => {
     const { file, card } = session([prompt("the shrinking dugong")]);
-    const real = fs.statSync(file);
-    vi.spyOn(fs.promises, "stat").mockResolvedValueOnce({ ...real, size: real.size + 500, mtimeMs: real.mtimeMs } as fs.Stats);
+    const grown = fs.statSync(file);
+    grown.size += 500;
+    vi.spyOn(fs.promises, "stat").mockResolvedValueOnce(grown);
     await reindex();
     expect(cardsOf("dugong")).toEqual([card.id]);
   });
@@ -263,15 +264,15 @@ describe("searchPrompts", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const db = g.__weftSearchDb!;
     const prepare = db.prepare.bind(db);
-    vi.spyOn(db, "prepare").mockImplementation((sql: string) => {
+    const failing = vi.spyOn(db, "prepare").mockImplementation((sql: string) => {
       if (sql.startsWith("INSERT OR REPLACE INTO sources")) throw new Error("disk full");
       return prepare(sql);
     });
     const { card } = session([prompt("the unlucky pangolin")]);
     await reindex();
-    expect(error).toHaveBeenCalledWith(expect.stringContaining(card.sessionId!), expect.objectContaining({ message: "disk full" }));
+    expect(error).toHaveBeenCalledWith(expect.stringContaining(card.sessionId), expect.objectContaining({ message: "disk full" }));
     expect(cardsOf("pangolin")).toEqual([]);
-    vi.mocked(db.prepare).mockRestore();
+    failing.mockRestore();
     await reindex();
     expect(cardsOf("pangolin")).toEqual([card.id]);
   });

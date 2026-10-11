@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
+import { asText } from "./format";
 
 // The desktop shell (electron/main.cjs) passes these when it starts the Next server.
 const SHELL_URL = process.env.THREADBOARD_SHELL_URL;
@@ -30,7 +31,7 @@ async function shell(route: string, body?: Record<string, unknown>) {
     body: JSON.stringify(body ?? {}),
   });
   const data = (await res.json()) as Record<string, unknown>;
-  if (!res.ok) throw new Error(String(data.error ?? res.statusText));
+  if (!res.ok) throw new Error(asText(data.error, res.statusText));
   return data;
 }
 
@@ -38,7 +39,7 @@ async function shell(route: string, body?: Record<string, unknown>) {
 // shell without the route, or no desktop app).
 export async function paneUrl(key: string): Promise<string | undefined> {
   try {
-    return String((await shell("/browser/url", { key })).url ?? "");
+    return asText((await shell("/browser/url", { key })).url);
   } catch {
     return undefined;
   }
@@ -88,13 +89,13 @@ export function browserMcpServer(cardId: () => string | undefined) {
       tool("open_url", "Open a URL in the browser pane beside the board and show the pane.", { url: z.string() }, ({ url }) =>
         attempt(async () => {
           const page = await shell("/browser/open", { url, key: cardId() });
-          return text(`Opened ${page.url} — ${page.title}`);
+          return text(`Opened ${asText(page.url)} — ${asText(page.title)}`);
         }),
       ),
       tool("read_page", "Return the URL, title, and visible text of the page in the browser pane.", {}, () =>
         attempt(async () => {
           const page = await shell("/browser/text", { key: cardId() });
-          return text(`URL: ${page.url}\nTitle: ${page.title}\n\n${page.text}`);
+          return text(`URL: ${asText(page.url)}\nTitle: ${asText(page.title)}\n\n${asText(page.text)}`);
         }),
       ),
       tool(

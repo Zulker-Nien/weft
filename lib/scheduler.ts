@@ -31,7 +31,7 @@ export function sendDueMessages(now = Date.now()) {
   for (const card of listCards()) {
     const due = dueMessage(card, now);
     if (!due || isBusy(card.id)) continue;
-    const rest = card.scheduled!.slice(1);
+    const rest = (card.scheduled ?? []).slice(1);
     updateCard(card.id, { scheduled: rest.length ? rest : undefined });
     try {
       sendUserMessage(card.id, due.text);

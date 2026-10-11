@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { publish } from "./bus";
 import { picturesPatch, threadPictures } from "./card-pictures";
 import type { Card, ThreadItem } from "./types";
+import { globalSingleton } from "./global-singleton";
 
 // The app was called Threadboard and kept its data in ~/.threadboard. Move that folder to
 // ~/.weft the first time, unless ~/.weft already exists. If the move fails, keep using the old one.
@@ -31,10 +32,11 @@ interface State {
   threads: Map<string, ThreadItem[]>;
 }
 
-const g = globalThis as unknown as { __threadboardState?: State };
-
 function state(): State {
-  if (g.__threadboardState) return g.__threadboardState;
+  return globalSingleton("__threadboardState", loadState);
+}
+
+function loadState(): State {
   fs.mkdirSync(THREADS_DIR, { recursive: true });
   const cards = new Map<string, Card>();
   if (fs.existsSync(BOARD_FILE)) {
@@ -50,8 +52,7 @@ function state(): State {
       cards.set(card.id, card);
     }
   }
-  g.__threadboardState = { cards, threads: new Map() };
-  return g.__threadboardState;
+  return { cards, threads: new Map() };
 }
 
 function saveBoard() {
@@ -79,7 +80,10 @@ function backfillPictures() {
   if (!todo.length) return;
   const step = () => {
     const card = todo.shift();
-    if (!card) return saveBoard();
+    if (!card) {
+      saveBoard();
+      return;
+    }
     const cached = state().threads.has(card.id);
     try {
       const found = threadPictures(getThread(card.id));

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { api } from "@/lib/client";
+import { readDraft, writeDraft } from "@/lib/drafts";
 import { alsoHereLine } from "@/lib/overlap";
 import { formatAt, sendLaterOptions, type PlanResets } from "@/lib/schedule";
 import { FIXED_SHORTCUTS } from "@/lib/shortcut-catalog";
@@ -19,25 +20,10 @@ const STOP_KEY = FIXED_SHORTCUTS.find((s) => s.id === "reply-stop")?.keys[0] ?? 
 // What you were writing to a card, kept per card until it's sent.
 const draftKey = (cardId: string) => `weft.reply.${cardId}`;
 
-function readDraft(cardId: string) {
-  try {
-    return localStorage.getItem(draftKey(cardId)) ?? "";
-  } catch {
-    return "";
-  }
-}
-
 // While a turn runs, the box says the next message waits; idle, it shows the thread's suggested next message.
 function replyPlaceholder(live: boolean, suggestion: string | undefined, fallback: string) {
   if (live) return "Working. Write the next message and it'll send when this turn is done.";
   return suggestion ? `${suggestion}  ⇥ Tab` : fallback;
-}
-
-function writeDraft(cardId: string, markdown: string) {
-  try {
-    if (markdown.trim()) localStorage.setItem(draftKey(cardId), markdown);
-    else localStorage.removeItem(draftKey(cardId));
-  } catch {}
 }
 
 // A thread's reply box: the same composer as a new thread (Markdown, pasted images and videos,
@@ -65,13 +51,17 @@ export default function ReplyBox({
   suggestion?: string;
   // Board threads can take a message to send at a set time; the copilot can't, so it leaves this out.
   // resets are the plan's next 5-hour and weekly resets, the default times on a Claude thread.
-  sendLater?: { backend: Backend; resets: PlanResets; scheduled: ScheduledMessage[] };
+  sendLater?: {
+    backend: Backend;
+    resets: PlanResets;
+    scheduled: ScheduledMessage[];
+  };
   // The thread's statusline (context, tokens, plan limits), under the box where you scope the next message.
   status?: ReactNode;
   onSend: (text: string) => Promise<void>;
   onStop: () => Promise<void>;
 }) {
-  const [initial] = useState(() => readDraft(cardId));
+  const [initial] = useState(() => readDraft(draftKey(cardId)));
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Messages written while the thread was working; they go out together once the turn ends.
@@ -83,6 +73,10 @@ export default function ReplyBox({
   const composer = useRef<ComposerHandle>(null);
   const draftTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  // The queued messages on their way out, numbered so each batch is sent exactly once.
+  const [outgoing, setOutgoing] = useState<{ id: number; text: string } | null>(null);
+  const sentId = useRef(0);
+
   // The draft not yet written. Closing the thread writes it, so Escape can close with text in the box.
   const unsaved = useRef<{ cardId: string; markdown: string } | null>(null);
 
@@ -90,7 +84,7 @@ export default function ReplyBox({
     clearTimeout(draftTimer.current);
     unsaved.current = { cardId, markdown };
     const write = () => {
-      if (unsaved.current) writeDraft(unsaved.current.cardId, unsaved.current.markdown);
+      if (unsaved.current) writeDraft(draftKey(unsaved.current.cardId), unsaved.current.markdown);
       unsaved.current = null;
     };
     if (now) write();
@@ -100,25 +94,32 @@ export default function ReplyBox({
   useEffect(
     () => () => {
       clearTimeout(draftTimer.current);
-      if (unsaved.current) writeDraft(unsaved.current.cardId, unsaved.current.markdown);
+      if (unsaved.current) writeDraft(draftKey(unsaved.current.cardId), unsaved.current.markdown);
     },
     [],
   );
 
-  // The turn ended and nothing is being edited: send what was queued as one message.
-  useEffect(() => {
-    if (live || paused || queue.length === 0) return;
+  // The turn ended and nothing is being edited: what was queued leaves the queue as one message.
+  // Moved during render, in the same pass that sees the turn end, so it can't be picked up twice.
+  if (!live && !paused && queue.length > 0) {
     const text = queue.join("\n\n");
-    // Cleared in the same pass as the send, so a re-run of this effect can't send the queue twice.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setQueue([]);
-    onSend(text).catch((err) => {
+    setOutgoing((o) => ({ id: (o?.id ?? 0) + 1, text }));
+  }
+
+  const sendOutgoing = useEffectEvent((text: string) => {
+    onSend(text).catch((err: unknown) => {
       setQueue((q) => [text, ...q]);
       setPaused(true);
       setError(err instanceof Error ? err.message : String(err));
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [live, paused, queue]);
+  });
+
+  useEffect(() => {
+    if (!outgoing || sentId.current >= outgoing.id) return;
+    sentId.current = outgoing.id;
+    sendOutgoing(outgoing.text);
+  }, [outgoing]);
 
   async function submit(now = false) {
     if (sending) return;
@@ -166,6 +167,7 @@ export default function ReplyBox({
   async function sendQueuedNow(index?: number) {
     if (sending) return;
     const text = index === undefined ? queue.join("\n\n") : queue[index];
+    if (text === undefined) return;
     setQueue((q) => (index === undefined ? [] : q.filter((_, j) => j !== index)));
     setPaused(true);
     setSending(true);
@@ -230,10 +232,11 @@ export default function ReplyBox({
         }
         if (takeSuggestion(e)) return;
         // Up in an empty box pulls the last queued message back to edit; the queue holds meanwhile.
-        if (e.key === "ArrowUp" && queue.length > 0 && composer.current?.isEmpty()) {
+        const last = queue.at(-1);
+        if (e.key === "ArrowUp" && last !== undefined && composer.current?.isEmpty()) {
           e.preventDefault();
           e.stopPropagation();
-          composer.current.write(queue[queue.length - 1]);
+          composer.current.write(last);
           setQueue((q) => q.slice(0, -1));
           setPaused(true);
         }
@@ -242,7 +245,7 @@ export default function ReplyBox({
         // Ctrl+C stops the running turn, unless text is selected (then it's a copy).
         if (live && e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "c" && !window.getSelection()?.toString()) {
           e.preventDefault();
-          void onStop().catch((err) => setError(err instanceof Error ? err.message : String(err)));
+          void onStop().catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
         }
       }}
     >
@@ -269,9 +272,14 @@ export default function ReplyBox({
                 type="button"
                 onClick={() => {
                   // Back into an empty box to edit; it stops being scheduled until you schedule it again.
-                  if (!composer.current?.isEmpty()) return setError("Clear the box first to edit a scheduled message.");
+                  if (!composer.current?.isEmpty()) {
+                    setError("Clear the box first to edit a scheduled message.");
+                    return;
+                  }
                   composer.current.write(m.text);
-                  void api.unschedule(cardId, m.id).catch((err) => setError(err instanceof Error ? err.message : String(err)));
+                  void api
+                    .unschedule(cardId, m.id)
+                    .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
                 }}
                 title="Take it back to edit"
                 className="min-w-0 flex-1 truncate text-left hover:text-ink"
@@ -280,7 +288,11 @@ export default function ReplyBox({
               </button>
               <button
                 type="button"
-                onClick={() => void api.unschedule(cardId, m.id).catch((err) => setError(err instanceof Error ? err.message : String(err)))}
+                onClick={() =>
+                  void api
+                    .unschedule(cardId, m.id)
+                    .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
+                }
                 aria-label="Cancel scheduled message"
                 className="shrink-0 hover:text-ink"
               >
@@ -289,10 +301,7 @@ export default function ReplyBox({
             </li>
           ))}
           {queue.map((text, i) => (
-            <li
-              key={i}
-              className="flex items-center gap-2 rounded-md bg-sunken px-2.5 py-1.5 text-[12.5px] text-muted"
-            >
+            <li key={i} className="flex items-center gap-2 rounded-md bg-sunken px-2.5 py-1.5 text-[12.5px] text-muted">
               <span className="shrink-0 text-[11px] uppercase tracking-wide">{paused ? "Paused" : "Queued"}</span>
               <span className="min-w-0 flex-1 truncate">{text}</span>
               <button
@@ -350,7 +359,9 @@ export default function ReplyBox({
               >
                 <button
                   type="button"
-                  onClick={() => void onStop().catch((err) => setError(err instanceof Error ? err.message : String(err)))}
+                  onClick={() =>
+                    void onStop().catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
+                  }
                   aria-label="Stop the current turn"
                   className="ml-1 flex shrink-0 items-center gap-1 rounded-md border border-line-strong px-2 py-1 text-[12px] text-ink hover:bg-sunken"
                 >
@@ -359,26 +370,28 @@ export default function ReplyBox({
               </Tip>
             )}
             {live && (
+              <Tip text="Stop the current turn and send this now" className="inline-flex">
+                <button
+                  type="button"
+                  onClick={() => void submit(true)}
+                  disabled={sending}
+                  className="ml-1 shrink-0 rounded-md border border-line-strong px-2 py-1 text-[12px] text-ink hover:bg-sunken disabled:opacity-40"
+                >
+                  Send now
+                </button>
+              </Tip>
+            )}
+            <Tip text={live ? "Queue until the turn finishes (Enter)" : "Send (Enter)"} className="inline-flex">
               <button
                 type="button"
-                onClick={() => void submit(true)}
+                onClick={() => void submit()}
                 disabled={sending}
-                title="Stop the current turn and send this now"
-                className="ml-1 shrink-0 rounded-md border border-line-strong px-2 py-1 text-[12px] text-ink hover:bg-sunken disabled:opacity-40"
+                aria-label="Send"
+                className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent text-on-accent hover:opacity-90 disabled:opacity-40"
               >
-                Send now
+                {sending ? <Spinner size={13} /> : <Icon name="send" size={15} />}
               </button>
-            )}
-          <button
-            type="button"
-            onClick={() => void submit()}
-            disabled={sending}
-            aria-label="Send"
-            title={live ? "Queue until the turn finishes (Enter)" : "Send (Enter)"}
-            className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent text-on-accent hover:opacity-90 disabled:opacity-40"
-          >
-            {sending ? <Spinner size={13} /> : <Icon name="send" size={15} />}
-          </button>
+            </Tip>
           </>
         }
       />

@@ -68,7 +68,7 @@ export default function RepoPicker({
     api
       .githubRepos()
       .then((r) => setGithub(r.repos))
-      .catch((err) => setGithubError(errorText(err)));
+      .catch((err: unknown) => setGithubError(errorText(err)));
   }, [open, github, githubError]);
 
   useEffect(() => {
@@ -97,7 +97,7 @@ export default function RepoPicker({
     return out;
   }, [q, local, github]);
 
-  const flat = useMemo(() => [...sections.flatMap((s) => s.choices), { kind: "browse" } as Choice], [sections]);
+  const flat = useMemo<Choice[]>(() => [...sections.flatMap((s) => s.choices), { kind: "browse" }], [sections]);
 
   // Keep the highlighted row in view while arrowing through the list.
   useEffect(() => {
@@ -297,7 +297,7 @@ export default function RepoPicker({
             {local !== null && sections.length === 0 && (
               <p className="px-2.5 py-2 text-[12px] text-muted">Nothing matches “{q}”.</p>
             )}
-            {open && !github && !githubError && (
+            {!github && !githubError && (
               <p className="flex items-center gap-2 px-2.5 py-1.5 text-[11.5px] text-faint">
                 <Spinner size={10} /> Loading your GitHub repos…
               </p>

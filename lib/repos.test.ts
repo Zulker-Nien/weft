@@ -143,8 +143,8 @@ describe("localRepos", () => {
     repo(at("dev", "detached"), { head: "0123456789abcdef0123456789abcdef01234567" });
     repo(at("dev", "empty"), { head: "" });
     const byName = Object.fromEntries(localRepos().map((r) => [r.name, r]));
-    expect(byName.detached.branch).toBe("0123456");
-    expect(byName.empty.branch).toBeUndefined();
+    expect(byName.detached!.branch).toBe("0123456");
+    expect(byName.empty!.branch).toBeUndefined();
   });
 
   it("leaves github unset for a non-GitHub origin or no origin at all", () => {
@@ -188,7 +188,7 @@ describe("localRepos", () => {
     const repos = localRepos();
     expect(repos.map((r) => r.path)).toEqual([at("notes"), quiet, old, busy]);
     expect(repos[0]).toEqual({ path: at("notes"), name: "notes", git: false, branch: undefined, github: undefined, activity: 0, recentAt: 200 });
-    expect(repos[1].recentAt).toBe(100);
+    expect(repos[1]!.recentAt).toBe(100);
     expect(repos.filter((r) => r.path === quiet)).toHaveLength(1);
   });
 
@@ -264,7 +264,7 @@ describe("githubRepos", () => {
     g.__weftRepos = undefined;
     const again = await githubRepos();
     expect(execFile).toHaveBeenCalledTimes(1);
-    expect(again[0].localPath).toBe(at("dev", "app"));
+    expect(again[0]!.localPath).toBe(at("dev", "app"));
     await githubRepos({ fresh: true });
     expect(execFile).toHaveBeenCalledTimes(2);
   });

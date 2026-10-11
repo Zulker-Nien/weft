@@ -347,6 +347,8 @@ again; a stale dev build cache causes this.
 If a card, the thread, the browser pane, the library, the terminal or the footer says it "failed to draw", a thread
 was probably partway through editing Weft. The rest of the board keeps working, and the piece draws itself again
 once the file is fixed (or click Try again). If the whole board fails, its page offers Try again and Reload window.
+At startup, if the board doesn't load or its renderer crashes, the start screen says why and offers Retry, Logs
+and Quit, rather than waiting on "Starting the board…" or leaving a blank window.
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the feature list.
 

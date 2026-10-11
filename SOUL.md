@@ -47,7 +47,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 
 ## How I work (file map)
 
-- `electron/main.cjs`: shell; starts Next, windows, tray, dock, `weft://` links, global hotkey.
+- `electron/main.cjs`: shell; starts Next, windows, tray, dock, `weft://` links, global hotkey;
+  `electron/startup-screen.cjs` runs the start screen and shows why the board didn't load (Retry, Logs, Quit).
 - `electron/browser-pane.cjs`: native browser pane, one page per card; token-guarded control
   server on 127.0.0.1 for agents, IPC for the board (`electron/preload.cjs`); `electron/pane-pages.cjs`
   saves each card's page to `~/.weft/pages/` so it comes back after a restart.

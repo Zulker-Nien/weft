@@ -31,7 +31,7 @@ const { ensureCopilot, sendToCopilot, resetCopilot, prewarm } = await import("./
 
 const g = globalThis as unknown as { __threadboardPrewarmed?: boolean; __weftCopilotSeen?: unknown };
 const card = (id: string, over: Partial<Card> = {}) => {
-  const c = { id, title: id, prompt: "", cwd: `/dev/${id}`, backend: "claude", permissionMode: "default", column: "running", createdAt: 0, updatedAt: 0, ...over } as Card;
+  const c: Card = { id, title: id, prompt: "", cwd: `/dev/${id}`, backend: "claude", permissionMode: "default", column: "running", createdAt: 0, updatedAt: 0, ...over };
   db.cards.set(id, c);
   return c;
 };
@@ -76,7 +76,7 @@ describe("sendToCopilot", () => {
     card("a", { column: "review", lastLine: "Done the thing" });
     g.__weftCopilotSeen = { a: { column: "running" } };
     sendToCopilot("what's new?");
-    const [id, text, opts] = vi.mocked(runner.sendUserMessage).mock.calls[0];
+    const [id, text, opts] = vi.mocked(runner.sendUserMessage).mock.calls[0]!;
     expect([id, text]).toEqual([COPILOT_ID, "what's new?"]);
     expect(opts!.cli).toMatch(/^\[Weft board update.*\n- Finished, in Review: "a" \(a\): Done the thing\n\nwhat's new\?$/);
     expect(lastSeen()).toEqual({ a: { column: "review", error: undefined } });
@@ -87,7 +87,7 @@ describe("sendToCopilot", () => {
     card("old", { column: "review", updatedAt: 50 });
     card("new", { column: "review", updatedAt: 150 });
     sendToCopilot("hi");
-    const cli = vi.mocked(runner.sendUserMessage).mock.calls[0][2]!.cli!;
+    const cli = vi.mocked(runner.sendUserMessage).mock.calls[0]![2]!.cli!;
     expect(cli).toContain("(new)");
     expect(cli).not.toContain("(old)");
   });
@@ -97,7 +97,10 @@ describe("resetCopilot", () => {
   it("ends the session, clears the thread, zeroes the card and warms a fresh CLI, in that order", async () => {
     card(COPILOT_ID, { role: "copilot", sessionId: "s1", column: "review", costUsd: 3, turns: 9, lastLine: "x", error: "e" });
     const order: string[] = [];
-    vi.mocked(runner.endSession).mockImplementationOnce(async () => void order.push("end"));
+    vi.mocked(runner.endSession).mockImplementationOnce(() => {
+      order.push("end");
+      return Promise.resolve();
+    });
     vi.mocked(store.clearThread).mockImplementationOnce(() => void order.push("clear"));
     vi.mocked(runner.warmUp).mockImplementationOnce(() => void order.push("warm"));
     const c = await resetCopilot();

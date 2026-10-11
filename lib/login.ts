@@ -2,6 +2,7 @@ import { execFile, execFileSync, spawn, type ChildProcess } from "node:child_pro
 import { cliEnv } from "./env";
 import { publish } from "./bus";
 import type { Backend, CliStatus, LoginState, LoginView } from "./types";
+import { globalSingleton } from "./global-singleton";
 
 // Runs `<cli> auth login` in the background when a thread finds its CLI logged out, streams the
 // CLI's output to the board's login pop-up, and falls back to a Terminal window when the CLI
@@ -29,8 +30,7 @@ interface LoginRun {
 }
 
 // Kept on globalThis so dev-mode reloads don't lose a login in progress.
-const g = globalThis as unknown as { __threadboardLogins?: Map<Backend, LoginRun> };
-const runs = (g.__threadboardLogins ??= new Map<Backend, LoginRun>());
+const runs = globalSingleton("__threadboardLogins", () => new Map<Backend, LoginRun>());
 
 const binaries = new Map<Backend, string>();
 
@@ -102,6 +102,11 @@ function append(run: LoginRun, chunk: string) {
 
 function isCurrent(run: LoginRun) {
   return runs.get(run.view.backend) === run;
+}
+
+// Read fresh each time: the state can change across an await.
+function stillRunning(run: LoginRun) {
+  return isCurrent(run) && run.view.state === "running";
 }
 
 function emit(run: LoginRun) {
@@ -200,7 +205,7 @@ async function onExit(run: LoginRun, child: ChildProcess, code: number | null, s
   emit(run);
 
   const status = await authStatus(run.view.backend);
-  if (!isCurrent(run) || run.view.state !== "running") return;
+  if (!stillRunning(run)) return;
 
   if (status.loggedIn) {
     succeed(run);
@@ -232,10 +237,10 @@ export function startLogin(backend: Backend, onDone?: () => void): LoginView {
     append(run, chunk.toString("utf8"));
     emitSoon(run);
   };
-  child.stdout?.on("data", onData);
-  child.stderr?.on("data", onData);
+  child.stdout.on("data", onData);
+  child.stderr.on("data", onData);
   // Writing a code after the CLI exits shouldn't crash the server.
-  child.stdin?.on("error", () => {});
+  child.stdin.on("error", () => {});
 
   child.on("error", (err) => {
     if (run.child !== child || !isCurrent(run)) return;
@@ -249,8 +254,8 @@ export function startLogin(backend: Backend, onDone?: () => void): LoginView {
     }
   });
   child.on("close", (code, signal) => {
-    void onExit(run, child, code, signal).catch((err) => {
-      if (isCurrent(run) && run.view.state === "running") failRun(run, message(err));
+    void onExit(run, child, code, signal).catch((err: unknown) => {
+      if (stillRunning(run)) failRun(run, message(err));
     });
   });
 
@@ -314,7 +319,10 @@ export function openLoginInTerminal(backend: Backend, onDone?: () => void): Logi
 
   const deadline = Date.now() + TERMINAL_WAIT_MS;
   run.poll = setInterval(() => {
-    if (!isCurrent(run) || run.view.state !== "terminal") return stopPolling(run);
+    if (!isCurrent(run) || run.view.state !== "terminal") {
+      stopPolling(run);
+      return;
+    }
     if (Date.now() > deadline) {
       failRun(run, "Stopped waiting for the Terminal login after 10 minutes.");
       return;
@@ -366,10 +374,13 @@ export async function authStatus(backend: Backend): Promise<CliStatus> {
       bin,
       ["auth", "status", "--json"],
       { env: cliEnv(), timeout: STATUS_TIMEOUT_MS, maxBuffer: 1024 * 1024 },
-      (err, stdout, stderr) => {
-        const status = parseStatus(String(stdout ?? ""));
-        if (status) return resolve(status);
-        const detail = clean(String(stderr ?? "")).trim() || (err ? message(err) : "") || "No status in the CLI's output.";
+      (err, stdout: string | undefined, stderr: string | undefined) => {
+        const status = parseStatus(stdout ?? "");
+        if (status) {
+          resolve(status);
+          return;
+        }
+        const detail = clean(stderr ?? "").trim() || (err ? message(err) : "") || "No status in the CLI's output.";
         resolve({ loggedIn: false, error: detail.slice(0, 500) });
       },
     );

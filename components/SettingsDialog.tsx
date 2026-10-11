@@ -60,7 +60,10 @@ function ShortcutRow({ id, label }: { id: string; label: string }) {
           if (!capturing) return;
           e.preventDefault();
           e.stopPropagation();
-          if (e.key === "Escape") return setCapturing(false);
+          if (e.key === "Escape") {
+            setCapturing(false);
+            return;
+          }
           const next = bindingFromEvent(e.nativeEvent);
           if (!next) return;
           setBinding(id, next);
@@ -186,7 +189,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
     () =>
       api.loginStatus().then(
         (r) => setLogin({ kind: "ready", status: r.status }),
-        (err) => setLogin({ kind: "error", error: message(err) }),
+        (err: unknown) => setLogin({ kind: "error", error: message(err) }),
       ),
     [],
   );
@@ -202,7 +205,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
         setMode(s.defaultPermissionMode);
         setRules(s.automations);
       },
-      (err) => {
+      (err: unknown) => {
         if (!ignore) setLoadError(message(err));
       },
     );
@@ -450,7 +453,8 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
               ) : (
                 <div className="flex flex-col gap-2">
                   {CLIS.map((cli) => {
-                    const s = login.status[cli.id];
+                    // A CLI the server didn't report on reads as Unknown.
+                    const s = (login.status as Partial<Record<Backend, CliStatus>>)[cli.id];
                     const line = statusLine(s);
                     const error = startError[cli.id];
                     return (

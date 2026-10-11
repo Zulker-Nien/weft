@@ -31,7 +31,7 @@ export type ShortcutDef = {
   allowInInput?: boolean;
   // Checked on each key press, so it can follow state. A disabled shortcut stays in the help list.
   enabled?: boolean;
-  handler: (e: KeyboardEvent) => void | false;
+  handler: (e: KeyboardEvent) => unknown;
 };
 
 // What the help dialog sees.
@@ -43,7 +43,7 @@ type Entry = ShortcutInfo & {
   combos: Combo[];
   allowInInput: boolean;
   isEnabled: () => boolean;
-  run: (e: KeyboardEvent) => void | false;
+  run: (e: KeyboardEvent) => unknown;
 };
 
 function parse(spec: string): Combo {
@@ -108,6 +108,7 @@ function dispatch(e: KeyboardEvent) {
   const typing = isTyping(e.target);
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i];
+    if (!entry) continue;
     const combo = entry.combos.find((c) => matches(c, e, mac));
     if (!combo) continue;
     if (typing && !(entry.allowInInput || combo.mod || combo.alt)) continue;

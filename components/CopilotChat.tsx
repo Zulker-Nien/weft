@@ -70,7 +70,7 @@ export default function CopilotChat() {
       }
     },
     () => {
-      load().catch((err) => setError(err instanceof Error ? err.message : String(err)));
+      load().catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
     },
   );
 
@@ -105,7 +105,7 @@ export default function CopilotChat() {
           </button>
         )}
         <button
-          onClick={() => void newChat().catch((err) => setError(String(err)))}
+          onClick={() => void newChat().catch((err: unknown) => setError(String(err)))}
           title="Start a new conversation"
           className="rounded-md px-2 py-1 text-[11.5px] text-muted hover:bg-sunken hover:text-ink"
         >
@@ -133,7 +133,7 @@ export default function CopilotChat() {
                   {SUGGESTIONS.map((text) => (
                     <button
                       key={text}
-                      onClick={() => void send(text).catch((err) => setError(String(err)))}
+                      onClick={() => void send(text).catch((err: unknown) => setError(String(err)))}
                       className="rounded-full border border-line-strong px-3 py-1 text-[12.5px] text-ink hover:bg-sunken"
                     >
                       {text}

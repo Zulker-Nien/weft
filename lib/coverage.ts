@@ -6,8 +6,8 @@ export type Coverage = { lines: number; statements: number; functions: number; b
 // A project's coverage report: where it was found and when it was written.
 export type CoverageReport = Coverage & { root: string; measuredAt: number };
 
-type Metric = { pct?: number };
-type Summary = { total?: Record<keyof Coverage, Metric> };
+type Metric = { pct?: unknown };
+type Summary = { total?: Partial<Record<keyof Coverage, Metric>> };
 
 const SUMMARY = path.join("coverage", "coverage-summary.json");
 
@@ -16,7 +16,10 @@ export function readCoverage(root: string): Coverage | null {
   try {
     const total = (JSON.parse(fs.readFileSync(path.join(root, SUMMARY), "utf8")) as Summary).total;
     if (!total) return null;
-    const pct = (k: keyof Coverage) => (typeof total[k]?.pct === "number" ? total[k].pct! : 0);
+    const pct = (k: keyof Coverage) => {
+      const value = total[k]?.pct;
+      return typeof value === "number" ? value : 0;
+    };
     return { lines: pct("lines"), statements: pct("statements"), functions: pct("functions"), branches: pct("branches") };
   } catch {
     return null;

@@ -15,7 +15,7 @@ export function useBoardEvents(onEvent: (event: BoardEvent) => void, onOpen: () 
   useEffect(() => {
     const events = new EventSource("/api/events");
     events.onopen = () => handlers.current.onOpen();
-    events.onmessage = (message) => handlers.current.onEvent(JSON.parse(message.data) as BoardEvent);
+    events.onmessage = (message: MessageEvent<string>) => handlers.current.onEvent(JSON.parse(message.data) as BoardEvent);
     return () => events.close();
   }, []);
 }

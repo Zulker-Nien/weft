@@ -67,7 +67,7 @@ export function extractStatus(text: string): { text: string; status?: BoardStatu
   for (const [i, line] of lines.entries()) {
     const match = inside[i] ? null : line.match(STATUS_LINE);
     if (match) {
-      status = parseFields(match[1]) ?? status;
+      status = parseFields(match[1] ?? "") ?? status;
       continue;
     }
     kept.push(line);

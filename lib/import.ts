@@ -10,6 +10,7 @@ import { extractStatus } from "./status";
 import { addCards, getThread, listCards, replaceThread, updateCard } from "./store";
 import { transcriptToThread } from "./transcript";
 import { toPermissionMode, type Card, type Column, type PermissionMode } from "./types";
+import { globalSingleton } from "./global-singleton";
 
 // Picks up the user's existing Claude Code sessions (the ones /resume and the Claude app list) as
 // cards, keeps them in sync, and loads a session's transcript into its thread when it's opened.
@@ -39,9 +40,9 @@ const STAGES = new Map([
 ]);
 
 export function parseTitle(raw: string): { title: string; stage?: string } {
-  const match = raw.trim().match(/^([A-Z][A-Z -]*[A-Z])\s+[-–—]\s+(.+)$/);
-  const stage = match ? STAGES.get(match[1]) : undefined;
-  return stage && match ? { title: match[2].trim(), stage } : { title: raw.trim() };
+  const [, label, rest] = raw.trim().match(/^([A-Z][A-Z -]*[A-Z])\s+[-–—]\s+(.+)$/) ?? [];
+  const stage = label ? STAGES.get(label) : undefined;
+  return stage && rest ? { title: rest.trim(), stage } : { title: raw.trim() };
 }
 
 function columnFor(stage: string | undefined, lastActivity: number, live?: Column): Column {
@@ -85,25 +86,28 @@ interface Tail {
 }
 
 const g = globalThis as unknown as {
-  __weftTails?: Map<string, { mtimeMs: number; tail: Tail }>;
   __weftSync?: Promise<SyncResult>;
   __weftSyncTimer?: ReturnType<typeof setInterval>;
   __weftCheckTimer?: ReturnType<typeof setInterval>;
-  __weftLive?: Set<string>;
 };
-const tailCache = (g.__weftTails ??= new Map());
+const tailCache = globalSingleton("__weftTails", () => new Map<string, { mtimeMs: number; tail: Tail }>());
 // Cards the sync put in Running or Needs you because their session was live in another app, so it
 // moves them back when that ends (and leaves cards the user moved there alone).
-const liveCards = (g.__weftLive ??= new Set<string>());
+const liveCards = globalSingleton("__weftLive", () => new Set<string>());
 
 // A turn is in progress when the last message is a prompt, a tool call, or a tool result rather than
 // the assistant's final reply. An interrupted turn, or a local command like /model, ended it.
+// A message's content blocks; entries come from disk, so any of them may be null or malformed.
+type Block = { type?: unknown; text?: unknown } | null | undefined;
+const blocksOf = (content: unknown): Block[] => (Array.isArray(content) ? (content as Block[]) : []);
+
 function midTurn(lines: string[]): boolean {
   for (let i = lines.length - 1; i >= 0; i--) {
-    if (!/"type":"(user|assistant)"/.test(lines[i])) continue;
+    const line = lines[i] ?? "";
+    if (!/"type":"(user|assistant)"/.test(line)) continue;
     let record: { type?: string; isSidechain?: boolean; isMeta?: boolean; message?: { stop_reason?: string | null; content?: unknown } };
     try {
-      record = JSON.parse(lines[i]);
+      record = JSON.parse(line) as typeof record;
     } catch {
       continue;
     }
@@ -111,25 +115,28 @@ function midTurn(lines: string[]): boolean {
     if (record.type === "assistant") return record.message?.stop_reason === "tool_use" || record.message?.stop_reason == null;
     if (record.isMeta) continue;
     const content = record.message?.content;
-    if (Array.isArray(content) && content.some((b) => b?.type === "tool_result")) return true;
-    const text = typeof content === "string" ? content : Array.isArray(content) ? (content.find((b) => b?.type === "text")?.text ?? "") : "";
-    return !/^(\[Request interrupted|<local-command-)/.test(String(text).trim());
+    if (blocksOf(content).some((b) => b?.type === "tool_result")) return true;
+    const found = typeof content === "string" ? content : blocksOf(content).find((b) => b?.type === "text")?.text;
+    // A non-string text can't start with either marker, so it reads as empty here.
+    const text = typeof found === "string" ? found : "";
+    return !/^(\[Request interrupted|<local-command-)/.test(text.trim());
   }
   return false;
 }
 
 function lastReply(lines: string[]): string | undefined {
   for (let i = lines.length - 1; i >= 0; i--) {
-    if (!lines[i].includes('"type":"assistant"')) continue;
+    const raw = lines[i] ?? "";
+    if (!raw.includes('"type":"assistant"')) continue;
     let record: { type?: string; isSidechain?: boolean; message?: { content?: unknown } };
     try {
-      record = JSON.parse(lines[i]);
+      record = JSON.parse(raw) as typeof record;
     } catch {
       continue;
     }
     if (record.type !== "assistant" || record.isSidechain || !Array.isArray(record.message?.content)) continue;
-    const text = (record.message.content as { type?: string; text?: string }[])
-      .flatMap((b) => (b?.type === "text" && b.text ? [b.text] : []))
+    const text = blocksOf(record.message.content)
+      .flatMap((b) => (b?.type === "text" && typeof b.text === "string" && b.text ? [b.text] : []))
       .join("\n");
     const line = firstLine(extractStatus(text).text);
     if (line) return line;
@@ -154,7 +161,8 @@ function readTail(file: string): Tail | undefined {
     }
     const text = buffer.toString("utf8");
     const stamps = [...text.matchAll(/"timestamp":"([^"]+)"/g)];
-    const at = stamps.length ? Date.parse(stamps[stamps.length - 1][1]) : NaN;
+    const last = stamps.at(-1)?.[1];
+    const at = last === undefined ? NaN : Date.parse(last);
     if (Number.isNaN(at)) return undefined;
     const lines = text.split("\n");
     const tail = { at, busy: midTurn(lines), reply: lastReply(lines), mode: lastPermissionMode(text) };
@@ -170,7 +178,7 @@ function readTail(file: string): Tail | undefined {
 export function lastPermissionMode(text: string): PermissionMode | undefined {
   const modes = [...text.matchAll(/"permissionMode":"([A-Za-z]+)"/g)];
   for (let i = modes.length - 1; i >= 0; i--) {
-    const mode = toPermissionMode(modes[i][1]);
+    const mode = toPermissionMode(modes[i]?.[1]);
     if (mode) return mode;
   }
   return undefined;
@@ -179,7 +187,7 @@ export function lastPermissionMode(text: string): PermissionMode | undefined {
 // The user's default mode for new Claude Code sessions (permissions.defaultMode).
 function defaultMode(): PermissionMode | undefined {
   try {
-    const settings = JSON.parse(fs.readFileSync(path.join(CONFIG_DIR, "settings.json"), "utf8"));
+    const settings = JSON.parse(fs.readFileSync(path.join(CONFIG_DIR, "settings.json"), "utf8")) as { permissions?: { defaultMode?: unknown } | null } | null;
     return toPermissionMode(settings?.permissions?.defaultMode);
   } catch {
     return undefined;
@@ -208,6 +216,7 @@ export function sessionMode(file: string | undefined, tailMode?: PermissionMode)
 }
 
 type SessionStatus = "busy" | "idle" | "waiting";
+const SESSION_STATUSES: readonly unknown[] = ["busy", "idle", "waiting"];
 
 // The sessions open in another app right now (the Claude app or a terminal), and what Claude Code
 // reports each is doing.
@@ -227,9 +236,9 @@ function runningEntries(): { pid: number; sessionId: string; status?: SessionSta
   }
   return names.flatMap((name) => {
     try {
-      const entry = JSON.parse(fs.readFileSync(path.join(RUNNING_DIR, name), "utf8"));
+      const entry = JSON.parse(fs.readFileSync(path.join(RUNNING_DIR, name), "utf8")) as { pid?: unknown; sessionId?: unknown; status?: unknown };
       if (typeof entry.pid !== "number" || typeof entry.sessionId !== "string") return [];
-      const status = ["busy", "idle", "waiting"].includes(entry.status) ? (entry.status as SessionStatus) : undefined;
+      const status = SESSION_STATUSES.includes(entry.status) ? (entry.status as SessionStatus) : undefined;
       return [{ pid: entry.pid, sessionId: entry.sessionId, status }];
     } catch {
       return [];
@@ -247,7 +256,7 @@ function openSessionsIn(psOutput: string): OpenSessions {
     parents.set(Number(match[1]), Number(match[2]));
     // Weft's own CLIs are children of this server process.
     if (Number(match[2]) === process.pid) continue;
-    for (const m of match[3].matchAll(/--(?:resume|session-id)[= ]([0-9a-f-]{36})/g)) ids.add(m[1]);
+    for (const m of (match[3] ?? "").matchAll(/--(?:resume|session-id)[= ]([0-9a-f-]{36})/g)) if (m[1]) ids.add(m[1]);
   }
   // A session the Claude app started fresh has no id on its command line, so this list is the only
   // place it shows up.
@@ -293,7 +302,7 @@ export function releaseSession(sessionId: string): number {
     if (!match) continue;
     parents.set(Number(match[1]), Number(match[2]));
     if (Number(match[2]) === process.pid) continue;
-    for (const m of match[3].matchAll(/--(?:resume|session-id)[= ]([0-9a-f-]{36})/g)) {
+    for (const m of (match[3] ?? "").matchAll(/--(?:resume|session-id)[= ]([0-9a-f-]{36})/g)) {
       if (m[1] === sessionId) pids.add(Number(match[1]));
     }
   }
@@ -450,7 +459,7 @@ export function startSessionSync() {
   if (g.__weftSyncTimer) return;
   g.__weftSyncTimer = setInterval(() => void syncSessions().catch(() => {}), SYNC_EVERY_MS);
   g.__weftCheckTimer = setInterval(() => void checkLive().catch(() => {}), CHECK_EVERY_MS);
-  void syncSessions().catch((err) => console.error("Session sync failed:", err));
+  void syncSessions().catch((err: unknown) => console.error("Session sync failed:", err));
 }
 
 // Reads a picked-up session's transcript into its thread, when it changed since the last read.

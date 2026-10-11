@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { worktreeParent } from "./format";
 import { listProjects } from "./settings";
 import type { GithubRepo, LocalRepo } from "./types";
+import { globalSingleton } from "./global-singleton";
 
 // The folders the new-thread picker offers: recent projects, git repos found in the usual code
 // folders, and the user's GitHub repos (through the gh CLI), which can be cloned in one step.
@@ -24,7 +25,8 @@ function gitDir(folder: string) {
     const stat = fs.statSync(dotGit);
     if (stat.isDirectory()) return dotGit;
     const match = /^gitdir:\s*(.+)$/m.exec(fs.readFileSync(dotGit, "utf8"));
-    return match ? path.resolve(folder, match[1].trim()) : null;
+    const target = match?.[1];
+    return target ? path.resolve(folder, target.trim()) : null;
   } catch {
     return null;
   }
@@ -50,7 +52,7 @@ export function githubSlug(url: string) {
   return match ? `${match[1]}/${match[2]}` : undefined;
 }
 
-const roots = ((globalThis as unknown as { __weftRoots?: Map<string, string> }).__weftRoots ??= new Map());
+const roots = globalSingleton("__weftRoots", () => new Map<string, string>());
 
 // The project a folder belongs to: the main repo for a git worktree (live ones through their commondir,
 // deleted ones through a .claude/worktrees path), otherwise the folder itself. Cached per folder.
@@ -199,7 +201,8 @@ export async function cloneRepo(fullName: string): Promise<string> {
   if (existing) return existing.path;
 
   const parent = fs.existsSync(path.join(HOME, "dev")) ? path.join(HOME, "dev") : HOME;
-  const name = fullName.split("/")[1];
+  // FULL_NAME guarantees an owner/name pair.
+  const name = fullName.split("/")[1] ?? fullName;
   let target = path.join(parent, name);
   for (let n = 2; fs.existsSync(target); n++) target = path.join(parent, `${name}-${n}`);
   try {

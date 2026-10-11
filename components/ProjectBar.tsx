@@ -191,7 +191,7 @@ export default function ProjectBar({
     });
   }
 
-  function addFolder(e: React.FormEvent) {
+  function addFolder(e: React.SubmitEvent) {
     e.preventDefault();
     const path = folder.trim();
     if (!path) {
@@ -201,7 +201,7 @@ export default function ProjectBar({
     void run(async () => (await api.addProject(path)).path);
   }
 
-  function createProject(e: React.FormEvent) {
+  function createProject(e: React.SubmitEvent) {
     e.preventDefault();
     const projectName = name.trim();
     const parentFolder = parent.trim();

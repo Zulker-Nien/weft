@@ -166,13 +166,13 @@ describe("transcriptToThread", () => {
   });
 
   it("adds images pasted into Claude Code to the prompt as attachment refs", () => {
-    const [item] = thread([user([imageBlock, { type: "text", text: "what is this?" }])]);
+    const item = thread([user([imageBlock, { type: "text", text: "what is this?" }])])[0]!;
     expect(item.kind).toBe("user");
     const text = item.kind === "user" ? item.text : "";
     const ref = text.match(/^!\[pasted-image[^\]]*\]\((.+)\)\n\nwhat is this\?$/);
     expect(ref).not.toBeNull();
-    expect(ref![1].startsWith(path.join(data, "attachments"))).toBe(true);
-    expect(fs.existsSync(ref![1])).toBe(true);
+    expect(ref![1]!.startsWith(path.join(data, "attachments"))).toBe(true);
+    expect(fs.existsSync(ref![1]!)).toBe(true);
   });
 
   it("doesn't add pasted images again when the text already refers to an attachment, as Weft's messages do", () => {
@@ -183,7 +183,7 @@ describe("transcriptToThread", () => {
   it("copies a local image the assistant shows into the attachments folder, resolving it against cwd", () => {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "weft-transcript-cwd-"));
     fs.writeFileSync(path.join(cwd, "chart.png"), Buffer.from(PNG, "base64"));
-    const [item] = thread([assistant([{ type: "text", text: "Here: ![chart](chart.png)" }])], { cwd });
+    const item = thread([assistant([{ type: "text", text: "Here: ![chart](chart.png)" }])], { cwd })[0]!;
     const text = item.kind === "assistant" ? item.text : "";
     expect(text).toMatch(new RegExp(`^Here: !\\[chart\\]\\(${path.join(data, "attachments")}/chart-[0-9a-f]+\\.png\\)$`));
   });

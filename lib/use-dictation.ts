@@ -39,7 +39,7 @@ function startClock(onTick: (seconds: number) => void) {
 let whisper: Promise<{ available: boolean; reason?: string }> | undefined;
 
 function whisperStatus() {
-  whisper ??= api.dictation().catch((err) => {
+  whisper ??= api.dictation().catch((err: unknown) => {
     whisper = undefined;
     return { available: false, reason: err instanceof Error ? err.message : String(err) };
   });
@@ -67,7 +67,10 @@ export function useDictation(onText: (text: string) => void) {
     const status = await whisperStatus();
     if (!status.available) {
       const Recognizer = browserRecognizer();
-      if (Recognizer) return startBrowser(Recognizer);
+      if (Recognizer) {
+        startBrowser(Recognizer);
+        return;
+      }
       setError(status.reason ?? "Dictation isn't available here.");
       return;
     }
@@ -155,7 +158,8 @@ export function useDictation(onText: (text: string) => void) {
       if (!send) return;
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const result = e.results[i];
-        if (result.isFinal && result[0].transcript.trim()) onTextRef.current(result[0].transcript.trim());
+        const text = result?.[0]?.transcript.trim();
+        if (result?.isFinal && text) onTextRef.current(text);
       }
     };
     recognizer.onerror = (e) => {

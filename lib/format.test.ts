@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Card } from "./types";
 import {
+  asText,
+  cacheMinutesLeft,
   clip,
   describeToolRun,
   firstLine,
@@ -152,6 +154,18 @@ describe("titleFromPrompt", () => {
   });
 });
 
+describe("asText", () => {
+  it("keeps strings, spells out numbers and booleans, and falls back for the rest", () => {
+    expect(asText("hi")).toBe("hi");
+    expect(asText("")).toBe("");
+    expect(asText(5)).toBe("5");
+    expect(asText(false)).toBe("false");
+    expect(asText(undefined)).toBe("");
+    expect(asText(null, "a card")).toBe("a card");
+    expect(asText({ a: 1 }, "x")).toBe("x");
+  });
+});
+
 describe("clip", () => {
   it("leaves short text alone and ends cut text in an ellipsis at exactly max", () => {
     expect(clip("short", 10)).toBe("short");
@@ -275,5 +289,15 @@ describe("describeToolRun phrases", () => {
 
   it("names an mcp kind with no tool part after its raw server", () => {
     expect(one("mcp:0123abcd-9")).toBe("Used 0123abcd-9");
+  });
+});
+
+describe("cacheMinutesLeft", () => {
+  const cache = { at: 0, ttl: 3600, hit: 90, tokens: 1000 };
+  it("counts whole minutes left, rounded up, and 0 once cold", () => {
+    expect(cacheMinutesLeft(cache, 0)).toBe(60);
+    expect(cacheMinutesLeft(cache, 59 * 60_000 + 1)).toBe(1);
+    expect(cacheMinutesLeft(cache, 3600_000)).toBe(0);
+    expect(cacheMinutesLeft(cache, 5_000_000)).toBe(0);
   });
 });

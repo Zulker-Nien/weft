@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { connection } from "next/server";
 import { patternRegex } from "@/lib/automations";
+import { asText } from "@/lib/format";
 import { fail, guard } from "@/lib/guard";
 import { setAutomations, setDefaultPermissionMode, setKeepAliveMinutes, setThreadPrompt, settingsView } from "@/lib/settings";
 import { SKILL_NAME } from "@/lib/skills";
@@ -13,11 +14,11 @@ function readAutomations(value: unknown): Automation[] {
     const rule = (raw ?? {}) as Record<string, unknown>;
     const trigger = AUTOMATION_TRIGGERS.find((t) => t.id === rule.on);
     if (!trigger) throw new Error(`Unknown automation trigger ${JSON.stringify(rule.on)}.`);
-    const skill = String(rule.skill ?? "").trim().replace(/^\//, "");
+    const skill = asText(rule.skill).trim().replace(/^\//, "");
     if (!SKILL_NAME.test(skill)) throw new Error(`Pick a skill for “when ${trigger.label}”.`);
     const id = typeof rule.id === "string" && rule.id ? rule.id : randomUUID();
     if (trigger.id !== "prompt-matches") return { id, on: trigger.id, skill };
-    const pattern = String(rule.pattern ?? "").trim();
+    const pattern = asText(rule.pattern).trim();
     if (!pattern) throw new Error(`Enter a pattern for “when ${trigger.label}”.`);
     if (!patternRegex(pattern)) throw new Error(`“${pattern}” isn't a valid pattern.`);
     return { id, on: trigger.id, skill, pattern };

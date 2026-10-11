@@ -8,7 +8,6 @@ import { busyHere } from "@/lib/overlap";
 import { planResets } from "@/lib/schedule";
 import { COLUMNS, type BoardEvent, type Card, type Column, type LibraryItem, type LibraryKind, type LoginView, type Project, type ThreadItem } from "@/lib/types";
 import { useShortcutHint, useShortcutListener, useShortcuts } from "@/lib/hotkeys";
-import { setTheme, THEMES } from "@/lib/theme";
 import { playChime, preloadChimes } from "@/lib/chimes";
 import {
   cardChangeEffects,
@@ -29,19 +28,23 @@ import { archivedMessage, neighborAfter } from "@/lib/archive";
 import { useEscape } from "@/lib/use-escape";
 import BrowserPane from "./BrowserPane";
 import CardView from "./CardView";
+import CrashGuard from "./CrashGuard";
 import CommandPalette, { type PaletteItem } from "./CommandPalette";
-import CoverageBadge from "./CoverageBadge";
+import { boardPaletteItems, promptItems } from "./board-palette";
+import { boardShortcuts } from "./board-shortcuts";
 import Icon from "./Icon";
 import { libraryPinned } from "@/lib/library-view";
 import LibraryRail from "./LibraryRail";
+import PileBadge from "./PileBadge";
+import QualityBadge from "./QualityBadge";
 import LoginDialog from "./LoginDialog";
 import NewCardDialog from "./NewCardDialog";
 import { useBoardMenus } from "./use-board-menus";
-import ProjectBar, { folderName, SORTS } from "./ProjectBar";
+import ProjectBar, { folderName } from "./ProjectBar";
 import FilterBox from "./FilterBox";
 import SettingsDialog from "./SettingsDialog";
 import ShortcutsDialog from "./ShortcutsDialog";
-import StatusStrip from "./StatusStrip";
+import BoardFooter from "./BoardFooter";
 import ModifierHint from "./ModifierHint";
 import TerminalDrawer from "./TerminalDrawer";
 import ThreadPanel from "./ThreadPanel";
@@ -73,18 +76,12 @@ const COLUMN_LIMIT = 40;
 // Cards the filter box lists under itself while typing.
 const FILTER_MATCHES = 5;
 
-const COVERAGE_SETUP_PROMPT =
-  "Set up test coverage for this project so Weft's header can show it. Run /weft:setup-done, and make sure " +
-  "`npm run coverage` (or the project's package manager equivalent) writes coverage/coverage-summary.json " +
-  "(the json-summary reporter) at the project root. Then run it once and report the line, statement, function " +
-  "and branch numbers.";
-
 // The selected project and sort order, remembered per browser.
 const VIEW_PREFS = "threadboard.view";
 
 function readPrefs(): { project?: string | null; sort?: SortKey } {
   try {
-    return JSON.parse(localStorage.getItem(VIEW_PREFS) ?? "{}");
+    return JSON.parse(localStorage.getItem(VIEW_PREFS) ?? "{}") as { project?: string | null; sort?: SortKey };
   } catch {
     return {};
   }
@@ -403,7 +400,7 @@ export default function Board() {
     };
   });
 
-  useEffect(() => window.threadboard?.onMenu?.((action, payload) => onMenu.current(action, payload)), []);
+  useEffect(() => window.threadboard?.onMenu((action, payload) => onMenu.current(action, payload)), []);
 
   const filtering = Boolean(project || query.trim());
   // Picking another project or changing the filter collapses the columns again.
@@ -474,16 +471,16 @@ export default function Board() {
     const column = current?.closest<HTMLElement>("[data-column]")?.dataset.column as Column | undefined;
     if (!current || !column) {
       const first = ids.map(inColumn).find((list) => list.length > 0);
-      first?.[0].focus();
+      first?.[0]?.focus();
       return;
     }
     const list = inColumn(column);
     const row = list.indexOf(current);
     if (move.dx) {
       for (let i = ids.indexOf(column) + move.dx; i >= 0 && i < ids.length; i += move.dx) {
-        const next = inColumn(ids[i]);
+        const next = inColumn(ids[i] ?? "");
         if (next.length) {
-          next[Math.min(row, next.length - 1)].focus();
+          next[Math.min(row, next.length - 1)]?.focus();
           return;
         }
       }
@@ -506,7 +503,7 @@ export default function Board() {
     const list = [...document.querySelectorAll<HTMLElement>('[data-column="needs_you"] [data-card-id]')];
     if (!list.length) return false;
     const at = list.findIndex((el) => el.contains(document.activeElement));
-    list[(at + 1) % list.length].focus();
+    list[(at + 1) % list.length]?.focus();
   }
 
   // Enter only opens a card that has focus itself, so it still presses a button inside one.
@@ -519,249 +516,71 @@ export default function Board() {
 
   // Everything the command palette offers: the board's actions, the projects, and every card.
   function paletteItems(): PaletteItem[] {
-    const command = (id: string, label: string, icon: PaletteItem["icon"], run: () => void, keys?: string, keywords?: string) =>
-      ({ id: `cmd-${id}`, group: "Commands", label, icon, run, keys, keywords }) satisfies PaletteItem;
-    const commands: PaletteItem[] = [
-      command("new", "New thread", "plus", () => openNew(), "n"),
-      command("filter", "Filter cards", "search", focusFilter, "/"),
-      command("copilot", "Toggle the copilot", "sparkles", toggleCopilot, "c"),
-      command("browser", "Toggle the browser", "globe", toggleBrowser, "b"),
-      command("terminal", "Toggle the terminal", "terminal", toggleTerminal, "t", "shell console command line"),
-      command("settings", "Open settings", "sliders", () => setShowSettings(true), ","),
-      command("help", "Show keyboard shortcuts", "zap", () => setShowHelp(true), "?", "hotkeys keys"),
-      command("needs-you", "Jump to a card that needs you", "alert", () => void jumpToNeedsYou(), "a", "waiting"),
-      ...(doneToArchive.length
-        ? [command("archive-done", `Archive all ${doneToArchive.length} in Done`, "archive", () => archiveCards(doneToArchive), "shift+e", "clear file")]
-        : []),
-      ...(lastArchived.length ? [command("archive-undo", "Undo the last archive", "archive", () => unarchive(lastArchived), "z", "unarchive restore")] : []),
-      ...(archivedCount
-        ? [command("toggle-archived", `${showArchived ? "Hide" : "Show"} ${archivedCount} archived`, "archive", () => setShowArchived((v) => !v))]
-        : []),
-      ...SORTS.map((s) => command(`sort-${s.id}`, `Sort: ${s.label}`, "list", () => chooseSort(s.id), undefined, "order")),
-      ...THEMES.map((t) => command(`theme-${t.id}`, `Theme: ${t.label}`, "sun", () => setTheme(t.id), undefined, "appearance dark light")),
-    ];
-    if (selected) {
-      commands.unshift(
-        command("reply", "Reply in the open thread", "send", () => {
-          document.querySelector<HTMLElement>('aside [contenteditable="true"], aside textarea')?.focus();
-        }, "r"),
-        command("close", "Close the open thread", "x", () => select(null), "Escape"),
-        command("archive", selected.archived ? "Unarchive the open thread" : "Archive the open thread", "archive", () => toggleArchive(selected), "shift+a", "file"),
-        ...(selected.column === "running" ? [command("stop", "Stop the open thread", "stop", () => api.stop(selected.id).catch(notify))] : []),
-        ...COLUMNS.filter((c) => c.id !== selected.column).map((c) =>
-          command(`move-${c.id}`, `Move the open thread to ${c.label}`, "forward", () => move(selected.id, c.id)),
-        ),
-      );
-    }
-    const projectItems = [null, ...projectSummaries.map((p) => p.path)].map((path): PaletteItem => ({
-      id: `project-${path ?? "all"}`,
-      group: "Projects",
-      label: path ? folderName(path) : "All projects",
-      detail: path ? (home && path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path) : undefined,
-      keywords: "project folder",
-      icon: "folder",
-      project: path ? folderName(path) : undefined,
-      run: () => chooseProject(path),
-    }));
-    const cardItems = cards
-      .filter((c) => c.role !== "copilot")
-      .toSorted(SORTERS.active)
-      .map((card): PaletteItem => ({
-        id: `card-${card.id}`,
-        group: "Cards",
-        label: card.title,
-        project: folderName(card.cwd),
-        column: card.column,
-        root: rootOf(card.cwd),
-        keywords: [card.prompt, card.lastLine, card.stage, card.remaining, folderName(card.cwd)].filter(Boolean).join(" "),
-        icon: "file",
-        run: () => openCard(card),
-      }));
-    return [...commands, ...projectItems, ...cardItems];
+    return boardPaletteItems(
+      { cards, selected, projectSummaries, home, doneToArchive, lastArchived, archivedCount, showArchived, rootOf },
+      {
+        openNew: () => openNew(),
+        focusFilter,
+        toggleCopilot,
+        toggleBrowser,
+        toggleTerminal,
+        openSettings: () => setShowSettings(true),
+        openHelp: () => setShowHelp(true),
+        jumpToNeedsYou: () => void jumpToNeedsYou(),
+        archiveCards,
+        unarchive,
+        toggleShowArchived: () => setShowArchived((v) => !v),
+        chooseSort,
+        focusReply: () => document.querySelector<HTMLElement>('aside [contenteditable="true"], aside textarea')?.focus(),
+        closeThread: () => select(null),
+        toggleArchive,
+        stop: (id) => void api.stop(id).catch(notify),
+        move,
+        chooseProject,
+        openCard,
+      },
+    );
   }
 
   // The prompts the user wrote that match a query, as palette items that open their card.
   async function findPrompts(query: string): Promise<PaletteItem[]> {
     const { hits } = await api.searchPrompts(query);
-    return hits.flatMap((hit, i): PaletteItem[] => {
-      const card = cards.find((c) => c.id === hit.cardId);
-      if (!card) return [];
-      return [
-        {
-          id: `prompt-${hit.cardId}-${i}`,
-          group: "Prompts",
-          label: card.title,
-          project: folderName(card.cwd),
-          column: card.column,
-          root: rootOf(card.cwd),
-          snippet: hit.snippet.replace(/\s+/g, " "),
-          icon: "file",
-          run: () => openCard(card),
-        },
-      ];
-    });
+    return promptItems(hits, cards, rootOf, openCard);
   }
 
-  useShortcuts([
-    {
-      id: "palette",
-      keys: ["mod+k"],
-      description: "Command palette: search cards and run commands",
-      group: "General",
-      enabled: !(showNew || showSettings || showHelp || Boolean(login)),
-      // From the filter box, the palette picks up what was typed there.
-      handler: () => (showPalette ? setShowPalette(false) : openPalette(filterHasFocus() ? query : "")),
-    },
-    {
-      id: "help",
-      keys: ["?", "mod+/"],
-      description: "Show keyboard shortcuts",
-      group: "General",
-      enabled: !(showNew || showSettings || showPalette || Boolean(login)),
-      handler: () => setShowHelp((open) => !open),
-    },
-    { id: "new-thread", keys: ["n"], description: "New thread", group: "General", enabled: boardKeys, handler: () => openNew() },
-    {
-      id: "library",
-      keys: ["mod+l"],
-      description: "Library: recipes, to-dos and notes",
-      group: "General",
-      enabled: !(showNew || showSettings || showPalette || showHelp || Boolean(login)),
-      handler: () => setLibraryOpen((open) => (open ? null : "recipe")),
-    },
-    { id: "filter", keys: ["/"], description: "Filter cards", group: "General", enabled: boardKeys, handler: focusFilter },
-    {
-      id: "settings",
-      keys: [","],
-      description: "Open settings",
-      group: "General",
-      enabled: boardKeys,
-      handler: () => setShowSettings(true),
-    },
-    { id: "copilot", keys: ["c"], description: "Toggle the copilot", group: "General", enabled: boardKeys, handler: toggleCopilot },
-    { id: "browser", keys: ["b"], description: "Toggle the browser", group: "General", enabled: boardKeys, handler: toggleBrowser },
-    { id: "terminal", keys: ["t"], description: "Toggle the terminal", group: "General", enabled: boardKeys, handler: toggleTerminal },
-    {
-      id: "card-down",
-      keys: ["j", "ArrowDown"],
-      description: "Next card in the column",
-      group: "Board",
-      enabled: boardKeys,
-      handler: () => moveFocus({ dy: 1 }),
-    },
-    {
-      id: "card-up",
-      keys: ["k", "ArrowUp"],
-      description: "Previous card in the column",
-      group: "Board",
-      enabled: boardKeys,
-      handler: () => moveFocus({ dy: -1 }),
-    },
-    {
-      id: "column-right",
-      keys: ["l", "ArrowRight"],
-      description: "Move to the next column",
-      group: "Board",
-      enabled: boardKeys,
-      handler: () => moveFocus({ dx: 1 }),
-    },
-    {
-      id: "column-left",
-      keys: ["h", "ArrowLeft"],
-      description: "Move to the previous column",
-      group: "Board",
-      enabled: boardKeys,
-      handler: () => moveFocus({ dx: -1 }),
-    },
-    {
-      id: "card-first",
-      keys: ["Home"],
-      description: "First card in the column",
-      group: "Board",
-      enabled: boardKeys,
-      handler: () => moveFocus({ edge: "first" }),
-    },
-    {
-      id: "card-last",
-      keys: ["End"],
-      description: "Last card in the column",
-      group: "Board",
-      enabled: boardKeys,
-      handler: () => moveFocus({ edge: "last" }),
-    },
-    {
-      id: "card-open",
-      keys: ["Enter", "o"],
-      description: "Open the focused card",
-      group: "Board",
-      enabled: boardKeys,
-      handler: openFocused,
-    },
-    {
-      id: "needs-you",
-      keys: ["a"],
-      description: "Jump to a card that needs you",
-      group: "Board",
-      enabled: boardKeys,
-      handler: jumpToNeedsYou,
-    },
-    { id: "project-next", keys: ["]"], description: "Next project", group: "Board", enabled: boardKeys, handler: () => stepProject(1) },
-    {
-      id: "project-previous",
-      keys: ["["],
-      description: "Previous project",
-      group: "Board",
-      enabled: boardKeys,
-      handler: () => stepProject(-1),
-    },
-    { id: "sort", keys: ["s"], description: "Change the sort order", group: "Board", enabled: boardKeys, handler: stepSort },
-    {
-      id: "reply",
-      keys: ["r"],
-      description: "Reply in the open thread",
-      group: "Thread",
-      enabled: boardKeys,
-      handler: () => {
-        const input = document.querySelector<HTMLElement>('aside [contenteditable="true"], aside textarea');
-        if (!input) return false;
-        input.focus();
-      },
-    },
-    {
-      id: "archive",
-      keys: ["shift+a"],
-      description: "Archive the focused card, or the open thread",
-      group: "Board",
-      enabled: boardKeys,
-      handler: () => {
-        const card = archiveTarget();
-        if (!card) return false;
-        toggleArchive(card);
-      },
-    },
-    {
-      id: "archive-done",
-      keys: ["shift+e"],
-      description: "Archive every card shown in Done",
-      group: "Board",
-      enabled: boardKeys,
-      handler: () => {
-        if (!doneToArchive.length) return false;
-        archiveCards(doneToArchive);
-      },
-    },
-    {
-      id: "archive-undo",
-      keys: ["z"],
-      description: "Undo the last archive",
-      group: "Board",
-      enabled: boardKeys,
-      handler: () => {
-        if (!lastArchived.length) return false;
-        unarchive(lastArchived);
-      },
-    },
-  ]);
+  useShortcuts(
+    boardShortcuts({
+      showNew,
+      showSettings,
+      showHelp,
+      showPalette,
+      login,
+      query,
+      boardKeys,
+      doneToArchive,
+      lastArchived,
+      setShowPalette,
+      setShowHelp,
+      setShowSettings,
+      setLibraryOpen,
+      openPalette,
+      filterHasFocus,
+      openNew: () => openNew(),
+      focusFilter,
+      toggleCopilot,
+      toggleBrowser,
+      toggleTerminal,
+      moveFocus,
+      openFocused,
+      jumpToNeedsYou,
+      stepProject,
+      stepSort,
+      archiveTarget,
+      toggleArchive,
+      archiveCards,
+      unarchive,
+    }),
+  );
   useShortcutListener();
   const hint = useShortcutHint();
 
@@ -850,7 +669,10 @@ export default function Board() {
     if (!libraryPinned()) setLibraryOpen(null);
     setShowNew(false);
     const url = libraryPageUrl(item.id);
-    if (!selectedRef.current) return showPage(url);
+    if (!selectedRef.current) {
+      showPage(url);
+      return;
+    }
     libraryPage.current = url;
     select(null);
   }
@@ -916,7 +738,7 @@ export default function Board() {
     if (card && card.column !== column) move(id, column);
   }
 
-  const { onCardMenu, onColumnMenu } = useBoardMenus({
+  const { onCardMenu, onColumnMenu, onStarMenu } = useBoardMenus({
     doneShown: byColumn.get("done") ?? [],
     archivedCount,
     showArchived,
@@ -940,11 +762,11 @@ export default function Board() {
     notify,
   });
 
-  // The header badge's "Set up coverage": a thread in that folder that makes `npm run coverage` work.
-  function setupCoverage(cwd: string) {
+  // The header badges' cards: the quality badge's fixes and the pile counter's commit walk-through.
+  function improveQuality(cwd: string, prompt: string, title: string) {
     return create({
-      title: "Set up test coverage",
-      prompt: COVERAGE_SETUP_PROMPT,
+      title,
+      prompt,
       cwd,
       backend: "claude",
       start: true,
@@ -963,7 +785,6 @@ export default function Board() {
         className={`flex shrink-0 items-center gap-3 border-b border-line bg-panel ${mac ? "app-drag h-11 pl-[78px] pr-4" : "px-4 py-2.5"}`}
       >
         <h1 className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-ink">
-          {/* eslint-disable-next-line @next/next/no-img-element -- a fixed 18px mark needs no optimizing */}
           <img src="/logo.svg" alt="" width={18} height={18} />
           Weft
         </h1>
@@ -971,7 +792,13 @@ export default function Board() {
           {running} running
           {waiting > 0 && <span className="text-warn"> · {waiting} need{waiting === 1 ? "s" : ""} you</span>}
         </span>
-        <CoverageBadge cwd={selected?.cwd ?? project ?? latest?.cwd} onSetup={(cwd) => setupCoverage(cwd).catch(notify)} />
+        <QualityBadge cwd={selected?.cwd ?? project ?? latest?.cwd} onImprove={(cwd, prompt, title) => void improveQuality(cwd, prompt, title).catch(notify)} />
+        <PileBadge
+          cwd={selected?.cwd ?? project ?? latest?.cwd}
+          refresh={`${running}:${cards.reduce((n, c) => n + (c.turns ?? 0), 0)}`}
+          onStart={(cwd, prompt, title) => improveQuality(cwd, prompt, title)}
+          onError={notify}
+        />
         <div className="flex-1" />
         <button
           onClick={toggleCopilot}
@@ -1037,6 +864,7 @@ export default function Board() {
       />
 
       <div className="flex min-h-0 flex-1">
+        <CrashGuard what="library" className="m-3 w-[220px] self-start">
         <LibraryRail
           open={libraryOpen}
           onOpen={setLibraryOpen}
@@ -1055,6 +883,7 @@ export default function Board() {
           }}
           notify={notify}
         />
+        </CrashGuard>
         <main
           className="flex min-w-0 flex-1 gap-3 overflow-x-auto p-3"
           onDoubleClick={(e) => {
@@ -1075,7 +904,7 @@ export default function Board() {
                 }}
                 onDragLeave={() => setDragOver((c) => (c === column.id ? null : c))}
                 onDrop={(e) => drop(column.id, e)}
-                onContextMenu={(e) => onColumnMenu(column.id, e)}
+                onContextMenu={(e) => void onColumnMenu(column.id, e)}
                 className={`flex w-[264px] min-w-[220px] shrink-0 flex-col rounded-xl border ${dragOver === column.id ? "border-accent bg-accent-soft" : "border-transparent bg-sunken"}`}
               >
                 <div className="flex items-center justify-between px-3 pb-1.5 pt-2.5">
@@ -1093,18 +922,20 @@ export default function Board() {
                 </div>
                 <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
                   {shown.map((card) => (
+                    <CrashGuard key={card.id} what="card" name={card.title}>
                     <CardView
-                      key={card.id}
                       card={card}
                       now={now}
                       selected={card.id === selectedId}
                       unseen={unseen.has(card.id)}
                       alsoHere={busyHere(cards, card)}
                       onOpen={() => openCard(card)}
-                      onAnswer={(allow) => api.answer(card.id, allow, undefined, card.pending?.id).catch(notify)}
-                      onStop={() => api.stop(card.id).catch(notify)}
-                      onContextMenu={(e) => onCardMenu(card, e)}
+                      onAnswer={(allow) => void api.answer(card.id, allow, undefined, card.pending?.id).catch(notify)}
+                      onStop={() => void api.stop(card.id).catch(notify)}
+                      onContextMenu={(e) => void onCardMenu(card, e)}
+                      onStarMenu={(e) => void onStarMenu(card, e)}
                     />
+                    </CrashGuard>
                   ))}
                   {shown.length < list.length && (
                     <button
@@ -1136,9 +967,10 @@ export default function Board() {
         {showNew ? (
           <NewCardDialog key={recipe?.id ?? "new"} cards={cards} home={home} recipe={recipe ?? undefined} defaultCwd={newCwd ?? project ?? undefined} recentCwd={[...cards].sort((a, b) => b.updatedAt - a.updatedAt).find((c) => c.cwd !== home)?.cwd} onClose={() => setShowNew(false)} onCreate={create} />
         ) : selected && (
+          <CrashGuard key={selected.id} what="thread" name={selected.title} className="m-3 w-[360px] self-start">
           <ThreadPanel
-            key={selected.id}
             card={selected}
+            onStarMenu={(e) => void onStarMenu(selected, e)}
             alsoHere={busyHere(cards, selected)}
             resets={planResets(cards)}
             items={thread}
@@ -1153,21 +985,23 @@ export default function Board() {
               }
               await api.send(selected.id, text);
             }}
-            onAnswer={(allow, answers) => api.answer(selected.id, allow, answers, selected.pending?.id).catch(notify)}
-            onRelease={() => api.release(selected.id).catch(notify)}
+            onAnswer={(allow, answers) => void api.answer(selected.id, allow, answers, selected.pending?.id).catch(notify)}
+            onRelease={() => void api.release(selected.id).catch(notify)}
             onArchive={() => toggleArchive(selected)}
             onDelete={() => {
               select(null);
               api.remove(selected.id).catch(notify);
             }}
             onClose={browserOpen ? undefined : () => select(null)}
-            onRename={(title) => api.rename(selected.id, title).catch(notify)}
-            onMode={(mode) => api.setMode(selected.id, mode).catch(notify)}
+            onRename={(title) => void api.rename(selected.id, title).catch(notify)}
+            onMode={(mode) => void api.setMode(selected.id, mode).catch(notify)}
             editTitle={renameId === selected.id}
           />
+          </CrashGuard>
         )}
 
         {browserOpen && (
+          <CrashGuard what="browser pane" className="m-3 w-[360px] self-start">
           <BrowserPane
             desktop={desktop}
             state={browser}
@@ -1177,26 +1011,18 @@ export default function Board() {
             onClose={showNew ? () => setShowNew(false) : selected ? () => select(null) : toggleBrowser}
             expanded={framed}
           />
+          </CrashGuard>
         )}
         </div>
       </div>
 
-      <footer className="flex shrink-0 items-center justify-between gap-4 border-t border-line bg-panel px-4 py-1.5">
-        <StatusStrip stats={footerStats} cwd={footerCwd} backend={footerBackend} />
-        <span className="shrink-0 whitespace-nowrap text-[11.5px] text-muted">
-          <button onClick={() => setShowHelp(true)} title="Keyboard shortcuts (?)" className="mr-3 hover:text-ink">
-            <kbd className="mr-1 rounded border border-line-strong border-b-2 px-1 font-mono text-[10.5px]">?</kbd>
-            Shortcuts
-          </button>
-          <a href={REPO_URL} onClick={(e) => openLink(e, REPO_URL)} className="font-medium text-ink hover:text-accent">Weft</a> v{process.env.NEXT_PUBLIC_APP_VERSION} built with{" "}
-          <a href={COFFEE_URL} onClick={(e) => openLink(e, COFFEE_URL)} title="Buy me a coffee">☕</a> by{" "}
-          <a href="mailto:alex@aimhuge.com" className="hover:text-accent">alex@aimhuge.com</a>
-        </span>
-      </footer>
+      <CrashGuard what="footer"><BoardFooter stats={footerStats} cwd={footerCwd} backend={footerBackend} onHelp={() => setShowHelp(true)} /></CrashGuard>
       {/* After the footer so an open card can stop just above it; z-40 keeps it over the card's backdrop. */}
       {terminalOpen && (
         <div style={NO_DRAG} className="relative z-40">
+          <CrashGuard what="terminal" className="m-3">
           <TerminalDrawer key={terminalCwd} cwd={terminalCwd} height={terminalHeight} onHeight={setTerminalHeight} onClose={toggleTerminal} />
+          </CrashGuard>
         </div>
       )}
 
@@ -1241,12 +1067,3 @@ function showPage(url: string) {
   else window.open(url, "_blank");
 }
 
-const REPO_URL = "https://github.com/fotoflo/weft";
-const COFFEE_URL = "https://buymeacoffee.com/alexmiller";
-
-// The desktop shell opens links in the default browser; the web build uses the link as is.
-function openLink(e: React.MouseEvent, url: string) {
-  if (!window.threadboard) return;
-  e.preventDefault();
-  window.threadboard.openExternal(url);
-}

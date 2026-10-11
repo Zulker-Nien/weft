@@ -30,7 +30,7 @@ export default function TerminalDrawer({
   onClose: () => void;
 }) {
   const [panes, setPanesState] = useState<string[]>(() => panesByFolder.get(cwd) ?? [cwd]);
-  const [focused, setFocused] = useState(panes[0]);
+  const [focused, setFocused] = useState(panes[0] ?? cwd);
   const bridge = typeof window === "undefined" ? undefined : window.threadboard;
 
   function setPanes(next: string[]) {
@@ -56,7 +56,8 @@ export default function TerminalDrawer({
       return;
     }
     setPanes(rest);
-    if (focused === id) setFocused(rest[Math.max(0, panes.indexOf(id) - 1)]);
+    const previous = rest[Math.max(0, panes.indexOf(id) - 1)];
+    if (focused === id && previous) setFocused(previous);
   }
 
   function startDrag(e: React.PointerEvent) {
@@ -155,12 +156,14 @@ function TerminalPane({
     if (!bridge?.terminal || !host.current) return;
     const el = host.current;
     let disposed = false;
+    // Read through a call: the async setup below checks it after each await, once cleanup may have run.
+    const isDisposed = () => disposed;
     const cleanups: (() => void)[] = [];
 
-    (async () => {
+    void (async () => {
       // xterm touches the DOM as it loads, so it can't be imported on the server.
       const [{ Terminal }, { FitAddon }] = await Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit")]);
-      if (disposed) return;
+      if (isDisposed()) return;
       const term = new Terminal({
         fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
         fontSize: 12.5,
@@ -202,7 +205,7 @@ function TerminalPane({
       cleanups.push(() => observer.disconnect());
 
       const opened = await bridge.terminal.open(id, cwd, term.cols, term.rows);
-      if (disposed) return;
+      if (isDisposed()) return;
       if (opened.error) setError(opened.error);
       else if (opened.replay) term.write(opened.replay);
       term.focus();

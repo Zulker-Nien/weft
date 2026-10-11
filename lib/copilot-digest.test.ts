@@ -74,7 +74,7 @@ describe("markSeen", () => {
     const cards = [card({ id: "a" })];
     rememberSeen(snapshot(cards));
     markSeen("a", "review");
-    expect(lastSeen()?.a.column).toBe("review");
+    expect(lastSeen()?.a!.column).toBe("review");
     expect(boardDigest([card({ id: "a", column: "review" })], lastSeen())).toBe("");
   });
 });

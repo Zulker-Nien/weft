@@ -66,7 +66,7 @@ describe("toolResult", () => {
     expect(out.images).toHaveLength(2);
     expect(out.images![0]).toMatch(/^\/api\/attachments\/screenshot-[0-9a-f]{12}\.png$/);
     expect(out.images![1]).toBe(out.images![0]);
-    expect(fs.readFileSync(path.join(attachments, out.images![0].split("/").pop()!))).toEqual(PNG);
+    expect(fs.readFileSync(path.join(attachments, out.images![0]!.split("/").pop()!))).toEqual(PNG);
   });
 
   it("writes [image] for an image block it can't save", async () => {
@@ -109,7 +109,7 @@ describe("adoptLocalMedia", () => {
     fs.writeFileSync(full, data);
     return full;
   }
-  const savedName = (text: string) => /\(<?([^)>]+)>?\)/.exec(text)![1];
+  const savedName = (text: string) => /\(<?([^)>]+)>?\)/.exec(text)![1]!;
 
   it("returns text without image syntax untouched", async () => {
     const { adoptLocalMedia } = await load();

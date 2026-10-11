@@ -28,11 +28,14 @@ const get = (name: string, headers: Record<string, string> = {}) =>
     params: Promise.resolve({ name }),
   });
 
+/** The attachment the upload route replies with. */
+const attachment = async (res: Response) => (await res.json()) as { name: string; url: string; path: string };
+
 describe("POST /api/attachments", () => {
   it("saves the body under the x-filename name and returns the attachment", async () => {
     const res = await post("hello world", { "x-filename": encodeURIComponent("My Notes.txt"), "content-type": "text/plain" });
     expect(res.status).toBe(200);
-    const saved = await res.json();
+    const saved = await attachment(res);
     expect(saved).toMatchObject({ kind: "file", bytes: 11 });
     expect(saved.name).toMatch(/^my-notes-[0-9a-f]{8}\.txt$/);
     expect(saved.url).toBe(`/api/attachments/${saved.name}`);
@@ -40,13 +43,13 @@ describe("POST /api/attachments", () => {
   });
 
   it("names a file without x-filename 'pasted', with the extension from its type", async () => {
-    const saved = await (await post("x", { "content-type": "image/png" })).json();
+    const saved = await attachment(await post("x", { "content-type": "image/png" }));
     expect(saved.name).toMatch(/^pasted-[0-9a-f]{8}\.png$/);
   });
 
   it("saves as .bin when there's neither a name nor a content type", async () => {
     // A Blob body with no type sends no content-type at all.
-    const saved = await (await post(new Blob(["x"]))).json();
+    const saved = await attachment(await post(new Blob(["x"])));
     expect(saved.name).toMatch(/^pasted-[0-9a-f]{8}\.bin$/);
   });
 
@@ -65,14 +68,14 @@ describe("POST /api/attachments", () => {
 
     const bad = await post("x", { "x-filename": "%E0%A4%A" });
     expect(bad.status).toBe(400);
-    expect((await bad.json()).error).toMatch(/URI/);
+    expect(((await bad.json()) as { error: string }).error).toMatch(/URI/);
   });
 });
 
 describe("GET /api/attachments/[name]", () => {
   let name: string;
   beforeAll(async () => {
-    name = (await (await post("0123456789", { "x-filename": "digits.txt" })).json()).name;
+    name = (await attachment(await post("0123456789", { "x-filename": "digits.txt" }))).name;
   });
 
   it("serves the whole file with locked-down headers", async () => {

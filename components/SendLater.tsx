@@ -5,6 +5,7 @@ import { keyLabel } from "@/lib/hotkeys";
 import { formatAt, toLocalInput, type SendLaterOption } from "@/lib/schedule";
 import { useEscape } from "@/lib/use-escape";
 import Icon from "./Icon";
+import Tip from "./Tip";
 
 // The reply box's clock: a small menu of times to send the message at, the first one the default
 // (the next 5-hour reset on a Claude thread), plus a picker for any other time. Alt+Enter opens it
@@ -51,17 +52,22 @@ export default function SendLater({
 
   return (
     <div ref={root} className="relative ml-1 shrink-0">
-      <button
-        type="button"
-        onClick={() => onOpenChange(!open)}
-        disabled={disabled}
-        aria-label="Send later"
-        aria-expanded={open}
-        title={`Send later${options[0] ? `: ${options[0].label.toLowerCase()}, ${formatAt(options[0].at, now)}` : ""} (${key})`}
-        className={`flex h-8 w-8 items-center justify-center rounded-md border border-line-strong text-muted hover:bg-sunken hover:text-ink disabled:opacity-40 ${open ? "bg-sunken text-ink" : ""}`}
+      <Tip
+        off={open}
+        className="inline-flex"
+        text={`Send later${options[0] ? `: ${options[0].label.toLowerCase()}, ${formatAt(options[0].at, now)}` : ""} (${key})`}
       >
-        <Icon name="clock" size={15} />
-      </button>
+        <button
+          type="button"
+          onClick={() => onOpenChange(!open)}
+          disabled={disabled}
+          aria-label="Send later"
+          aria-expanded={open}
+          className={`flex h-8 w-8 items-center justify-center rounded-md border border-line-strong text-muted hover:bg-sunken hover:text-ink disabled:opacity-40 ${open ? "bg-sunken text-ink" : ""}`}
+        >
+          <Icon name="clock" size={15} />
+        </button>
+      </Tip>
       {open && (
         <div className="absolute bottom-full right-0 z-30 mb-1.5 w-64 rounded-lg border border-line-strong bg-panel p-1 text-[12.5px] shadow-lg">
           <p className="px-2 pb-1 pt-1.5 text-[11px] uppercase tracking-wide text-faint">Send later</p>

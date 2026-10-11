@@ -5,7 +5,7 @@ import { getItem, listLibrary } from "./library";
 import { blanksIn } from "./library-view";
 import { markSeen } from "./copilot-digest";
 import { resolveFolder } from "./folders";
-import { clip, firstLine, shortToolName, titleFromPrompt } from "./format";
+import { asText, clip, firstLine, shortToolName, titleFromPrompt } from "./format";
 import { defaultPermissionMode, touchProject } from "./settings";
 import { createCard, getCard, getThread, listCards, updateCard } from "./store";
 import type { Backend, Card, PermissionMode, ThreadItem } from "./types";
@@ -83,12 +83,12 @@ function threadText(items: ThreadItem[]) {
 export function describeBoardTool(toolName: string, input: Record<string, unknown>): string | null {
   const name = toolName.replace(/^mcp__board__/, "");
   const card = typeof input.card_id === "string" ? getCard(input.card_id) : undefined;
-  const label = card ? `“${card.title}”` : String(input.card_id ?? "a card");
+  const label = card ? `“${card.title}”` : asText(input.card_id, "a card");
   switch (name) {
     case "start_card":
       return `Start ${label}`;
     case "send_message":
-      return `Reply to ${label}: ${clip(String(input.text ?? ""), 140)}`;
+      return `Reply to ${label}: ${clip(asText(input.text), 140)}`;
     case "answer_permission":
       return `${input.allow ? "Allow" : "Deny"} ${card?.pending?.title ?? "its request"} on ${label}`;
     default:
@@ -230,7 +230,8 @@ export function threadBoardMcpServer(
         },
         ({ prompt, title, folder, start }) =>
           attempt(() => {
-            const parent = getCardId() ? getCard(getCardId()!) : undefined;
+            const parentId = getCardId();
+            const parent = parentId ? getCard(parentId) : undefined;
             const card = createBoardCard({
               prompt,
               title,

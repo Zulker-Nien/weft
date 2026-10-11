@@ -17,7 +17,7 @@ class FakeChild extends EventEmitter {
 
 const cp = vi.hoisted(() => ({
   which: vi.fn<(file: string, args: string[]) => string>(),
-  spawn: vi.fn(),
+  spawn: vi.fn<(...args: unknown[]) => FakeChild>(),
   children: [] as FakeChild[],
   // `auth status --json` and osascript calls; each test scripts how they answer.
   status: vi.fn<(cb: Callback) => void>(),
@@ -110,7 +110,7 @@ describe("startLogin", () => {
 
     expect(cp.which).toHaveBeenCalledWith("/usr/bin/which", ["claude"]);
     expect(cp.spawn).toHaveBeenCalledWith("/usr/local/bin/claude", ["auth", "login"], {
-      env: expect.objectContaining({ CLAUDE_CODE_ENTRYPOINT: "sdk-ts" }),
+      env: expect.objectContaining({ CLAUDE_CODE_ENTRYPOINT: "sdk-ts" }) as unknown,
       stdio: ["pipe", "pipe", "pipe"],
     });
     expect(view).toEqual({ backend: "claude", state: "running", output: "", startedAt: Date.now() });
@@ -120,7 +120,7 @@ describe("startLogin", () => {
   it("runs puku-cli for the puku backend", () => {
     login.startLogin("puku");
     expect(cp.which).toHaveBeenCalledWith("/usr/bin/which", ["puku-cli"]);
-    expect(cp.spawn.mock.calls[0][0]).toBe("/usr/local/bin/puku-cli");
+    expect(cp.spawn.mock.calls[0]![0]).toBe("/usr/local/bin/puku-cli");
   });
 
   it("looks the CLI up on PATH only once", () => {
@@ -273,7 +273,7 @@ describe("when auth login exits", () => {
     await flush();
 
     expect(cp.execFile).toHaveBeenCalledWith("/usr/local/bin/claude", ["auth", "status", "--json"], {
-      env: expect.objectContaining({ CLAUDE_CODE_ENTRYPOINT: "sdk-ts" }),
+      env: expect.objectContaining({ CLAUDE_CODE_ENTRYPOINT: "sdk-ts" }) as unknown,
       timeout: 10_000,
       maxBuffer: 1024 * 1024,
     });
@@ -337,8 +337,9 @@ describe("when auth login exits", () => {
 
   it("shows a non-Error thrown by the status check as text", async () => {
     login.startLogin("claude");
+    const notAnError: unknown = "status unavailable";
     cp.status.mockImplementation(() => {
-      throw "status unavailable";
+      throw notAnError;
     });
     child().emit("close", 0, null);
     await flush();
@@ -458,7 +459,7 @@ describe("cancelLogin", () => {
 
     login.cancelLogin("claude");
     expect(bus.publish).not.toHaveBeenCalled();
-    expect(login.loginRuns()[0].state).toBe("done");
+    expect(login.loginRuns()[0]!.state).toBe("done");
   });
 });
 
@@ -566,7 +567,7 @@ describe("openLoginInTerminal", () => {
     login.openLoginInTerminal("claude");
     expect(child().kill).toHaveBeenCalledTimes(1);
     expect(login.loginRuns()).toHaveLength(1);
-    expect(login.loginRuns()[0].state).toBe("terminal");
+    expect(login.loginRuns()[0]!.state).toBe("terminal");
   });
 
   it.each([

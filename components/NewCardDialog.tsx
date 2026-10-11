@@ -39,14 +39,33 @@ const BACKENDS: { id: Backend; label: string }[] = [
   { id: "puku", label: "puku-cli" },
 ];
 
-const MODELS = [
-  { id: "claude-fable-5-1", label: "Fable 5.1" },
-  { id: "claude-opus-5-5", label: "Opus 5.5" },
-  { id: "claude-sonnet-5-5", label: "Sonnet 5.5" },
-  { id: "claude-haiku-5-5", label: "Haiku 5.5" },
-];
+// The Puku gateway serves these three and answers any other id as puku-ai-2.8.
+const MODELS: Record<Backend, { id: string; label: string }[]> = {
+  claude: [
+    { id: "claude-fable-5-1", label: "Fable 5.1" },
+    { id: "claude-opus-5-5", label: "Opus 5.5" },
+    { id: "claude-sonnet-5-5", label: "Sonnet 5.5" },
+    { id: "claude-haiku-5-5", label: "Haiku 5.5" },
+  ],
+  puku: [
+    { id: "opus-4.8", label: "Opus 4.8" },
+    { id: "puku-ai-2.8", label: "Puku AI 2.8" },
+    { id: "puku-ai-2.7", label: "Puku AI 2.7" },
+  ],
+};
 
-const DEFAULT_MODEL = "claude-opus-5-5";
+const DEFAULT_MODEL: Record<Backend, string> = {
+  claude: "claude-opus-5-5",
+  puku: "opus-4.8",
+};
+
+// The last model picked for this CLI, or its default.
+function modelFor(backend: Backend) {
+  const saved = remembered(`${LAST_MODEL}.${backend}`);
+  return saved !== null && MODELS[backend].some((m) => m.id === saved)
+    ? saved
+    : DEFAULT_MODEL[backend];
+}
 
 // "" leaves it to the model's own default. A new thread uses the last card's choice, High at first.
 const DEFAULT_EFFORT: Effort = "high";
@@ -80,19 +99,26 @@ export default function NewCardDialog({
   onClose: () => void;
   onCreate: (input: NewCardInput) => Promise<void>;
 }) {
-  const [initial] = useState(() => (recipe ? (recipe.prompt ?? "") : (remembered(DRAFT) ?? "")));
+  const [initial] = useState(() =>
+    recipe ? (recipe.prompt ?? "") : (remembered(DRAFT) ?? ""),
+  );
   // The recipe's blanks still in the prompt; it can't start until they're filled in.
   const [blanks, setBlanks] = useState(() => blanksIn(recipe?.prompt ?? ""));
   const [cwd, setCwd] = useState(() => {
     // Home isn't a project, so only fall back to it when nothing better is known.
     const last = remembered(LAST_CWD);
-    return defaultCwd ?? (last && last !== home ? last : undefined) ?? recentCwd ?? last ?? home;
+    return (
+      defaultCwd ??
+      (last && last !== home ? last : undefined) ??
+      recentCwd ??
+      last ??
+      home
+    );
   });
-  const [backend, setBackend] = useState<Backend>(() => (remembered(LAST_BACKEND) as Backend | null) ?? "claude");
-  const [model, setModel] = useState(() => {
-    const saved = remembered(LAST_MODEL);
-    return MODELS.some((m) => m.id === saved) ? saved! : DEFAULT_MODEL;
-  });
+  const [backend, setBackend] = useState<Backend>(
+    () => (remembered(LAST_BACKEND) as Backend | null) ?? "claude",
+  );
+  const [model, setModel] = useState(() => modelFor(backend));
   const [effort, setEffort] = useState<Effort | "">(() => {
     const saved = remembered(LAST_EFFORT);
     return EFFORTS.find((e) => e.id === saved)?.id ?? DEFAULT_EFFORT;
@@ -122,9 +148,15 @@ export default function NewCardDialog({
   function saveDraft(markdown: string) {
     setError(null);
     // A recipe's prompt isn't your draft: the draft you had stays for next time.
-    if (recipe) return setBlanks(blanksIn(markdown));
+    if (recipe) {
+      setBlanks(blanksIn(markdown));
+      return;
+    }
     clearTimeout(draftTimer.current);
-    draftTimer.current = setTimeout(() => remember(DRAFT, markdown.trim() ? markdown : null), 300);
+    draftTimer.current = setTimeout(
+      () => remember(DRAFT, markdown.trim() ? markdown : null),
+      300,
+    );
   }
 
   function chooseFolder(folder: string) {
@@ -149,18 +181,31 @@ export default function NewCardDialog({
       return;
     }
     if (recipe && blanksIn(prompt).length) {
-      setError(`Fill in ${blanksIn(prompt).map((b) => `{${b}}`).join(", ")} first.`);
+      setError(
+        `Fill in ${blanksIn(prompt)
+          .map((b) => `{${b}}`)
+          .join(", ")} first.`,
+      );
       composer.current?.focus();
       return;
     }
     setBusy(true);
     try {
-      await onCreate({ prompt, cwd, backend, permissionMode, model: backend === "claude" ? model : undefined, effort: (backend === "claude" && effort) || undefined, recipeId: recipe?.id, start });
+      await onCreate({
+        prompt,
+        cwd,
+        backend,
+        permissionMode,
+        model,
+        effort: (backend === "claude" && effort) || undefined,
+        recipeId: recipe?.id,
+        start,
+      });
       clearTimeout(draftTimer.current);
       if (!recipe) remember(DRAFT, null);
       remember(LAST_CWD, cwd);
       remember(LAST_BACKEND, backend);
-      remember(LAST_MODEL, model);
+      remember(`${LAST_MODEL}.${backend}`, model);
       // Kept even when it's "", so picking Default effort sticks too.
       remember(LAST_EFFORT, effort);
       onClose();
@@ -173,128 +218,151 @@ export default function NewCardDialog({
   // The prompt is saved as a draft as it's typed, so Escape or a click outside keeps it.
   return (
     <aside className="flex w-[44%] min-w-[380px] shrink-0 flex-col bg-panel last:flex-1">
-        <div className="flex shrink-0 items-center justify-between border-b border-line px-5 py-3.5">
-          <h2 className="min-w-0 truncate text-[15px] font-medium text-ink" title={recipe?.description}>
-            {recipe ? `↻ ${recipe.title}` : "New thread"}
-          </h2>
-          <button onClick={onClose} aria-label="Close" className="rounded-md p-1 text-muted hover:bg-sunken hover:text-ink">
-            <Icon name="x" size={16} />
-          </button>
-        </div>
-        <div className="flex min-h-0 flex-1 flex-col px-5 pt-3">
-          <Composer
-            ref={composer}
-            variant="dialog"
-            cwd={cwd}
-            autoFocus
-            initial={initial}
-            onChange={saveDraft}
-            onSubmit={() => void submit(true)}
-            placeholder="What should this thread do? Paste screenshots or videos right where they belong, or hit the mic and talk."
-            sizeClass="h-full min-h-[180px]"
-            className="flex-1"
-          />
-        </div>
+      <div className="flex shrink-0 items-center justify-between border-b border-line px-5 py-3.5">
+        <h2
+          className="min-w-0 truncate text-[15px] font-medium text-ink"
+          title={recipe?.description}
+        >
+          {recipe ? `↻ ${recipe.title}` : "New thread"}
+        </h2>
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="rounded-md p-1 text-muted hover:bg-sunken hover:text-ink"
+        >
+          <Icon name="x" size={16} />
+        </button>
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col px-5 pt-3">
+        <Composer
+          ref={composer}
+          variant="dialog"
+          cwd={cwd}
+          autoFocus
+          initial={initial}
+          onChange={saveDraft}
+          onSubmit={() => void submit(true)}
+          placeholder="What should this thread do? Paste screenshots or videos right where they belong, or hit the mic and talk."
+          sizeClass="h-full min-h-[180px]"
+          className="flex-1"
+        />
+      </div>
 
-        <div className="flex shrink-0 flex-wrap items-center gap-2 px-5 pt-3">
-          <RepoPicker value={cwd} home={home} onChange={chooseFolder} />
+      <div className="flex shrink-0 flex-wrap items-center gap-2 px-5 pt-3">
+        <RepoPicker value={cwd} home={home} onChange={chooseFolder} />
 
-          {backend === "claude" && (
-            <label className="relative flex items-center gap-1.5 rounded-md border border-line-strong py-1.5 pl-2.5 pr-1.5 text-[12px] text-ink">
-              <span className="sr-only">Model</span>
-              <select
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                className="cursor-pointer appearance-none bg-transparent pr-4 font-medium outline-none"
-              >
-                {MODELS.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-              <Icon name="chevronDown" size={12} className="pointer-events-none absolute right-1.5" />
-            </label>
-          )}
-
-          {backend === "claude" && (
-            <label
-              className="relative flex items-center gap-1.5 rounded-md border border-line-strong py-1.5 pl-2.5 pr-1.5 text-[12px] text-ink"
-              title="How hard the model thinks before answering"
-            >
-              <span className="sr-only">Effort</span>
-              <select
-                value={effort}
-                onChange={(e) => setEffort(e.target.value as Effort | "")}
-                className="cursor-pointer appearance-none bg-transparent pr-4 font-medium outline-none"
-              >
-                {EFFORTS.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.label}
-                  </option>
-                ))}
-              </select>
-              <Icon name="chevronDown" size={12} className="pointer-events-none absolute right-1.5" />
-            </label>
-          )}
-
-          <ModePicker
-            value={permissionMode}
-            onChange={(mode) => {
-              pickedMode.current = true;
-              setPermissionMode(mode);
-            }}
-          />
-        </div>
-
-        <div className="flex shrink-0 items-center gap-3 px-5 pb-4 pt-3">
-          <div className="flex rounded-md border border-line-strong p-0.5" role="group" aria-label="CLI">
-            {BACKENDS.map((b) => (
-              <button
-                key={b.id}
-                type="button"
-                onClick={() => setBackend(b.id)}
-                aria-pressed={backend === b.id}
-                className={`rounded px-2.5 py-1 text-[12px] ${backend === b.id ? "bg-sunken font-medium text-ink" : "text-muted hover:text-ink"}`}
-              >
-                {b.label}
-              </button>
+        <label className="relative flex items-center gap-1.5 rounded-md border border-line-strong py-1.5 pl-2.5 pr-1.5 text-[12px] text-ink">
+          <span className="sr-only">Model</span>
+          <select
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            className="cursor-pointer appearance-none bg-transparent pr-4 font-medium outline-none"
+          >
+            {MODELS[backend].map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
             ))}
-          </div>
-          <p className="min-w-0 flex-1 truncate text-[12px]">
-            {error ? (
-              <span className="text-danger">{error}</span>
-            ) : blanks.length > 0 ? (
-              <span className="font-medium text-accent">Fill in {blanks.map((b) => `{${b}}`).join(" ")} in the prompt</span>
-            ) : alsoHere.length > 0 ? (
-              <span
-                className="flex min-w-0 items-center gap-1.5 text-warn"
-                title={`These threads share this folder's working tree:\n${alsoHere.map((c) => c.title).join("\n")}`}
-              >
-                <Icon name="alert" size={12} className="shrink-0" />
-                <span className="truncate">{alsoHereLine(alsoHere)}</span>
-              </span>
-            ) : (
-              <span className="text-faint">
-                <kbd className="font-sans">⌘↵</kbd> starts it · the title comes from the prompt
-              </span>
-            )}
-          </p>
-          <button
-            onClick={() => void submit(false)}
-            disabled={busy || blanks.length > 0}
-            className="shrink-0 rounded-md border border-line-strong px-3 py-1.5 text-[13px] text-ink hover:bg-sunken disabled:opacity-50"
+          </select>
+          <Icon
+            name="chevronDown"
+            size={12}
+            className="pointer-events-none absolute right-1.5"
+          />
+        </label>
+
+        {backend === "claude" && (
+          <label
+            className="relative flex items-center gap-1.5 rounded-md border border-line-strong py-1.5 pl-2.5 pr-1.5 text-[12px] text-ink"
+            title="How hard the model thinks before answering"
           >
-            Add to backlog
-          </button>
-          <button
-            onClick={() => void submit(true)}
-            disabled={busy || blanks.length > 0}
-            className="shrink-0 rounded-md bg-accent px-3.5 py-1.5 text-[13px] font-medium text-on-accent hover:opacity-90 disabled:opacity-50"
-          >
-            Start now
-          </button>
+            <span className="sr-only">Effort</span>
+            <select
+              value={effort}
+              onChange={(e) => setEffort(e.target.value as Effort | "")}
+              className="cursor-pointer appearance-none bg-transparent pr-4 font-medium outline-none"
+            >
+              {EFFORTS.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.label}
+                </option>
+              ))}
+            </select>
+            <Icon
+              name="chevronDown"
+              size={12}
+              className="pointer-events-none absolute right-1.5"
+            />
+          </label>
+        )}
+
+        <ModePicker
+          value={permissionMode}
+          onChange={(mode) => {
+            pickedMode.current = true;
+            setPermissionMode(mode);
+          }}
+        />
+      </div>
+
+      <div className="flex shrink-0 items-center gap-3 px-5 pb-4 pt-3">
+        <div
+          className="flex rounded-md border border-line-strong p-0.5"
+          role="group"
+          aria-label="CLI"
+        >
+          {BACKENDS.map((b) => (
+            <button
+              key={b.id}
+              type="button"
+              onClick={() => {
+                setBackend(b.id);
+                setModel(modelFor(b.id));
+              }}
+              aria-pressed={backend === b.id}
+              className={`rounded px-2.5 py-1 text-[12px] ${backend === b.id ? "bg-sunken font-medium text-ink" : "text-muted hover:text-ink"}`}
+            >
+              {b.label}
+            </button>
+          ))}
         </div>
+        <p className="min-w-0 flex-1 truncate text-[12px]">
+          {error ? (
+            <span className="text-danger">{error}</span>
+          ) : blanks.length > 0 ? (
+            <span className="font-medium text-accent">
+              Fill in {blanks.map((b) => `{${b}}`).join(" ")} in the prompt
+            </span>
+          ) : alsoHere.length > 0 ? (
+            <span
+              className="flex min-w-0 items-center gap-1.5 text-warn"
+              title={`These threads share this folder's working tree:\n${alsoHere.map((c) => c.title).join("\n")}`}
+            >
+              <Icon name="alert" size={12} className="shrink-0" />
+              <span className="truncate">{alsoHereLine(alsoHere)}</span>
+            </span>
+          ) : (
+            <span className="text-faint">
+              <kbd className="font-sans">⌘↵</kbd> starts it · the title comes
+              from the prompt
+            </span>
+          )}
+        </p>
+        <button
+          onClick={() => void submit(false)}
+          disabled={busy || blanks.length > 0}
+          className="shrink-0 rounded-md border border-line-strong px-3 py-1.5 text-[13px] text-ink hover:bg-sunken disabled:opacity-50"
+        >
+          Add to backlog
+        </button>
+        <button
+          onClick={() => void submit(true)}
+          disabled={busy || blanks.length > 0}
+          className="shrink-0 rounded-md bg-accent px-3.5 py-1.5 text-[13px] font-medium text-on-accent hover:opacity-90 disabled:opacity-50"
+        >
+          Start now
+        </button>
+      </div>
     </aside>
   );
 }

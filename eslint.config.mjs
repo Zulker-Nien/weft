@@ -1,15 +1,101 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
+import tseslint from "typescript-eslint";
+
+const TS_FILES = ["**/*.{ts,tsx,mts,cts}"];
+const LINE_COUNT = { skipBlankLines: true, skipComments: true };
+
+// Follow-up: split these files (longest first; SOUL.md hotspots) and extract the complex functions,
+// then lower or delete each entry. Never raise one: a file that grows past its number fails lint.
+const OVERSIZE = {
+  "lib/runner.test.ts": 1084,
+  "components/Board.tsx": 933,
+  "app/api/routes.test.ts": 762,
+  "lib/runner.ts": 715,
+  "lib/login.test.ts": 576,
+  "lib/import.test.ts": 568,
+  "components/Composer.tsx": 556,
+  "lib/board-tools.test.ts": 536,
+  "lib/library.test.ts": 510,
+  "lib/board-view.test.ts": 506,
+  "components/SettingsDialog.tsx": 471,
+  "lib/use-dictation.test.ts": 425,
+  "electron/main.cjs": 394,
+  "lib/import.ts": 391,
+  "lib/library.ts": 391,
+  "components/ReplyBox.tsx": 357,
+  "components/ProjectBar.tsx": 344,
+  "components/NewCardDialog.tsx": 331,
+  "lib/hotkeys.test.ts": 322,
+  "lib/board-tools.ts": 316,
+  "lib/login.ts": 316,
+  "lib/repos.test.ts": 307,
+  "components/RepoPicker.tsx": 304,
+};
+const COMPLEX = {
+  "components/Board.tsx": 75,
+  "lib/transcript.ts": 43,
+  "lib/format.ts": 37,
+  "lib/import.ts": 36,
+  "components/CardView.tsx": 32,
+  "lib/runner.ts": 26,
+  "components/MediaNode.tsx": 25,
+  // Brackets escaped: a glob reads [id] as a character class.
+  "app/api/cards/\\[id\\]/route.ts": 24,
+  "components/Composer.tsx": 24,
+  "lib/copilot-digest.ts": 22,
+  "components/ReplyBox.tsx": 21,
+  "lib/card-menu.ts": 20,
+  "components/MediaView.tsx": 19,
+  "components/ThreadView.tsx": 19,
+  "components/ProjectBar.tsx": 18,
+  "components/RepoPicker.tsx": 18,
+  "components/SettingsDialog.tsx": 18,
+  "components/use-board-menus.ts": 18,
+  "lib/repos.ts": 18,
+  "app/api/cards/route.ts": 17,
+  "components/NewCardDialog.tsx": 17,
+  "electron/main.cjs": 17,
+  "lib/library.ts": 17,
+  "app/api/settings/route.ts": 16,
+  "components/ThreadPanel.tsx": 16,
+  "electron/server.cjs": 16,
+};
 
 const eslintConfig = defineConfig([
   ...nextVitals,
-  ...nextTs,
-  // Electron's main and preload scripts are CommonJS.
+  // TypeScript rules apply to TypeScript; electron/*.cjs is plain CommonJS and keeps its require().
+  ...nextTs.map((c) => (c.rules ? { ...c, files: TS_FILES } : c)),
+  // Strict, type-aware rules for every TypeScript file.
   {
-    files: ["electron/**/*.cjs"],
-    rules: { "@typescript-eslint/no-require-imports": "off" },
+    files: TS_FILES,
+    extends: [tseslint.configs.strictTypeChecked],
+    languageOptions: { parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname } },
+    rules: {
+      // Numbers read fine in a template; objects and undefined are what this rule should catch.
+      "@typescript-eslint/restrict-template-expressions": ["error", { allowNumber: true }],
+      // `onClick={() => setOpen(true)}` is the React idiom, not a confusing void.
+      "@typescript-eslint/no-confusing-void-expression": ["error", { ignoreArrowShorthand: true }],
+    },
   },
+  // Tests index into fixtures they just built; `!` there says "this test set it up".
+  {
+    files: ["**/*.test.{ts,tsx}"],
+    rules: { "@typescript-eslint/no-non-null-assertion": "off" },
+  },
+  // Keep files and functions small (SOUL.md: split hotspots, Fowler's Extract Function).
+  {
+    rules: {
+      "max-lines": ["error", { max: 300, ...LINE_COUNT }],
+      complexity: ["error", 15],
+    },
+  },
+  // The ratchet: files over those limits today, each held at its current size so it can only shrink.
+  ...Object.entries(OVERSIZE).map(([file, max]) => ({ files: [file], rules: { "max-lines": ["error", { max, ...LINE_COUNT }] } })),
+  ...Object.entries(COMPLEX).map(([file, max]) => ({ files: [file], rules: { complexity: ["error", max] } })),
+  // Weft is an Electron app showing local files; next/image's optimizer has nothing to do there.
+  { rules: { "@next/next/no-img-element": "off" } },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
@@ -20,6 +106,7 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "coverage/**",
   ]),
 ]);
 

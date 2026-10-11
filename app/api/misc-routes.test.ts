@@ -3,17 +3,17 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-// The read-only picker routes (repos, skills, coverage), the new-thread splash page, and the error
+// The read-only picker routes (repos, skills, quality), the new-thread splash page, and the error
 // paths of the projects routes. Every lib they call is mocked except resolveFolder, which gets real temp folders.
 
 vi.mock("next/server", () => ({ connection: async () => {} }));
 
 vi.mock("@/lib/repos", () => ({
   localRepos: vi.fn(() => [{ path: "/dev/app", name: "app", git: true, activity: 1 }]),
-  githubRepos: vi.fn(async () => [{ fullName: "me/app", private: false, pushedAt: 1 }]),
+  githubRepos: vi.fn(() => Promise.resolve([{ fullName: "me/app", private: false, pushedAt: 1 }])),
 }));
 vi.mock("@/lib/skills", () => ({ listSkills: vi.fn(() => [{ name: "weft:done", description: "d", source: "weft" }]) }));
-vi.mock("@/lib/coverage", () => ({ findCoverage: vi.fn(() => ({ lines: 90, root: "/dev/app" })) }));
+vi.mock("@/lib/quality", () => ({ measureQuality: vi.fn(() => ({ score: 90, root: "/dev/app" })) }));
 vi.mock("@/lib/glance", () => ({ newThreadUrl: vi.fn(() => "file:///pages/new-thread.html") }));
 vi.mock("@/lib/settings", () => ({
   listProjects: vi.fn(() => []),
@@ -23,14 +23,14 @@ vi.mock("@/lib/settings", () => ({
 
 const repos = await import("@/lib/repos");
 const skills = await import("@/lib/skills");
-const coverage = await import("@/lib/coverage");
+const quality = await import("@/lib/quality");
 const glance = await import("@/lib/glance");
 const settings = await import("@/lib/settings");
 
 const reposRoute = await import("./repos/route");
 const githubRoute = await import("./repos/github/route");
 const skillsRoute = await import("./skills/route");
-const coverageRoute = await import("./coverage/route");
+const qualityRoute = await import("./quality/route");
 const newThreadPageRoute = await import("./new-thread-page/route");
 const projectsRoute = await import("./projects/route");
 const newProjectRoute = await import("./projects/new/route");
@@ -57,7 +57,7 @@ const reads: [string, (r: Request) => Promise<Response>][] = [
   ["GET /repos", (r) => reposRoute.GET(r)],
   ["GET /repos/github", (r) => githubRoute.GET(r)],
   ["GET /skills", (r) => skillsRoute.GET(r)],
-  ["GET /coverage", (r) => coverageRoute.GET(r)],
+  ["GET /quality", (r) => qualityRoute.GET(r)],
 ];
 
 describe("guard", () => {
@@ -67,7 +67,7 @@ describe("guard", () => {
     expect(repos.localRepos).not.toHaveBeenCalled();
     expect(repos.githubRepos).not.toHaveBeenCalled();
     expect(skills.listSkills).not.toHaveBeenCalled();
-    expect(coverage.findCoverage).not.toHaveBeenCalled();
+    expect(quality.measureQuality).not.toHaveBeenCalled();
   });
 
   it.each(reads)("%s needs no x-threadboard header", async (_name, call) => {
@@ -129,31 +129,26 @@ describe("GET /skills", () => {
   });
 });
 
-describe("GET /coverage", () => {
-  it("is null without ?cwd= and doesn't look", async () => {
-    const res = await coverageRoute.GET(req("/coverage", { headers: READ }));
-    expect(await res.json()).toEqual({ coverage: null });
-    expect(coverage.findCoverage).not.toHaveBeenCalled();
+describe("GET /quality", () => {
+  it("is null without ?cwd= and doesn't measure", async () => {
+    const res = await qualityRoute.GET(req("/quality", { headers: READ }));
+    expect(await res.json()).toEqual({ quality: null });
+    expect(quality.measureQuality).not.toHaveBeenCalled();
   });
 
-  it("returns the coverage found for the folder", async () => {
-    const res = await coverageRoute.GET(req("/coverage?cwd=%2Fdev%2Fapp", { headers: READ }));
-    expect(await res.json()).toEqual({ coverage: { lines: 90, root: "/dev/app" } });
-    expect(coverage.findCoverage).toHaveBeenCalledWith("/dev/app");
+  it("returns the report for the folder", async () => {
+    const res = await qualityRoute.GET(req("/quality?cwd=%2Fdev%2Fapp", { headers: READ }));
+    expect(await res.json()).toEqual({ quality: { score: 90, root: "/dev/app" } });
+    expect(quality.measureQuality).toHaveBeenCalledWith("/dev/app");
   });
 
-  it("passes through null when the project has no coverage report", async () => {
-    vi.mocked(coverage.findCoverage).mockReturnValueOnce(null);
-    expect(await (await coverageRoute.GET(req("/coverage?cwd=/x", { headers: READ }))).json()).toEqual({ coverage: null });
-  });
-
-  it("500s when the report can't be read", async () => {
-    vi.mocked(coverage.findCoverage).mockImplementationOnce(() => {
-      throw new Error("Unexpected token");
+  it("500s when measuring fails", async () => {
+    vi.mocked(quality.measureQuality).mockImplementationOnce(() => {
+      throw new Error("EACCES");
     });
-    const res = await coverageRoute.GET(req("/coverage?cwd=/x", { headers: READ }));
+    const res = await qualityRoute.GET(req("/quality?cwd=/x", { headers: READ }));
     expect(res.status).toBe(500);
-    expect(await res.json()).toEqual({ error: "Unexpected token" });
+    expect(await res.json()).toEqual({ error: "EACCES" });
   });
 });
 

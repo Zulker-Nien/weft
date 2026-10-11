@@ -4,6 +4,7 @@ import path from "node:path";
 import { saveAttachmentData } from "./attachments";
 import { clip } from "./format";
 import { MEDIA_REF, attachmentName, mediaKind, mediaMarkdown } from "./media";
+import { globalSingleton } from "./global-singleton";
 
 // Images that reach a thread some other way than being pasted into a message: a screenshot a tool
 // returned, an image pasted into a Claude Code session that Weft picked up, or a file the agent shows
@@ -21,9 +22,8 @@ interface Block {
 // Bigger files than this aren't copied; the ref is left as it is.
 const MAX_COPY_BYTES = 200 * 1024 ** 2;
 
-const g = globalThis as unknown as { __threadboardCopied?: Map<string, string> };
 // Files already copied, by "path|size|mtime", so a transcript read doesn't hash them again.
-const copied = (g.__threadboardCopied ??= new Map<string, string>());
+const copied = globalSingleton("__threadboardCopied", () => new Map<string, string>());
 
 // Saves an image block's bytes and returns the attachment, or undefined if it isn't one.
 function saveImageBlock(block: Block, name: string) {
@@ -44,7 +44,7 @@ export function toolResult(content: unknown): { result: string; images?: string[
   if (!Array.isArray(content)) return { result: "" };
   const texts: string[] = [];
   const images: string[] = [];
-  for (const block of content as Block[]) {
+  for (const block of content as (Block | null | undefined)[]) {
     if (block?.type === "text") texts.push(block.text ?? "");
     else if (block?.type === "image") {
       const saved = saveImageBlock(block, "screenshot");

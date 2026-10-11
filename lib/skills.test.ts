@@ -103,7 +103,7 @@ describe("listSkills", () => {
 describe("skill descriptions", () => {
   const describeOf = (text: string) => {
     skill(userSkills(), "s", text);
-    return listSkills()[0].description;
+    return listSkills()[0]!.description;
   };
 
   it("strips matching quotes from a value", () => {

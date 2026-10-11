@@ -169,7 +169,7 @@ export function messageContent(text: string): Content {
   const blocks: Exclude<Content, string> = [];
   let last = 0;
   for (const match of text.matchAll(MEDIA_REF)) {
-    const file = path.resolve(match[2] ?? match[3]);
+    const file = path.resolve(match[2] ?? match[3] ?? "");
     if (path.dirname(file) !== ATTACHMENTS_DIR || !IMAGE_EXTENSIONS.has(extensionOf(file))) continue;
     const image = imageData(file);
     if (!image) continue;

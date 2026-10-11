@@ -37,20 +37,30 @@ describe("useToast", () => {
   it("clears itself after 5 seconds", () => {
     const { result } = renderHook(() => useToast());
     act(() => result.current.setToast("Saved"));
-    act(() => vi.advanceTimersByTime(4999));
+    act(() => {
+      vi.advanceTimersByTime(4999);
+    });
     expect(result.current.toast).not.toBeNull();
-    act(() => vi.advanceTimersByTime(1));
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
     expect(result.current.toast).toBeNull();
   });
 
   it("restarts the 5 seconds when a new toast replaces the old one", () => {
     const { result } = renderHook(() => useToast());
     act(() => result.current.setToast("First"));
-    act(() => vi.advanceTimersByTime(4000));
+    act(() => {
+      vi.advanceTimersByTime(4000);
+    });
     act(() => result.current.setToast("Second"));
-    act(() => vi.advanceTimersByTime(4000));
+    act(() => {
+      vi.advanceTimersByTime(4000);
+    });
     expect(result.current.toast?.text).toBe("Second");
-    act(() => vi.advanceTimersByTime(1000));
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
     expect(result.current.toast).toBeNull();
   });
 

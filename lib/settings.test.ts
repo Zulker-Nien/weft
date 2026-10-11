@@ -134,7 +134,7 @@ describe("settings", () => {
     s = await load();
     const view = s.settingsView();
     expect(view.keepAliveMinutes).toBe(30);
-    expect(view.projects[0].path).toBe("/x");
+    expect(view.projects[0]!.path).toBe("/x");
     expect(view.defaultThreadPrompt).toBe(s.DEFAULT_THREAD_PROMPT);
     expect(fs.existsSync(path.join(dir, "settings.json"))).toBe(true);
   });

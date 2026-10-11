@@ -1,5 +1,6 @@
 import { connection } from "next/server";
 import { resolveFolder } from "@/lib/folders";
+import { asText } from "@/lib/format";
 import { fail, guard } from "@/lib/guard";
 import { listProjects, removeProject, touchProject } from "@/lib/settings";
 
@@ -17,7 +18,7 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Record<string, unknown>;
     // resolveFolder treats an empty path as the home folder, which is never what's meant here.
-    if (!String(body.path ?? "").trim()) throw new Error("Choose a folder.");
+    if (!asText(body.path).trim()) throw new Error("Choose a folder.");
     const folder = resolveFolder(body.path);
     touchProject(folder);
     return Response.json({ path: folder, projects: listProjects() });
@@ -32,7 +33,7 @@ export async function DELETE(req: Request) {
   if (denied) return denied;
   try {
     const body = (await req.json()) as Record<string, unknown>;
-    removeProject(String(body.path ?? ""));
+    removeProject(asText(body.path));
     return Response.json({ projects: listProjects() });
   } catch (err) {
     return fail(err);

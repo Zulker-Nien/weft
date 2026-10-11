@@ -25,8 +25,8 @@ const lib = await import("./library");
 const store = await import("./store");
 const bus = await import("./bus");
 
-const LIB = path.join(process.env.THREADBOARD_DATA!, "library");
-const HOME_SKILLS = path.join(process.env.HOME!, ".claude", "skills");
+const LIB = path.join(process.env.THREADBOARD_DATA, "library");
+const HOME_SKILLS = path.join(process.env.HOME, ".claude", "skills");
 
 const card = (over: Partial<Card> = {}) =>
   ({ id: "c1", title: "Card", prompt: "Do the thing", cwd: path.join(root, "proj"), backend: "claude", column: "review", createdAt: 0, updatedAt: 0, ...over }) as Card;
@@ -34,7 +34,7 @@ const card = (over: Partial<Card> = {}) =>
 const note = (over: Partial<Omit<LibraryItem, "id" | "createdAt" | "updatedAt">> = {}) =>
   ({ kind: "note", scope: "mine", title: "A note", folder: "/p/one", ...over }) as Omit<LibraryItem, "id" | "createdAt" | "updatedAt">;
 
-const index = (dir: string) => JSON.parse(fs.readFileSync(path.join(dir, "items.json"), "utf8")).items as LibraryItem[];
+const index = (dir: string) => (JSON.parse(fs.readFileSync(path.join(dir, "items.json"), "utf8")) as { items: LibraryItem[] }).items;
 
 beforeEach(() => {
   fs.rmSync(process.env.THREADBOARD_DATA!, { recursive: true, force: true });
@@ -54,7 +54,7 @@ describe("addItem, getItem, listLibrary", () => {
   it("writes mine to library/items.json and a project's to library/projects/<slug>, and announces the change", () => {
     const mine = lib.addItem(note(), "m1");
     const proj = lib.addItem(note({ scope: "project", folder: "/p/one" }), "p1");
-    expect(mine).toMatchObject({ id: "m1", kind: "note", createdAt: expect.any(Number) });
+    expect(mine).toMatchObject({ id: "m1", kind: "note", createdAt: expect.any(Number) as unknown });
     expect(mine.updatedAt).toBe(mine.createdAt);
     expect(index(LIB).map((i) => i.id)).toEqual(["m1"]);
     expect(index(path.join(LIB, "projects", "-p-one")).map((i) => i.id)).toEqual(["p1"]);
@@ -422,14 +422,8 @@ Fill the blanks in {braces} from the arguments, in order: $ARGUMENTS. Ask for an
 
 describe("starCard", () => {
   const deps = (url?: string | Error, answer: string | Error = "") => ({
-    paneUrl: vi.fn(async () => {
-      if (url instanceof Error) throw url;
-      return url;
-    }),
-    complete: vi.fn<(prompt: string) => Promise<string>>(async () => {
-      if (answer instanceof Error) throw answer;
-      return answer;
-    }),
+    paneUrl: vi.fn(() => (url instanceof Error ? Promise.reject(url) : Promise.resolve(url))),
+    complete: vi.fn<(prompt: string) => Promise<string>>(() => (answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer))),
   });
 
   it("saves a recipe as a marked skill and stars the card with it", async () => {
@@ -438,7 +432,7 @@ describe("starCard", () => {
     db.threads.set("c1", [{ kind: "result", text: "Made a deck" }] as ThreadItem[]);
     const d = deps(undefined, JSON.stringify({ name: "Pitch Deck", title: "Pitch", description: "Deck", prompt: "Pitch {product}", blanks: [{ name: "product", hint: "what" }], makes: ["deck"] }));
     const item = await lib.starCard(c, "recipe", "mine", d);
-    expect(d.complete.mock.calls[0][0]).toContain("Made a deck");
+    expect(d.complete.mock.calls[0]![0]).toContain("Made a deck");
     expect(item).toMatchObject({ kind: "recipe", scope: "mine", title: "Pitch", skill: "pitch-deck", prompt: "Pitch {product}", blanks: [{ name: "product", hint: "what" }], makes: ["deck"], cardId: "c1" });
     expect(item.skillPath).toBe(path.join(HOME_SKILLS, "pitch-deck"));
     expect(fs.readFileSync(path.join(item.skillPath!, "SKILL.md"), "utf8")).toContain(lib.SKILL_MARK);
@@ -515,14 +509,14 @@ describe("recipeRuns", () => {
   it("lists the cards run from a recipe, newest first, from the board by default", () => {
     db.cards = [card({ id: "a", recipeId: "r", createdAt: 1 }), card({ id: "b", recipeId: "x", createdAt: 3 }), card({ id: "c", recipeId: "r", createdAt: 2 })];
     expect(lib.recipeRuns("r").map((c) => c.id)).toEqual(["c", "a"]);
-    expect(lib.recipeRuns("r", [db.cards[0]]).map((c) => c.id)).toEqual(["a"]);
+    expect(lib.recipeRuns("r", [db.cards[0]!]).map((c) => c.id)).toEqual(["a"]);
   });
 });
 
 describe("recipePage", () => {
   const home = "/Users/me";
-  const recipe = (over: Partial<LibraryItem> = {}) =>
-    ({ id: "r", kind: "recipe", scope: "mine", title: "Pitch <it>", folder: "/dev/app", createdAt: 0, updatedAt: 0, ...over }) as LibraryItem;
+  const recipe = (over: Partial<LibraryItem> = {}): LibraryItem =>
+    ({ id: "r", kind: "recipe", scope: "mine", title: "Pitch <it>", folder: "/dev/app", createdAt: 0, updatedAt: 0, ...over });
   const run = (over: Partial<Card>) => card({ title: "Run", column: "backlog", createdAt: 0, updatedAt: 0, ...over });
 
   it("shows a fresh recipe with no blanks, no runs and no stats", () => {

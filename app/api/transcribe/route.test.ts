@@ -4,7 +4,7 @@ import { GET, POST } from "./route";
 vi.mock("next/server", () => ({ connection: async () => {} }));
 vi.mock("@/lib/transcribe", () => ({
   dictationStatus: vi.fn(() => ({ available: true, model: "ggml-base.en.bin" })),
-  transcribe: vi.fn(async () => "hello world"),
+  transcribe: vi.fn(() => Promise.resolve("hello world")),
 }));
 
 const { dictationStatus, transcribe } = await import("@/lib/transcribe");
@@ -45,7 +45,7 @@ describe("POST /api/transcribe", () => {
   ])("picks the file extension from content type %j", async (type, ext) => {
     // A Blob body with no type sends no content-type at all.
     await post(new Blob(["audio"]), type ? { "content-type": type } : {});
-    expect(vi.mocked(transcribe).mock.calls[0][1]).toBe(ext);
+    expect(vi.mocked(transcribe).mock.calls[0]![1]).toBe(ext);
   });
 
   it("is a 400 when nothing was recorded", async () => {

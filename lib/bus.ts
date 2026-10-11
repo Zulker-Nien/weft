@@ -1,9 +1,9 @@
 import { EventEmitter } from "node:events";
 import type { BoardEvent } from "./types";
+import { globalSingleton } from "./global-singleton";
 
 // One emitter per server process, kept on globalThis so dev-mode reloads don't split it.
-const g = globalThis as unknown as { __threadboardBus?: EventEmitter };
-const bus = (g.__threadboardBus ??= new EventEmitter().setMaxListeners(100));
+const bus = globalSingleton("__threadboardBus", () => new EventEmitter().setMaxListeners(100));
 
 export function publish(event: BoardEvent) {
   bus.emit("event", event);

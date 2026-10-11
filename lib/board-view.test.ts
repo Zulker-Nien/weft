@@ -202,7 +202,7 @@ describe("summarizeProjects", () => {
     const p: Project = { path: "/p", lastUsedAt: 10_000 };
     const c = card({ id: "c", cwd: "/p", lastActivity: 5_000 });
     const rows = summarizeProjects([p], [c], identity);
-    expect(rows[0].lastActivity).toBe(10_000);
+    expect(rows[0]!.lastActivity).toBe(10_000);
   });
 });
 

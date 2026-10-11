@@ -18,7 +18,8 @@ export type Entry =
 
 // Tool calls, and the permission requests they made, fold together. An answered question stays out,
 // since its answer is part of the conversation.
-export function groupThread(items: ThreadItem[]): Entry[] {
+// A stored thread can hold a null hole, so items are checked one by one.
+export function groupThread(items: readonly (ThreadItem | null | undefined)[]): Entry[] {
   const entries: Entry[] = [];
   items.forEach((item, key) => {
     if (!item) return;
@@ -70,7 +71,7 @@ function ToolLine({ item, live }: { item: ToolCall; live: boolean }) {
       {item.images && (
         <div className="flex flex-wrap gap-2 border-t border-line p-2">
           {item.images.map((src) => (
-            <MediaView key={src} src={src} alt="Screenshot" thumb={item.images!.length > 1} />
+            <MediaView key={src} src={src} alt="Screenshot" thumb={(item.images?.length ?? 0) > 1} />
           ))}
         </div>
       )}

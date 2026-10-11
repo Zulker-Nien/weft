@@ -20,10 +20,10 @@ const bt = await import("./browser-tools");
 const fetchMock = vi.fn();
 vi.stubGlobal("fetch", fetchMock);
 const reply = (data: Record<string, unknown>, ok = true, statusText = "Bad Request") =>
-  fetchMock.mockResolvedValueOnce({ ok, statusText, json: async () => data });
+  fetchMock.mockResolvedValueOnce({ ok, statusText, json: () => Promise.resolve(data) });
 const sent = (i = 0) => {
   const [url, init] = fetchMock.mock.calls[i] as [string, RequestInit];
-  return { url, init, body: JSON.parse(String(init.body)) };
+  return { url, init, body: JSON.parse(init.body as string) as Record<string, unknown> };
 };
 
 let card: string | undefined = "c1";
@@ -125,19 +125,19 @@ describe("browserMcpServer", () => {
   it("read_page returns the url, title and visible text", async () => {
     reply({ url: "https://a.test", title: "A", text: "Hello world" });
     const r = await run("read_page");
-    expect(r.content[0].text).toBe("URL: https://a.test\nTitle: A\n\nHello world");
-    expect(sent()).toMatchObject({ url: expect.stringMatching(/\/browser\/text$/), body: { key: "c1" } });
+    expect(r.content[0]!.text).toBe("URL: https://a.test\nTitle: A\n\nHello world");
+    expect(sent()).toMatchObject({ url: expect.stringMatching(/\/browser\/text$/) as unknown, body: { key: "c1" } });
   });
 
   it("click and type_text report success, or an error when nothing matches", async () => {
     reply({ found: true });
-    expect((await run("click", { selector: "#go" })).content[0].text).toBe("Clicked #go");
+    expect((await run("click", { selector: "#go" })).content[0]!.text).toBe("Clicked #go");
     expect(sent(0).body).toEqual({ selector: "#go", key: "c1" });
     reply({ found: false });
     expect(await run("click", { selector: "#nope" })).toMatchObject({ isError: true, content: [{ text: "No element matches #nope" }] });
 
     reply({ found: true });
-    expect((await run("type_text", { selector: "input", text: "hi" })).content[0].text).toBe("Typed into input");
+    expect((await run("type_text", { selector: "input", text: "hi" })).content[0]!.text).toBe("Typed into input");
     expect(sent(2).body).toEqual({ selector: "input", text: "hi", key: "c1" });
     reply({ found: false });
     expect(await run("type_text", { selector: "#x", text: "hi" })).toMatchObject({ isError: true, content: [{ text: "No element matches #x" }] });
@@ -169,7 +169,7 @@ describe("the screenshot tool", () => {
 
     const upper = path.join(tmp, "Shot.PNG");
     reply({ png });
-    expect((await run("screenshot", { save_to: upper })).content[1].text).toBe(`Saved to ${upper}`);
+    expect((await run("screenshot", { save_to: upper })).content[1]!.text).toBe(`Saved to ${upper}`);
     expect(fs.existsSync(upper)).toBe(true);
   });
 
@@ -199,7 +199,7 @@ describe("outside the desktop app", () => {
     const bare = await import("./browser-tools");
     const s = bare.browserMcpServer(() => "c1") as unknown as typeof server;
     const r = await s.tools.find((t) => t.name === "read_page")!.handler({});
-    expect(r).toMatchObject({ isError: true, content: [{ text: expect.stringMatching(/only exists in the desktop app/) }] });
+    expect(r).toMatchObject({ isError: true, content: [{ text: expect.stringMatching(/only exists in the desktop app/) as unknown }] });
     expect(await bare.paneUrl("k")).toBeUndefined();
     expect(await bare.paneThumb("k")).toBeUndefined();
     await expect(bare.openInPane("u", "k")).rejects.toThrow(/desktop app/);

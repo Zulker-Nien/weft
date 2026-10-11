@@ -56,6 +56,16 @@ export interface LimitWindow {
   resetsAt?: number;
 }
 
+// The prompt cache after the thread's last request: when it went out (unix ms), how long the cache
+// lives after it (seconds), the share of it read from cache (0-100), and its size in tokens, which is
+// what the next request sends again at full price once the cache has gone cold.
+export interface CacheState {
+  at: number;
+  ttl: number;
+  hit: number;
+  tokens: number;
+}
+
 // What the thread panel's status strip shows (see components/StatusStrip.tsx).
 export interface CardStats {
   model?: string;
@@ -69,6 +79,7 @@ export interface CardStats {
   removed?: number;
   fiveHour?: LimitWindow;
   sevenDay?: LimitWindow;
+  cache?: CacheState;
 }
 
 // A message written now and sent to the thread later, at `at` (unix ms).

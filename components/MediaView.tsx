@@ -59,7 +59,6 @@ export default function MediaView({ src, alt = "", thumb = false }: { src: strin
         title={alt || "Open image"}
         className={`block max-w-full overflow-hidden rounded-lg border border-line bg-sunken hover:border-line-strong ${thumb ? "" : "my-1"}`}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element -- local attachments, sized by the thread */}
         <img
           src={url}
           alt={alt}
@@ -76,7 +75,6 @@ export default function MediaView({ src, alt = "", thumb = false }: { src: strin
             onClick={() => setZoomed(false)}
             style={NO_DRAG} className="fixed inset-0 z-50 flex cursor-zoom-out items-center justify-center bg-black/80 p-8"
           >
-            {/* eslint-disable-next-line @next/next/no-img-element -- full-size view of the same image */}
             <img src={url} alt={alt} className="max-h-full max-w-full rounded-md object-contain shadow-2xl" />
           </div>,
           document.body,

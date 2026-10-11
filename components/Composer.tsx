@@ -12,6 +12,7 @@ import { currentBinding, formatBinding, matches } from "@/lib/shortcuts";
 import { useDictation } from "@/lib/use-dictation";
 import Icon, { Spinner, type IconName } from "./Icon";
 import { Media, insertFiles, pendingMedia } from "./MediaNode";
+import Tip from "./Tip";
 
 // The prompt box for new threads and replies: rich text that reads and writes Markdown, images and
 // videos pasted or dropped right where they go, dictation, and a raw Markdown view.
@@ -43,8 +44,9 @@ function slashAtCursor(e: Editor): SlashQuery | null {
   if (!selection.empty || e.isActive("codeBlock")) return null;
   const { $from } = selection;
   const match = SLASH.exec($from.parent.textBetween(0, $from.parentOffset, undefined, "\ufffc"));
-  if (!match) return null;
-  return { query: match[2], from: $from.pos - match[2].length - 1, to: $from.pos };
+  const query = match?.[2];
+  if (query === undefined) return null;
+  return { query, from: $from.pos - query.length - 1, to: $from.pos };
 }
 
 function rankSkills(skills: SkillInfo[], query: string) {
@@ -122,18 +124,19 @@ function ToolButton({
   disabled?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      aria-pressed={active}
-      title={label}
-      className={`rounded p-1.5 ${active ? "bg-accent-soft text-accent" : "text-muted hover:bg-sunken hover:text-ink"} disabled:opacity-40`}
-    >
-      <Icon name={icon} size={14} />
-    </button>
+    <Tip text={label} className="inline-flex">
+      <button
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onClick}
+        disabled={disabled}
+        aria-label={label}
+        aria-pressed={active}
+        className={`rounded p-1.5 ${active ? "bg-accent-soft text-accent" : "text-muted hover:bg-sunken hover:text-ink"} disabled:opacity-40`}
+      >
+        <Icon name={icon} size={14} />
+      </button>
+    </Tip>
   );
 }
 
@@ -166,15 +169,35 @@ function FormatBar({ editor }: { editor: Editor }) {
     <div className="flex flex-wrap items-center gap-0.5">
       <ToolButton icon="bold" label="Bold (⌘B)" active={on.bold} onClick={() => run().toggleBold().run()} />
       <ToolButton icon="italic" label="Italic (⌘I)" active={on.italic} onClick={() => run().toggleItalic().run()} />
-      <ToolButton icon="strike" label="Strikethrough (⌘⇧S)" active={on.strike} onClick={() => run().toggleStrike().run()} />
+      <ToolButton
+        icon="strike"
+        label="Strikethrough (⌘⇧S)"
+        active={on.strike}
+        onClick={() => run().toggleStrike().run()}
+      />
       <ToolButton icon="code" label="Inline code (⌘E)" active={on.code} onClick={() => run().toggleCode().run()} />
       <ToolButton icon="link" label="Link" active={on.link} onClick={link} />
       <span className="mx-1 h-4 w-px bg-line" />
-      <ToolButton icon="heading" label="Heading" active={on.heading} onClick={() => run().toggleHeading({ level: 2 }).run()} />
+      <ToolButton
+        icon="heading"
+        label="Heading"
+        active={on.heading}
+        onClick={() => run().toggleHeading({ level: 2 }).run()}
+      />
       <ToolButton icon="list" label="Bulleted list" active={on.bullet} onClick={() => run().toggleBulletList().run()} />
-      <ToolButton icon="listOrdered" label="Numbered list" active={on.ordered} onClick={() => run().toggleOrderedList().run()} />
+      <ToolButton
+        icon="listOrdered"
+        label="Numbered list"
+        active={on.ordered}
+        onClick={() => run().toggleOrderedList().run()}
+      />
       <ToolButton icon="quote" label="Quote" active={on.quote} onClick={() => run().toggleBlockquote().run()} />
-      <ToolButton icon="codeBlock" label="Code block" active={on.codeBlock} onClick={() => run().toggleCodeBlock().run()} />
+      <ToolButton
+        icon="codeBlock"
+        label="Code block"
+        active={on.codeBlock}
+        onClick={() => run().toggleCodeBlock().run()}
+      />
     </div>
   );
 }
@@ -182,32 +205,36 @@ function FormatBar({ editor }: { editor: Editor }) {
 function MicButton({ dictation }: { dictation: ReturnType<typeof useDictation> }) {
   const { state, level, seconds: elapsed } = dictation;
   const recording = state === "recording";
+  const tip = recording
+    ? "Stop and insert the text (Esc cancels)"
+    : `Dictate (${formatBinding(currentBinding("dictation"))})`;
   return (
-    <button
-      type="button"
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={dictation.toggle}
-      disabled={state === "transcribing"}
-      aria-label={recording ? "Stop dictation" : "Dictate"}
-      aria-pressed={recording}
-      title={recording ? "Stop and insert the text (Esc cancels)" : `Dictate (${formatBinding(currentBinding("dictation"))})`}
-      className={`relative flex items-center gap-1.5 rounded-full px-2 py-1.5 text-[12px] ${
-        recording ? "bg-danger text-white" : "text-muted hover:bg-sunken hover:text-ink"
-      } disabled:opacity-60`}
-    >
-      {recording && (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 rounded-full bg-danger/40 transition-transform duration-75"
-          style={{ transform: `scale(${1 + level * 0.45})` }}
-        />
-      )}
-      <span className="relative flex items-center gap-1.5">
-        {state === "transcribing" ? <Spinner size={12} /> : <Icon name={recording ? "stop" : "mic"} size={14} />}
-        {recording && <span className="tabular-nums">{seconds(elapsed)}</span>}
-        {state === "transcribing" && <span>Transcribing…</span>}
-      </span>
-    </button>
+    <Tip text={tip} className="inline-flex">
+      <button
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={dictation.toggle}
+        disabled={state === "transcribing"}
+        aria-label={recording ? "Stop dictation" : "Dictate"}
+        aria-pressed={recording}
+        className={`relative flex items-center gap-1.5 rounded-full px-2 py-1.5 text-[12px] ${
+          recording ? "bg-danger text-white" : "text-muted hover:bg-sunken hover:text-ink"
+        } disabled:opacity-60`}
+      >
+        {recording && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 rounded-full bg-danger/40 transition-transform duration-75"
+            style={{ transform: `scale(${1 + level * 0.45})` }}
+          />
+        )}
+        <span className="relative flex items-center gap-1.5">
+          {state === "transcribing" ? <Spinner size={12} /> : <Icon name={recording ? "stop" : "mic"} size={14} />}
+          {recording && <span className="tabular-nums">{seconds(elapsed)}</span>}
+          {state === "transcribing" && <span>Transcribing…</span>}
+        </span>
+      </button>
+    </Tip>
   );
 }
 
@@ -285,7 +312,9 @@ const Composer = forwardRef<
       }),
     ],
     editorProps: {
-      attributes: { class: `composer-content md-body outline-none px-3.5 py-3 ${sizeClass} overflow-y-auto` },
+      attributes: {
+        class: `composer-content md-body outline-none px-3.5 py-3 ${sizeClass} overflow-y-auto`,
+      },
       handlePaste: (view, event) => {
         const files = [...(event.clipboardData?.files ?? [])];
         const text = event.clipboardData?.getData("text/plain") ?? "";
@@ -306,7 +335,10 @@ const Composer = forwardRef<
         const files = [...(event.dataTransfer?.files ?? [])];
         if (moved || !files.length || !editorRef.current) return false;
         event.preventDefault();
-        const pos = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
+        const pos = view.posAtCoords({
+          left: event.clientX,
+          top: event.clientY,
+        })?.pos;
         insertFiles(editorRef.current, files, pos);
         return true;
       },
@@ -318,13 +350,22 @@ const Composer = forwardRef<
   }, [editor]);
 
   // Typing "/" offers the skills for this folder; they load the first time it's needed.
-  const slash = useEditorState({ editor, selector: ({ editor: e }) => (e ? slashAtCursor(e) : null) });
+  const slash = useEditorState({
+    editor,
+    selector: ({ editor: e }) => (e ? slashAtCursor(e) : null),
+  });
   const [skills, setSkills] = useState<SkillInfo[]>([]);
   // The highlighted row belongs to one query; a new query starts back at the top.
-  const [highlight, setHighlight] = useState<{ query: string | null; i: number }>({ query: null, i: 0 });
+  const [highlight, setHighlight] = useState<{
+    query: string | null;
+    i: number;
+  }>({ query: null, i: 0 });
   const activeSkill = highlight.query === (slash?.query ?? null) ? highlight.i : 0;
   const setActiveSkill = (next: number | ((i: number) => number)) =>
-    setHighlight({ query: slash?.query ?? null, i: typeof next === "function" ? next(activeSkill) : next });
+    setHighlight({
+      query: slash?.query ?? null,
+      i: typeof next === "function" ? next(activeSkill) : next,
+    });
   const [dismissedAt, setDismissedAt] = useState<number | null>(null);
   const wantsSkills = slash !== null;
   useEffect(() => {
@@ -362,7 +403,11 @@ const Composer = forwardRef<
     // Keep a space between dictated text and what's before it.
     const { from } = editor.state.selection;
     const before = editor.state.doc.textBetween(Math.max(0, from - 1), from, "\n", "\n");
-    editor.chain().focus().insertContent(before && !/\s/.test(before) ? ` ${text}` : text).run();
+    editor
+      .chain()
+      .focus()
+      .insertContent(before && !/\s/.test(before) ? ` ${text}` : text)
+      .run();
   });
 
   function insertIntoSource(text: string) {
@@ -437,7 +482,10 @@ const Composer = forwardRef<
             if (key === "ArrowDown") setActiveSkill((i) => (i >= last ? 0 : i + 1));
             else if (key === "ArrowUp") setActiveSkill((i) => (i <= 0 ? last : i - 1));
             else if (key === "Escape") setDismissedAt(slash.from);
-            else pickSkill(suggestions[Math.min(activeSkill, last)]);
+            else {
+              const skill = suggestions[Math.min(activeSkill, last)];
+              if (skill) pickSkill(skill);
+            }
             return;
           }
         }
@@ -511,10 +559,19 @@ const Composer = forwardRef<
       )}
 
       <div className="flex shrink-0 items-center gap-0.5 px-1.5 pb-1.5 pt-0.5">
-        <ToolButton icon="paperclip" label="Attach images, videos, or files" onClick={() => fileInput.current?.click()} />
+        <ToolButton
+          icon="paperclip"
+          label="Attach images, videos, or files"
+          onClick={() => fileInput.current?.click()}
+        />
         <MicButton dictation={dictation} />
         {variant === "reply" && source === null && (
-          <ToolButton icon="heading" label="Formatting" active={showFormat} onClick={() => setShowFormat(!showFormat)} />
+          <ToolButton
+            icon="heading"
+            label="Formatting"
+            active={showFormat}
+            onClick={() => setShowFormat(!showFormat)}
+          />
         )}
         <ToolButton
           icon="markdown"

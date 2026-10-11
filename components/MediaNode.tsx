@@ -73,7 +73,7 @@ export function insertFiles(editor: Editor, files: File[], pos?: number) {
         listeners.forEach((l) => l());
         if (preview) setTimeout(() => URL.revokeObjectURL(preview), 10_000);
       })
-      .catch((err) => setUpload(id, { error: err instanceof Error ? err.message : String(err) }));
+      .catch((err: unknown) => setUpload(id, { error: err instanceof Error ? err.message : String(err) }));
     return { type: "media", attrs: { src: null, name, kind, uploadId: id } };
   });
   const chain = editor.chain().focus();
@@ -94,8 +94,10 @@ export function pendingMedia(editor: Editor) {
   let uploading = 0;
   let failed = 0;
   editor.state.doc.descendants((node) => {
-    if (node.type.name !== "media" || !node.attrs.uploadId) return;
-    if (uploads.get(node.attrs.uploadId)?.error) failed++;
+    if (node.type.name !== "media") return;
+    const { uploadId } = node.attrs as MediaAttrs;
+    if (!uploadId) return;
+    if (uploads.get(uploadId)?.error) failed++;
     else uploading++;
   });
   return { uploading, failed };
@@ -106,7 +108,7 @@ function formatPercent(fraction: number) {
 }
 
 function MediaView({ node, selected, deleteNode }: NodeViewProps) {
-  const { src, name, kind, uploadId } = node.attrs as { src: string | null; name: string; kind: MediaKind; uploadId: string | null };
+  const { src, name, kind, uploadId } = node.attrs as MediaAttrs;
   const upload = useUpload(uploadId);
   const url = upload?.preview ?? (src ? mediaUrl(src) : null);
   const busy = Boolean(uploadId) && !upload?.error;
@@ -120,7 +122,6 @@ function MediaView({ node, selected, deleteNode }: NodeViewProps) {
       title={src ?? name}
     >
       {kind === "image" && url ? (
-        // eslint-disable-next-line @next/next/no-img-element
         <img src={url} alt={name} draggable={false} className="block max-h-72 max-w-full rounded-lg object-contain" />
       ) : kind === "video" && url ? (
         <video src={url} controls preload="metadata" className="block max-h-72 max-w-full rounded-lg bg-black" />
@@ -165,6 +166,9 @@ function MediaView({ node, selected, deleteNode }: NodeViewProps) {
     </NodeViewWrapper>
   );
 }
+
+// A media node's attributes, as addAttributes below declares them.
+type MediaAttrs = { src: string | null; name: string; kind: MediaKind; uploadId: string | null };
 
 // Only web URLs and file paths survive a paste; data: and blob: sources would bloat the prompt.
 function usableSrc(src: string | null) {
@@ -214,7 +218,8 @@ export const Media = Node.create({
   },
 
   renderHTML({ node }) {
-    return ["figure", { "data-media": "", "data-src": node.attrs.src ?? "", "data-name": node.attrs.name }];
+    const { src, name } = node.attrs as MediaAttrs;
+    return ["figure", { "data-media": "", "data-src": src ?? "", "data-name": name }];
   },
 
   addNodeView() {
@@ -225,7 +230,10 @@ export const Media = Node.create({
   markdownTokenName: "image",
   parseMarkdown: (token, helpers) => {
     const src = String(token.href ?? "");
-    return helpers.createNode("media", { src, name: String(token.text ?? ""), kind: mediaKind(src) });
+    return helpers.createNode("media", { src, name: token.text ?? "", kind: mediaKind(src) });
   },
-  renderMarkdown: (node) => (node.attrs?.src ? mediaMarkdown(node.attrs.name ?? "", node.attrs.src) : ""),
+  renderMarkdown: (node) => {
+    const { src, name } = (node.attrs ?? {}) as Partial<MediaAttrs>;
+    return src ? mediaMarkdown(name ?? "", src) : "";
+  },
 });

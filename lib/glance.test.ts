@@ -130,9 +130,9 @@ describe("pages glance writes and opens in the pane", () => {
 
   // The thumbnail waits for the page to paint; keep the fake clock moving until the turn's work is done.
   async function settle(p: Promise<unknown>) {
-    let done = false;
-    void p.finally(() => (done = true));
-    for (let i = 0; i < 20 && !done; i++) await vi.advanceTimersByTimeAsync(1200);
+    const state = { done: false };
+    void p.finally(() => (state.done = true));
+    for (let i = 0; i < 20 && !state.done; i++) await vi.advanceTimersByTimeAsync(1200);
     return p;
   }
 

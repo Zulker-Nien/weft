@@ -11,23 +11,24 @@ const DEFAULTS: Record<string, Binding> = {
 
 const STORAGE_KEY = "threadboard.shortcuts";
 
-function readAll(): Record<string, Binding> {
+function readAll(): Record<string, Binding | undefined> {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}");
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Record<string, Binding | undefined>;
   } catch {
     return {};
   }
 }
 
 export function currentBinding(id: string): Binding {
-  return readAll()[id] ?? DEFAULTS[id];
+  // Callers pass ids from SHORTCUTS, which all have a default; an unknown id gets undefined.
+  return readAll()[id] ?? (DEFAULTS[id] as Binding);
 }
 
 // null puts the default back.
 export function setBinding(id: string, binding: Binding | null) {
   const all = readAll();
-  if (binding) all[id] = binding;
-  else delete all[id];
+  // An undefined entry is dropped by JSON.stringify, which puts the default back.
+  all[id] = binding ?? undefined;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
   } catch {}
