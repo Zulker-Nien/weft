@@ -128,6 +128,16 @@ describe("pilePrompt", () => {
     expect(prompt).toContain("curl -s -X PATCH http://localhost:3000/api/cards/<card id>");
   });
 
+  it("speaks in commit, push and /done, never save", () => {
+    const prompt = pilePrompt({ ...base, map: { cards: [], shared: [], busy: [], unclaimed: [] } });
+    expect(prompt).toContain('"2 of 7 committed"');
+    expect(prompt).toContain('Buttons: "Commit", "Commit and push", "Commit and run /done"');
+    expect(prompt).toContain('A "Committed" stamp');
+    expect(prompt).toContain('looks good, commit it.');
+    expect(prompt).toContain("run `git push` and stamp it Pushed");
+    expect(prompt).not.toMatch(/\bsav(e|ed)\b/i);
+  });
+
   it("says when no Review card claims anything and leaves out empty groups", () => {
     const prompt = pilePrompt({ ...base, map: { cards: [{ card: card("a", { thumb: "https://x/y.png" }), files: [{ path: "a.ts", code: " M" }] }], shared: [], busy: [], unclaimed: [] } });
     expect(prompt).toContain("   picture: https://x/y.png\n");
