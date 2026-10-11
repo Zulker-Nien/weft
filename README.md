@@ -88,8 +88,9 @@ The new-thread dialog (⌘N) and every card's reply box use the same editor:
 - **Drafts are kept** per card and for the new-thread dialog until sent, so closing it loses nothing.
 - **Send later.** The clock beside Send (Alt+Enter) holds a reply until a time you pick. On a Claude
   thread the first choice is a minute after the 5-hour limit resets (the time in the bottom bar), so
-  a message written when you hit the limit goes out as the new window opens; there's also "In 1
-  hour", "Tomorrow morning" and any date and time. Scheduled replies sit above the box (click one to
+  a message written when you hit the limit goes out as the new window opens. When the weekly limit
+  is at 90% or more it adds "At the weekly reset", and once the weekly limit is used up that comes
+  first instead. There's also "In 1 hour", "Tomorrow morning" and any date and time. Scheduled replies sit above the box (click one to
   edit it) and show as a clock on the card. Weft sends them itself, with the thread closed; one that
   came due while Weft was shut goes when it next starts.
 - In a reply, Enter sends and Shift+Enter starts a new line (Enter in a list or code block starts a

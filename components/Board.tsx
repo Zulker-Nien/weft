@@ -5,7 +5,7 @@ import { showBacklog, subscribeBoardPrefs } from "@/lib/board-prefs";
 import { api, mergeThread, type BrowserState, type MenuAction, type NewCardInput } from "@/lib/client";
 import { worktreeParent } from "@/lib/format";
 import { busyHere } from "@/lib/overlap";
-import { nextFiveHourReset } from "@/lib/schedule";
+import { planResets } from "@/lib/schedule";
 import { COLUMNS, type BoardEvent, type Card, type Column, type LibraryItem, type LibraryKind, type LoginView, type Project, type ThreadItem } from "@/lib/types";
 import { useShortcutHint, useShortcutListener, useShortcuts } from "@/lib/hotkeys";
 import { setTheme, THEMES } from "@/lib/theme";
@@ -1142,7 +1142,7 @@ export default function Board() {
             key={selected.id}
             card={selected}
             alsoHere={busyHere(cards, selected)}
-            resetAt={nextFiveHourReset(cards)}
+            resets={planResets(cards)}
             items={thread}
             streaming={streaming}
             onSend={async (text) => {

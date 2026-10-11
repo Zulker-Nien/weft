@@ -1,20 +1,46 @@
-import type { Card, ScheduledMessage } from "./types";
+import type { Card, LimitWindow, ScheduledMessage } from "./types";
 
-// Sent this long after the 5-hour window resets, so the message lands in the new window.
+// Sent this long after a window resets, so the message lands in the new window.
 export const RESET_GRACE_MS = 60_000;
 
-// When the plan's 5-hour window resets (unix ms), if a Claude thread has seen one that's still ahead.
-// Every future reset is the same window's, so the latest one is the safest to trust.
-export function nextFiveHourReset(cards: Card[], now = Date.now()): number | undefined {
-  let best: number | undefined;
+// The weekly window counts as close to blocking from this share used (0-100); at 100 it is blocking.
+export const WEEKLY_NEAR = 90;
+
+// The latest window still ahead that a Claude thread has seen, for one of the plan's limits.
+// Every future reset is the same window's, so the latest one is the safest to trust; its share used
+// is the highest any thread saw, the freshest reading.
+function latestWindow(cards: Card[], pick: (card: Card) => LimitWindow | undefined, now: number) {
+  let best: { at: number; used: number } | undefined;
   for (const card of cards) {
     if (card.backend !== "claude") continue;
-    const resetsAt = card.stats?.fiveHour?.resetsAt;
-    if (!resetsAt) continue;
-    const at = resetsAt * 1000;
-    if (at > now && (best === undefined || at > best)) best = at;
+    const window = pick(card);
+    if (!window?.resetsAt) continue;
+    const at = window.resetsAt * 1000;
+    if (at <= now) continue;
+    if (!best || at > best.at) best = { at, used: window.used };
+    else if (at === best.at) best.used = Math.max(best.used, window.used);
   }
   return best;
+}
+
+// When the plan's 5-hour window resets (unix ms), if a Claude thread has seen one that's still ahead.
+export function nextFiveHourReset(cards: Card[], now = Date.now()): number | undefined {
+  return latestWindow(cards, (card) => card.stats?.fiveHour, now)?.at;
+}
+
+// When the plan's weekly window resets (unix ms) and how much of it is used (0-100), if known.
+export function nextWeeklyReset(cards: Card[], now = Date.now()): { at: number; used: number } | undefined {
+  return latestWindow(cards, (card) => card.stats?.sevenDay, now);
+}
+
+// The plan's next resets the reply box offers to send at.
+export interface PlanResets {
+  fiveHour?: number;
+  weekly?: { at: number; used: number };
+}
+
+export function planResets(cards: Card[], now = Date.now()): PlanResets {
+  return { fiveHour: nextFiveHourReset(cards, now), weekly: nextWeeklyReset(cards, now) };
 }
 
 export interface SendLaterOption {
@@ -22,11 +48,19 @@ export interface SendLaterOption {
   at: number;
 }
 
-// The times the reply box offers, the default first: the next 5-hour reset on a Claude thread
-// (puku has no plan limit), then an hour from now, then tomorrow morning.
-export function sendLaterOptions(backend: Card["backend"], reset: number | undefined, now = Date.now()): SendLaterOption[] {
+// The times the reply box offers, the default first. On a Claude thread (puku has no plan limit):
+// the next 5-hour reset, and the weekly reset when that window is used up or close to it; a used-up
+// weekly window goes first, since sending at the 5-hour reset would only hit it again. Then an hour
+// from now, then tomorrow morning.
+export function sendLaterOptions(backend: Card["backend"], resets: PlanResets, now = Date.now()): SendLaterOption[] {
   const options: SendLaterOption[] = [];
-  if (backend === "claude" && reset) options.push({ label: "At the 5-hour reset", at: reset + RESET_GRACE_MS });
+  if (backend === "claude") {
+    const { fiveHour, weekly } = resets;
+    const fiveHourOption = fiveHour && { label: "At the 5-hour reset", at: fiveHour + RESET_GRACE_MS };
+    const weeklyOption = weekly && weekly.used >= WEEKLY_NEAR && { label: "At the weekly reset", at: weekly.at + RESET_GRACE_MS };
+    const order = weekly && weekly.used >= 100 ? [weeklyOption, fiveHourOption] : [fiveHourOption, weeklyOption];
+    for (const option of order) if (option) options.push(option);
+  }
   options.push({ label: "In 1 hour", at: now + 3600_000 });
   const morning = new Date(now);
   morning.setDate(morning.getDate() + 1);

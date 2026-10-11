@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "@/lib/client";
 import { alsoHereLine } from "@/lib/overlap";
-import { formatAt, sendLaterOptions } from "@/lib/schedule";
+import { formatAt, sendLaterOptions, type PlanResets } from "@/lib/schedule";
 import { FIXED_SHORTCUTS } from "@/lib/shortcut-catalog";
 import { useNow } from "@/lib/use-now";
 import type { Backend, Card, ScheduledMessage } from "@/lib/types";
@@ -55,8 +55,8 @@ export default function ReplyBox({
   live: boolean;
   placeholder: string;
   // Board threads can take a message to send at a set time; the copilot can't, so it leaves this out.
-  // resetAt is the plan's next 5-hour reset (unix ms), the default time on a Claude thread.
-  sendLater?: { backend: Backend; resetAt?: number; scheduled: ScheduledMessage[] };
+  // resets are the plan's next 5-hour and weekly resets, the default times on a Claude thread.
+  sendLater?: { backend: Backend; resets: PlanResets; scheduled: ScheduledMessage[] };
   // The thread's statusline (context, tokens, plan limits), under the box where you scope the next message.
   status?: ReactNode;
   onSend: (text: string) => Promise<void>;
@@ -298,7 +298,7 @@ export default function ReplyBox({
               <SendLater
                 open={laterOpen}
                 onOpenChange={setLaterOpen}
-                options={sendLaterOptions(sendLater.backend, sendLater.resetAt, now)}
+                options={sendLaterOptions(sendLater.backend, sendLater.resets, now)}
                 now={now}
                 onPick={(at) => void scheduleAt(at)}
                 disabled={sending}

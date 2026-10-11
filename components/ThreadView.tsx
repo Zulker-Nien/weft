@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "@/lib/client";
 import { isLive } from "@/lib/format";
+import type { PlanResets } from "@/lib/schedule";
 import type { Card, ThreadItem } from "@/lib/types";
 import Icon, { Spinner } from "./Icon";
 import Markdown from "./Markdown";
@@ -38,8 +39,8 @@ export default function ThreadView({
   replaceReply?: boolean;
   // Other busy cards in this folder, warned about above the reply box.
   alsoHere?: Card[];
-  // Given on board threads, so the reply box offers Send later; resetAt is the next 5-hour reset (unix ms).
-  scheduling?: { resetAt?: number };
+  // Given on board threads, so the reply box offers Send later; resets are the plan's next 5-hour and weekly resets.
+  scheduling?: { resets: PlanResets };
 }) {
   // The request already answered here, so a second click can't answer it (or the next one) again.
   const [answeredId, setAnsweredId] = useState<string | null>(null);
@@ -150,7 +151,7 @@ export default function ThreadView({
       {footer}
       {!replaceReply && (
         <ReplyBox key={card.id} cardId={card.id} cwd={card.cwd} live={live} placeholder={placeholder} alsoHere={alsoHere}
-          sendLater={scheduling && { backend: card.backend, resetAt: scheduling.resetAt, scheduled: card.scheduled ?? [] }}
+          sendLater={scheduling && { backend: card.backend, resets: scheduling.resets, scheduled: card.scheduled ?? [] }}
           status={<StatusStrip stats={card.stats} cwd={card.cwd} backend={card.backend} />}
           onSend={send} onStop={() => api.stop(card.id).then(() => {})} />
       )}

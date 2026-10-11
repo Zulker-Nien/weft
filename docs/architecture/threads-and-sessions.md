@@ -100,8 +100,12 @@ the turn ends. A failed send puts the reason in `card.error` and is not retried.
 
 The default time is the plan's next 5-hour reset plus a minute (`RESET_GRACE_MS`), read by
 `nextFiveHourReset()` (`lib/schedule.ts`) from the latest `stats.fiveHour.resetsAt` any Claude card
-has seen (the figure the status bar shows). Puku threads, and Claude ones with no known reset, get
-"In 1 hour" first; "Tomorrow morning" (9am) and a date-time picker are always there. The copilot
+has seen (the figure the status bar shows). `nextWeeklyReset()` reads `stats.sevenDay` the same
+way, with the highest share used any card saw at that reset; `planResets()` gathers both for the
+reply box. When the weekly window is at `WEEKLY_NEAR` (90%) or more, `sendLaterOptions()` adds "At
+the weekly reset" (also plus `RESET_GRACE_MS`) after the 5-hour one; at 100% the weekly limit is
+what stops the thread, so it goes first and becomes the Alt+Enter default. Puku threads, and Claude
+ones with no known reset, get "In 1 hour" first; "Tomorrow morning" (9am) and a date-time picker are always there. The copilot
 can't schedule. The card shows the next time as a clock badge in its footer.
 
 ### Archiving after Done

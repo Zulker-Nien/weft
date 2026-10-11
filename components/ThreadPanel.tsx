@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { folderName, isLive } from "@/lib/format";
 import { useShortcutHint } from "@/lib/hotkeys";
+import type { PlanResets } from "@/lib/schedule";
 import type { Card, PermissionMode, ThreadItem } from "@/lib/types";
 import { BackendBadge } from "./CardView";
 import Icon from "./Icon";
@@ -25,7 +26,7 @@ export default function ThreadPanel({
   onMode,
   editTitle = false,
   alsoHere,
-  resetAt,
+  resets,
 }: {
   card: Card;
   items: ThreadItem[];
@@ -44,8 +45,8 @@ export default function ThreadPanel({
   editTitle?: boolean;
   // Other busy cards in this folder (lib/overlap.ts busyHere).
   alsoHere?: Card[];
-  // The plan's next 5-hour reset (unix ms), the reply box's default Send later time.
-  resetAt?: number;
+  // The plan's next 5-hour and weekly resets, the reply box's default Send later times.
+  resets: PlanResets;
 }) {
   const [editing, setEditing] = useState(editTitle);
   const hint = useShortcutHint();
@@ -163,7 +164,7 @@ export default function ThreadPanel({
         footer={card.column === "review" && <ReviewPanel card={card} items={items} onSend={onSend} />}
         replaceReply={card.column === "review" && Boolean(card.review)}
         alsoHere={alsoHere}
-        scheduling={{ resetAt }}
+        scheduling={{ resets }}
       />
     </aside>
   );
