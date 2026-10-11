@@ -37,7 +37,9 @@ same time; Next.js allows one dev server per project folder.
 - **Menu bar icon**: shows how many cards need you and lists them; click one to open it.
 - **Dock**: the Needs you count on the icon, and New Thread and Copilot in its menu.
 - **Links**: `weft://new?prompt=…&folder=…&start=1` creates a card (in your most recent project
-  if no folder is given), `weft://card/<id>` opens one, `weft://copilot` opens the copilot. Handy
+  if no folder is given), `weft://card/<id>` opens one, `weft://copilot` opens the copilot, and `weft://reply?text=…` on a
+  thread's own local page in the browser pane sends that text to the thread as your reply (the buttons on
+  a walk-through page). Handy
   from Alfred, Raycast, or Shortcuts. (Registered by the packaged app.)
 - The window remembers its size and position, and the app reads your login shell's PATH, so it
   finds `claude` and `puku-cli` even when started from Finder.
@@ -93,6 +95,11 @@ The new-thread dialog (⌘N) and every card's reply box use the same editor:
   first instead. There's also "In 1 hour", "Tomorrow morning" and any date and time. Scheduled replies sit above the box (click one to
   edit it) and show as a clock on the card. Weft sends them itself, with the thread closed; one that
   came due while Weft was shut goes when it next starts.
+- **Prompt cache in the status strip.** `cache:52m` counts down how long the thread's prompt cache
+  stays warm (an hour after each request on a Claude plan). Replies inside that window reread the
+  thread from cache at about a tenth of the price. After it, the chip reads `cache:cold 120k`: your
+  next message sends the whole thread again at full price, which uses more of the 5-hour limit. For a
+  new topic, a fresh card is cheaper.
 - **Suggested next message.** After a turn, a Claude thread's reply box shows the CLI's guess at what
   you'll say next as its placeholder (as the Claude CLI does). Tab in the empty box fills it in to edit
   or send; it never sends on its own. It rides the turn's prompt cache, so it costs next to nothing,
@@ -215,12 +222,37 @@ Enter open one), ending in a row that carries your text into the ⌘K palette to
 projects and commands too. New threads default to the selected project. The New thread dialog drags by its header and
 resizes from any edge or corner; it stays inside the window and remembers its size and position.
 
-The header shows test coverage ("49% coverage") of the project in view: the open card's folder,
-else the selected project, else your latest card's. Hover it for lines, statements, functions and
-branches and when it was measured. It reads `coverage/coverage-summary.json` at the project's root
-(`npm run coverage` in a Vitest or Jest repo with the json-summary reporter); without one it
-becomes a **Set up coverage** button that starts a thread in that folder to add a test runner with
-coverage (`/weft:setup-done`) and run it once.
+The header shows the code quality ("87% code quality") of the project in view: the open card's
+folder, else the selected project, else your latest card's. It never reaches 100%, because there's always
+another refactor, a stricter lint rule or a better type:
+
+- **The checklist earns 90 points**: test coverage (`coverage/coverage-summary.json` from `npm run coverage`),
+  file size, lint lockdown, type safety and guardrails (pre-commit hook and CI), averaged (`lib/quality.ts`).
+- **The refactor scout earns the last 10.** A read-only Sonnet run (Read, Grep, Glob) reads the project and
+  ranks up to 15 concrete findings, each with file:line, a Fowler-named smell (Long Function, Duplicated
+  Code, Feature Envy, Primitive Obsession…), a category (refactor, lint, types, tests, guardrails) and a
+  one-line fix. It also suggests lint rules that aren't on and loose types. The band is
+  10 × 10 ÷ (10 + debt), where each open finding costs 3 (high), 2 (medium) or 1 (low): fixes raise it,
+  new findings lower it. Before the first run the score tops out at 90; it's capped at 99.
+- The scout's report is cached in `~/.weft/scout/` with the commit it ran on. It runs on its own only
+  once, for a project with no report; after that `/weft:done` scouts the session's files and merges its findings
+  in, and **Re-scout now** reads the whole project again. A new commit alone never starts a run.
+  It never runs on the start-a-card path.
+
+Hover the badge for how the number is made. Click it for a menu: **Fix the checklist, weakest first**
+starts one thread on the checklist, and each scout finding starts its own small card ("Long Function:
+runner.ts"), so improving code quality becomes a stream of small cards.
+
+Beside it, **+1262/-832** counts the uncommitted pile in that project's repo: every line in the working
+tree that differs from HEAD (hover for the file count and how many Review cards it belongs to). Review
+cards pile up with working code nobody committed, so several cards' edits end up mixed in one tree. Click
+the counter to start a card that walks you through committing it (`lib/commit-pile.ts`): it lists the
+Review cards with the files each touched and its last status, flags files several cards share, files
+only busy cards touched and files no card claims, then goes card by card in the browser pane with a
+checklist page written for non-engineers (each change as its card picture or emoji, a plain sentence on what it
+does, its review tour's "try it" steps, the files folded under Technical details, and a review bar
+under each change: Save it, Save it and mark Done, Skip for now, or type what to change): what changed, lint, typecheck and tests, and a commit of just that card's files by path
+(`commit.sh`; never `git stash`, `git reset` or a bare `git commit`). When you say so, it moves the card to Done.
 
 ## Logging in
 
@@ -234,7 +266,8 @@ Review or Done without you keeps an accent tint and a pulsing dot until you open
 
 ## Library: recipes, to-dos and notes
 
-Star the cards worth keeping. Right-click a card (or drag it onto the rail at the board's left edge):
+Star the cards worth keeping: hover a card and click its ☆ (or click ☆ at the top of an open thread), right-click it,
+or drag it onto the rail at the board's left edge, which lights up while you drag. Then pick what to keep it as:
 
 - **Save as Recipe** turns its prompt into one you can run again: Haiku swaps what changes next time for
   `{blanks}` like `{product}`. A recipe is a Claude Code skill, in `~/.claude/skills` (Mine) or the
@@ -310,6 +343,10 @@ with xterm.js (`components/TerminalDrawer.tsx`). Desktop app only.
 
 If the page reloads over and over in development, stop the app, delete `.next`, and start it
 again; a stale dev build cache causes this.
+
+If a card, the thread, the browser pane, the library, the terminal or the footer says it "failed to draw", a thread
+was probably partway through editing Weft. The rest of the board keeps working, and the piece draws itself again
+once the file is fixed (or click Try again). If the whole board fails, its page offers Try again and Reload window.
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the feature list.
 

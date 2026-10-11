@@ -61,10 +61,14 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `plugin/skills/*`: my own skills (`/weft:done`, `/weft:commit`, `/weft:preview`, `/weft:setup-done`,
   which installs tests, docs and strict lint on a project before `/done`; `/weft:done` also keeps this file current);
   `lib/skills.ts` lists skills, `lib/automations.ts` turns "When … run …" rules into turns.
-- `lib/coverage.ts` + `app/api/coverage`: read the project in view's `coverage/coverage-summary.json` (`npm run coverage`) for the
-  header pie, `components/CoverageBadge.tsx`; its hover bubble is `components/Tip.tsx` (native titles don't show in Electron).
+- `lib/quality.ts` + `lib/quality-view.ts` + `app/api/quality`: the header's code quality checklist (coverage via `lib/coverage.ts`,
+  file size, lint, types, guardrails); `lib/scout.ts` + `lib/scout-view.ts` + `app/api/scout`: the refactor scout, a cached
+  read-only Sonnet run whose findings take the score's last 10 points so it never hits 100. `components/QualityBadge.tsx`
+  draws it, `components/ScoutMenu.tsx` starts a card per finding; its hover bubble is `components/Tip.tsx` (native titles don't show in Electron).
+- `lib/commit-pile.ts` + `app/api/pile` + `components/PileBadge.tsx`: the header's "+N/-N" uncommitted counter and the card it
+  starts to commit that pile one Review card at a time.
 - `lib/card-pictures.ts`: a card's thumbnail (latest thread image, or a pane capture after each turn from `lib/glance.ts`) and its Haiku emoji tile; `lib/retitle.ts` renames a card with a placeholder title ("Image attachment") after its turn (`titleBy` marks a name Weft or you chose); `components/CardView.tsx` draws the card.
-- `lib/library.ts` + `lib/library-view.ts` + `components/LibraryRail.tsx`: the library of starred cards (recipes are Claude
+- `lib/library.ts` + `lib/library-view.ts` + `components/LibraryRail.tsx` + `components/StarButton.tsx` (the ☆ on a card and thread header): the library of starred cards (recipes are Claude
   skills, to-dos and notes are saved pages in `~/.weft/library`), its rail and drawer (docs/architecture/library.md).
 - `lib/copilot.ts` + `lib/board-tools.ts`: the copilot thread and its `mcp__board__*` tools.
 - `lib/browser-tools.ts`: `mcp__browser__*` tools every thread gets.
@@ -74,7 +78,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `lib/store.ts`: storage in `~/.weft` (board.json, threads/, attachments/).
 - `app/api/*` + `lib/guard.ts`: localhost-only Host check, writes need `x-threadboard: 1`.
 - Components: `Board.tsx`, `ThreadView.tsx`, `ThreadItems.tsx`, `Markdown.tsx`, `ReviewPanel.tsx`;
-  every dialog sits in `Modal.tsx` (backdrop, header, close, Escape via `lib/use-escape.ts`).
+  every dialog sits in `Modal.tsx` (backdrop, header, close, Escape via `lib/use-escape.ts`);
+  each card and panel sits in `CrashGuard.tsx` (an error boundary), with `app/error.tsx` behind the whole board.
 - Deeper docs: docs/architecture/*.md.
 
 ## Conventions to keep

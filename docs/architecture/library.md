@@ -48,6 +48,9 @@ still there, so a skill you edited or wrote yourself is never deleted.
   drawer that slides over the board, or sits beside it when pinned. "This project · Mine · All", a
   native menu on each row (move between Mine and the project, swap to-do and note, remove), and drop
   targets: drop a card on an icon to file it there. ⌘L opens it.
+- ☆ (`components/StarButton.tsx`): on each card while you hover it, and in an open thread's header; it pops
+  `starMenu`, the library part of the card menu. Starred, it's a ★ that stays visible. While a card is dragged, the
+  rail's icons light up with a "Drop on ↻ recipe · ☑ to-do · ✎ note" hint, and an empty drawer lists all three ways in.
 - Card menu (`lib/card-menu.ts`): Save as Recipe (`⇧R`), Star as To-do (`T`), Star as Note (`K`); a starred
   card gets Show in Library (`I`) and Unstar (`⇧K`).
 - New thread (`components/NewCardDialog.tsx`): with a recipe, the prompt is the recipe's, the header says

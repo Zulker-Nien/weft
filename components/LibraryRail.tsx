@@ -2,11 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/client";
-import type { MenuItem } from "@/lib/card-menu";
-import { libraryCounts, libraryGroups, libraryPinned, setLibraryPinned, todoProgress, type LibraryView } from "@/lib/library-view";
+import { libraryCounts, libraryGroups, libraryItemMenu, libraryPinned, setLibraryPinned, todoProgress, type LibraryItemAction, type LibraryView } from "@/lib/library-view";
 import { LIBRARY_KINDS, type Card, type LibraryItem, type LibraryKind } from "@/lib/types";
 import Icon from "./Icon";
-import { folderName } from "./ProjectBar";
 
 // The library (lib/library.ts) on the board's left edge: a 38px rail of ↻ ☑ ✎ with counts, and a drawer
 // that slides over the board (or, pinned, pushes it over). Drop a card on an icon to file it there.
@@ -42,6 +40,8 @@ export default function LibraryRail({
   const [chosenView, setView] = useState<LibraryView>("project");
   const [pinned, setPinned] = useState(() => typeof window !== "undefined" && libraryPinned());
   const [dropOn, setDropOn] = useState<LibraryKind | null>(null);
+  // A card is being dragged somewhere on the board: the rail lights up to show it takes drops.
+  const [cardDrag, setCardDrag] = useState(false);
   // With every project on the board, "This project" means nothing.
   const view: LibraryView = chosenView === "project" && !project ? "all" : chosenView;
 
@@ -55,6 +55,22 @@ export default function LibraryRail({
       live = false;
     };
   }, [project, view, version]);
+
+  useEffect(() => {
+    const start = (e: DragEvent) => setCardDrag(e.target instanceof Element && e.target.closest("[data-card-id]") !== null);
+    const end = () => {
+      setCardDrag(false);
+      setDropOn(null);
+    };
+    window.addEventListener("dragstart", start);
+    window.addEventListener("dragend", end);
+    window.addEventListener("drop", end);
+    return () => {
+      window.removeEventListener("dragstart", start);
+      window.removeEventListener("dragend", end);
+      window.removeEventListener("drop", end);
+    };
+  }, []);
 
   const counts = libraryCounts(items, view, project);
   const runs = (id: string) => cards.filter((c) => c.recipeId === id).length;
@@ -76,26 +92,18 @@ export default function LibraryRail({
     if (!shell?.popupMenu) return;
     e.preventDefault();
     const card = item.cardId ? cards.find((c) => c.id === item.cardId) : undefined;
-    const menu: MenuItem[] = [
-      item.kind === "recipe" ? { id: "run", label: "Run Recipe…" } : { id: "open", label: "Open Page" },
-      ...(item.kind === "recipe" ? [{ id: "open", label: "Show Recipe Page" }] : []),
-      ...(card ? [{ id: "card", label: "Open the Original Thread" }] : []),
-      { type: "separator" },
-      item.scope === "mine"
-        ? { id: "scope", label: `Move to ${folderName(item.folder)} (This Project Only)` }
-        : { id: "scope", label: "Move to Mine (Every Project)" },
-      ...(item.kind === "todo" ? [{ id: "kind", label: "Make It a Note" }] : item.kind === "note" ? [{ id: "kind", label: "Make It a To-do" }] : []),
-      { type: "separator" },
-      { id: "remove", label: item.kind === "recipe" ? "Remove Recipe (and Its Skill)" : "Remove from Library" },
-    ];
-    const picked = await shell.popupMenu(menu);
+    const picked = (await shell.popupMenu(libraryItemMenu(item, Boolean(card)))) as LibraryItemAction | null;
+    if (!picked) return;
+    const actions: Record<LibraryItemAction, () => unknown> = {
+      run: () => onRun(item),
+      open: () => onOpenItem(item),
+      card: () => card && onOpenCard(card.id),
+      scope: () => api.updateLibraryItem(item.id, { scope: item.scope === "mine" ? "project" : "mine" }),
+      kind: () => api.updateLibraryItem(item.id, { kind: item.kind === "todo" ? "note" : "todo" }),
+      remove: () => api.removeLibraryItem(item.id),
+    };
     try {
-      if (picked === "run") onRun(item);
-      if (picked === "open") onOpenItem(item);
-      if (picked === "card" && card) onOpenCard(card.id);
-      if (picked === "scope") await api.updateLibraryItem(item.id, { scope: item.scope === "mine" ? "project" : "mine" });
-      if (picked === "kind") await api.updateLibraryItem(item.id, { kind: item.kind === "todo" ? "note" : "todo" });
-      if (picked === "remove") await api.removeLibraryItem(item.id);
+      await actions[picked]();
     } catch (err) {
       notify(err);
     }
@@ -152,17 +160,22 @@ export default function LibraryRail({
         {groups.length === 0 && (
           <p className="px-2 py-4 text-center text-[11.5px] leading-snug text-faint">
             {open === "recipe"
-              ? "Right-click a card and pick Save as Recipe, or drop it on ↻, to run it again later with new blanks."
+              ? "Keep a card's prompt to run again with new blanks:"
               : open === "todo"
-                ? "Star a card whose result is steps for you to do. Its page keeps your ticks."
-                : "Star a card to keep its answer here."}
+                ? "Keep a card whose result is steps for you to do; its page keeps your ticks:"
+                : "Keep a card's answer to look up later:"}
+            <span className="mt-2 block text-left text-muted">
+              · hover a card and click <b className="text-warn">☆</b>
+              <br />· or click ☆ at the top of an open thread
+              <br />· or drag the card onto {LIBRARY_KINDS.find((k) => k.id === open)?.icon} here
+            </span>
           </p>
         )}
         {groups.map((group) => (
           <section key={group.key}>
             <h3 className="px-1.5 pb-1 pt-2.5 text-[10.5px] font-semibold uppercase tracking-wider text-faint">{group.label}</h3>
             {group.items.map((item) => (
-              <Row key={item.id} item={item} runs={runs(item.id)} onClick={() => (item.kind === "recipe" ? onRun(item) : onOpenItem(item))} onContextMenu={(e) => itemMenu(item, e)} />
+              <Row key={item.id} item={item} runs={runs(item.id)} onClick={() => (item.kind === "recipe" ? onRun(item) : onOpenItem(item))} onContextMenu={(e) => void itemMenu(item, e)} />
             ))}
           </section>
         ))}
@@ -187,7 +200,7 @@ export default function LibraryRail({
               onDrop={(e) => drop(k.id, e)}
               title={`${k.plural}${k.id === "recipe" ? ": cards to run again" : k.id === "todo" ? ": steps for you" : ": answers to keep"} · drop a card here to file it`}
               aria-pressed={open === k.id}
-              className={`relative grid size-7 place-items-center rounded-md text-[14px] ${open === k.id ? "bg-accent-soft text-accent" : "text-muted hover:bg-sunken hover:text-ink"} ${dropOn === k.id ? "outline-2 outline-offset-2 outline-dashed outline-accent" : ""}`}
+              className={`relative grid size-7 place-items-center rounded-md text-[14px] ${open === k.id || cardDrag ? "bg-accent-soft text-accent" : "text-muted hover:bg-sunken hover:text-ink"} ${dropOn === k.id ? "outline-2 outline-offset-2 outline-dashed outline-accent" : cardDrag ? "ring-1 ring-accent" : ""}`}
             >
               <span aria-hidden>{k.icon}</span>
               <span className="sr-only">{k.plural}</span>
@@ -200,6 +213,11 @@ export default function LibraryRail({
           );
         })}
       </nav>
+      {cardDrag && !open && (
+        <span className="pointer-events-none absolute left-full top-2 z-30 ml-1.5 whitespace-nowrap rounded-md bg-ink px-2 py-1 text-[11.5px] text-canvas shadow-lg">
+          Drop on ↻ recipe · ☑ to-do · ✎ note to keep it
+        </span>
+      )}
       {drawer}
     </div>
   );

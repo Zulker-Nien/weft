@@ -1,5 +1,5 @@
 import { api } from "@/lib/client";
-import { cardMenu, columnMenu, resumeCommand, withAccelerators, type CardAction, type ColumnAction } from "@/lib/card-menu";
+import { cardMenu, columnMenu, starMenu, resumeCommand, withAccelerators, type CardAction, type ColumnAction } from "@/lib/card-menu";
 import { toAccelerator, useShortcutList } from "@/lib/hotkeys";
 import type { Card, Column, DevServerStatus, LibraryKind, PermissionMode } from "@/lib/types";
 
@@ -50,52 +50,72 @@ export function useBoardMenus(deps: BoardMenuDeps) {
     if (picked) runCardAction(card, picked).catch(deps.notify);
   }
 
+  // Star, unstar, show in library. True when the action was one of these.
+  async function runLibraryAction(card: Card, action: CardAction) {
+    if (action.startsWith("star:")) {
+      deps.star(card, action.slice(5) as LibraryKind);
+    } else if (action === "unstar") {
+      if (card.libraryId) await api.removeLibraryItem(card.libraryId);
+      deps.toast(`Took “${card.title}” out of the library.`);
+    } else if (action === "show-in-library") {
+      const { items } = await api.library(null, true);
+      const kind = items.find((i) => i.id === card.libraryId)?.kind;
+      if (kind) deps.showLibrary(kind);
+      else deps.toast("It isn't in the library any more.");
+    } else {
+      return false;
+    }
+    return true;
+  }
+
   async function runCardAction(card: Card, action: CardAction) {
-    if (action.startsWith("move:")) return deps.move(card.id, action.slice(5) as Column);
+    if (await runLibraryAction(card, action)) return;
+    if (action.startsWith("move:")) {
+      deps.move(card.id, action.slice(5) as Column);
+      return;
+    }
     if (action.startsWith("skill:")) {
       await api.send(card.id, `/${action.slice(6)}`);
       return;
     }
-    if (action.startsWith("star:")) return deps.star(card, action.slice(5) as LibraryKind);
     if (action.startsWith("mode:")) {
       await api.setMode(card.id, action.slice(5) as PermissionMode);
       return;
     }
     if (action.startsWith("dev:")) {
       const { status } = await api.devAction(card.id, action.slice(4) as "start" | "restart" | "stop");
-      return deps.toast(devMessage(status));
+      deps.toast(devMessage(status));
+      return;
     }
     switch (action) {
       case "open":
-        return deps.openCard(card);
+        deps.openCard(card);
+        return;
       case "rename":
-        return deps.renameCard(card);
+        deps.renameCard(card);
+        return;
       case "start":
-        return deps.move(card.id, "running");
+        deps.move(card.id, "running");
+        return;
       case "stop":
         await api.stop(card.id);
         return;
       case "new-here":
-        return deps.openNew(card.cwd);
+        deps.openNew(card.cwd);
+        return;
       case "reveal":
         return shell?.revealFolder(card.cwd);
       case "copy-path":
         await navigator.clipboard.writeText(card.cwd);
-        return deps.toast("Copied the folder path.");
+        deps.toast("Copied the folder path.");
+        return;
       case "copy-resume":
         await navigator.clipboard.writeText(resumeCommand(card));
-        return deps.toast("Copied. Paste it in a terminal to pick the thread up.");
-      case "unstar":
-        if (card.libraryId) await api.removeLibraryItem(card.libraryId);
-        return deps.toast(`Took “${card.title}” out of the library.`);
-      case "show-in-library": {
-        const { items } = await api.library(null, true);
-        const kind = items.find((i) => i.id === card.libraryId)?.kind;
-        if (kind) return deps.showLibrary(kind);
-        return deps.toast("It isn't in the library any more.");
-      }
+        deps.toast("Copied. Paste it in a terminal to pick the thread up.");
+        return;
       case "archive":
-        return deps.toggleArchive(card);
+        deps.toggleArchive(card);
+        return;
       case "delete":
         if (window.confirm(`Delete “${card.title}”? Its CLI transcript stays on disk.`)) deps.remove(card);
         return;
@@ -114,7 +134,20 @@ export function useBoardMenus(deps: BoardMenuDeps) {
     if (picked === "archive-done") deps.archive(done);
   }
 
-  return { onCardMenu, onColumnMenu };
+  // The ☆ on a card or in its thread: star it as a recipe, to-do or note, or show or unstar it. Outside the
+  // desktop app there's no native menu, so a click stars it as a note.
+  async function onStarMenu(card: Card, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!shell?.popupMenu) {
+      if (!card.libraryId) deps.star(card, "note");
+      return;
+    }
+    const picked = (await shell.popupMenu(starMenu(card))) as CardAction | null;
+    if (picked) runCardAction(card, picked).catch(deps.notify);
+  }
+
+  return { onCardMenu, onColumnMenu, onStarMenu };
 }
 
 // Keys a native menu uses to move and pick, so they can't be an item's key.

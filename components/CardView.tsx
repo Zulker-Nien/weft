@@ -4,11 +4,13 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { monogram } from "@/lib/card-pictures";
 import { api } from "@/lib/client";
+import { currentArea, placeBeside } from "@/lib/float-place";
 import { folderName, isLive, STAGES, stageStep, timeAgo } from "@/lib/format";
 import { isBusy } from "@/lib/overlap";
 import { formatAt } from "@/lib/schedule";
 import type { Card } from "@/lib/types";
 import Icon, { Spinner } from "./Icon";
+import StarButton from "./StarButton";
 
 export function BackendBadge({ backend }: { backend: Card["backend"] }) {
   return backend === "puku" ? (
@@ -98,10 +100,7 @@ function Picture({ card }: { card: Card }) {
             src={card.thumb}
             alt=""
             className="pointer-events-none fixed z-50 max-h-[300px] w-[420px] rounded-lg border border-line-strong bg-card object-cover object-left-top shadow-2xl"
-            style={{
-              left: Math.max(8, Math.min(hover.right + 10, window.innerWidth - 430)),
-              top: Math.max(8, Math.min(hover.top - 40, window.innerHeight - 310)),
-            }}
+            style={placeBeside(hover, { width: 420, height: 300 }, currentArea())}
           />,
           document.body,
         )}
@@ -142,6 +141,7 @@ export default function CardView({
   onAnswer,
   onStop,
   onContextMenu,
+  onStarMenu,
   alsoHere = [],
 }: {
   card: Card;
@@ -154,12 +154,16 @@ export default function CardView({
   onStop: () => void;
   // Right-click: the card's menu (lib/card-menu.ts).
   onContextMenu?: (e: React.MouseEvent) => void;
+  // The ☆: file the card in the library (lib/card-menu.ts starMenu).
+  onStarMenu?: (e: React.MouseEvent) => void;
   // Other busy cards in this folder (lib/overlap.ts busyHere); flagged only while this one is busy too.
   alsoHere?: Card[];
 }) {
   // The request already answered here, so a second click can't answer it (or the next one) again.
   const [answeredId, setAnsweredId] = useState<string | null>(null);
   const live = isLive(card);
+  const scheduled = card.scheduled ?? [];
+  const nextSend = scheduled[0];
   const answered = answeredId !== null && answeredId === card.pending?.id;
   const needsLogin = card.column === "needs_you" && !card.pending && /^Log in to /.test(card.lastLine ?? "");
   const border = selected
@@ -188,7 +192,7 @@ export default function CardView({
       data-card-id={card.id}
       onClick={onOpen}
       onContextMenu={onContextMenu}
-      className={`relative rounded-lg border bg-card px-3 py-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent ${border} ${live ? "" : "cursor-grab active:cursor-grabbing"}`}
+      className={`group relative rounded-lg border bg-card px-3 py-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent ${border} ${live ? "" : "cursor-grab active:cursor-grabbing"}`}
     >
       {unseen && (
         <span title="New since you last looked" className="absolute right-1 top-1 z-10 size-2.5 animate-pulse rounded-full border-2 border-card bg-accent" />
@@ -196,11 +200,6 @@ export default function CardView({
       <div className="flex items-start gap-2.5">
         <div className="min-w-0 flex-1">
           <div className={`line-clamp-2 text-[13px] font-medium leading-snug ${card.column === "done" ? "text-muted" : "text-ink"}`}>
-            {card.libraryId && (
-              <span className="mr-1 text-warn" title="Starred: kept in your library" aria-label="Starred">
-                ★
-              </span>
-            )}
             {card.title}
           </div>
           <Summary card={card} />
@@ -277,13 +276,13 @@ export default function CardView({
             {timeAgo(card.lastActivity ?? card.updatedAt, now).replace(" ago", "")}
             {card.turns ? ` · ${card.turns}t` : ""}
           </span>
-          {card.scheduled?.length ? (
+          {nextSend ? (
             <span
               className="flex shrink-0 items-center gap-0.5 text-accent"
-              title={`${card.scheduled.length} message${card.scheduled.length > 1 ? "s" : ""} scheduled; the next sends ${formatAt(card.scheduled[0].at, now)}`}
+              title={`${scheduled.length} message${scheduled.length > 1 ? "s" : ""} scheduled; the next sends ${formatAt(nextSend.at, now)}`}
             >
               <Icon name="clock" size={10} />
-              {formatAt(card.scheduled[0].at, now)}
+              {formatAt(nextSend.at, now)}
             </span>
           ) : null}
           {card.openElsewhere && (
@@ -296,6 +295,7 @@ export default function CardView({
             </span>
           )}
         </span>
+        <StarButton variant="card" starred={Boolean(card.libraryId)} onClick={onStarMenu} />
         {live && (
           <button
             onClick={(e) => {

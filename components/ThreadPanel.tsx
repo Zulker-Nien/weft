@@ -10,6 +10,7 @@ import Icon from "./Icon";
 import ModePicker from "./ModePicker";
 import ReviewPanel from "./ReviewPanel";
 import SkillMenu from "./SkillMenu";
+import StarButton from "./StarButton";
 import ThreadView from "./ThreadView";
 
 export default function ThreadPanel({
@@ -20,6 +21,7 @@ export default function ThreadPanel({
   onAnswer,
   onRelease,
   onArchive,
+  onStarMenu,
   onDelete,
   onClose,
   onRename,
@@ -35,6 +37,8 @@ export default function ThreadPanel({
   onAnswer: (allow: boolean, answers?: Record<string, string>) => void;
   onRelease: () => void;
   onArchive: () => void;
+  // The ☆: file the card in the library, or show or unstar it.
+  onStarMenu?: (e: React.MouseEvent) => void;
   onDelete: () => void;
   // Left out while the browser shows beside the thread: the window's X sits in the browser's corner.
   onClose?: () => void;
@@ -105,6 +109,7 @@ export default function ThreadPanel({
           )}
         </div>
         <SkillMenu cwd={card.cwd} disabled={live} onRun={(skill) => onSend(`/${skill}`)} />
+        <StarButton variant="header" starred={Boolean(card.libraryId)} onClick={onStarMenu} />
         <button
           onClick={onArchive}
           disabled={live}

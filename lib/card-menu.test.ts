@@ -1,13 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { cardMenu, columnMenu, resumeCommand, type MenuItem } from "./card-menu";
+import { cardMenu, columnMenu, resumeCommand, starMenu, type MenuItem } from "./card-menu";
 import type { Card } from "./types";
 
 function card(over: Partial<Card> = {}): Card {
-  return { id: "c1", title: "T", prompt: "p", cwd: "/w", backend: "claude", permissionMode: "default", column: "review", createdAt: 0, updatedAt: 0, ...over } as Card;
+  return { id: "c1", title: "T", prompt: "p", cwd: "/w", backend: "claude", permissionMode: "default", column: "review", createdAt: 0, updatedAt: 0, ...over };
 }
 
 const ids = (items: MenuItem[]) => items.flatMap((i) => ("id" in i ? [i.id] : []));
 const item = (items: MenuItem[], id: string) => items.find((i) => "id" in i && i.id === id) as { enabled?: boolean; checked?: boolean; label: string; accelerator?: string } | undefined;
+
+describe("starMenu", () => {
+  it("is just the library part of the card menu, with the same keys", () => {
+    expect(ids(starMenu(card()))).toEqual(["star:recipe", "star:todo", "star:note"]);
+    expect(item(starMenu(card()), "star:recipe")?.accelerator).toBe("Shift+R");
+    expect(ids(starMenu(card({ libraryId: "x" })))).toEqual(["show-in-library", "unstar"]);
+  });
+});
 
 describe("cardMenu", () => {
   it("offers to star an unstarred card as each library kind, and to unstar a starred one", () => {

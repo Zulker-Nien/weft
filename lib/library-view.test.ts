@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { blanksIn, fillBlanks, isFinished, libraryCounts, libraryGroups, libraryPinned, setLibraryPinned, todoProgress } from "./library-view";
+import { blanksIn, fillBlanks, isFinished, libraryCounts, libraryGroups, libraryItemMenu, libraryPinned, setLibraryPinned, todoProgress } from "./library-view";
 import type { LibraryItem } from "./types";
 
 let seq = 0;
-const item = (over: Partial<LibraryItem> = {}) =>
-  ({ id: `i${++seq}`, kind: "note", scope: "project", title: "t", folder: "/dev/app", createdAt: 0, updatedAt: 0, ...over }) as LibraryItem;
+const item = (over: Partial<LibraryItem> = {}): LibraryItem =>
+  ({ id: `i${++seq}`, kind: "note", scope: "project", title: "t", folder: "/dev/app", createdAt: 0, updatedAt: 0, ...over });
 
 describe("isFinished", () => {
   it("is a to-do with steps, all of them ticked", () => {
@@ -70,11 +70,11 @@ describe("libraryGroups", () => {
       item({ id: "new", kind: "todo", updatedAt: 5, steps: 2 }),
       item({ id: "done-old", kind: "todo", updatedAt: 2, steps: 1, ticked: [0] }),
     ];
-    expect(libraryGroups(items, "todo", "project", "/dev/app")[0].items.map((i) => i.id)).toEqual(["new", "old", "done-new", "done-old"]);
+    expect(libraryGroups(items, "todo", "project", "/dev/app")[0]!.items.map((i) => i.id)).toEqual(["new", "old", "done-new", "done-old"]);
   });
 
   it("labels a folder that's only separators with the folder itself", () => {
-    expect(libraryGroups([item({ folder: "/" })], "note", "all", null)[0].label).toBe("/");
+    expect(libraryGroups([item({ folder: "/" })], "note", "all", null)[0]!.label).toBe("/");
   });
 });
 
@@ -117,5 +117,22 @@ describe("libraryPinned", () => {
     setLibraryPinned(false);
     expect(libraryPinned()).toBe(false);
     vi.unstubAllGlobals();
+  });
+});
+
+describe("libraryItemMenu", () => {
+  const ids = (menu: ReturnType<typeof libraryItemMenu>) => menu.flatMap((m) => ("id" in m ? [m.id] : []));
+
+  it("runs a recipe and shows its page; opens a to-do's or note's page", () => {
+    expect(ids(libraryItemMenu(item({ kind: "recipe" }), false))).toEqual(["run", "open", "scope", "remove"]);
+    expect(ids(libraryItemMenu(item({ kind: "todo" }), true))).toEqual(["open", "card", "scope", "kind", "remove"]);
+  });
+
+  it("moves between Mine and the project, and swaps to-do and note", () => {
+    const label = (menu: ReturnType<typeof libraryItemMenu>, id: string) => menu.find((m) => "id" in m && m.id === id) as { label: string };
+    expect(label(libraryItemMenu(item({ scope: "mine", folder: "/dev/app" }), false), "scope").label).toBe("Move to app (This Project Only)");
+    expect(label(libraryItemMenu(item({ scope: "project" }), false), "scope").label).toBe("Move to Mine (Every Project)");
+    expect(label(libraryItemMenu(item({ kind: "note" }), false), "kind").label).toBe("Make It a To-do");
+    expect(label(libraryItemMenu(item({ kind: "recipe" }), false), "remove").label).toBe("Remove Recipe (and Its Skill)");
   });
 });

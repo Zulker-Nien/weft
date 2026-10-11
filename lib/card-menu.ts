@@ -113,13 +113,21 @@ export function cardMenu(card: Card, dev?: DevServerStatus | null): MenuItem[] {
   if (card.sessionId && card.backend === "claude") items.push({ id: "copy-resume", label: "Copy Resume Command" });
   items.push(SEPARATOR);
 
-  // Starring files the card in the library (lib/library.ts); a starred card is never auto-archived.
-  if (card.libraryId) items.push({ id: "show-in-library", label: "Show in Library" }, { id: "unstar", label: "Unstar (Remove from Library)" });
-  else for (const k of LIBRARY_KINDS) items.push({ id: `star:${k.id}`, label: k.id === "recipe" ? "Save as Recipe" : `Star as ${k.label}` });
-  items.push(SEPARATOR);
+  items.push(...starItems(card), SEPARATOR);
 
   items.push({ id: "archive", label: card.archived ? "Unarchive" : "Archive" }, { id: "delete", label: "Delete…" });
   return withAccelerators(items, MENU_KEYS);
+}
+
+// Starring files the card in the library (lib/library.ts); a starred card is never auto-archived.
+function starItems(card: Card): MenuItem[] {
+  if (card.libraryId) return [{ id: "show-in-library", label: "Show in Library" }, { id: "unstar", label: "Unstar (Remove from Library)" }];
+  return LIBRARY_KINDS.map((k) => ({ id: `star:${k.id}`, label: k.id === "recipe" ? "Save as Recipe" : `Star as ${k.label}` }));
+}
+
+// The ☆ on a card and in its thread's header: just the library part of the card's menu.
+export function starMenu(card: Card): MenuItem[] {
+  return withAccelerators(starItems(card), MENU_KEYS);
 }
 
 // What to paste in a terminal to pick the thread up in Claude Code.

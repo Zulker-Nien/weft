@@ -1,3 +1,4 @@
+import type { MenuItem } from "./card-menu";
 import type { LibraryItem, LibraryKind } from "./types";
 
 // How the library rail reads (components/LibraryRail.tsx). Pure, so it's testable and safe in the browser.
@@ -13,7 +14,7 @@ function inView(item: LibraryItem, view: LibraryView, project: string | null) {
 
 // A to-do with every step ticked is finished.
 export function isFinished(item: LibraryItem) {
-  return item.kind === "todo" && Boolean(item.steps) && (item.ticked?.length ?? 0) >= item.steps!;
+  return item.kind === "todo" && Boolean(item.steps) && (item.ticked?.length ?? 0) >= (item.steps ?? 0);
 }
 
 // The rail's badges: recipes and notes in view, and to-dos still open.
@@ -34,8 +35,9 @@ export function libraryGroups(items: LibraryItem[], kind: LibraryKind, view: Lib
   for (const item of items) {
     if (item.kind !== kind || !inView(item, view, project)) continue;
     const key = item.scope === "mine" ? "~mine" : item.folder;
-    if (!groups.has(key)) groups.set(key, { key, label: item.scope === "mine" ? "Mine" : folderName(item.folder), items: [] });
-    groups.get(key)!.items.push(item);
+    const group = groups.get(key) ?? { key, label: item.scope === "mine" ? "Mine" : folderName(item.folder), items: [] };
+    groups.set(key, group);
+    group.items.push(item);
   }
   const order = (key: string) => (key === project ? 0 : key === "~mine" ? 2 : 1);
   return [...groups.values()]
@@ -77,9 +79,28 @@ const BLANK = /\{([A-Za-z](?:[\w -]|\\_){0,39})\}/g;
 const blankName = (raw: string) => raw.replace(/\\_/g, "_").trim();
 
 export function blanksIn(prompt: string): string[] {
-  return [...new Set([...prompt.matchAll(BLANK)].map((m) => blankName(m[1])))];
+  return [...new Set([...prompt.matchAll(BLANK)].map((m) => blankName(m[1] ?? "")))];
 }
 
 export function fillBlanks(prompt: string, values: Record<string, string>) {
   return prompt.replace(BLANK, (whole, name: string) => values[blankName(name)]?.trim() || whole);
+}
+
+export type LibraryItemAction = "run" | "open" | "card" | "scope" | "kind" | "remove";
+
+// A row's right-click menu in the drawer. hasCard: the card it was starred from is still on the board.
+export function libraryItemMenu(item: LibraryItem, hasCard: boolean): MenuItem[] {
+  const recipe = item.kind === "recipe";
+  const swap: MenuItem[] = item.kind === "todo" ? [{ id: "kind", label: "Make It a Note" }] : item.kind === "note" ? [{ id: "kind", label: "Make It a To-do" }] : [];
+  return [
+    ...(recipe ? [{ id: "run", label: "Run Recipe…" }, { id: "open", label: "Show Recipe Page" }] : [{ id: "open", label: "Open Page" }]),
+    ...(hasCard ? [{ id: "card", label: "Open the Original Thread" }] : []),
+    { type: "separator" },
+    item.scope === "mine"
+      ? { id: "scope", label: `Move to ${folderName(item.folder)} (This Project Only)` }
+      : { id: "scope", label: "Move to Mine (Every Project)" },
+    ...swap,
+    { type: "separator" },
+    { id: "remove", label: recipe ? "Remove Recipe (and Its Skill)" : "Remove from Library" },
+  ];
 }

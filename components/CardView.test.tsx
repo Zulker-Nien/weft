@@ -106,3 +106,23 @@ describe("CardView", () => {
     expect(api.login).toHaveBeenCalledWith("claude", "start");
   });
 });
+
+describe("CardView star", () => {
+  it("has a ☆ that opens the star menu without opening the card", async () => {
+    const onStarMenu = vi.fn();
+    const { onOpen } = renderCard({}, { onStarMenu });
+    await userEvent.click(screen.getByRole("button", { name: "Star" }));
+    expect(onStarMenu).toHaveBeenCalledOnce();
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it("shows ★ on a starred card", () => {
+    renderCard({ libraryId: "lib1" }, { onStarMenu: vi.fn() });
+    expect(screen.getByRole("button", { name: "Starred" })).toHaveTextContent("★");
+  });
+
+  it("has no star button without a menu to open", () => {
+    renderCard({ libraryId: "lib1" });
+    expect(screen.queryByRole("button", { name: /Star/ })).not.toBeInTheDocument();
+  });
+});
