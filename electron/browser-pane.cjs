@@ -3,6 +3,7 @@
 // 127.0.0.1 (see lib/browser-tools.ts).
 const { WebContentsView } = require("electron");
 const http = require("node:http");
+const { isSelfUrl } = require("./self-url.cjs");
 
 // Chrome's zoom steps, as percentages; Zoom In/Out walk them.
 const ZOOM_STEPS = [25, 33, 50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300, 400, 500];
@@ -89,16 +90,18 @@ function createBrowserPane({ getWindow, getAppView, token, onContents, pages, on
     wc.setVisualZoomLevelLimits(1, 4).catch(() => {});
     wc.on("zoom-changed", (_e, direction) => zoomContents(wc, direction));
     // Pop-ups open in the same card's view instead of new windows.
+    // Links get where they came from: the card whose pane holds the page, and the page's own URL.
+    const from = () => ({ card: key === BOARD ? null : key, page: wc.getURL() });
     wc.setWindowOpenHandler(({ url }) => {
-      if (/^weft:/i.test(url)) onLink?.(url);
+      if (/^weft:/i.test(url)) onLink?.(url, from());
       else wc.loadURL(url).catch(() => {});
       return { action: "deny" };
     });
-    // weft:// links in a page (a recipe's past runs) are the app's, not the page's.
+    // weft:// links in a page (a recipe's past runs, a walk-through's buttons) are the app's, not the page's.
     wc.on("will-navigate", (e, url) => {
       if (!/^weft:/i.test(url)) return;
       e.preventDefault();
-      onLink?.(url);
+      onLink?.(url, from());
     });
     for (const event of ["did-navigate", "did-navigate-in-page", "page-title-updated", "did-start-loading", "did-stop-loading"]) {
       wc.on(event, () => {
@@ -182,20 +185,9 @@ function createBrowserPane({ getWindow, getAppView, token, onContents, pages, on
     return `https://${url}`;
   }
 
-  // Weft's own server, with localhost and 127.0.0.1 treated as one host. Library pages (lib/library.ts) are
-  // served from it on purpose, so their checkboxes can save, and don't count.
+  // Weft's own server (see self-url.cjs for what counts).
   function isSelf(url) {
-    const key = (u) => {
-      const { protocol, hostname, port } = new URL(u);
-      return `${protocol}//${hostname === "localhost" ? "127.0.0.1" : hostname}:${port}`;
-    };
-    try {
-      const own = getAppView()?.webContents.getURL();
-      if (new URL(url).pathname.startsWith("/api/library/")) return false;
-      return Boolean(own) && key(own) === key(url);
-    } catch {
-      return false;
-    }
+    return isSelfUrl(url, getAppView()?.webContents.getURL());
   }
 
   // Loads a page in a card's browser. Opening in the card on screen shows the pane; another card's
