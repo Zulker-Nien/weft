@@ -5,6 +5,7 @@ import { openInPane, paneThumb, paneUrl } from "./browser-tools";
 import { emojiPrompt, parseEmoji } from "./card-pictures";
 import { complete } from "./haiku";
 import { listLibrary } from "./library";
+import { parseTitle, shouldRetitle, titleEmoji, titlePrompt } from "./retitle";
 import { DATA_DIR, decorateCard, getCard } from "./store";
 import type { LibraryItem } from "./types";
 
@@ -194,8 +195,27 @@ export async function glanceAfterTurn(
   if (turn.reply.trim() && shouldWriteGlance({ ...turn, paneUrl: await paneUrl(cardId) })) {
     await writeGlance(cardId, turn.ask, turn.reply, isCurrent).catch(() => {});
   }
+  retitleAfterTurn(cardId, turn);
   await pictureAfterTurn(cardId, isCurrent);
 }
+
+// A card still named "Image attachment" or by its raw prompt gets a Haiku title with an emoji (lib/retitle.ts),
+// and that emoji becomes its tile. Fire and forget; a failed or empty reply leaves the title for the next turn.
+function retitleAfterTurn(cardId: string, turn: { ask: string; reply: string }) {
+  const card = getCard(cardId);
+  if (!card || !shouldRetitle(card) || !turn.reply.trim()) return;
+  void complete(titlePrompt(turn.ask, turn.reply))
+    .then((reply) => {
+      const title = parseTitle(reply);
+      const current = getCard(cardId);
+      // You may have renamed it while Haiku was thinking.
+      if (!title || !current || !shouldRetitle(current)) return;
+      const emoji = titleEmoji(title);
+      decorateCard(cardId, { title, titleBy: "auto", ...(emoji ? { emoji } : {}) });
+    })
+    .catch(() => {});
+}
+
 
 // How long a page just opened in the pane gets to paint before it's captured.
 const PAINT_MS = 1200;

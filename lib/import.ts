@@ -402,10 +402,12 @@ async function runSync(): Promise<SyncResult> {
     // New messages or a new title from outside Weft move the card, unless Weft has the thread open.
     Object.assign(patch, columnPatch(existing, activity, live, stage, tail?.reply));
     const outside = activity > (existing.lastActivity ?? 0) + 1000;
+    // A title you or Weft's retitle chose (lib/retitle.ts) stays; only the stage follows Claude Code.
+    const name = existing.titleBy ? {} : { title };
     if (outside && !existing.warm) {
-      Object.assign(patch, { title, stage, lastActivity: activity });
-    } else if (!existing.warm && (title !== existing.title || stage !== existing.stage)) {
-      Object.assign(patch, { title, stage });
+      Object.assign(patch, { stage, lastActivity: activity }, name);
+    } else if (!existing.warm && (stage !== existing.stage || (!existing.titleBy && title !== existing.title))) {
+      Object.assign(patch, { stage }, name);
     }
     if (Object.keys(patch).length) {
       updateCard(existing.id, patch);

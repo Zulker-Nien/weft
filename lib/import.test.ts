@@ -379,6 +379,18 @@ describe("syncSessions: cards already on the board", () => {
     expect(patchFor(card)).toEqual({ column: "review", lastLine: "All green now.", title: "New title", stage: "Polishing", lastActivity: Date.parse(last) });
   });
 
+  it("keeps a title you or Weft's retitle chose, while the stage still follows Claude Code", async () => {
+    const id = onDisk([said("go", ago(2 * DAY)), answered("Done.", ago(DAY))]);
+    const card = boardCard(id, { title: "🐞 Compile Error", titleBy: "auto", column: "done" });
+    await sync([info(id, { customTitle: "POLISHING - Image attachment" })], [card]);
+    expect(patchFor(card)).not.toHaveProperty("title");
+    expect(patchFor(card)).toMatchObject({ stage: "Polishing" });
+
+    const quiet = boardCard(id, { title: "Mine", titleBy: "user", lastActivity: Date.now() });
+    await sync([info(id, { customTitle: "Something else" })], [quiet]);
+    expect(patchFor(quiet)).not.toHaveProperty("title");
+  });
+
   it("takes the reply from an earlier message when the last ones have no text", async () => {
     const id = onDisk([
       said("go", ago(DAY)),

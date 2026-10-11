@@ -118,7 +118,7 @@ describe("pages glance writes and opens in the pane", () => {
     paneThumb: vi.fn<(key: string) => Promise<Buffer | undefined>>(),
     openInPane: vi.fn<(url: string, key: string) => Promise<void>>(async () => {}),
     complete: vi.fn<(prompt: string) => Promise<string>>(),
-    getCard: vi.fn<(id: string) => { id: string; title: string; emoji?: string } | undefined>(),
+    getCard: vi.fn<(id: string) => { id: string; title: string; prompt?: string; emoji?: string; titleBy?: "user" | "auto" } | undefined>(),
     decorateCard: vi.fn(),
     saveAttachmentData: vi.fn(() => ({ url: "/api/attachments/pane-1.jpg" })),
   };
@@ -159,7 +159,7 @@ describe("pages glance writes and opens in the pane", () => {
     vi.useFakeTimers();
     h.paneUrl.mockResolvedValue("");
     h.paneThumb.mockResolvedValue(undefined);
-    h.getCard.mockReturnValue({ id: "c1", title: "Login", emoji: "🔐" });
+    h.getCard.mockReturnValue({ id: "c1", title: "Login", prompt: "Add login", emoji: "🔐" });
     h.complete.mockResolvedValue(PAGE);
   });
 
@@ -245,7 +245,7 @@ describe("pages glance writes and opens in the pane", () => {
     it("asks Haiku once for a tile emoji when the card has none, keeping only a real emoji", async () => {
       const emojiReplies = ["Sure! 🔐", "no idea", new Error("down")];
       for (const reply of emojiReplies) {
-        h.getCard.mockReturnValue({ id: "c1", title: "Login" });
+        h.getCard.mockReturnValue({ id: "c1", title: "Login", prompt: "Add login" });
         h.complete.mockImplementation((prompt) =>
           !prompt.startsWith("Reply with exactly one emoji") ? Promise.resolve(PAGE)
           : reply instanceof Error ? Promise.reject(reply) : Promise.resolve(reply));
@@ -253,6 +253,47 @@ describe("pages glance writes and opens in the pane", () => {
       }
       expect(h.complete).toHaveBeenCalledWith(expect.stringContaining("Task: Login"));
       expect(h.decorateCard.mock.calls).toEqual([["c1", { emoji: "🔐" }]]);
+    });
+    describe("retitling", () => {
+      const weak = { id: "c1", title: "Image attachment", prompt: "[Image #1]", emoji: "🔐" };
+      const titleCalls = () => h.complete.mock.calls.filter(([p]) => p.startsWith("Name this coding thread"));
+      const reply = (title: string | Error) => (prompt: string) =>
+        !prompt.startsWith("Name this coding thread") ? Promise.resolve(PAGE) : title instanceof Error ? Promise.reject(title) : Promise.resolve(title);
+
+      it("renames a placeholder-titled card and takes its emoji for the tile", async () => {
+        h.getCard.mockReturnValue(weak);
+        h.complete.mockImplementation(reply("🐞 Compile Error: missing import"));
+        await settle(g.glanceAfterTurn("c1", turn, () => true));
+        expect(h.decorateCard).toHaveBeenCalledWith("c1", { title: "🐞 Compile Error: missing import", titleBy: "auto", emoji: "🐞" });
+      });
+
+      it("keeps the old emoji when the title has none", async () => {
+        h.getCard.mockReturnValue(weak);
+        h.complete.mockImplementation(reply("Compile error"));
+        await settle(g.glanceAfterTurn("c1", turn, () => true));
+        expect(h.decorateCard).toHaveBeenCalledWith("c1", { title: "Compile error", titleBy: "auto" });
+      });
+
+      it("leaves named cards, silent turns and bad replies alone", async () => {
+        h.getCard.mockReturnValue({ ...weak, titleBy: "user" });
+        await settle(g.glanceAfterTurn("c1", turn, () => true));
+        h.getCard.mockReturnValue(weak);
+        await settle(g.glanceAfterTurn("c1", { ...turn, reply: " " }, () => true));
+        expect(titleCalls()).toHaveLength(0);
+        for (const bad of ["  ", new Error("down")]) {
+          h.complete.mockImplementation(reply(bad));
+          await settle(g.glanceAfterTurn("c1", turn, () => true));
+        }
+        expect(titleCalls()).toHaveLength(2);
+        expect(h.decorateCard).not.toHaveBeenCalled();
+      });
+
+      it("drops the title if you renamed the card meanwhile", async () => {
+        h.getCard.mockReturnValueOnce(weak).mockReturnValue({ ...weak, title: "Mine", titleBy: "user" });
+        h.complete.mockImplementation(reply("🐞 Auto"));
+        await settle(g.glanceAfterTurn("c1", turn, () => true));
+        expect(h.decorateCard).not.toHaveBeenCalledWith("c1", expect.objectContaining({ titleBy: "auto" }));
+      });
     });
   });
 });

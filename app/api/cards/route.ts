@@ -40,7 +40,8 @@ export async function POST(req: Request) {
     const body = (await req.json()) as Record<string, unknown>;
     const prompt = String(body.prompt ?? "").trim();
     if (!prompt) throw new Error("Write a prompt for this thread.");
-    const title = String(body.title ?? "").trim() || titleFromPrompt(prompt);
+    const typedTitle = String(body.title ?? "").trim();
+    const title = typedTitle || titleFromPrompt(prompt);
 
     const cwd = resolveFolder(body.cwd);
 
@@ -56,7 +57,7 @@ export async function POST(req: Request) {
     // Only a recipe that's really in the library; its runs show on its page.
     const recipeId = typeof body.recipeId === "string" && getItem(body.recipeId)?.kind === "recipe" ? body.recipeId : undefined;
 
-    const card = createCard({ title, prompt, cwd, backend, permissionMode, model, effort, ...(recipeId ? { recipeId } : {}) });
+    const card = createCard({ title, ...(typedTitle ? { titleBy: "user" as const } : {}), prompt, cwd, backend, permissionMode, model, effort, ...(recipeId ? { recipeId } : {}) });
     touchProject(cwd);
     if (body.start) sendMessage(card.id, firstMessage(card));
     return Response.json({ card: getCard(card.id) });

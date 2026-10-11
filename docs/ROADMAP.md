@@ -42,6 +42,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 
 ## Cards and threads
 
+- `Now` **Auto-retitle cards** — after a turn, a card named "Image attachment", "Untitled thread" or just its prompt's first line gets a Haiku title with an emoji (`lib/retitle.ts`, hooked in `lib/glance.ts`); `titleBy` marks a card named by you or by Weft so neither it nor Claude Code's sync renames it again. Still open: retitling when the thread's topic drifts, and a "rename with AI" card menu item.
 - `Now` **Summary-first cards with a picture** — the card leads with the thread's last line in plain text, a 52 px thumbnail of its latest picture (thread screenshots and images, or a pane capture after each turn; hover to enlarge), an 8-dot stage bar with what's left, and a one-line footer. No picture yet: a Haiku emoji tile, or the folder's initial. Still open: emoji for cards that haven't had a turn since, and a setting to hide thumbnails.
 
 - `Now` **Managed thread prompt and BOARD STATUS** — every board thread gets a system prompt asking it to end replies with a `BOARD STATUS` line; the board uses it to move the card to Needs you, Review, or Done and to show its stage and what's left. The parser skips status lines quoted in code blocks and reads the bold-label form (`**BOARD STATUS:** ...`).

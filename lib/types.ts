@@ -160,6 +160,9 @@ export interface Card {
   pictures?: number;
   // Haiku's emoji for the card, shown in place of a thumbnail until it has one.
   emoji?: string;
+  // Who last named the card: you (typed or renamed it) or Weft's retitle after its first turn (lib/retitle.ts).
+  // Either way, Claude Code's own session title no longer replaces it.
+  titleBy?: "user" | "auto";
   // Messages to send at a set time (lib/schedule.ts), soonest first; lib/scheduler.ts sends them.
   scheduled?: ScheduledMessage[];
   createdAt: number;

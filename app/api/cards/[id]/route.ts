@@ -26,7 +26,10 @@ export async function PATCH(req: Request, { params }: Ctx) {
       permissionMode?: PermissionMode;
     };
 
-    if (body.title !== undefined) updateCard(id, { title: String(body.title).trim() || card.title });
+    if (body.title !== undefined) {
+      const title = String(body.title).trim();
+      if (title) updateCard(id, { title, titleBy: "user" });
+    }
 
     if (body.archived !== undefined) {
       if (card.role === "copilot") throw new Error("The copilot isn't on the board.");

@@ -63,7 +63,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   `lib/skills.ts` lists skills, `lib/automations.ts` turns "When … run …" rules into turns.
 - `lib/coverage.ts` + `app/api/coverage`: read the project in view's `coverage/coverage-summary.json` (`npm run coverage`) for the
   header pie, `components/CoverageBadge.tsx`; its hover bubble is `components/Tip.tsx` (native titles don't show in Electron).
-- `lib/card-pictures.ts`: a card's thumbnail (latest thread image, or a pane capture after each turn from `lib/glance.ts`) and its Haiku emoji tile; `components/CardView.tsx` draws the card.
+- `lib/card-pictures.ts`: a card's thumbnail (latest thread image, or a pane capture after each turn from `lib/glance.ts`) and its Haiku emoji tile; `lib/retitle.ts` renames a card with a placeholder title ("Image attachment") after its turn (`titleBy` marks a name Weft or you chose); `components/CardView.tsx` draws the card.
 - `lib/library.ts` + `lib/library-view.ts` + `components/LibraryRail.tsx`: the library of starred cards (recipes are Claude
   skills, to-dos and notes are saved pages in `~/.weft/library`), its rail and drawer (docs/architecture/library.md).
 - `lib/copilot.ts` + `lib/board-tools.ts`: the copilot thread and its `mcp__board__*` tools.

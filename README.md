@@ -166,6 +166,11 @@ picks from its title, or its folder's initial until then. Below that, eight dots
 through the stages it is (Planning to Done) with what's left, and the footer reads
 `● weft 12m · 1t · $1.22` (the dot is the CLI: orange for claude, purple for puku).
 
+A card whose title says nothing (a picked-up session called "Image attachment", "Untitled thread", or just its
+prompt's first line) is renamed after its first turn, by Haiku, to something like
+"🐞 Compile Error: missing CoverageBadge import"; its emoji becomes the tile. A title you typed or edited is
+never replaced, and Claude Code's own session title stops overwriting it once Weft has named the card.
+
 ## Skills and automations
 
 Weft ships its own skills in `plugin/`, a Claude Code plugin named `weft` that every board thread

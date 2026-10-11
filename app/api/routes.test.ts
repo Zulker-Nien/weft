@@ -360,6 +360,7 @@ describe("POST /cards", () => {
     const { card } = await res.json();
     expect(card).toMatchObject({ prompt: "fix the bug", cwd: tmp, backend: "claude", permissionMode: "auto", column: "backlog" });
     expect(card.title).toBeTruthy();
+    expect(card.titleBy).toBeUndefined();
     expect(settings.touchProject).toHaveBeenCalledWith(tmp);
     expect(runner.sendMessage).not.toHaveBeenCalled();
   });
@@ -368,6 +369,7 @@ describe("POST /cards", () => {
     const res = await cardsRoute.POST(req("/cards", { method: "POST", body: { prompt: "go", title: "Go", cwd: tmp, start: true } }));
     const { card } = await res.json();
     expect(card.title).toBe("Go");
+    expect(card.titleBy).toBe("user");
     expect(runner.sendMessage).toHaveBeenCalledWith(card.id, "first:go");
   });
 
@@ -418,6 +420,7 @@ describe("PATCH /cards/:id", () => {
     const card = addCard({ title: "Old" });
     const res = await patch(card.id, { title: "  New  " });
     expect((await res.json()).card.title).toBe("New");
+    expect(db.cards.get(card.id)!.titleBy).toBe("user");
     await patch(card.id, { title: "   " });
     expect(db.cards.get(card.id)!.title).toBe("New");
   });
