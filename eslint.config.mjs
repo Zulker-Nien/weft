@@ -99,9 +99,8 @@ const eslintConfig = defineConfig([
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
-    ".next/**",
-    ".next-app/**",
-    ".next-dist/**",
+    // .next plus every sibling build dir (.next-app, .next-dist, .next-bench*, .next-game).
+    ".next*/**",
     "dist/**",
     "out/**",
     "build/**",

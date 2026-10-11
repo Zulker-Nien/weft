@@ -14,8 +14,8 @@
 /coverage
 
 # next.js
-/.next/
-/.next-app/
+# .next plus sibling build dirs (.next-app, .next-bench*, .next-game, ...)
+/.next*/
 /out/
 
 # production
@@ -42,7 +42,6 @@ yarn-error.log*
 next-env.d.ts
 
 # packaged app
-/.next-dist/
 /dist/
 
 # Local preview config (machine-specific paths)
