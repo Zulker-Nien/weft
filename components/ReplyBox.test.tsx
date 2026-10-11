@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ScheduledMessage } from "@/lib/types";
@@ -68,6 +68,13 @@ describe("ReplyBox", () => {
     localStorage.setItem("weft.reply.c1", "half a thought");
     const { box } = setup();
     expect(box).toHaveValue("half a thought");
+  });
+
+  it("keeps what was just typed when the thread closes before the draft saves", async () => {
+    const { box } = setup();
+    await userEvent.type(box, "closing fast");
+    cleanup();
+    expect(localStorage.getItem("weft.reply.c1")).toBe("closing fast");
   });
 
   it("warns when other threads are running in this folder", () => {

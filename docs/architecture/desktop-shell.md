@@ -108,6 +108,10 @@ A native `WebContentsView` overlaid on the board. Lazily created on first
   board and the copilot window try to open in new windows are sent to this pane too.
 - A focused page swallows keys the board never sees, so `before-input-event` replays a plain Escape
   into the board (which closes its newest layer via `useEscape`). Fullscreen pages keep it.
+- A page load takes keyboard focus, so `open()` gives it back to the board when the board had it, and
+  `layout()` hands focus to the board when it hides a view that holds it. Otherwise no key (Escape
+  included) reaches the board. `useEscape(..., { panel: true })` marks board panels (thread, browser,
+  library), which close only after every dialog and menu.
 - `normalizeUrl(raw)` accepts `https?/file/about:` schemes, prepends `http://` to
   bare `localhost`/`127.0.0.1`/`[::1]`, rejects other schemes, and prepends
   `https://` to bare hostnames.

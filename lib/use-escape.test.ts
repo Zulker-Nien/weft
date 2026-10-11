@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { keepTypedText, useEscape } from "./use-escape";
+import { useEscape } from "./use-escape";
 
 function press(key = "Escape", init: KeyboardEventInit = {}) {
   const e = new KeyboardEvent("keydown", { key, cancelable: true, ...init });
@@ -97,6 +97,29 @@ describe("useEscape", () => {
     expect(below).not.toHaveBeenCalled();
   });
 
+  it("keeps a panel under a dialog that opened before it", () => {
+    const dialog = vi.fn();
+    const panel = vi.fn();
+    const shown = renderHook(() => useEscape(true, dialog));
+    renderHook(() => useEscape(true, panel, { panel: true }));
+    press();
+    expect(dialog).toHaveBeenCalledOnce();
+    expect(panel).not.toHaveBeenCalled();
+    shown.unmount();
+    press();
+    expect(panel).toHaveBeenCalledOnce();
+  });
+
+  it("closes the newest panel when no dialog is up", () => {
+    const thread = vi.fn();
+    const library = vi.fn();
+    renderHook(() => useEscape(true, thread, { panel: true }));
+    renderHook(() => useEscape(true, library, { panel: true }));
+    press();
+    expect(library).toHaveBeenCalledOnce();
+    expect(thread).not.toHaveBeenCalled();
+  });
+
   it("lets something closer claim Escape by stopping its propagation", () => {
     const onEscape = vi.fn();
     renderHook(() => useEscape(true, onEscape));
@@ -104,65 +127,5 @@ describe("useEscape", () => {
     input.addEventListener("keydown", (e) => e.stopPropagation());
     input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(onEscape).not.toHaveBeenCalled();
-  });
-});
-
-describe("keepTypedText", () => {
-  function escapeOn(target: EventTarget) {
-    const e = new KeyboardEvent("keydown", { key: "Escape" });
-    Object.defineProperty(e, "target", { value: target });
-    return e;
-  }
-
-  function field<T extends HTMLElement>(el: T): T {
-    document.body.appendChild(el);
-    el.focus();
-    return el;
-  }
-
-  it("blurs an input holding text and keeps the dialog open", () => {
-    const input = field(document.createElement("input"));
-    input.value = "half a prompt";
-    expect(keepTypedText(escapeOn(input))).toBe(true);
-    expect(document.activeElement).not.toBe(input);
-  });
-
-  it("does the same for a textarea", () => {
-    const textarea = field(document.createElement("textarea"));
-    textarea.value = "notes";
-    expect(keepTypedText(escapeOn(textarea))).toBe(true);
-    expect(document.activeElement).not.toBe(textarea);
-  });
-
-  it("lets an empty or whitespace-only field close", () => {
-    const input = field(document.createElement("input"));
-    input.value = "   ";
-    expect(keepTypedText(escapeOn(input))).toBe(false);
-    expect(document.activeElement).toBe(input);
-  });
-
-  it("treats a contenteditable editor with text as typed", () => {
-    const editor = field(document.createElement("div"));
-    editor.contentEditable = "true";
-    editor.tabIndex = 0;
-    editor.textContent = "draft";
-    expect(keepTypedText(escapeOn(editor))).toBe(true);
-  });
-
-  it("lets an empty contenteditable editor close", () => {
-    const editor = field(document.createElement("div"));
-    editor.contentEditable = "true";
-    expect(keepTypedText(escapeOn(editor))).toBe(false);
-  });
-
-  it("ignores text in an element that isn't editable", () => {
-    const div = field(document.createElement("div"));
-    div.textContent = "just a label";
-    expect(keepTypedText(escapeOn(div))).toBe(false);
-  });
-
-  it("returns false when the target isn't an element", () => {
-    expect(keepTypedText(escapeOn(window))).toBe(false);
-    expect(keepTypedText(new KeyboardEvent("keydown", { key: "Escape" }))).toBe(false);
   });
 });

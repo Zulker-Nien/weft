@@ -74,7 +74,27 @@ export default function ReplyBox({
   const composer = useRef<ComposerHandle>(null);
   const draftTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  useEffect(() => () => clearTimeout(draftTimer.current), []);
+  // The draft not yet written. Closing the thread writes it, so Escape can close with text in the box.
+  const unsaved = useRef<{ cardId: string; markdown: string } | null>(null);
+
+  function saveDraft(markdown: string, now = false) {
+    clearTimeout(draftTimer.current);
+    unsaved.current = { cardId, markdown };
+    const write = () => {
+      if (unsaved.current) writeDraft(unsaved.current.cardId, unsaved.current.markdown);
+      unsaved.current = null;
+    };
+    if (now) write();
+    else draftTimer.current = setTimeout(write, 300);
+  }
+
+  useEffect(
+    () => () => {
+      clearTimeout(draftTimer.current);
+      if (unsaved.current) writeDraft(unsaved.current.cardId, unsaved.current.markdown);
+    },
+    [],
+  );
 
   // The turn ended and nothing is being edited: send what was queued as one message.
   useEffect(() => {
@@ -113,8 +133,7 @@ export default function ReplyBox({
     if (live && !now) {
       setQueue((q) => [...q, text]);
       setPaused(false);
-      clearTimeout(draftTimer.current);
-      writeDraft(cardId, "");
+      saveDraft("", true);
       composer.current?.clear();
       return;
     }
@@ -124,8 +143,7 @@ export default function ReplyBox({
       if (live) await onStop();
       await onSend(text);
       setPaused(false);
-      clearTimeout(draftTimer.current);
-      writeDraft(cardId, "");
+      saveDraft("", true);
       composer.current?.clear();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -171,8 +189,7 @@ export default function ReplyBox({
     }
     try {
       await api.schedule(cardId, text, at);
-      clearTimeout(draftTimer.current);
-      writeDraft(cardId, "");
+      saveDraft("", true);
       composer.current?.clear();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -288,8 +305,7 @@ export default function ReplyBox({
         onSubmit={() => void submit()}
         onChange={(markdown) => {
           setError(null);
-          clearTimeout(draftTimer.current);
-          draftTimer.current = setTimeout(() => writeDraft(cardId, markdown), 300);
+          saveDraft(markdown);
         }}
         sizeClass="min-h-[44px] max-h-[40vh]"
         actions={

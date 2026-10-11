@@ -26,7 +26,7 @@ import { useDesktopBridge } from "@/lib/use-desktop-bridge";
 import { useNow } from "@/lib/use-now";
 import { useToast } from "@/lib/use-toast";
 import { archivedMessage, neighborAfter } from "@/lib/archive";
-import { keepTypedText, useEscape } from "@/lib/use-escape";
+import { useEscape } from "@/lib/use-escape";
 import BrowserPane from "./BrowserPane";
 import CardView from "./CardView";
 import CommandPalette, { type PaletteItem } from "./CommandPalette";
@@ -884,15 +884,13 @@ export default function Board() {
     else setWebBrowserOpen((open) => !open);
   }
 
-  // Escape closes the newest open layer. The board's own panels sit under any dialog opened over them,
-  // and an unsent reply isn't thrown away with its thread. A card and its browser are one window, so
-  // they close together.
-  useEscape(Boolean(selectedId), (e) => {
-    if (!keepTypedText(e)) select(null);
-  });
-  useEscape(browserOpen && !selectedId && !showNew, toggleBrowser);
+  // Escape closes the newest open layer. The board's own panels sit under any dialog or menu, even one
+  // opened before them. The thread closes even mid-reply: ReplyBox keeps the draft for next time. A card
+  // and its browser are one window, so they close together.
+  useEscape(Boolean(selectedId), () => select(null), { panel: true });
+  useEscape(browserOpen && !selectedId && !showNew, toggleBrowser, { panel: true });
   // Registered last, so an open library drawer closes before the browser does.
-  useEscape(Boolean(libraryOpen) && !selectedId && !showNew && !libraryPinned(), () => setLibraryOpen(null));
+  useEscape(Boolean(libraryOpen) && !selectedId && !showNew && !libraryPinned(), () => setLibraryOpen(null), { panel: true });
 
   function toggleTerminal() {
     setTerminalOpen((open) => !open);
