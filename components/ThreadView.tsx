@@ -150,7 +150,7 @@ export default function ThreadView({
 
       {footer}
       {!replaceReply && (
-        <ReplyBox key={card.id} cardId={card.id} cwd={card.cwd} live={live} placeholder={placeholder} alsoHere={alsoHere}
+        <ReplyBox key={card.id} cardId={card.id} cwd={card.cwd} live={live} placeholder={placeholder} suggestion={card.suggestion} alsoHere={alsoHere}
           sendLater={scheduling && { backend: card.backend, resets: scheduling.resets, scheduled: card.scheduled ?? [] }}
           status={<StatusStrip stats={card.stats} cwd={card.cwd} backend={card.backend} />}
           onSend={send} onStop={() => api.stop(card.id).then(() => {})} />

@@ -136,7 +136,7 @@ const MAX_TIMER_MS = 2 ** 31 - 1;
 // rules in turn.ts count too: a session started before they changed would still run the old ones.
 const BUILD = createHash("sha1")
   .update(
-    [drive, queryOptions, handle, handleAssistant, recordEdit, handleToolResults, handleResult, askUser, settle, sendMessage, ...Object.values(turnRules)]
+    [drive, queryOptions, handle, handleRateLimit, handleSuggestion, handleAssistant, recordEdit, handleToolResults, handleResult, askUser, settle, sendMessage, ...Object.values(turnRules)]
       .map(String)
       .join("\n"),
   )
@@ -330,7 +330,7 @@ export function sendMessage(cardId: string, text: string, { echo = true, cli = t
   session ??= adoptSpare(card) ?? open(specFor(card), cardId);
 
   if (echo) appendThread(cardId, { kind: "user", text, at: Date.now() });
-  updateCard(cardId, { column: "running", archived: false, error: undefined, pending: null, lastLine: "Thinking…" });
+  updateCard(cardId, { column: "running", archived: false, error: undefined, suggestion: undefined, pending: null, lastLine: "Thinking…" });
   clearTimeout(session.idle);
   session.busy = true;
   session.status = undefined;
@@ -567,6 +567,8 @@ function queryOptions(session: Session, executable: string | undefined): Options
     // Puku-cli's CLI doesn't accept this flag, so only forward it to the Claude Code binary.
     allowDangerouslySkipPermissions: spec.backend === "claude" && !spec.copilot ? true : undefined,
     pathToClaudeCodeExecutable: executable,
+    // A guessed next message after each turn, for the reply box's Tab (it rides the turn's prompt cache).
+    promptSuggestions: spec.backend === "claude" && !spec.copilot ? true : undefined,
     // Weft's own skills (plugin/skills), so board threads can run /weft:done and the like.
     plugins: !spec.copilot && fs.existsSync(PLUGIN_DIR) ? [{ type: "local", path: PLUGIN_DIR }] : undefined,
     systemPrompt: {
@@ -653,14 +655,9 @@ function handle(id: string, session: Session, msg: SDKMessage) {
       }
       break;
 
-    case "rate_limit_event": {
-      const info = msg.rate_limit_info;
-      const window = eventWindow(info);
-      if (!window) break;
-      if (info.rateLimitType === "five_hour") updateStats(id, { fiveHour: window });
-      else if (info.rateLimitType === "seven_day") updateStats(id, { sevenDay: window });
+    case "rate_limit_event":
+      handleRateLimit(id, msg.rate_limit_info);
       break;
-    }
 
     case "stream_event": {
       if (msg.parent_tool_use_id) break;
@@ -683,7 +680,24 @@ function handle(id: string, session: Session, msg: SDKMessage) {
     case "result":
       handleResult(id, session, msg);
       break;
+
+    case "prompt_suggestion":
+      handleSuggestion(id, msg.suggestion);
+      break;
   }
+}
+
+function handleRateLimit(id: string, info: Extract<SDKMessage, { type: "rate_limit_event" }>["rate_limit_info"]) {
+  const window = eventWindow(info);
+  if (!window) return;
+  if (info.rateLimitType === "five_hour") updateStats(id, { fiveHour: window });
+  else if (info.rateLimitType === "seven_day") updateStats(id, { sevenDay: window });
+}
+
+// The CLI's guess at your next message, for the reply box's placeholder and Tab.
+function handleSuggestion(id: string, suggestion: string) {
+  const text = suggestion.trim();
+  if (text) safeUpdate(id, { suggestion: text });
 }
 
 // The agent's reply: its text goes to the thread (status and review blocks lifted onto the card), and

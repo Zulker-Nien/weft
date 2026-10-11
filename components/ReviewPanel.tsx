@@ -233,12 +233,7 @@ function Tour({
             </button>
           </div>
           {plan.dev && plan.url && <DevServer cardId={cardId} plan={plan} />}
-          {step.look && (
-            <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
-              <span className="font-medium text-ink">Look for: </span>
-              {step.look}
-            </p>
-          )}
+          {step.look && <LookFor key={index} text={step.look} />}
           <div className="mt-2">
             <Composer
               ref={composer}
@@ -289,5 +284,19 @@ function Tour({
         </div>
       )}
     </section>
+  );
+}
+
+// What to look for, held to two lines so a wordy step can't push the feedback box off a small screen; click to read it all.
+function LookFor({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <p
+      onClick={() => setOpen((o) => !o)}
+      className={`mt-1.5 cursor-default text-[12.5px] leading-relaxed text-muted ${open ? "" : "line-clamp-2"}`}
+    >
+      <span className="font-medium text-ink">Look for: </span>
+      {text}
+    </p>
   );
 }

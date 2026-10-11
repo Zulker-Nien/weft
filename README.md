@@ -93,6 +93,10 @@ The new-thread dialog (⌘N) and every card's reply box use the same editor:
   first instead. There's also "In 1 hour", "Tomorrow morning" and any date and time. Scheduled replies sit above the box (click one to
   edit it) and show as a clock on the card. Weft sends them itself, with the thread closed; one that
   came due while Weft was shut goes when it next starts.
+- **Suggested next message.** After a turn, a Claude thread's reply box shows the CLI's guess at what
+  you'll say next as its placeholder (as the Claude CLI does). Tab in the empty box fills it in to edit
+  or send; it never sends on its own. It rides the turn's prompt cache, so it costs next to nothing,
+  and it doesn't appear after a session's first turn.
 - In a reply, Enter sends and Shift+Enter starts a new line (Enter in a list or code block starts a
   new line too). In the new-thread dialog, ⌘↵ starts the thread.
 

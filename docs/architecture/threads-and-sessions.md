@@ -108,6 +108,17 @@ what stops the thread, so it goes first and becomes the Alt+Enter default. Puku 
 ones with no known reset, get "In 1 hour" first; "Tomorrow morning" (9am) and a date-time picker are always there. The copilot
 can't schedule. The card shows the next time as a clock badge in its footer.
 
+### Suggested next message
+
+`queryOptions()` turns on the SDK's `promptSuggestions` for Claude board threads (not puku-cli or the
+copilot). After a turn's `result` the CLI may send one `prompt_suggestion` message, a predicted next
+user prompt that rides the turn's prompt cache. It never comes after a session's first turn, after an
+error, or in plan mode. `handle()` passes it to `handleSuggestion()`, which saves the trimmed text as
+`card.suggestion`; `sendMessage()` clears it. `ThreadView` hands it to `ReplyBox`, which shows it as the
+placeholder (`replyPlaceholder`) with a "Tab" hint; Tab in an empty box (`takeSuggestion`) writes it into
+the composer without sending. It stays out of the way while a turn runs or once you've typed. A CLI
+that started before this was added has no suggestions until it restarts.
+
 ### Archiving after Done
 
 Moving a card to Done also calls `archiveWhenIdle()` (`lib/runner.ts`): with no queued or running
@@ -290,7 +301,7 @@ don't appear in the Claude app's session list.
 
 A thread that finishes work for review ends its reply with a fenced `weft-review` JSON block (the instruction is `REVIEW_PROMPT` in `lib/review.ts`, appended to every board thread's system prompt in `drive()`). `lib/runner.ts` strips the block from the visible text and saves the parsed plan on `card.review`: `url` (where the app runs), `dev` (the command that starts it), and `steps`.
 
-While the card is in Review, `components/ReviewPanel.tsx` sits at the bottom of the thread, in place of the reply box (`footer` and `replaceReply` on `ThreadView`). A card with no plan keeps its reply box with a "Build review tour" strip above it. It shows one step at a time with what to look for, "Looks good, next" and previous/next buttons, an **Open browser** button, and a feedback box that sends the note to the thread. A new plan restarts the tour.
+While the card is in Review, `components/ReviewPanel.tsx` sits at the bottom of the thread, in place of the reply box (`footer` and `replaceReply` on `ThreadView`). A card with no plan keeps its reply box with a "Build review tour" strip above it. It shows one step at a time with what to look for, "Looks good, next" and previous/next buttons, an **Open browser** button, and a feedback box that sends the note to the thread. `REVIEW_PROMPT` asks each `look` to be one short sentence (under 20 words), and the panel clamps it to two lines (`LookFor`; click to expand) so a wordy step can't push the feedback box off a small screen. A new plan restarts the tour.
 
 - **A step's page** (`stepUrl` in `lib/review.ts`): its `path` as a full URL, an absolute media/file path (opened as `file://`), or a path on the plan's `url`. A step with no `path` uses the first URL or file path in its `look` text, then the plan's `url`. A plan with no `url` falls back to the local app the thread mentioned most.
 - **Dev server** (`lib/devserver.ts`, `app/api/cards/[id]/dev/route.ts`): when the plan has `dev` and `url`, the tour asks the server to start the command in the card's folder unless the url already answers, polls its status every 3 s, and shows running/starting/crashed with Start/Restart buttons. Servers Weft started are stopped when Weft exits.

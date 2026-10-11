@@ -246,10 +246,16 @@ button:disabled {
 }
 
 /* The composer's editing area. */
+/* The placeholder wraps and the box grows to fit it (a long suggestion, a two-line hint), with the
+   caret still at the start: a full-width float whose margin cancels its width, held by a flow root. */
+.composer-content p.is-editor-empty:first-child {
+  display: flow-root;
+}
 .composer-content p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   float: left;
-  height: 0;
+  width: 100%;
+  margin-right: -100%;
   color: var(--faint);
   pointer-events: none;
 }

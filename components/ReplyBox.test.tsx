@@ -134,6 +134,32 @@ describe("ReplyBox", () => {
     });
   });
 
+  describe("suggested next message", () => {
+    it("shows as the placeholder; Tab fills it in without sending", async () => {
+      const { onSend, box } = setup({ suggestion: "run the tests" });
+      expect(box).toHaveAttribute("placeholder", expect.stringMatching(/^run the tests/));
+      box.focus();
+      await userEvent.keyboard("{Tab}");
+      expect(box).toHaveValue("run the tests");
+      expect(onSend).not.toHaveBeenCalled();
+    });
+
+    it("Tab leaves typed text alone", async () => {
+      const { box } = setup({ suggestion: "run the tests" });
+      await userEvent.type(box, "commit");
+      await userEvent.keyboard("{Tab}");
+      expect(box).toHaveValue("commit");
+    });
+
+    it("isn't offered while the thread works", async () => {
+      const { box } = setup({ suggestion: "run the tests", live: true });
+      expect(box).toHaveAttribute("placeholder", expect.stringMatching(/send when this turn is done/));
+      box.focus();
+      await userEvent.keyboard("{Tab}");
+      expect(box).toHaveValue("");
+    });
+  });
+
   it("idle, there's no Stop or Send now", () => {
     setup();
     expect(screen.queryByRole("button", { name: "Stop the current turn" })).not.toBeInTheDocument();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { api } from "@/lib/client";
 import { alsoHereLine } from "@/lib/overlap";
 import { formatAt, sendLaterOptions, type PlanResets } from "@/lib/schedule";
@@ -27,6 +27,12 @@ function readDraft(cardId: string) {
   }
 }
 
+// While a turn runs, the box says the next message waits; idle, it shows the thread's suggested next message.
+function replyPlaceholder(live: boolean, suggestion: string | undefined, fallback: string) {
+  if (live) return "Working. Write the next message and it'll send when this turn is done.";
+  return suggestion ? `${suggestion}  ⇥ Tab` : fallback;
+}
+
 function writeDraft(cardId: string, markdown: string) {
   try {
     if (markdown.trim()) localStorage.setItem(draftKey(cardId), markdown);
@@ -41,6 +47,7 @@ export default function ReplyBox({
   cwd,
   live,
   placeholder,
+  suggestion,
   alsoHere = [],
   sendLater,
   status,
@@ -54,6 +61,8 @@ export default function ReplyBox({
   // A turn is running or waiting on a permission answer, so a reply can't go yet.
   live: boolean;
   placeholder: string;
+  // The thread's guess at your next message: shown as the placeholder, and Tab in an empty box fills it in (not sends).
+  suggestion?: string;
   // Board threads can take a message to send at a set time; the copilot can't, so it leaves this out.
   // resets are the plan's next 5-hour and weekly resets, the default times on a Claude thread.
   sendLater?: { backend: Backend; resets: PlanResets; scheduled: ScheduledMessage[] };
@@ -196,6 +205,16 @@ export default function ReplyBox({
     }
   }
 
+  // Tab in an empty box takes the suggested next message, to edit or send.
+  function takeSuggestion(e: KeyboardEvent) {
+    const plainTab = e.key === "Tab" && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey;
+    if (!plainTab || !suggestion || live || !composer.current?.isEmpty()) return false;
+    e.preventDefault();
+    e.stopPropagation();
+    composer.current.write(suggestion);
+    return true;
+  }
+
   const scheduled = sendLater?.scheduled ?? [];
 
   return (
@@ -209,6 +228,7 @@ export default function ReplyBox({
           setLaterOpen(true);
           return;
         }
+        if (takeSuggestion(e)) return;
         // Up in an empty box pulls the last queued message back to edit; the queue holds meanwhile.
         if (e.key === "ArrowUp" && queue.length > 0 && composer.current?.isEmpty()) {
           e.preventDefault();
@@ -301,7 +321,7 @@ export default function ReplyBox({
         variant="reply"
         cwd={cwd}
         initial={initial}
-        placeholder={live ? "Working. Write the next message and it'll send when this turn is done." : placeholder}
+        placeholder={replyPlaceholder(live, suggestion, placeholder)}
         onSubmit={() => void submit()}
         onChange={(markdown) => {
           setError(null);

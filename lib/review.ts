@@ -10,13 +10,13 @@ import type { ReviewPlan, ReviewStep } from "./types";
 // What the thread is told about the block; appended to its system prompt (see drive() in lib/runner.ts).
 export const REVIEW_PROMPT = `When you finish work for the user to review (BOARD STATUS column=review), also end the reply with a review tour: a fenced block tagged weft-review holding JSON, placed before the BOARD STATUS line.
 \`\`\`weft-review
-{"url": "http://localhost:3000", "dev": "npm run dev", "steps": [{"title": "Short feature name", "look": "What to try and what should happen, in one or two sentences", "path": "/page"}]}
+{"url": "http://localhost:3000", "dev": "npm run dev", "steps": [{"title": "Short feature name", "look": "What to check, in one short sentence", "path": "/page"}]}
 \`\`\`
 - url: where the running app is, when the work is a web product (start the dev server first if it isn't running); leave it out otherwise.
 - dev: the shell command that starts that app from the project folder (e.g. "npm run dev"). Weft uses it to start the server for the user and keep it running while they review. Run the /weft:preview skill first to check the app is up and renders.
 - steps: one per feature or change you built, in the order to check them. "path" (or a full "url", or an absolute file path such as a PDF or HTML file) is the page for that step. Never point a step at source code: when a change has no page (a prompt, a refactor, config), render it as a readable HTML page and point the step there.
 - Before you send the reply, open the first step's page in the browser pane (mcp__browser__open_url) so the pane already shows it the moment the tour opens. Do this for every tour, including steps that are a file path rather than a web page.
-- The user steps through these in the browser pane and sends feedback on each one. Keep each "look" concrete and checkable.`;
+- The user steps through these in the browser pane and sends feedback on each one. Keep each "look" to one short, checkable sentence (under 20 words): the review panel is small. Background, caveats and how-to go on the step's page, not in "look".`;
 
 const BLOCK = /```weft-review[^\S\n]*\n([\s\S]*?)\n?```[^\S\n]*\n?/g;
 

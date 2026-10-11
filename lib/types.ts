@@ -135,6 +135,9 @@ export interface Card {
   // From the thread's own BOARD STATUS line (see lib/status.ts).
   stage?: string;
   remaining?: string;
+  // The CLI's guess at your next message after a turn (the SDK's prompt suggestions); the reply box
+  // shows it as its placeholder and Tab fills it in. Cleared when you send.
+  suggestion?: string;
   // From the thread's weft-review block; replaced each time it sends a new one.
   review?: ReviewPlan;
   // Files the thread has edited (Edit, Write, MultiEdit, NotebookEdit), most recent first, capped

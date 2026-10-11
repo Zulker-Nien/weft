@@ -279,6 +279,7 @@ describe("sendMessage", () => {
       model: "opus",
       effort: "high",
       includePartialMessages: true,
+      promptSuggestions: true,
       allowDangerouslySkipPermissions: true,
       pathToClaudeCodeExecutable: undefined,
       env: { PATH: "/usr/bin" },
@@ -292,6 +293,7 @@ describe("sendMessage", () => {
     const q = await send("c1");
     expect(q.options.pathToClaudeCodeExecutable).toBe("/opt/bin/puku-cli");
     expect(q.options.allowDangerouslySkipPermissions).toBeUndefined();
+    expect(q.options.promptSuggestions).toBeUndefined();
   });
 
   it("gives the copilot the copilot prompt and no skip-permissions flag", async () => {
@@ -1006,6 +1008,19 @@ describe("edges", () => {
     );
     await flush();
     expect(card("c1").stats).toMatchObject({ fiveHour: { used: 50, resetsAt: 100 }, sevenDay: { used: 7, resetsAt: 200 } });
+  });
+
+  it("a prompt suggestion lands on the card, a blank one doesn't, and sending clears it", async () => {
+    addCard({ id: "c1" });
+    const q = await send("c1");
+    q.emit(success("ok"), { type: "prompt_suggestion", suggestion: "  run the tests  " });
+    await flush();
+    expect(card("c1").suggestion).toBe("run the tests");
+    q.emit({ type: "prompt_suggestion", suggestion: " " });
+    await flush();
+    expect(card("c1").suggestion).toBe("run the tests");
+    runner.sendMessage("c1", "run the tests");
+    expect(card("c1").suggestion).toBeUndefined();
   });
 
   it("a turn's stats leave out the branch and changed lines when git fails", async () => {
