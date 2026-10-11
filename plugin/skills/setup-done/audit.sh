@@ -48,7 +48,6 @@ for d in docs/architecture docs/bug-fixes; do
   if [ -d "$d" ]; then c=$(ls "$d" | grep -vc '^\.gitkeep$'); [ "$c" -gt 0 ] && row Docs "$d" OK "$c files" || row Docs "$d" WEAK "empty"
   else row Docs "$d" MISSING ""; fi
 done
-[ -f docs/file-sizes.md ] && row Docs docs/file-sizes.md OK present || row Docs docs/file-sizes.md MISSING ""
 [ -f SOUL.md ] && row Docs SOUL.md OK present || row Docs SOUL.md MISSING ""
 if [ -f CLAUDE.md ]; then grep -q '@SOUL.md' CLAUDE.md && row Docs CLAUDE.md OK "includes SOUL.md" || row Docs CLAUDE.md WEAK "exists, no @SOUL.md include"
 else row Docs CLAUDE.md MISSING ""; fi
@@ -69,7 +68,7 @@ elif [ "$STACK" = python ]; then
 fi
 
 # Helper scripts /done relies on
-for s in lint.sh tests.sh file-sizes.sh; do
+for s in lint.sh tests.sh scout-facts.sh scout-save.mjs; do
   if [ -x "$DONE_DIR/$s" ] || [ -f "$DONE_DIR/$s" ]; then row Scripts "$s" OK "$DONE_DIR"
   elif [ -f ".claude/skills/done/$s" ]; then row Scripts "$s" OK ".claude/skills/done"
   else row Scripts "$s" MISSING "not beside /done"; fi

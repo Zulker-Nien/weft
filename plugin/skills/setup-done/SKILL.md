@@ -59,7 +59,6 @@ Create only the missing items. Never touch existing docs.
 - `docs/architecture/`: create `overview.md` from `templates/architecture-overview.md`, filled in
   from the real code (entry points, directory layout, README).
 - `docs/bug-fixes/`: create with `README.md` from `templates/bug-fixes-README.md`.
-- `docs/file-sizes.md`: create from `templates/file-sizes.md`. `/done` fills it on its first run.
 - `SOUL.md`: if missing, write a minimal one from `templates/SOUL.md`, with purpose, values and
   file map filled in from the README and code. Mark guesses with `<confirm>`.
 - `CLAUDE.md`: if missing, create it from `templates/CLAUDE.md` (just `@SOUL.md`). If it exists
@@ -91,16 +90,13 @@ and a `lint` script, same rules.)
 
 ## Step 5: Helper scripts
 
-`/done` calls `lint.sh`, `tests.sh`, `file-sizes.sh` (plus `session-stats.sh`,
+`/done` calls `lint.sh`, `tests.sh`, `scout-facts.sh`, `scout-save.mjs` (plus `session-stats.sh`,
 `gather-context.sh`, `commit.sh`) through its own `${CLAUDE_SKILL_DIR}`. The audit checks they sit
 beside `/done`: normally `../done/` in this plugin, or `.claude/skills/done/` in the project.
 
 - Scripts present: nothing to do.
 - Project has its own `.claude/skills/done/` missing some: copy the missing ones from
   `${CLAUDE_SKILL_DIR}/../done/` (never overwrite existing ones) and `chmod +x`.
-- `file-sizes.sh` hardcodes the roots `src public docs .claude`. If the project uses others
-  (`app`, `lib`, `components`, `packages`), tell the user which roots to change; don't edit the
-  shared copy.
 - `/done` not installed at all: say so, and where to get it (`fotoflo/claude-skills`, or Weft's
   plugin).
 
