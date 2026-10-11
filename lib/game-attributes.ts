@@ -1,10 +1,11 @@
-// The builder card: eight attributes (0-100) worked out from what you build and how, the class your
+// The builder card: seven attributes (0-100) worked out from what you build and how, the class your
 // top two make, and a level per technology from the cards you shipped with it. Pure (see lib/game.ts).
+import type { Habit } from "./craft";
 import { addDays, XP, type ActivityEvent, type DayTally } from "./game";
 import { isRefactor } from "./game-badges";
 import { branchProgress, type ProjectReport } from "./project-badges";
 
-export type AttributeId = "follow" | "velocity" | "range" | "rigor" | "guard" | "craft" | "stamina" | "thrift";
+export type AttributeId = "follow" | "velocity" | "range" | "rigor" | "guard" | "craft" | "stamina";
 
 export interface Attribute {
   id: AttributeId;
@@ -24,7 +25,6 @@ const META: Record<AttributeId, { icon: string; label: string; noun: string; adj
   guard: { icon: "🛡️", label: "Guard", noun: "Guardian", adjective: "Vigilant" },
   craft: { icon: "🧹", label: "Craft", noun: "Refiner", adjective: "Careful" },
   stamina: { icon: "🔥", label: "Stamina", noun: "Marathoner", adjective: "Tireless" },
-  thrift: { icon: "💰", label: "Thrift", noun: "Tinkerer", adjective: "Frugal" },
 };
 
 export interface AttributeInput {
@@ -36,7 +36,19 @@ export interface AttributeInput {
   // Projects with 3 or more cards, and every stack seen across them.
   projectCount: number;
   stacks: number;
+  // Each card's craft habits, from the skills its transcript ran (lib/craft.ts).
+  habits: ReadonlyMap<string, ReadonlySet<Habit>>;
 }
+
+// Craft: each habit's points, earned in full once this share of shipped cards shows it. Wrapping up
+// with /done is most of it; a refactor counts by the card's title too.
+const CRAFT: Record<Habit, { points: number; full: number }> = {
+  wrap: { points: 40, full: 1 },
+  commit: { points: 15, full: 1 },
+  review: { points: 15, full: 0.2 },
+  docs: { points: 15, full: 0.2 },
+  refactor: { points: 15, full: 0.1 },
+};
 
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 const avg = (list: number[]) => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0);
@@ -44,12 +56,6 @@ const avg = (list: number[]) => (list.length ? list.reduce((a, b) => a + b, 0) /
 function lastDays(days: Map<string, DayTally>, today: string, n: number) {
   const from = addDays(today, -(n - 1));
   return [...days].filter(([day]) => day >= from && day <= today).map(([, d]) => d);
-}
-
-// Cost per shipped card: $0.10 or less is 100, $5 or more is 0, on a log scale.
-export function thriftScore(costPerCard: number | null): number {
-  if (costPerCard === null) return 50;
-  return clamp(100 - (Math.log10(Math.max(costPerCard, 0.1) / 0.1) / Math.log10(50)) * 100);
 }
 
 function treeShare(projects: ProjectReport[], branches: Parameters<typeof branchProgress>[1][]) {
@@ -61,6 +67,22 @@ function treeShare(projects: ProjectReport[], branches: Parameters<typeof branch
   );
 }
 
+// How many shipped cards show each habit, and the craft score they make.
+function craftScore(done: ActivityEvent[], habits: AttributeInput["habits"]) {
+  const shipped = new Map(done.map((e) => [e.card, e.title]));
+  const shown: Record<Habit, number> & { shipped: number } = { wrap: 0, commit: 0, review: 0, docs: 0, refactor: 0, shipped: shipped.size };
+  for (const [card, title] of shipped) {
+    const has = (card && habits.get(card)) || new Set<Habit>();
+    for (const habit of Object.keys(CRAFT) as Habit[]) {
+      if (has.has(habit) || (habit === "refactor" && isRefactor(title))) shown[habit]++;
+    }
+  }
+  const craft = shipped.size
+    ? (Object.keys(CRAFT) as Habit[]).reduce((n, h) => n + CRAFT[h].points * Math.min(1, shown[h] / shipped.size / CRAFT[h].full), 0)
+    : 0;
+  return { craft, shown };
+}
+
 export function attributes(input: AttributeInput): Attribute[] {
   const { events, days, today } = input;
   const created = new Set(events.filter((e) => e.kind === "created").map((e) => e.card)).size;
@@ -69,18 +91,15 @@ export function attributes(input: AttributeInput): Attribute[] {
   const activeMonth = month.filter((d) => d.cards + d.turns + d.done > 0).length;
   const shippedMonth = month.reduce((n, d) => n + d.done, 0);
   const perDay = activeMonth ? shippedMonth / activeMonth : 0;
-  const paid = done.filter((e) => (e.cost ?? 0) > 0);
-  const costPerCard = paid.length ? paid.reduce((n, e) => n + (e.cost ?? 0), 0) / paid.length : null;
-  const refactors = done.filter((e) => isRefactor(e.title)).length;
+  const { craft, shown } = craftScore(done, input.habits);
   const values: Record<AttributeId, [number, string]> = {
     follow: [created ? (100 * done.length) / created : 0, `${done.length} of ${created} cards reached Done`],
     velocity: [perDay * 10, `${perDay.toFixed(1)} cards shipped per active day this month`],
     range: [input.projectCount * 6 + input.stacks * 3, `${input.projectCount} projects, ${input.stacks} technologies`],
     rigor: [treeShare(input.projects, ["testing"]), "Testing checks passed across your projects"],
     guard: [treeShare(input.projects, ["security", "observability"]), "Security and observability checks passed"],
-    craft: [done.length ? (400 * refactors) / done.length : 0, `${refactors} refactor cards shipped`],
+    craft: [craft, `${shown.wrap}/${shown.shipped} ran /done · review ${shown.review} · docs ${shown.docs} · refactor ${shown.refactor}`],
     stamina: [(activeMonth / 30) * 80 + Math.min(20, input.bestStreak), `${activeMonth} active days this month, best streak ${input.bestStreak}`],
-    thrift: [thriftScore(costPerCard), costPerCard === null ? "No costs recorded yet" : `$${costPerCard.toFixed(2)} per shipped card`],
   };
   return (Object.keys(META) as AttributeId[]).map((id) => ({
     id,

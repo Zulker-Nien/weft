@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { readActivity, record, trackActivity } from "./activity";
+import { craftHabits, scanCraft } from "./craft";
 import {
   activeDays, cloth, dayKey, LEAGUES, levelFor, records, streakOf, tallyDays, weekXp,
   type DayTally, type Level, type Records, type Stitch, type Streak,
@@ -11,6 +12,7 @@ import { attributes, classFor, stackSkills, type Attribute, type Skill } from ".
 import { badges, coverageClimbed, isRefactor, type Badge } from "./game-badges";
 import { globalSingleton } from "./global-singleton";
 import type { ProjectReport } from "./project-badges";
+import { sessionFiles } from "./import";
 import { checkProject, detectStack } from "./project-checks";
 import { projectRoot } from "./quality";
 import { listCards } from "./store";
@@ -114,6 +116,8 @@ export function gameState({ cwd, full, now = Date.now() }: { cwd?: string | null
   trackActivity();
   const events = readActivity();
   const cards = listCards().filter((c) => c.role !== "copilot");
+  // Craft reads what the last scan found; the scan catches up in the background.
+  void scanCraft(cards, sessionFiles()).catch(() => {});
   const inView = cwd ? rootOf(cwd) : null;
   const projects = full
     ? rootsToMeasure(cards, inView, now).map((root) => measure(root, now))
@@ -126,7 +130,7 @@ export function gameState({ cwd, full, now = Date.now() }: { cwd?: string | null
   for (const c of cards) cardsPerRoot.set(rootOf(c.cwd), (cardsPerRoot.get(rootOf(c.cwd)) ?? 0) + 1);
   const busyRoots = [...cardsPerRoot].filter(([, n]) => n >= 3).map(([root]) => root);
   const stacks = new Set(busyRoots.flatMap((root) => stackOf(root)));
-  const attrs = attributes({ events, days, today, bestStreak: streak.best, projects, projectCount: busyRoots.length, stacks: stacks.size });
+  const attrs = attributes({ events, days, today, bestStreak: streak.best, projects, projectCount: busyRoots.length, stacks: stacks.size, habits: craftHabits(cards) });
   const xp = [...days.values()].reduce((n, d) => n + d.xp, 0);
   const facts = {
     events,

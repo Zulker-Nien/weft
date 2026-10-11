@@ -41,8 +41,15 @@ checklist score and coverage). Every event has a stable id, so a sync can tell w
   freeze (max 2); a missed day spends one. An empty today doesn't break it, it marks it at risk.
 - **Attributes** (0–100): follow-through = Done ÷ started; velocity = 10 × shipped per active day (30 days);
   range = 6 per project with 3+ cards + 3 per technology; rigor = testing checks passed; guard = security and
-  observability checks passed; craft = 4 × refactor share of shipped cards; stamina = active days of 30 × 80 +
-  best streak (max 20); thrift = cost per shipped card on a log scale, $0.10 → 100, $5 → 0.
+  observability checks passed; craft = the craft habits shipped cards showed (below); stamina = active days of
+  30 × 80 + best streak (max 20).
+- **Craft habits** (`lib/craft.ts`): the skills each Done card's Claude Code transcript ran, in Weft or the
+  terminal: wrap-up (`/done`, `/done-quick`) 40 points, commit (`/commit` or a wrap-up) 15, review
+  (`/code-review`, `/review`, `/security-review`) 15, docs (`/architecture`, `/update-docs`, `/documentation`) 15,
+  refactor (`/simplify`, `/lint-fix`, `/tech-debt`, or a refactor title) 15. Each is earned in full once every
+  shipped card shows it (wrap-up, commit), 1 in 5 (review, docs) or 1 in 10 (refactor). The scan runs in the
+  background on `/api/game` and re-reads a transcript only when its size changed; `~/.weft/craft.json` keeps
+  `[size, habits]` per session id.
 - **Class**: the top attribute's noun after the second's adjective ("Roaming Shipper").
 
 ## Projects

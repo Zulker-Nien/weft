@@ -29,6 +29,8 @@ vi.mock("./activity", () => ({
 }));
 vi.mock("./store", () => ({ listCards: () => board.cards }));
 vi.mock("./quality", () => ({ projectRoot: (cwd: string) => cwd }));
+vi.mock("./import", () => ({ sessionFiles: () => new Map() }));
+vi.mock("./craft", () => ({ scanCraft: vi.fn(() => Promise.reject(new Error("unreadable"))), craftHabits: () => new Map() }));
 vi.mock("./project-checks", () => ({
   detectStack: vi.fn((root: string) => (root === A ? ["Next.js"] : [])),
   checkProject: vi.fn(

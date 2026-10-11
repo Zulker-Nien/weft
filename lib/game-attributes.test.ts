@@ -1,25 +1,26 @@
 import { describe, expect, it } from "vitest";
+import type { Habit } from "./craft";
 import type { ActivityEvent, DayTally } from "./game";
-import { attributes, classFor, stackSkills, thriftScore, type Attribute, type AttributeInput } from "./game-attributes";
+import { attributes, classFor, stackSkills, type Attribute, type AttributeInput } from "./game-attributes";
 import { CHECKS, type ProjectReport } from "./project-badges";
 
 const ev = (kind: ActivityEvent["kind"], card: string, extra: Partial<ActivityEvent> = {}): ActivityEvent => ({ id: `${kind}${card}`, kind, at: 1, card, cwd: "/a", ...extra });
 const day = (d: Partial<DayTally>): DayTally => ({ cards: 0, turns: 0, done: 0, xp: 0, ...d });
 
 function input(overrides: Partial<AttributeInput> = {}): AttributeInput {
-  return { events: [], days: new Map(), today: "2026-10-11", bestStreak: 0, projects: [], projectCount: 0, stacks: 0, ...overrides };
+  return { events: [], days: new Map(), today: "2026-10-11", bestStreak: 0, projects: [], projectCount: 0, stacks: 0, habits: new Map(), ...overrides };
 }
 
 const value = (list: Attribute[], id: Attribute["id"]) => list.find((a) => a.id === id)?.value;
 
 describe("attributes", () => {
-  it("is zeros (and a middling thrift) with no history", () => {
+  it("is zeros with no history", () => {
     const list = attributes(input());
-    expect(list.map((a) => a.value)).toEqual([0, 0, 0, 0, 0, 0, 0, 50]);
-    expect(list.find((a) => a.id === "thrift")?.hint).toBe("No costs recorded yet");
+    expect(list.map((a) => a.value)).toEqual([0, 0, 0, 0, 0, 0, 0]);
+    expect(list.find((a) => a.id === "craft")?.hint).toBe("0/0 ran /done · review 0 · docs 0 · refactor 0");
   });
 
-  it("measures follow-through, velocity, range, craft, stamina and thrift", () => {
+  it("measures follow-through, velocity, range, craft and stamina", () => {
     const events = [
       ev("created", "a"), ev("created", "b"), ev("created", "c"), ev("created", "d"),
       ev("done", "a", { cost: 0.1, title: "Refactor the store" }),
@@ -31,14 +32,28 @@ describe("attributes", () => {
       ["2026-10-10", day({ done: 1 })],
       ["2026-09-01", day({ done: 9 })],
     ]);
-    const list = attributes(input({ events, days, bestStreak: 30, projectCount: 4, stacks: 5 }));
+    const habits = new Map<string, ReadonlySet<Habit>>([
+      ["a", new Set<Habit>(["wrap", "commit"])],
+      ["b", new Set<Habit>(["wrap", "commit", "review"])],
+      ["z", new Set<Habit>(["docs"])],
+    ]);
+    const list = attributes(input({ events, days, bestStreak: 30, projectCount: 4, stacks: 5, habits }));
     expect(value(list, "follow")).toBe(75);
     expect(value(list, "velocity")).toBe(15);
     expect(value(list, "range")).toBe(39);
-    expect(value(list, "craft")).toBe(100);
+    // 2 of 3 wrapped and committed (26.7 of 40, 10 of 15), 1 reviewed and 1 refactor by title (past 1 in 5
+    // and 1 in 10: 15 each), no docs (z never shipped).
+    expect(value(list, "craft")).toBe(67);
+    expect(list.find((a) => a.id === "craft")?.hint).toBe("2/3 ran /done · review 1 · docs 0 · refactor 1");
     expect(value(list, "stamina")).toBe(Math.round((2 / 30) * 80 + 20));
-    expect(value(list, "thrift")).toBe(100);
-    expect(list.find((a) => a.id === "thrift")?.hint).toBe("$0.10 per shipped card");
+  });
+
+  it("gives craft in full for every habit, and nothing to a shipped card it can't place", () => {
+    const all = new Set<Habit>(["wrap", "commit", "review", "docs", "refactor"]);
+    const events = [ev("done", "a"), { ...ev("done", "lost"), card: undefined }];
+    expect(value(attributes(input({ events: events.slice(0, 1), habits: new Map([["a", all]]) })), "craft")).toBe(100);
+    // Half the cards: half of /done and commit, but 1 in 2 is past the share review, docs and refactor need.
+    expect(value(attributes(input({ events, habits: new Map([["a", all]]) })), "craft")).toBe(73);
   });
 
   it("scores rigor and guard from the projects' trees", () => {
@@ -47,15 +62,6 @@ describe("attributes", () => {
     const list = attributes(input({ projects: [p(testing), p({ envIgnored: true })] }));
     expect(value(list, "rigor")).toBe(50);
     expect(value(list, "guard")).toBe(5);
-  });
-});
-
-describe("thriftScore", () => {
-  it("runs from 100 at 10 cents down to 0 at $5", () => {
-    expect(thriftScore(0.05)).toBe(100);
-    expect(thriftScore(5)).toBe(0);
-    expect(thriftScore(50)).toBe(0);
-    expect(thriftScore(null)).toBe(50);
   });
 });
 
