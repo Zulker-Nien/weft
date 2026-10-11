@@ -122,7 +122,7 @@ Replying to a card continues the same CLI session, so the agent keeps its contex
 Right-click a card for a native menu where everything is one click: open, rename, start, move to
 Review, Done or Backlog, stop, run `/weft:done`, `/weft:commit` or `/weft:preview`, start, restart or
 stop its dev server, start a new thread in its folder, reveal the folder in Finder, copy the folder path
-or a `claude --resume` command, archive, and delete. Right-click a column's empty space for New thread;
+or a `claude --resume` command, archive, and delete. Double-click any empty part of the board to open New thread, or right-click a column's empty space for it;
 in Done, also show or hide archived cards and archive all the Done cards on screen. Every item has a key,
 shown beside it, that picks it while the menu is open: right-click, then `D` for Done, `1` for `/weft:done`,
 `Y` for YOLO. (Desktop app only.)

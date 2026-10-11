@@ -1057,7 +1057,13 @@ export default function Board() {
           }}
           notify={notify}
         />
-        <main className="flex min-w-0 flex-1 gap-3 overflow-x-auto p-3">
+        <main
+          className="flex min-w-0 flex-1 gap-3 overflow-x-auto p-3"
+          onDoubleClick={(e) => {
+            // Empty board space (between or inside columns, not on a card or control) opens New thread.
+            if (!(e.target as HTMLElement).closest("[data-card-id], button, a, input, textarea, [contenteditable]")) openNew();
+          }}
+        >
           {visibleColumns.map((column) => {
             const list = byColumn.get(column.id) ?? [];
             const shown = expandedColumns.includes(column.id) ? list : list.slice(0, COLUMN_LIMIT);
