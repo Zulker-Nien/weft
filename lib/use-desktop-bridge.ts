@@ -3,6 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { BrowserState } from "./client";
 import type { Card } from "./types";
+import { useTitleBarZoom } from "./use-title-bar-zoom";
 
 const noopSubscribe = () => () => {};
 
@@ -15,6 +16,7 @@ export function useDesktopBridge(closed: BrowserState, selectedId: string | null
   const desktop = useSyncExternalStore(noopSubscribe, () => Boolean(window.threadboard), () => false);
   // On macOS the header doubles as the title bar, under the window's traffic lights.
   const mac = useSyncExternalStore(noopSubscribe, () => window.threadboard?.platform ?? "", () => "") === "darwin";
+  useTitleBarZoom();
 
   useEffect(() => {
     const bridge = window.threadboard;

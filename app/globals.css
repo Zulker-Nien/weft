@@ -95,6 +95,17 @@ button:disabled {
   cursor: default;
 }
 
+/* macOS title bars: the traffic lights sit in window pixels, so these sizes divide by the page's zoom
+   (lib/use-title-bar-zoom.ts sets --zoom) to stay clear of them at any View > Zoom. */
+:root {
+  --zoom: 1;
+}
+
+.mac-title-bar {
+  height: calc(44px / var(--zoom));
+  padding-left: calc(78px / var(--zoom));
+}
+
 /* A header that moves the desktop window, like a title bar. Its controls still take clicks. */
 .app-drag {
   -webkit-app-region: drag;

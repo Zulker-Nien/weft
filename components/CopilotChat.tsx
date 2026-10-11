@@ -4,6 +4,7 @@ import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import { api, mergeThread } from "@/lib/client";
 import { isLive } from "@/lib/format";
 import { useBoardEvents } from "@/lib/use-events";
+import { useTitleBarZoom } from "@/lib/use-title-bar-zoom";
 import { COPILOT_ID, type Card, type ThreadItem } from "@/lib/types";
 import Icon, { Spinner } from "./Icon";
 import ThreadView from "./ThreadView";
@@ -37,6 +38,7 @@ export default function CopilotChat() {
   const opened = useRef(false);
   // On macOS the header doubles as the title bar, under the window's traffic lights.
   const mac = useSyncExternalStore(noopSubscribe, () => window.threadboard?.platform ?? "", () => "") === "darwin";
+  useTitleBarZoom();
 
   // The first load keeps live items that arrived during the fetch; after a reconnect, what's shown
   // may be stale, so the snapshot replaces it.
@@ -90,7 +92,7 @@ export default function CopilotChat() {
   return (
     <div className="flex h-screen flex-col bg-panel">
       <header
-        className={`flex shrink-0 items-center gap-2 border-b border-line ${mac ? "app-drag h-11 pl-[76px] pr-3" : "px-3 py-2.5"}`}
+        className={`flex shrink-0 items-center gap-2 border-b border-line ${mac ? "app-drag mac-title-bar pr-3" : "px-3 py-2.5"}`}
       >
         <Icon name="sparkles" size={15} className="text-accent" />
         <h1 className="text-[13.5px] font-semibold text-ink">Copilot</h1>

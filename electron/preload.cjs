@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webFrame } = require("electron");
 
 function listen(channel, callback) {
   const listener = (_event, ...args) => callback(...args);
@@ -11,6 +11,8 @@ function listen(channel, callback) {
 contextBridge.exposeInMainWorld("threadboard", {
   desktop: true,
   platform: process.platform,
+  // The page's zoom (View > Zoom In/Out); the traffic lights don't zoom, so the title bar scales back.
+  zoomFactor: () => webFrame.getZoomFactor(),
   browser: {
     open: (url, key) => ipcRenderer.invoke("browser:open", url, key),
     setActive: (key) => ipcRenderer.send("browser:active", key),

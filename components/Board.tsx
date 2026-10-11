@@ -785,7 +785,7 @@ export default function Board() {
   return (
     <div className="flex h-screen flex-col">
       <header
-        className={`flex shrink-0 items-center gap-3 border-b border-line bg-panel ${mac ? "app-drag h-11 pl-[78px] pr-4" : "px-4 py-2.5"}`}
+        className={`flex shrink-0 items-center gap-3 border-b border-line bg-panel ${mac ? "app-drag mac-title-bar pr-4" : "px-4 py-2.5"}`}
       >
         <h1 className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-ink">
           <img src="/logo.svg" alt="" width={18} height={18} />

@@ -41,6 +41,8 @@ export interface ShellBridge {
   desktop: true;
   // process.platform, e.g. "darwin".
   platform: string;
+  // The page's zoom factor, 1 at Actual Size.
+  zoomFactor?(): number;
   browser: {
     // key is the card whose browser to load into; each card has its own, and the open card's is on screen.
     open(url: string, key?: string): Promise<unknown>;
