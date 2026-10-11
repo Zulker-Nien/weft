@@ -56,43 +56,46 @@ export default function QuestionForm({
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      {questions.map((q) => (
-        <div key={q.question} className="flex flex-col gap-1.5">
-          <div className="text-[13px] font-medium leading-snug text-ink">
-            {q.header && <span className="mr-1.5 rounded bg-panel px-1.5 py-px text-[11px] font-normal text-muted">{q.header}</span>}
-            {q.question}
+    // The questions scroll and the buttons stay put, so a long list never pushes Send answer off screen.
+    <div className="flex min-h-0 flex-col gap-3">
+      <div className="-mr-2 flex min-h-0 flex-col gap-3 overflow-y-auto pr-2">
+        {questions.map((q) => (
+          <div key={q.question} className="flex flex-col gap-1.5">
+            <div className="text-[13px] font-medium leading-snug text-ink">
+              {q.header && <span className="mr-1.5 rounded bg-panel px-1.5 py-px text-[11px] font-normal text-muted">{q.header}</span>}
+              {q.question}
+            </div>
+            <div className="flex flex-col gap-1">
+              {q.options.map((option) => {
+                const on = picked[q.question]?.includes(option.label);
+                return (
+                  <button
+                    key={option.label}
+                    onClick={() => toggle(q, option.label)}
+                    className={`rounded-md border px-2.5 py-1.5 text-left text-[12.5px] ${on ? "border-accent bg-accent-soft text-ink" : "border-line-strong bg-panel text-ink hover:bg-sunken"}`}
+                  >
+                    <span className="font-medium">{option.label}</span>
+                    {option.description && <span className="block text-[11.5px] text-muted">{option.description}</span>}
+                  </button>
+                );
+              })}
+              <input
+                value={other[q.question] ?? ""}
+                onChange={(e) => {
+                  setError(null);
+                  setOther((prev) => ({ ...prev, [q.question]: e.target.value }));
+                  if (!q.multiSelect && e.target.value) setPicked((prev) => ({ ...prev, [q.question]: [] }));
+                }}
+                onKeyDown={(e) => e.key === "Enter" && submit()}
+                placeholder="Something else"
+                className="rounded-md border border-line-strong bg-panel px-2.5 py-1.5 text-[12.5px] text-ink outline-none placeholder:text-faint focus:border-accent"
+              />
+            </div>
           </div>
-          <div className="flex flex-col gap-1">
-            {q.options.map((option) => {
-              const on = picked[q.question]?.includes(option.label);
-              return (
-                <button
-                  key={option.label}
-                  onClick={() => toggle(q, option.label)}
-                  className={`rounded-md border px-2.5 py-1.5 text-left text-[12.5px] ${on ? "border-accent bg-accent-soft text-ink" : "border-line-strong bg-panel text-ink hover:bg-sunken"}`}
-                >
-                  <span className="font-medium">{option.label}</span>
-                  {option.description && <span className="block text-[11.5px] text-muted">{option.description}</span>}
-                </button>
-              );
-            })}
-            <input
-              value={other[q.question] ?? ""}
-              onChange={(e) => {
-                setError(null);
-                setOther((prev) => ({ ...prev, [q.question]: e.target.value }));
-                if (!q.multiSelect && e.target.value) setPicked((prev) => ({ ...prev, [q.question]: [] }));
-              }}
-              onKeyDown={(e) => e.key === "Enter" && submit()}
-              placeholder="Something else"
-              className="rounded-md border border-line-strong bg-panel px-2.5 py-1.5 text-[12.5px] text-ink outline-none placeholder:text-faint focus:border-accent"
-            />
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
       {error && <p className="text-[12px] text-danger">{error}</p>}
-      <div className="flex gap-2">
+      <div className="flex shrink-0 gap-2">
         <button
           onClick={submit}
           disabled={submitting}

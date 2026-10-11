@@ -157,6 +157,10 @@ through `QuestionForm.tsx`. The user answers with one label (or several for
 `Record<question, "label, label">` and are passed as `updatedInput.answers` to the
 SDK on allow.
 
+The panel (`ThreadView.tsx`) is capped at 60% of the window height, and the form
+scrolls only its questions: Send answer and Skip stay pinned below them, so a long
+list never pushes them off screen.
+
 ## BOARD STATUS protocol
 
 The thread prompt (in `lib/settings.ts`, editable as "Thread instructions") tells

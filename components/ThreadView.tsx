@@ -108,13 +108,14 @@ export default function ThreadView({
       </div>
 
       {card.pending && (
-        <div className="border-t border-warn/40 bg-warn-soft px-4 py-3">
+        // Capped so a long list of questions scrolls inside the panel instead of running off the window.
+        <div className="flex max-h-[60vh] min-h-0 shrink-0 flex-col border-t border-warn/40 bg-warn-soft px-4 py-3">
           <div className="flex items-start gap-2 text-[13px] font-medium text-ink">
             <Icon name={card.pending.questions ? "alert" : "lock"} size={14} className="mt-0.5 text-warn" />
             <span>{card.pending.questions ? "The agent has a question" : card.pending.title}</span>
           </div>
           {card.pending.questions ? (
-            <div className="mt-2.5">
+            <div className="mt-2.5 flex min-h-0 flex-col">
               <QuestionForm
                 key={card.pending.id}
                 questions={card.pending.questions}
