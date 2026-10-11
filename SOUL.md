@@ -37,7 +37,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
     Pure logic already moved out: `lib/board-view.ts` (columns, project chips, chime/unseen rules) and
     `lib/turn.ts` (how a turn's result reads, cost, limits); Board's hooks into `lib/use-*.ts` (`use-now`,
     `use-toast`, `use-desktop-bridge`). Next: live events/chimes, view prefs, shortcuts, command palette.
-  - My Vitest suite (`npm test`, ~1,400 tests) covers every line of `lib/` and `app/api/` (98.6% of branches,
+  - My Vitest suite (`npm test`, ~1,700 tests) covers every line of `lib/` and `app/api/` (98.6% of branches,
     `npm run coverage`): a test file beside each module, routes with their libs mocked, the runner's SDK loop
     against a fake `query()` (`lib/runner.test.ts`), and browser code and React hooks under happy-dom +
     @testing-library/react (`// @vitest-environment happy-dom`). Component tests have started under jsdom
@@ -66,6 +66,9 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   file size, lint, types, guardrails); `lib/scout.ts` + `lib/scout-view.ts` + `app/api/scout`: the refactor scout, a cached
   read-only Sonnet run whose findings take the score's last 10 points so it never hits 100. `components/QualityBadge.tsx`
   draws it, `components/ScoutMenu.tsx` starts a card per finding; its hover bubble is `components/Tip.tsx` (native titles don't show in Electron).
+- `lib/activity.ts` + `lib/game*.ts` + `lib/project-checks.ts` + `app/api/game`: streaks, XP, badges, the builder card and the
+  production-ready tree, from the append-only `~/.weft/activity.jsonl`; `components/GameBadge.tsx` is the header chip and
+  `components/LoomDialog.tsx` its dialog (docs/architecture/gamification.md).
 - `lib/commit-pile.ts` + `app/api/pile` + `components/PileBadge.tsx`: the header's "+N/-N" uncommitted counter and the card it
   starts to commit that pile one Review card at a time.
 - `lib/card-pictures.ts`: a card's thumbnail (latest thread image, or a pane capture after each turn from `lib/glance.ts`) and its Haiku emoji tile; `lib/retitle.ts` renames a card with a placeholder title ("Image attachment") after its turn (`titleBy` marks a name Weft or you chose); `components/CardView.tsx` draws the card.

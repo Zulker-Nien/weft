@@ -1,12 +1,19 @@
 import { connection } from "next/server";
+import { trackActivity } from "@/lib/activity";
 import { subscribe } from "@/lib/bus";
 import { guard } from "@/lib/guard";
 
-// Server-sent events: every card change and thread update, as it happens.
+// Server-sent events: every card change and thread update, as it happens. The board opens this first,
+// so it also starts the activity log (lib/activity.ts) following the board.
 export async function GET(req: Request) {
   const denied = guard(req, { write: false });
   if (denied) return denied;
   await connection();
+  try {
+    trackActivity();
+  } catch (err) {
+    console.warn("Couldn't start the activity log", err);
+  }
 
   const encoder = new TextEncoder();
   let cleanup = () => {};

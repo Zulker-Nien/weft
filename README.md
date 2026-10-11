@@ -254,6 +254,37 @@ does, its review tour's "try it" steps, the files folded under Technical details
 under each change: Save it, Save it and mark Done, Skip for now, or type what to change): what changed, lint, typecheck and tests, and a commit of just that card's files by path
 (`commit.sh`; never `git stash`, `git reset` or a bare `git commit`). When you say so, it moves the card to Done.
 
+## Progress: streaks, badges and your builder card
+
+Beside the code quality badge, **🔥 25 · Lv 15** is your streak and level (Settings > Show progress turns it
+off). Hover it for today's numbers; click it for **Your loom**:
+
+- **XP and levels.** Starting a card earns 2 XP, a turn 1, and taking a card to Done 10, or 15 when its
+  project's quality checklist scores 80+. Shipping pays more than starting, and healthy code pays more than
+  volume. Levels climb a square curve, titled Thread, Strand, Yarn, Bolt, Loom and Tapestry.
+- **Streaks.** Any day you start, work on or ship a card counts. Every 7 days in a row earns a streak freeze
+  (up to 2); a missed day spends one instead of ending the streak. The chip dims when you haven't done
+  anything yet today.
+- **Your builder card.** Eight attributes worked out from what you build: Follow-through (cards that reach
+  Done), Velocity, Range (projects and stacks), Rigor and Guard (the projects' testing, security and
+  observability checks), Craft (refactor cards shipped), Stamina and Thrift (cost per shipped card). Your top
+  two name your class, like "Roaming Shipper". Stack skills level up each technology (from `package.json`
+  and friends) by the cards you ship with it.
+- **The cloth.** Your last 26 weeks as woven stitches, brighter for bigger days, blue where a freeze covered one.
+- **Badges.** 38 of them: milestones, streaks, habits (five cards running at once, night owl, refactorer…),
+  code health (coverage at 80/95/100%, guarded, strict, slim files, clean tree) and the production-ready
+  tree. New ones and level-ups arrive as a toast.
+- **Projects.** Each of your busiest repos' production-ready tree: Testing, Security (secrets ignored, secret
+  scanning, Dependabot, security headers, SECURITY.md), Observability (analytics, error tracking, tracing,
+  structured logs, a health route), Docs and Delivery. Every check Weft finds missing has **Set it up**,
+  which starts a card to install it. All five branches make the project **🚀 Production-ready**.
+- **League.** The ladder (Cotton to Gold Thread) is there, locked until Weft has accounts; this week's XP is
+  what it will rank you by.
+
+Everything comes from `~/.weft/activity.jsonl`, an append-only log the board writes as cards change
+(`lib/activity.ts`). The first time, it fills itself from your existing cards, imported Claude Code sessions
+included, so your history counts from day one. See docs/architecture/gamification.md.
+
 ## Logging in
 
 When a thread fails because its CLI isn't logged in, the board runs `<cli> auth login` in the

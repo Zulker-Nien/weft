@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CHIMES, CHIME_KINDS, type ChimePrefs, chimePrefs, previewChime, setChimePrefs } from "@/lib/chimes";
-import { setShowBacklog, showBacklog } from "@/lib/board-prefs";
+import { setShowBacklog, setShowProgress, showBacklog, showProgress } from "@/lib/board-prefs";
 import { api } from "@/lib/client";
 import { SHORTCUTS, bindingFromEvent, currentBinding, formatBinding, setBinding } from "@/lib/shortcuts";
 import { THEMES, type Theme, savedTheme, setTheme } from "@/lib/theme";
@@ -11,6 +11,7 @@ import AutomationSettings from "./AutomationSettings";
 import Icon, { type IconName, Spinner } from "./Icon";
 import Modal from "./Modal";
 import ModePicker from "./ModePicker";
+import SwitchRow from "./SwitchRow";
 
 const THEME_ICONS: Record<Theme, IconName> = { system: "monitor", light: "sun", dark: "moon" };
 
@@ -172,6 +173,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   // The dialog only mounts in the browser, so the cookie is there to read.
   const [theme, setThemeChoice] = useState<Theme>(savedTheme);
   const [backlog, setBacklog] = useState(showBacklog);
+  const [progress, setProgress] = useState(showProgress);
 
   const [login, setLogin] = useState<LoginStatus>({ kind: "loading" });
   const [starting, setStarting] = useState<Backend | null>(null);
@@ -313,29 +315,25 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
               </div>
             </section>
 
-            <section className="flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-0.5">
-                <h3 className={sectionTitle}>Show backlog</h3>
-                <p className={sectionHint}>
-                  A column for threads you add without starting. It still shows while cards wait in it.
-                </p>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={backlog}
-                aria-label="Show backlog"
-                onClick={() => {
-                  setShowBacklog(!backlog);
-                  setBacklog(!backlog);
-                }}
-                className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${backlog ? "bg-accent" : "bg-line-strong"}`}
-              >
-                <span
-                  className={`absolute top-0.5 h-4 w-4 rounded-full bg-panel shadow transition-[left] ${backlog ? "left-[18px]" : "left-0.5"}`}
-                />
-              </button>
-            </section>
+            <SwitchRow
+              title="Show backlog"
+              hint="A column for threads you add without starting. It still shows while cards wait in it."
+              on={backlog}
+              onChange={(on) => {
+                setShowBacklog(on);
+                setBacklog(on);
+              }}
+            />
+
+            <SwitchRow
+              title="Show progress"
+              hint="Your streak and level in the header, with badges and level-ups as toasts. Off is quiet mode."
+              on={progress}
+              onChange={(on) => {
+                setShowProgress(on);
+                setProgress(on);
+              }}
+            />
 
             <SoundSettings titleClass={sectionTitle} hintClass={sectionHint} />
 

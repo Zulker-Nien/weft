@@ -14,6 +14,19 @@ export function setShowBacklog(on: boolean) {
   window.dispatchEvent(new Event(EVENT));
 }
 
+const PROGRESS_COOKIE = "weft-show-progress";
+
+// On by default: the header's streak and level chip (components/GameBadge.tsx). Off is quiet mode.
+export function showProgress(): boolean {
+  if (typeof document === "undefined") return true;
+  return !new RegExp(`(?:^|; )${PROGRESS_COOKIE}=0`).test(document.cookie);
+}
+
+export function setShowProgress(on: boolean) {
+  document.cookie = `${PROGRESS_COOKIE}=${on ? 1 : 0}; path=/; max-age=${10 * 365 * 24 * 60 * 60}; SameSite=Lax`;
+  window.dispatchEvent(new Event(EVENT));
+}
+
 // For useSyncExternalStore.
 export function subscribeBoardPrefs(onChange: () => void) {
   window.addEventListener(EVENT, onChange);

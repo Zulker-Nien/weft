@@ -221,6 +221,19 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `P3` **Spend by CLI and model** — compare Claude and puku cost for similar kinds of tasks.
 - `P3` **CSV export** — card history with cost, turns, and durations.
 
+## Progress and gamification
+
+- `Done` **Streaks, XP, badges and the builder card** — the header's 🔥 chip and "Your loom" dialog: XP that pays shipping (and healthy code) over volume, streaks with freezes, 38 badges, eight attributes and a class, stack skills, the activity cloth, personal records (`lib/game*.ts`, `lib/activity.ts`, docs/architecture/gamification.md).
+- `Done` **Production-ready tree** — per-project testing, security, observability, docs and delivery checks read from the repo, each with "Set it up" to start a card (`lib/project-checks.ts`, `lib/project-badges.ts`).
+- `P1` **Leagues** — weekly leagues of ~30 by XP, top 7 up and bottom 5 down, once accounts land; sync only weekly XP and a display name. The log's stable event ids are there for it.
+- `P2` **Daily quests** — three small goals a day ("Ship 3 cards", "Clear Needs you") with bonus XP.
+- `P2` **Weekly recap** — on Monday the browser pane opens "Your week in Weft": shipped, projects, streak, new badges.
+- `P2` **What you build** — Haiku tags each shipped card with a domain (Payments, AI agents, Decks) for the builder card.
+- `P2` **Audit clean** — an `npm audit` check (no high or critical) in the Security branch, run at most daily.
+- `P3` **Public builder card** — your profile beside your name in a league, shareable as an image; find collaborators by class and stack.
+- `P3` **Weft Wrapped** — a year-in-review page and image.
+- `P3` **Efficiency and test-first badges** — ship under $1, a 95% cache hit week; a card that edited the test before the code.
+
 ## Search and memory
 
 - `P1` **Search** — ⌘K search across card titles, prompts, agent replies, and tool commands.

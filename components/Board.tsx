@@ -35,8 +35,7 @@ import { boardShortcuts } from "./board-shortcuts";
 import Icon from "./Icon";
 import { leavesBoard, libraryPinned } from "@/lib/library-view";
 import LibraryRail from "./LibraryRail";
-import PileBadge from "./PileBadge";
-import QualityBadge from "./QualityBadge";
+import HeaderBadges from "./HeaderBadges";
 import LoginDialog from "./LoginDialog";
 import NewCardDialog from "./NewCardDialog";
 import { useBoardMenus } from "./use-board-menus";
@@ -796,13 +795,7 @@ export default function Board() {
           {running} running
           {waiting > 0 && <span className="text-warn"> · {waiting} need{waiting === 1 ? "s" : ""} you</span>}
         </span>
-        <QualityBadge cwd={selected?.cwd ?? project ?? latest?.cwd} onImprove={(cwd, prompt, title) => void improveQuality(cwd, prompt, title).catch(notify)} />
-        <PileBadge
-          cwd={selected?.cwd ?? project ?? latest?.cwd}
-          refresh={`${running}:${cards.reduce((n, c) => n + (c.turns ?? 0), 0)}`}
-          onStart={(cwd, prompt, title) => improveQuality(cwd, prompt, title)}
-          onError={notify}
-        />
+        <HeaderBadges cwd={selected?.cwd ?? project ?? latest?.cwd} cards={cards} start={improveQuality} notify={notify} toast={setToast} />
         <div className="flex-1" />
         <button
           onClick={toggleCopilot}
