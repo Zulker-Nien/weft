@@ -423,7 +423,7 @@ const boardActions = {
 };
 
 // Runs the thread's last message again, in a fresh CLI (after a login, for example).
-async function retry(cardId: string) {
+export async function retry(cardId: string) {
   if (isBusy(cardId)) return;
   await endSession(cardId);
   const last = [...getThread(cardId)].reverse().find((item) => item.kind === "user");

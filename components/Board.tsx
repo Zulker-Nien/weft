@@ -24,6 +24,7 @@ import { useBoardEvents } from "@/lib/use-events";
 import { useDesktopBridge } from "@/lib/use-desktop-bridge";
 import { useNow } from "@/lib/use-now";
 import { useToast } from "@/lib/use-toast";
+import { resumeActions } from "@/lib/resume-actions";
 import { archivedMessage, neighborAfter } from "@/lib/archive";
 import { useEscape } from "@/lib/use-escape";
 import BrowserPane from "./BrowserPane";
@@ -412,6 +413,7 @@ export default function Board() {
   );
   const archivedCount = cards.filter((c) => c.archived && (!project || rootOf(c.cwd) === project)).length;
   // The Done cards on screen that Shift+E and "Archive all" file away.
+  const { resume } = resumeActions([], notify);
   const doneToArchive = (byColumn.get("done") ?? []).filter((c) => !c.archived);
   // Backlog hides unless Settings turns it on, but never hides cards waiting in it.
   const backlogOn = useSyncExternalStore(subscribeBoardPrefs, showBacklog, () => false);
@@ -929,6 +931,7 @@ export default function Board() {
                       onOpen={() => openCard(card)}
                       onAnswer={(allow) => void api.answer(card.id, allow, undefined, card.pending?.id).catch(notify)}
                       onStop={() => void api.stop(card.id).catch(notify)}
+                      onResume={(how) => resume(card.id, how)}
                       onContextMenu={(e) => void onCardMenu(card, e)}
                       onStarMenu={(e) => void onStarMenu(card, e)}
                     />

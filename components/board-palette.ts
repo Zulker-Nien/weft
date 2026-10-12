@@ -1,5 +1,5 @@
 import { SORTERS, type ProjectSummary, type SortKey } from "@/lib/board-view";
-import { SCENES, setTheme, THEMES } from "@/lib/theme";
+import { setTheme, THEMES } from "@/lib/theme";
 import { COLUMNS, type Card, type Column } from "@/lib/types";
 import type { PaletteItem } from "./CommandPalette";
 import { folderName, SORTS } from "./ProjectBar";
@@ -63,7 +63,6 @@ function commandItems(s: PaletteState, a: PaletteActions): PaletteItem[] {
       : []),
     ...SORTS.map((o) => command(`sort-${o.id}`, `Sort: ${o.label}`, "list", () => a.chooseSort(o.id), undefined, "order")),
     ...THEMES.map((t) => command(`theme-${t.id}`, `Theme: ${t.label}`, "sun", () => setTheme(t.id), undefined, "appearance dark light")),
-    ...SCENES.map((t) => command(`theme-${t.id}`, `Theme: ${t.label}`, "sun", () => setTheme(t.id), undefined, "appearance scene background picture")),
   ];
   if (selected) {
     commands.unshift(

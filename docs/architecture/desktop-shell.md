@@ -32,8 +32,7 @@ lives in `electron/server.cjs`.
   close-to-hide behavior so the conversation survives.
 - `followThemeChoice()` runs before any window opens. It reads the board's
   `weft-theme` cookie (set from Settings → Appearance; see `lib/theme.ts`) from the
-  default session and sets `nativeTheme.themeSource` to match (`electron/theme-source.cjs`: a scene follows
-  its light or dark base; see docs/architecture/themes.md), then keeps watching
+  default session and sets `nativeTheme.themeSource` to match, then keeps watching
   the cookie. Window backgrounds, native menus, and the splash screen follow it.
 - `COPILOT_SHORTCUT = "Control+Alt+Space"` is registered with `globalShortcut` at
   startup. If the OS refuses it, a warning is logged.

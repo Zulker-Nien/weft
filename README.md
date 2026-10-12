@@ -34,9 +34,6 @@ same time; Next.js allows one dev server per project folder.
   overlay over the board; Esc (or clicking outside) closes it, and so does sending `/done`.
 - **Browser pane zoom**: the % button in the pane's toolbar zooms the page (Chrome's steps, plus
   50–200% presets); ⌘+ / ⌘− / ⌘0 and ⌘+scroll work on the page too, and a trackpad pinch magnifies.
-- **Themes**: Settings → Appearance (or ⌘K "Theme: …") picks System, Light or Dark, or a scene: Twin Suns,
-  Canyon, Coast Road, Neon City, Snow Pass or Salt Flats puts that picture behind the board with a palette drawn
-  from it and frosted columns (`lib/theme.ts`, colors in `app/globals.css`; docs/architecture/themes.md).
 - **Menu bar icon**: shows how many cards need you and lists them; click one to open it.
 - **Dock**: the Needs you count on the icon, and New Thread and Copilot in its menu.
 - **Links**: `weft://new?prompt=…&folder=…&start=1` creates a card (in your most recent project
@@ -128,6 +125,10 @@ Claude Code keep the mode they last ran in (say `auto`).
 | Needs you | The agent asks permission for a tool; Allow or Deny on the card |
 | Review    | The turn finishes (or fails, or you stop it) |
 | Done      | You drag it there, and its Done automations run (by default `/weft:done`) |
+
+Any card that isn't running and has a session shows a ▶ in its footer: it sends "continue" into the thread, for when
+the model gave up too early. A card whose turn you stopped or that failed also shows **Restart**, which runs your last
+message again in a fresh CLI.
 
 The Backlog column is hidden by default. Turn it on with Settings → Show backlog. It also shows
 whenever cards are waiting in it.

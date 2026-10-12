@@ -7,6 +7,7 @@ import { COPILOT_ID } from "@/lib/types";
 vi.mock("next/server", () => ({ connection: async () => {} }));
 vi.mock("@/lib/store", () => ({ getCard: vi.fn((id: string) => ({ id })) }));
 vi.mock("@/lib/runner", () => ({ sendUserMessage: vi.fn(), retryAfterLogin: vi.fn() }));
+vi.mock("@/lib/restart", () => ({ restartTurn: vi.fn(() => Promise.resolve()) }));
 vi.mock("@/lib/copilot", () => ({ sendToCopilot: vi.fn() }));
 vi.mock("@/lib/login", () => ({
   authStatus: vi.fn(),
@@ -31,6 +32,7 @@ vi.mock("@/lib/settings", () => ({
 }));
 
 const runner = await import("@/lib/runner");
+const restart = await import("@/lib/restart");
 const copilot = await import("@/lib/copilot");
 const login = await import("@/lib/login");
 const repos = await import("@/lib/repos");
@@ -56,6 +58,13 @@ describe("POST /cards/:id/messages", () => {
     const res = await messagesRoute.POST(post(`/cards/${COPILOT_ID}/messages`, { text: " hi " }), { params: Promise.resolve({ id: COPILOT_ID }) });
     expect(res.status).toBe(200);
     expect(copilot.sendToCopilot).toHaveBeenCalledWith("hi");
+    expect(runner.sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it("restart: true runs the card's last message again, with no text needed", async () => {
+    const res = await messagesRoute.POST(post("/cards/c1/messages", { restart: true }), { params: Promise.resolve({ id: "c1" }) });
+    expect(res.status).toBe(200);
+    expect(restart.restartTurn).toHaveBeenCalledWith("c1");
     expect(runner.sendUserMessage).not.toHaveBeenCalled();
   });
 });

@@ -62,7 +62,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `Now` **Images in threads** — tool screenshots, images pasted into Claude Code sessions and local images an agent shows with `![](path)` appear inline, saved in `~/.weft/attachments`; click for full size.
 - `Now` **Live sessions move columns** — a session busy in another app moves to Running, one waiting on a question to Needs you, read from Claude Code's own session list every 5 seconds.
 - `P2` **Subagent drill-down** — subagent turns are hidden today; show them nested under the Task call that started them.
-- `P2` **Retry after an error** — one click to resend the last message after "Ended early" or an API error.
+- `Done` **Continue and retry from the card** — a ▶ in the footer of any idle card with a session sends "continue" (for a model that gave up too early); a stopped or failed card also gets **Restart**, its last message again in a fresh CLI (`lib/card-resume.ts`, `lib/restart.ts`).
 - `P2` **Edit and resend** — edit your last message and rerun the turn from there.
 - `P2` **Auto-title** — name a card from its first exchange when you left the title blank, instead of the first 60 characters of the prompt.
 - `P2` **Slash commands and skills in the reply box** — list the CLI's slash commands and skills available in the card's folder.
@@ -268,7 +268,6 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `Now` **Shortcuts sheet** — `?` lists every keyboard shortcut (board, composer, terminal, app menu), searchable by words or keys; hold ⌘ or ⇧ for a cheat card; tooltips, the filter box and right-click menus show keys.
 - `P2` **Export and import settings** — move the thread prompt, templates, and rules to another machine as one file.
 - `Now` **Theme** — light, dark, or follow the system, from Settings → Appearance; the desktop window chrome follows it too.
-- `Now` **Scene themes** — Twin Suns, Canyon, Coast Road, Neon City, Snow Pass and Salt Flats: Weft's own pictures behind the board, each with a palette drawn from it and frosted columns (Settings → Appearance, or ⌘K "Theme: …").
 
 ## Packaging, updates and distribution
 

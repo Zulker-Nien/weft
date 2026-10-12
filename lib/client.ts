@@ -172,6 +172,8 @@ export const api = {
   archive: (id: string, archived: boolean) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { archived }),
   remove: (id: string) => call("DELETE", `/api/cards/${id}`),
   send: (id: string, text: string) => call<{ card: Card }>("POST", `/api/cards/${id}/messages`, { text }),
+  // A stopped or failed card's Restart: its last message again, in a fresh CLI.
+  restart: (id: string) => call<{ card: Card }>("POST", `/api/cards/${id}/messages`, { restart: true }),
   // Sends text to the thread at `at` (unix ms), even if Weft was closed then (it goes on the next start).
   schedule: (id: string, text: string, at: number) => call<{ card: Card }>("POST", `/api/cards/${id}/scheduled`, { text, at }),
   unschedule: (id: string, messageId: string) => call<{ card: Card }>("DELETE", `/api/cards/${id}/scheduled`, { messageId }),

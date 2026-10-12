@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { makeCard } from "./test-utils";
@@ -32,6 +32,26 @@ describe("CardView", () => {
     renderCard({ lastLine: "Working", error: "CLI crashed" });
     expect(screen.getByText("CLI crashed")).toBeInTheDocument();
     expect(screen.queryByText("Working")).not.toBeInTheDocument();
+  });
+
+  it("▶ sends continue on an idle card with a session, without opening the thread", async () => {
+    const onResume = vi.fn();
+    const { onOpen } = renderCard({ lastLine: "I'll stop here.", sessionId: "s1" }, { onResume });
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(onResume).toHaveBeenCalledWith("continue");
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Restart" })).not.toBeInTheDocument();
+  });
+
+  it("a stopped card also offers Restart; a running one offers neither", async () => {
+    const onResume = vi.fn();
+    renderCard({ lastLine: "Stopped", sessionId: "s1" }, { onResume });
+    await userEvent.click(screen.getByRole("button", { name: "Restart" }));
+    expect(onResume).toHaveBeenCalledWith("restart");
+    cleanup();
+    renderCard({ column: "running", sessionId: "s1" }, { onResume });
+    expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Restart" })).not.toBeInTheDocument();
   });
 
   it("opens on click", async () => {
