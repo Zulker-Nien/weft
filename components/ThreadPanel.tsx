@@ -6,12 +6,18 @@ import { useShortcutHint } from "@/lib/hotkeys";
 import type { PlanResets } from "@/lib/schedule";
 import type { Card, PermissionMode, ThreadItem } from "@/lib/types";
 import { BackendBadge } from "./CardView";
+import CrashGuard from "./CrashGuard";
+import { guarded } from "./guarded";
 import Icon from "./Icon";
 import ModePicker from "./ModePicker";
-import ReviewPanel from "./ReviewPanel";
 import SkillMenu from "./SkillMenu";
 import StarButton from "./StarButton";
+import TagPill from "./TagPill";
+import { cardTags } from "@/lib/rail-view";
 import ThreadView from "./ThreadView";
+
+// Loaded in its own CrashGuard (components/guarded.tsx), so a broken review panel leaves the thread and its reply box.
+const ReviewPanel = guarded(() => import("./ReviewPanel"), { what: "review panel", className: "mx-4 my-2" });
 
 export default function ThreadPanel({
   card,
@@ -21,12 +27,14 @@ export default function ThreadPanel({
   onAnswer,
   onRelease,
   onArchive,
-  onStarMenu,
+  onStar,
+  onTags,
   onDelete,
   onClose,
   onRename,
   onMode,
   editTitle = false,
+  focusReply,
   alsoHere,
   resets,
 }: {
@@ -37,8 +45,10 @@ export default function ThreadPanel({
   onAnswer: (allow: boolean, answers?: Record<string, string>) => void;
   onRelease: () => void;
   onArchive: () => void;
-  // The ☆: file the card in the library, or show or unstar it.
-  onStarMenu?: (e: React.MouseEvent) => void;
+  // The ☆: star or unstar the card.
+  onStar?: () => void;
+  // A click on the card's tags (or "+ tag"): opens the Tags… dialog.
+  onTags?: () => void;
   onDelete: () => void;
   // Left out while the browser shows beside the thread: the window's X sits in the browser's corner.
   onClose?: () => void;
@@ -47,6 +57,8 @@ export default function ThreadPanel({
   onMode: (mode: PermissionMode) => void;
   // Opens with the title already being edited (Rename… in the card's right-click menu).
   editTitle?: boolean;
+  // Opens with the reply box focused (a card just started from New thread).
+  focusReply?: boolean;
   // Other busy cards in this folder (lib/overlap.ts busyHere).
   alsoHere?: Card[];
   // The plan's next 5-hour and weekly resets, the reply box's default Send later times.
@@ -92,14 +104,15 @@ export default function ThreadPanel({
           )}
           <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted">
             <BackendBadge backend={card.backend} />
-            <ModePicker small value={card.permissionMode} onChange={onMode} yolo={card.backend === "claude"} />
-            <span className="truncate" title={card.cwd}>{folderName(card.cwd)}</span>
+            <CrashGuard inline what="mode picker"><ModePicker small value={card.permissionMode} onChange={onMode} yolo={card.backend === "claude"} /></CrashGuard>
+            <span className="min-w-[3rem] truncate" title={card.cwd}>{folderName(card.cwd)}</span>
             {card.sessionId && (
-              <span className="font-mono text-faint" title={card.sessionId}>· {card.sessionId.slice(0, 8)}</span>
+              <span className="shrink-0 whitespace-nowrap font-mono text-faint" title={card.sessionId}>· {card.sessionId.slice(0, 8)}</span>
             )}
             {card.warm && (
-              <span className="text-ok" title="The CLI is open, so a reply starts right away">· live</span>
+              <span className="shrink-0 whitespace-nowrap text-ok" title="The CLI is open, so a reply starts right away">· live</span>
             )}
+            <HeaderMarks card={card} onTags={onTags} />
           </div>
           {(card.stage || card.remaining) && (
             <div className="mt-1.5 flex min-w-0 items-center gap-1.5 text-[11.5px]">
@@ -108,8 +121,8 @@ export default function ThreadPanel({
             </div>
           )}
         </div>
-        <SkillMenu cwd={card.cwd} disabled={live} onRun={(skill) => onSend(`/${skill}`)} />
-        <StarButton variant="header" starred={Boolean(card.libraryId)} onClick={onStarMenu} />
+        <CrashGuard inline what="skill menu"><SkillMenu cwd={card.cwd} disabled={live} onRun={(skill) => onSend(`/${skill}`)} /></CrashGuard>
+        <CrashGuard inline what="star"><StarButton variant="header" starred={Boolean(card.starred)} onClick={onStar} /></CrashGuard>
         <button
           onClick={onArchive}
           disabled={live}
@@ -170,7 +183,45 @@ export default function ThreadPanel({
         replaceReply={card.column === "review" && Boolean(card.review)}
         alsoHere={alsoHere}
         scheduling={{ resets }}
+        focusReply={focusReply}
       />
     </aside>
+  );
+}
+
+// The card's GitHub issue (#N, a link) and its tags, which open the Tags… dialog ("+ tag" with none yet).
+function HeaderMarks({ card, onTags }: { card: Card; onTags?: () => void }) {
+  return (
+    <>
+      {card.issue && (
+        <a href={card.issue.url} target="_blank" rel="noreferrer" title={`${card.issue.repo}#${card.issue.number} (${card.issue.state})`} className="shrink-0 font-medium text-muted hover:underline">
+          #{card.issue.number}
+        </a>
+      )}
+      {onTags && (
+        <button
+          type="button"
+          onClick={onTags}
+          title="Edit tags"
+          aria-label={card.tags?.length ? `Tags: ${card.tags.join(", ")}` : "Add a tag"}
+          className="flex shrink-0 items-center gap-1 rounded px-0.5 hover:bg-sunken"
+        >
+          {card.tags?.length ? <HeaderTags tags={card.tags} /> : <span className="whitespace-nowrap text-faint">+ tag</span>}
+        </button>
+      )}
+    </>
+  );
+}
+
+// Up to three tags, then "+N".
+function HeaderTags({ tags }: { tags: string[] }) {
+  const { shown, more } = cardTags(tags, 3);
+  return (
+    <>
+      {shown.map((tag) => (
+        <TagPill key={tag} tag={tag} className="max-w-[80px]" />
+      ))}
+      {more > 0 && <span className="text-faint">+{more}</span>}
+    </>
   );
 }

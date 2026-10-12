@@ -7,7 +7,7 @@ vi.mock("@/lib/theme", () => ({ THEMES: [{ id: "dark", label: "Dark" }], SCENES:
 
 function actions(): PaletteActions {
   const names = [
-    "openNew", "focusFilter", "toggleCopilot", "toggleBrowser", "toggleTerminal", "openSettings", "openHelp",
+    "openNew", "focusFilter", "toggleCopilot", "toggleBrowser", "toggleTerminal", "openSettings", "openHelp", "addSecret",
     "jumpToNeedsYou", "archiveCards", "unarchive", "toggleShowArchived", "chooseSort", "focusReply", "closeThread",
     "toggleArchive", "stop", "move", "chooseProject", "openCard",
   ];
@@ -37,6 +37,7 @@ describe("boardPaletteItems", () => {
     expect(ids(items)).toContain("cmd-new");
     expect(ids(items)).toContain("cmd-theme-dark");
     expect(ids(items)).toContain("cmd-theme-canyon");
+    expect(ids(items)).toContain("cmd-add-secret");
     expect(ids(items)).toContain("project-all");
     expect(ids(items)).not.toContain("cmd-reply");
     expect(ids(items)).not.toContain("cmd-archive-done");
@@ -92,6 +93,19 @@ describe("boardPaletteItems", () => {
     byId.get("card-c1")?.run();
     expect(a.chooseProject).toHaveBeenCalledWith(null);
     expect(a.openCard).toHaveBeenCalledWith(card);
+  });
+
+  it("gives each card its last line of output (or its error) and how long ago it changed", () => {
+    const now = Date.now();
+    const cards = [
+      makeCard({ id: "c1", lastLine: "Built the\n  login page", updatedAt: now - 5 * 60_000 }),
+      makeCard({ id: "c2", lastLine: "old", error: "Rate limited", updatedAt: now }),
+      makeCard({ id: "c3", lastLine: "  " }),
+    ];
+    const byId = new Map(boardPaletteItems(state({ cards }), actions()).map((i) => [i.id, i]));
+    expect(byId.get("card-c1")).toMatchObject({ preview: "Built the login page", when: "5m ago" });
+    expect(byId.get("card-c2")?.preview).toBe("Rate limited");
+    expect(byId.get("card-c3")?.preview).toBeUndefined();
   });
 });
 

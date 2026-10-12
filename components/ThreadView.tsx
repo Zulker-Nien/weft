@@ -5,12 +5,17 @@ import { api } from "@/lib/client";
 import { isLive } from "@/lib/format";
 import type { PlanResets } from "@/lib/schedule";
 import type { Card, ThreadItem } from "@/lib/types";
+import { useEditLast } from "@/lib/use-edit-last";
+import CrashGuard from "./CrashGuard";
+import { guarded } from "./guarded";
 import Icon, { Spinner } from "./Icon";
-import Markdown from "./Markdown";
 import QuestionForm from "./QuestionForm";
-import ReplyBox from "./ReplyBox";
 import StatusStrip from "./StatusStrip";
-import { ThreadMessage, ToolRun, groupThread } from "./ThreadItems";
+import { ThreadEntries, groupThread } from "./ThreadItems";
+
+// Loaded in its own CrashGuard (components/guarded.tsx): a reply box that fails, even as its module loads,
+// leaves the thread readable.
+const ReplyBox = guarded(() => import("./ReplyBox"), { what: "reply box", className: "mx-4 my-2" });
 
 // A thread's messages, its pending permission request, and the reply box.
 // The parent supplies a flex column for it to fill.
@@ -26,6 +31,7 @@ export default function ThreadView({
   replaceReply = false,
   alsoHere,
   scheduling,
+  focusReply,
 }: {
   card: Card;
   items: ThreadItem[];
@@ -41,6 +47,8 @@ export default function ThreadView({
   alsoHere?: Card[];
   // Given on board threads, so the reply box offers Send later; resets are the plan's next 5-hour and weekly resets.
   scheduling?: { resets: PlanResets };
+  // The reply box takes focus as it opens.
+  focusReply?: boolean;
 }) {
   // The request already answered here, so a second click can't answer it (or the next one) again.
   const [answeredId, setAnsweredId] = useState<string | null>(null);
@@ -49,6 +57,7 @@ export default function ThreadView({
   const live = isLive(card);
   const entries = groupThread(items);
   const answered = answeredId !== null && answeredId === card.pending?.id;
+  const { editLast, editFrom, onEditing } = useEditLast(card, items, () => (stick.current = true));
 
   // Follow new output unless the user has scrolled up to read.
   useEffect(() => {
@@ -89,14 +98,7 @@ export default function ThreadView({
         className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4"
       >
         {entries.length === 0 && !live && empty}
-        {entries.map((entry) =>
-          entry.kind === "tools" ? (
-            <ToolRun key={entry.key} calls={entry.calls} live={live} />
-          ) : (
-            <ThreadMessage key={entry.key} item={entry.item} />
-          ),
-        )}
-        {streaming && <Markdown text={streaming} streaming />}
+        <ThreadEntries entries={entries} live={live} streaming={streaming} editFrom={editFrom} />
         {card.column === "running" && !streaming && (
           <div className="flex items-center gap-2 text-[12px] text-muted">
             <Spinner size={12} /> Working…
@@ -109,6 +111,7 @@ export default function ThreadView({
 
       {card.pending && (
         // Capped so a long list of questions scrolls inside the panel instead of running off the window.
+        <CrashGuard key={card.pending.id} what="permission request" className="mx-4 my-2">
         <div className="flex max-h-[60vh] min-h-0 shrink-0 flex-col border-t border-warn/40 bg-warn-soft px-4 py-3">
           <div className="flex items-start gap-2 text-[13px] font-medium text-ink">
             <Icon name={card.pending.questions ? "alert" : "lock"} size={14} className="mt-0.5 text-warn" />
@@ -147,13 +150,15 @@ export default function ThreadView({
           </>
           )}
         </div>
+        </CrashGuard>
       )}
 
       {footer}
       {!replaceReply && (
-        <ReplyBox key={card.id} cardId={card.id} cwd={card.cwd} live={live} placeholder={placeholder} suggestion={card.suggestion} alsoHere={alsoHere}
+        <ReplyBox key={card.id} cardId={card.id} cwd={card.cwd} live={live} placeholder={placeholder} suggestion={card.suggestion} alsoHere={alsoHere} autoFocus={focusReply}
           sendLater={scheduling && { backend: card.backend, resets: scheduling.resets, scheduled: card.scheduled ?? [] }}
           status={<StatusStrip stats={card.stats} cwd={card.cwd} backend={card.backend} />}
+          editLast={editLast} onEditing={onEditing}
           onSend={send} onStop={() => api.stop(card.id).then(() => {})} />
       )}
     </>

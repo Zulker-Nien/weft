@@ -1,6 +1,8 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { ShortcutDef } from "@/lib/hotkeys";
-import type { Card, LibraryKind, LoginView } from "@/lib/types";
+import type { RailPanel } from "@/lib/rail-view";
+import { addSecret } from "@/lib/use-vault";
+import type { Card, LoginView } from "@/lib/types";
 
 // The board's keyboard shortcuts (Board.tsx), from the state and actions they read.
 export interface BoardShortcutContext {
@@ -17,7 +19,7 @@ export interface BoardShortcutContext {
   setShowPalette: (open: boolean) => void;
   setShowHelp: Dispatch<SetStateAction<boolean>>;
   setShowSettings: (open: boolean) => void;
-  setLibraryOpen: Dispatch<SetStateAction<LibraryKind | null>>;
+  setLibraryOpen: Dispatch<SetStateAction<RailPanel | null>>;
   openPalette: (initial: string) => void;
   filterHasFocus: () => boolean;
   openNew: () => void;
@@ -59,11 +61,12 @@ export function boardShortcuts(c: BoardShortcutContext): ShortcutDef[] {
     {
       id: "library",
       keys: ["mod+l"],
-      description: "Library: recipes, to-dos and notes",
+      description: "Tags: filter the board, add, rename, recolour",
       group: "General",
       enabled: !(c.showNew || c.showSettings || c.showPalette || c.showHelp || Boolean(c.login)),
-      handler: () => c.setLibraryOpen((open) => (open ? null : "recipe")),
+      handler: () => c.setLibraryOpen((open) => (open ? null : "tags")),
     },
+    { id: "add-secret", keys: ["shift+s"], description: "Add a secret to the vault", group: "General", enabled: c.boardKeys, handler: () => addSecret(c.setLibraryOpen) },
     { id: "filter", keys: ["/"], description: "Filter cards", group: "General", enabled: c.boardKeys, handler: c.focusFilter },
     {
       id: "settings",

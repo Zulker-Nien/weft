@@ -1,6 +1,8 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type { DevServerStatus } from "./types";
+import { cliEnv } from "./env";
 import { globalSingleton } from "./global-singleton";
+import { devSecrets } from "./secret-run";
 
 // The dev server a card's review tour points at: started from the card's folder, kept running
 // while the user reviews, and probed so the board can say whether the app really answers.
@@ -48,12 +50,23 @@ export function stopDev(cardId: string) {
   }
 }
 
-export function startDev(cardId: string, command: string, cwd: string) {
+// With a vault for the folder, the server gets its development values in its env (lib/secret-run.ts), never
+// this server's or a thread's; the user approves the command the first time.
+export async function startDev(cardId: string, command: string, cwd: string) {
   const existing = runs.get(cardId);
   if (existing && !existing.exited && existing.command === command) return;
+  const { launch, note } = await devSecrets(cardId, command, cwd);
   stopDev(cardId);
-  const child = spawn(command, { cwd, shell: true, detached: true, stdio: ["ignore", "pipe", "pipe"] });
-  const run: Run = { child, command, log: "", exited: false, failed: false };
+  // cliEnv() drops the pane's control-server token, which a dev server has no use for.
+  const env = { ...cliEnv(), ...launch?.env };
+  // (A plain start ignores stdin, so its stdin is null; only the secrets launch writes to it.)
+  const child = (
+    launch
+      ? spawn(launch.bin, launch.args, { cwd, env, detached: true, stdio: ["pipe", "pipe", "pipe"] })
+      : spawn(command, { cwd, env, shell: true, detached: true, stdio: ["ignore", "pipe", "pipe"] })
+  ) as ChildProcessWithoutNullStreams;
+  if (launch) child.stdin.end(launch.stdin);
+  const run: Run = { child, command, log: launch ? `With vault secrets: ${launch.names.join(", ")}\n` : note ? `${note}\n` : "", exited: false, failed: false };
   const collect = (chunk: Buffer) => {
     run.log = (run.log + chunk.toString()).slice(-LOG_LIMIT);
   };

@@ -6,6 +6,7 @@ import { isLive } from "@/lib/format";
 import { useBoardEvents } from "@/lib/use-events";
 import { useTitleBarZoom } from "@/lib/use-title-bar-zoom";
 import { COPILOT_ID, type Card, type ThreadItem } from "@/lib/types";
+import CrashGuard from "./CrashGuard";
 import Icon, { Spinner } from "./Icon";
 import ThreadView from "./ThreadView";
 
@@ -119,6 +120,8 @@ export default function CopilotChat() {
 
       {card ? (
         <div className="flex min-h-0 flex-1 flex-col">
+          {/* Keeps the header's New chat working when the conversation fails to draw. */}
+          <CrashGuard what="conversation" className="m-3">
           <ThreadView
             card={card}
             items={items}
@@ -145,6 +148,7 @@ export default function CopilotChat() {
               </div>
             }
           />
+          </CrashGuard>
         </div>
       ) : (
         <div className="flex flex-1 items-center justify-center text-faint">

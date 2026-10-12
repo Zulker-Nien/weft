@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { query, type ModelUsage, type Options, type PermissionResult, type Query, type SDKMessage, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
@@ -7,30 +6,37 @@ import { signAsWeft } from "./attribution";
 import { isDoneCommand, skillsForPrompt } from "./automations";
 import { COPILOT_PROMPT, boardMcpServer, describeBoardTool, isTrustedTool, threadBoardMcpServer } from "./board-tools";
 import { BROWSER_PROMPT, browserMcpServer } from "./browser-tools";
+import { withRedacted } from "./secret-run";
 import { SECRETS_PROMPT, secretsMcpServer } from "./secret-tools";
 import { publish } from "./bus";
 import { firstLine, shortToolName, summarizeInput, toolAction } from "./format";
-import { cliEnv } from "./env";
-import { glanceAfterTurn, showStarter } from "./glance";
+import { lastSent } from "./edit-last";
+import { guardedCli, RESTART_PROMPT } from "./env";
+import { executableFor } from "./cli-path";
 import { changedLines, gitBranch } from "./git-stats";
+import { glanceAfterTurn, showStarter } from "./glance";
 import { isOpenElsewhere } from "./import";
 import { isNotLoggedInError, isRateLimitError, startLogin } from "./login";
-import { editedPath, touchFile } from "./overlap";
 import { hitRateLimit } from "./rate-limit";
+export { switchBackend } from "./backend-switch";
+import { editedPath, touchFile } from "./overlap";
 import { defaultPermissionMode, keepAliveMinutes, threadPrompt } from "./settings";
 import { PLUGIN_DIR } from "./skills";
 import { switchSpare } from "./spare-switch";
 import { extractReview, REVIEW_PROMPT } from "./review";
+import { sessionRewindPoint } from "./rewind";
 import { extractStatus, type BoardStatus } from "./status";
-import { appendThread, getCard, getThread, replaceThreadItem, updateCard } from "./store";
+import { appendThread, foldThread, getCard, getThread, replaceThreadItem, updateCard } from "./store";
 import { adoptLocalMedia, toolResult } from "./thread-media";
 import * as turnRules from "./turn";
 import { cacheAfter, columnAfterTurn, eventWindow, modelStats, readQuestions, readResult, turnCost, usageWindow } from "./turn";
-import { BACKEND_LABELS, type Backend, type CacheState, type Card, type CardStats, type Effort, type PermissionMode, type Question } from "./types";
+import type { Backend, CacheState, Card, CardStats, Effort, PermissionMode, Question } from "./types";
 import { globalSingleton } from "./global-singleton";
 
 // Spare CLIs started ahead of time, one per recent project folder, so a new card doesn't wait.
 const MAX_SPARES = 3;
+
+const CLI_NAMES: Record<Backend, string> = { claude: "Claude Code", puku: "puku-cli" };
 
 interface Pending {
   id: string;
@@ -48,10 +54,12 @@ class Inbox implements AsyncIterable<SDKUserMessage> {
   private wake?: () => void;
   private closed = false;
 
-  push(text: string) {
+  // uuid becomes the prompt's id in the session transcript, which is how ↑ finds it to rewind.
+  push(text: string, uuid?: string) {
     if (this.closed) throw new Error("This thread's CLI is closing. Send your message again.");
     // Images pasted into the text go along as image blocks (see lib/attachments.ts).
-    this.queue.push({ type: "user", message: { role: "user", content: messageContent(text) }, parent_tool_use_id: null });
+    const message: SDKUserMessage = { type: "user", message: { role: "user", content: messageContent(text) }, parent_tool_use_id: null };
+    this.queue.push(uuid ? { ...message, uuid: uuid as SDKUserMessage["uuid"] } : message);
     this.wake?.();
   }
 
@@ -80,6 +88,8 @@ interface Spec {
   sessionId?: string;
   // Continue the session as a copy instead of writing to it.
   forkSession?: boolean;
+  // Resume only up to this transcript entry, dropping the turns after it (↑ to edit, editLastMessage).
+  resumeAt?: string;
   copilot: boolean;
 }
 
@@ -170,20 +180,6 @@ function currentSession(cardId: string): Session | undefined {
     return undefined;
   }
   return session;
-}
-
-let pukuPath: string | undefined;
-
-function executableFor(backend: Backend) {
-  if (backend !== "puku") return undefined;
-  if (!pukuPath) {
-    try {
-      pukuPath = execFileSync("/usr/bin/which", ["puku-cli"], { encoding: "utf8" }).trim();
-    } catch {
-      throw new Error("puku-cli isn't on this app's PATH.");
-    }
-  }
-  return pukuPath;
 }
 
 // The card may be deleted while its thread is still running.
@@ -316,14 +312,17 @@ export function sendMessage(cardId: string, text: string, { echo = true, cli = t
   }
   session ??= adoptSpare(card) ?? open(specFor(card), cardId);
 
-  if (echo) appendThread(cardId, { kind: "user", text, at: Date.now() });
-  updateCard(cardId, { column: "running", archived: false, error: undefined, suggestion: undefined, pending: null, lastLine: "Thinking…" });
+  // Claude threads tag the prompt so ↑ can rewind its turn later (lib/edit-last.ts).
+  const promptId = card.backend === "claude" && !session.spec.copilot ? randomUUID() : undefined;
+  if (echo) appendThread(cardId, { kind: "user", text, at: Date.now(), ...(promptId && { id: promptId }) });
+  const fresh = { error: undefined, suggestion: undefined, pending: null, interrupted: undefined, resumes: undefined };
+  updateCard(cardId, { column: "running", archived: false, wrappingUp: archiveAfter.has(cardId), ...fresh, lastLine: "Thinking…" });
   clearTimeout(session.idle);
   session.busy = true;
   session.status = undefined;
   session.openedPane = false;
   session.turnSeq = (session.turnSeq ?? 0) + 1;
-  session.inbox.push(cli);
+  session.inbox.push(cli, promptId);
   if (!session.spec.copilot) showStarter(cardId, card.title, text).catch(() => {});
 }
 
@@ -341,6 +340,38 @@ export function sendUserMessage(cardId: string, text: string, { cli = text } = {
   queueMessages(cardId, skills.map((skill) => `/${skill}`));
 }
 
+// ↑ in the reply box: your last message, rewritten. Its turn is stopped if it's still running, rewound
+// out of the conversation and folded away in the thread, then the new text goes out in its place.
+// Files that turn changed stay as they are. A message the CLI's transcript doesn't hold (a picked-up
+// session, a puku thread, one sent before ↑ could edit) can't be rewound, so the text goes out as a
+// new message after it.
+export async function editLastMessage(cardId: string, text: string) {
+  const before = getCard(cardId);
+  if (!before) throw new Error("No such card.");
+  if (before.role === "copilot") throw new Error("The copilot's messages can't be edited.");
+  const last = lastSent(getThread(cardId));
+  if (!last) throw new Error("There's no message to edit yet.");
+  // Closing the CLI ends a running turn and leaves its transcript complete for the read below.
+  await endSession(cardId);
+  queued.delete(cardId);
+  archiveAfter.delete(cardId);
+  const card = getCard(cardId) ?? before;
+  const at = last.promptId && card.sessionId ? sessionRewindPoint(card.sessionId, last.promptId) : undefined;
+  if (at !== undefined) {
+    foldThread(cardId, last.index);
+    if (at === null) {
+      // It was the session's first message, so the edit starts a new one.
+      open({ ...specFor(card), sessionId: undefined }, cardId);
+    } else {
+      // Rewinding writes to the session, so one open in another app is continued as a copy.
+      const forkSession = activeElsewhere(card);
+      if (forkSession) updateCard(cardId, { forkedFrom: card.sessionId, openElsewhere: false });
+      open({ ...specFor(card), resumeAt: at, forkSession }, cardId);
+    }
+  }
+  sendUserMessage(cardId, text);
+}
+
 // Runs each message as its own turn, in order, starting now if the card is idle. A turn that's
 // stopped or fails drops the rest; one that ends needing you waits for your reply's turn to end.
 export function queueMessages(cardId: string, texts: string[]) {
@@ -349,11 +380,12 @@ export function queueMessages(cardId: string, texts: string[]) {
   sendQueued(cardId);
 }
 
-// Archives the card in Done once the messages queued for it have run (now, if there are none). A
-// stopped or failed turn leaves it in Done, unarchived, and so does a starred one (it's in the library).
+// Archives the card in Done once the messages queued for it have run (now, if there are none); until
+// then it's wrappingUp and the board draws it in Done. A stopped or failed turn sends it to Review
+// unarchived, and a starred card stays on the board (★: worth keeping).
 export function archiveWhenIdle(cardId: string) {
   if (queued.has(cardId) || isBusy(cardId)) archiveAfter.add(cardId);
-  else updateCard(cardId, { archived: !getCard(cardId)?.libraryId });
+  updateCard(cardId, archiveAfter.has(cardId) ? { wrappingUp: true } : { archived: !getCard(cardId)?.starred });
 }
 
 function sendQueued(cardId: string) {
@@ -437,7 +469,7 @@ function needLogin(cardId: string, backend: Backend, message: string) {
     column: "needs_you",
     pending: null,
     error: message,
-    lastLine: `Log in to ${BACKEND_LABELS[backend]} to run this thread`,
+    lastLine: `Log in to ${CLI_NAMES[backend]} to run this thread`,
   });
   const waiting = loginWaiters.get(backend) ?? new Set<string>();
   waiting.add(cardId);
@@ -544,7 +576,8 @@ function queryOptions(session: Session, executable: string | undefined): Options
     cwd: spec.cwd,
     resume: spec.sessionId,
     forkSession: spec.sessionId ? spec.forkSession : undefined,
-    env: cliEnv(),
+    resumeSessionAt: spec.sessionId ? spec.resumeAt : undefined,
+    ...guardedCli(() => [...sessions.values()].filter((s) => s.busy && s !== session).length),
     abortController: session.abort,
     includePartialMessages: true,
     permissionMode: spec.permissionMode,
@@ -561,7 +594,7 @@ function queryOptions(session: Session, executable: string | undefined): Options
     systemPrompt: {
       type: "preset",
       preset: "claude_code",
-      append: spec.copilot ? `${BROWSER_PROMPT}\n\n${COPILOT_PROMPT}` : `${BROWSER_PROMPT}\n\n${SECRETS_PROMPT}\n\n${threadPrompt()}\n\n${REVIEW_PROMPT}`,
+      append: spec.copilot ? `${BROWSER_PROMPT}\n\n${COPILOT_PROMPT}` : `${BROWSER_PROMPT}\n\n${SECRETS_PROMPT}\n\n${RESTART_PROMPT}\n\n${threadPrompt()}\n\n${REVIEW_PROMPT}`,
     },
     mcpServers: {
       browser: browserMcpServer(cardId),
@@ -596,7 +629,7 @@ async function drive(session: Session, executable: string | undefined) {
         session.abort.abort();
         break;
       }
-      handle(cardId, session, msg);
+      await handle(cardId, session, msg);
     }
   } catch (err) {
     const cardId = session.cardId;
@@ -637,7 +670,8 @@ function closeWhenIdle(cardId: string, session: Session) {
   setTimeout(() => session.abort.abort(), 10_000);
 }
 
-function handle(id: string, session: Session, msg: SDKMessage) {
+// Sync except for tool results from a card that used vault secrets, which wait on their redaction.
+function handle(id: string, session: Session, msg: SDKMessage): void | Promise<void> {
   switch (msg.type) {
     case "system":
       if (msg.subtype === "init") {
@@ -665,8 +699,7 @@ function handle(id: string, session: Session, msg: SDKMessage) {
       break;
 
     case "user":
-      handleToolResults(id, session, msg);
-      break;
+      return handleToolResults(id, session, msg);
 
     case "result":
       handleResult(id, session, msg);
@@ -694,6 +727,8 @@ function handleSuggestion(id: string, suggestion: string) {
 // The agent's reply: its text goes to the thread (status and review blocks lifted onto the card), and
 // each tool call gets a thread item its result fills in later.
 function handleAssistant(id: string, session: Session, msg: Extract<SDKMessage, { type: "assistant" }>) {
+  if (!session.busy) safeUpdate(id, { column: "running" }); // went on after its turn ended: a restart must find it running
+  session.busy = true;
   session.cache = cacheAfter(msg.message.usage, Date.now(), session.cache?.ttl) ?? session.cache;
   for (const block of msg.message.content) {
     if (block.type === "text") {
@@ -732,18 +767,18 @@ function recordEdit(id: string, toolName: string, input: Record<string, unknown>
   if (touched) safeUpdate(id, { touchedFiles: touched });
 }
 
-// Tool results fill in the tool items the assistant message added.
-function handleToolResults(id: string, session: Session, msg: Extract<SDKMessage, { type: "user" }>) {
+// Tool results fill in the tool items the assistant message added. A card that has used vault secrets gets
+// each value swapped for ‹NAME› before the result is stored (lib/secret-run.ts); the model saw it as it was.
+function handleToolResults(id: string, session: Session, msg: Extract<SDKMessage, { type: "user" }>): void | Promise<void> {
   const content = msg.message.content;
   if (!Array.isArray(content)) return;
-  for (const block of content) {
-    if (block.type !== "tool_result") continue;
-    const index = session.toolIndex.get(block.tool_use_id);
-    if (index === undefined) continue;
-    const item = getThread(id)[index];
-    if (item?.kind !== "tool") continue;
-    replaceThreadItem(id, index, { ...item, ...toolResult(block.content), isError: Boolean(block.is_error) });
-  }
+  const results = content.flatMap((b) => (b.type === "tool_result" && session.toolIndex.has(b.tool_use_id) ? [{ index: session.toolIndex.get(b.tool_use_id) as number, result: toolResult(b.content), isError: Boolean(b.is_error) }] : []));
+  return withRedacted(id, results.map((r) => r.result.result), (texts) => {
+    results.forEach(({ index, result, isError }, i) => {
+      const item = getThread(id)[index];
+      if (item?.kind === "tool") replaceThreadItem(id, index, { ...item, ...result, result: texts[i] as string, isError });
+    });
+  });
 }
 
 // The turn ended: settle the card (column, cost, stats), then archive it or send what was queued.
@@ -766,11 +801,34 @@ function handleResult(id: string, session: Session, msg: Extract<SDKMessage, { t
     return;
   }
 
+  if (isError && isRateLimitError(summary)) {
+    safeUpdate(id, { rateLimitHit: true });
+  }
+
   const status = parsed.status ?? session.status;
   const cost = turnCost(getCard(id)?.costUsd ?? 0, msg.total_cost_usd, session.costBase);
   session.costBase = cost.base;
   const costUsd = cost.costUsd;
   appendThread(id, { kind: "result", text: summary, costUsd, isError, at: Date.now() });
+  applyResultUpdate(id, session, msg, parsed, status, summary, costUsd, isError, stopped);
+  scheduleIdle(session);
+  if (!session.spec.copilot) glanceAfter(id, session, { reply: parsed.summary, isError, stopped });
+  finishResult(id, status, stopped, isError);
+}
+
+// The card update that closes out a turn: column, pending, cost, lastLine, etc. Extracted from
+// handleResult to keep its complexity under the cap.
+function applyResultUpdate(
+  id: string,
+  session: Session,
+  msg: Extract<SDKMessage, { type: "result" }>,
+  parsed: ReturnType<typeof readResult>,
+  status: BoardStatus | undefined,
+  summary: string,
+  costUsd: number,
+  isError: boolean,
+  stopped: boolean,
+) {
   safeUpdate(id, {
     sessionId: msg.session_id,
     column: columnAfterTurn(stopped, isError, status),
@@ -784,18 +842,16 @@ function handleResult(id: string, session: Session, msg: Extract<SDKMessage, { t
     error: isError ? summary : undefined,
     ...(status ? { stage: status.stage, remaining: status.remaining } : {}),
   });
-  scheduleIdle(session);
-  if (!session.spec.copilot) glanceAfter(id, session, { reply: parsed.summary, isError, stopped });
-  handlePostResult(id, { stopped, isError, status });
 }
 
-// After a result lands: archive the card if its /done ran, or kick off the next queued message.
-function handlePostResult(id: string, { stopped, isError, status }: { stopped: boolean; isError: boolean; status?: BoardStatus }) {
-  if (archiveAfter.has(id) && (stopped || isError)) archiveAfter.delete(id);
-  else if (archiveAfter.has(id) && !queued.has(id) && status?.column !== "needs_you") {
+// The bookkeeping around archiveAfter and the queued-turn handoff. Extracted from handleResult to
+// keep its complexity under the cap.
+function finishResult(id: string, status: BoardStatus | undefined, stopped: boolean, isError: boolean) {
+  const failed = stopped || isError;
+  if (archiveAfter.has(id) && (failed || (!queued.has(id) && status?.column !== "needs_you"))) {
     archiveAfter.delete(id);
-    // A starred card is in the library, so it stays on the board too.
-    safeUpdate(id, { column: "done", archived: !getCard(id)?.libraryId });
+    // A stopped or failed wrap-up isn't filed away; a starred card stays on the board too.
+    safeUpdate(id, failed ? { wrappingUp: false } : { column: "done", archived: !getCard(id)?.starred, wrappingUp: false });
   }
   if (queued.has(id)) {
     if (stopped || isError) queued.delete(id);
@@ -836,7 +892,3 @@ function turnStats(id: string, session: Session, modelUsage: Record<string, Mode
     branch: gitBranch(session.spec.cwd),
   };
 }
-
-// The per-card and column "switch to other CLI" actions live in lib/backend-switch.ts so the
-// runner can re-export them without dragging the runner's session map into the route modules.
-export { switchBackend } from "./backend-switch";

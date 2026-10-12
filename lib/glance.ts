@@ -4,10 +4,10 @@ import { saveAttachmentData } from "./attachments";
 import { openInPane, paneThumb, paneUrl } from "./browser-tools";
 import { emojiPrompt, parseEmoji } from "./card-pictures";
 import { complete } from "./haiku";
-import { listLibrary } from "./library";
-import { parseTitle, shouldRetitle, titleEmoji, titlePrompt } from "./retitle";
-import { DATA_DIR, decorateCard, getCard } from "./store";
-import type { LibraryItem } from "./types";
+import { nameNeeds, namePrompt, parseName, tagVocabulary, titleEmoji } from "./retitle";
+import { DATA_DIR, decorateCard, getCard, listCards } from "./store";
+import { listTags } from "./tag-store";
+import type { Card } from "./types";
 
 // The pane is never empty or stale: a card with no page gets a starter page when its turn starts, and a
 // turn that showed nothing gets a teammate's update page written by Haiku (lib/haiku.ts) after it ends.
@@ -113,28 +113,18 @@ function askHtml(ask: string) {
   return escape(ask).replace(/\n*!\[([^\]]*)\]\((\/[^)]+)\)\n*/g, (_, alt: string, file: string) => `<img src="${encodeURI(`file://${file}`)}" alt="${alt}">`);
 }
 
-// A recipe the New thread page offers (lib/library.ts).
-export type RecipeLink = Pick<LibraryItem, "id" | "title" | "blanks">;
-
-// Beside the New thread dialog while you write the prompt; the folder's recipes and yours sit under it, and
-// picking one fills the dialog in (weft://recipe/<id>, handled in electron/main.cjs).
-export function newThreadPage(recipes: RecipeLink[] = []) {
-  const list = recipes.slice(0, 6);
-  const extra = list.length
-    ? `<nav class="recipes"><div class="or">or start from a recipe</div>${list
-        .map((r) => `<a href="weft://recipe/${encodeURIComponent(r.id)}">↻ ${escape(r.title)}${r.blanks?.length ? ` <span>${escape(r.blanks.map((b) => `{${b.name}}`).join(" "))}</span>` : ""}</a>`)
-        .join("")}</nav>`
-    : "";
-  return splashPage({ title: "New thread", note: "A board for your AI", status: "Waiting for your prompt…", extra });
+// Beside the New thread dialog while you write the prompt.
+export function newThreadPage(scene = "splash-speeder.jpg") {
+  return splashPage({ title: "New thread", note: "A board for your AI", status: "Waiting for your prompt…", scene });
 }
 
-function splashPage({ title, note, ask, status, extra = "" }: { title: string; note: string; ask?: string; status: string; extra?: string }) {
+function splashPage({ title, note, ask, status, scene = "splash-speeder.jpg" }: { title: string; note: string; ask?: string; status: string; scene?: string }) {
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escape(title)}</title><style>
 html,body{height:100%;margin:0}
 body{--ink:#f4efe6;--muted:#d9d0c3;--faint:#b9afa2;--line:rgb(255 250 240/.2);--accent:#d9774b;--accent2:#8f97d6;
 background:#1a1520;color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
 -webkit-font-smoothing:antialiased;display:flex;justify-content:center;padding-top:8vh;box-sizing:border-box;overflow:hidden;position:relative}
-body::before{content:"";position:absolute;inset:0;background:url("${asset("splash-speeder.jpg")}") center 62%/cover no-repeat;animation:push 24s ease-out both}
+body::before{content:"";position:absolute;inset:0;background:url("${asset(scene)}") center 62%/cover no-repeat;animation:push 24s ease-out both}
 body::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgb(10 8 20/.6) 0%,rgb(10 8 20/.2) 45%,transparent 60%,rgb(10 8 12/.5) 100%),radial-gradient(ellipse 90% 80% at 50% 50%,transparent 55%,rgb(0 0 0/.45))}
 main{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;max-width:440px;width:100%;padding:0 22px;box-sizing:border-box}
 .mark{position:relative;width:96px;height:96px;animation:rise .7s cubic-bezier(.2,.8,.2,1) both}
@@ -146,10 +136,6 @@ h1{margin:6px 0 0;font-size:24px;line-height:1.25;font-weight:700;letter-spacing
 .thread{width:160px;height:3px;margin-top:8px;border-radius:3px;background:var(--line);overflow:hidden;position:relative}
 .thread::after{content:"";position:absolute;inset:0;width:45%;border-radius:3px;background:linear-gradient(90deg,transparent,var(--accent),var(--accent2));animation:weave 1.3s ease-in-out infinite}
 .status{color:var(--faint);font-size:12.5px}
-.recipes{display:flex;flex-direction:column;gap:6px;width:100%;margin-top:14px;animation:rise .7s .4s cubic-bezier(.2,.8,.2,1) both}
-.recipes .or{color:var(--faint);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase}
-.recipes a{display:block;text-align:left;color:var(--ink);text-decoration:none;background:rgb(20 14 24/.55);backdrop-filter:blur(10px);border:.5px solid var(--line);border-radius:9px;padding:8px 12px;font-size:13px}
-.recipes a:hover{border-color:var(--accent)}.recipes span{color:var(--faint);font:11.5px ui-monospace,Menlo,monospace}
 @keyframes weave{0%{transform:translateX(-100%)}100%{transform:translateX(230%)}}
 @keyframes rise{from{opacity:0;transform:translateY(10px) scale(.96)}}
 @keyframes float{to{transform:translateY(-6px)}}
@@ -163,7 +149,6 @@ h1{margin:6px 0 0;font-size:24px;line-height:1.25;font-weight:700;letter-spacing
 ${ask === undefined ? "" : `<div class="ask">${escape(clip(ask, MAX_ASK_CHARS))}</div>`}
 <div class="thread" aria-hidden="true"></div>
 <div class="status">${escape(status)}</div>
-${extra}
 </main></body></html>`;
 }
 
@@ -174,10 +159,15 @@ function write(cardId: string, html: string) {
   return file;
 }
 
-// The New thread dialog's page, as a url the browser pane can load, offering the folder's recipes and yours.
-export function newThreadUrl(folder?: string | null) {
-  const recipes = listLibrary({ folder }).filter((i) => i.kind === "recipe");
-  return `file://${write("new-thread", newThreadPage(recipes))}`;
+// Each New thread opens on the next scene, so the dialog never looks the same twice in a row.
+let sceneTurn = 0;
+export function nextScene(names = backdrops()) {
+  return names[sceneTurn++ % names.length] ?? "splash-speeder.jpg";
+}
+
+// The New thread dialog's page, as a url the browser pane can load.
+export function newThreadUrl() {
+  return `file://${write("new-thread", newThreadPage(nextScene()))}`;
 }
 
 // Fire and forget from the start-a-card path: a file write and one local request, nothing awaited.
@@ -200,18 +190,28 @@ export async function glanceAfterTurn(
 }
 
 // A card still named "Image attachment" or by its raw prompt gets a Haiku title with an emoji (lib/retitle.ts),
-// and that emoji becomes its tile. Fire and forget; a failed or empty reply leaves the title for the next turn.
+// and that emoji becomes its tile; a card with no tags gets one to three, from the board's own where they fit.
+// One Haiku call asks for whichever it needs. Fire and forget; a failed or empty reply leaves both for the next turn.
 function retitleAfterTurn(cardId: string, turn: { ask: string; reply: string }) {
   const card = getCard(cardId);
-  if (!card || !shouldRetitle(card) || !turn.reply.trim()) return;
-  void complete(titlePrompt(turn.ask, turn.reply))
+  if (!card || !turn.reply.trim()) return;
+  const needs = nameNeeds(card);
+  if (!needs.title && !needs.tags) return;
+  const vocabulary = needs.tags ? tagVocabulary(listCards(), listTags().map((t) => t.name)) : [];
+  void complete(namePrompt(needs, turn.ask, turn.reply, vocabulary))
     .then((reply) => {
-      const title = parseTitle(reply);
       const current = getCard(cardId);
-      // You may have renamed it while Haiku was thinking.
-      if (!title || !current || !shouldRetitle(current)) return;
-      const emoji = titleEmoji(title);
-      decorateCard(cardId, { title, titleBy: "auto", ...(emoji ? { emoji } : {}) });
+      if (!current) return;
+      const { title, tags } = parseName(reply, needs);
+      // You may have renamed or tagged it while Haiku was thinking.
+      const still = nameNeeds(current);
+      const patch: Partial<Card> = {};
+      if (title && still.title) {
+        const emoji = titleEmoji(title);
+        Object.assign(patch, { title, titleBy: "auto" }, emoji ? { emoji } : {});
+      }
+      if (tags.length && still.tags) Object.assign(patch, { tags, tagsBy: "auto" });
+      if (Object.keys(patch).length) decorateCard(cardId, patch);
     })
     .catch(() => {});
 }

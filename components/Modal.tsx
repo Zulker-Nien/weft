@@ -3,6 +3,7 @@
 import { useId, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { NO_DRAG } from "@/lib/no-drag";
 import { useEscape } from "@/lib/use-escape";
+import CrashGuard from "./CrashGuard";
 import Icon from "./Icon";
 
 const PLACEMENT = {
@@ -15,6 +16,7 @@ const PLACEMENT = {
 // The chrome every dialog shares: a dimmed backdrop over the whole window, a panel, a header with the
 // title and a close button, and Escape. Escape always closes the newest dialog; so does a click on the
 // backdrop, unless `keepOnBackdrop`. Without a title there's no header, and `label` names the dialog.
+// The body sits in a CrashGuard, so a dialog that fails to draw still has its header, ✕ and Escape.
 export default function Modal({
   title,
   label,
@@ -74,7 +76,9 @@ export default function Modal({
             </button>
           </div>
         )}
-        {children}
+        <CrashGuard what="dialog" name={typeof title === "string" ? title : label} className="m-4">
+          {children}
+        </CrashGuard>
       </div>
     </div>
   );

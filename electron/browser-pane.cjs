@@ -5,6 +5,7 @@ const { WebContentsView } = require("electron");
 const http = require("node:http");
 const { isSelfUrl } = require("./self-url.cjs");
 const { createPaneSecrets } = require("./pane-secrets.cjs");
+const { secretRunRoutes } = require("./secret-run.cjs");
 const { click, typeText } = require("./pane-actions.cjs");
 
 // Chrome's zoom steps, as percentages; Zoom In/Out walk them.
@@ -16,7 +17,7 @@ function stepZoom(percent, dir) {
   return [...ZOOM_STEPS].reverse().find((z) => z < percent - 0.5) ?? ZOOM_STEPS[0];
 }
 
-function createBrowserPane({ getWindow, getAppView, token, onContents, pages, onLink, secrets }) {
+function createBrowserPane({ getWindow, getAppView, token, onContents, pages, onLink, secrets, secretRun = () => undefined, routes: moreRoutes = {} }) {
   // One page per card (keyed by card id), so each review keeps its own browser; "board" is the
   // one shown with no card open. Only the active one is on screen.
   const BOARD = "board";
@@ -99,7 +100,7 @@ function createBrowserPane({ getWindow, getAppView, token, onContents, pages, on
       else wc.loadURL(url).catch(() => {});
       return { action: "deny" };
     });
-    // weft:// links in a page (a recipe's past runs, a walk-through's buttons) are the app's, not the page's.
+    // weft:// links in a page (a walk-through's buttons, a commit page's Commit) are the app's, not the page's.
     wc.on("will-navigate", (e, url) => {
       if (!/^weft:/i.test(url)) return;
       e.preventDefault();
@@ -301,6 +302,15 @@ function createBrowserPane({ getWindow, getAppView, token, onContents, pages, on
       "POST /browser/type": (body) => typeText(requirePage(body.key), body.selector, body.text),
       "POST /secrets/list": (body) => paneSecrets.list(body.folder),
       "POST /secrets/fill": (body) => paneSecrets.fill({ ...body, key: body.key ?? active }),
+      // Commands and dev servers with vault values in their env (electron/secret-run.cjs).
+      ...secretRunRoutes(secretRun, () => active),
+      // A card's stored tool results, with every value it typed or ran with swapped for ‹NAME› (lib/secret-run.ts).
+      "POST /secrets/redact": (body) => {
+        const typed = paneSecrets.redact(body.key, body.text);
+        return { text: secretRun()?.redact(body.key, typed) ?? typed };
+      },
+      // Other parts of main the server talks to, like the account session (electron/account-store.cjs).
+      ...moreRoutes,
     };
     const server = http.createServer(async (req, res) => {
       const send = (status, body) => {
@@ -329,6 +339,7 @@ function createBrowserPane({ getWindow, getAppView, token, onContents, pages, on
     isVisible: () => visible,
     setActive,
     prune,
+    contentsFor: (key) => views.get(key)?.webContents,
     webContents: () => views.get(active)?.webContents,
     back: () => views.get(active)?.webContents.navigationHistory.goBack(),
     forward: () => views.get(active)?.webContents.navigationHistory.goForward(),

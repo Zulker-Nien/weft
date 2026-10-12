@@ -25,6 +25,11 @@ vi.spyOn(process, "on").mockImplementation(((event: string, fn: () => void) => {
   return process;
 }) as typeof process.on);
 
+// The vault's side is mocked: by default there's nothing to inject, so servers start the plain way.
+const devSecrets = vi.hoisted(() => vi.fn());
+vi.mock("./secret-run", () => ({ devSecrets }));
+vi.mock("./env", () => ({ cliEnv: () => ({ PATH: "/bin" }) }));
+
 const dev = await import("./devserver");
 
 const kill = vi.spyOn(process, "kill").mockImplementation(() => true);
@@ -39,6 +44,7 @@ beforeEach(() => {
     return child;
   });
   fetchMock.mockReset().mockRejectedValue(new Error("ECONNREFUSED"));
+  devSecrets.mockReset().mockResolvedValue({});
   kill.mockClear();
 });
 afterEach(() => {
@@ -77,34 +83,34 @@ describe("devStatus", () => {
   });
 
   it("is starting while the server runs but doesn't answer yet, then running", async () => {
-    dev.startDev("a", "npm run dev", "/app");
+    await dev.startDev("a", "npm run dev", "/app");
     expect(await dev.devStatus("a", "http://x")).toMatchObject({ state: "starting", command: "npm run dev" });
     fetchMock.mockResolvedValue(new Response("ok"));
     expect(await dev.devStatus("a", "http://x")).toMatchObject({ state: "running", reachable: true });
   });
 
   it("is failed after a non-zero exit and stopped after a clean one", async () => {
-    dev.startDev("a", "bad", "/app");
+    await dev.startDev("a", "bad", "/app");
     last().emit("exit", 1);
     expect((await dev.devStatus("a")).state).toBe("failed");
 
-    dev.startDev("b", "ok", "/app");
+    await dev.startDev("b", "ok", "/app");
     last().emit("exit", 0);
     expect((await dev.devStatus("b")).state).toBe("stopped");
 
-    dev.startDev("c", "signalled", "/app");
+    await dev.startDev("c", "signalled", "/app");
     last().emit("exit", null);
     expect((await dev.devStatus("c")).state).toBe("stopped");
   });
 
   it("is failed when the shell can't spawn, with the error in the log", async () => {
-    dev.startDev("a", "nope", "/app");
+    await dev.startDev("a", "nope", "/app");
     last().emit("error", new Error("spawn ENOENT"));
     expect(await dev.devStatus("a")).toMatchObject({ state: "failed", log: "spawn ENOENT" });
   });
 
   it("shows the last 12 lines the server printed, from stdout and stderr", async () => {
-    dev.startDev("a", "npm run dev", "/app");
+    await dev.startDev("a", "npm run dev", "/app");
     const lines = Array.from({ length: 20 }, (_, i) => `line ${i}`);
     last().stdout.emit("data", Buffer.from(`${lines.slice(0, 10).join("\n")}\n`));
     last().stderr.emit("data", Buffer.from(`${lines.slice(10).join("\n")}\n`));
@@ -112,7 +118,7 @@ describe("devStatus", () => {
   });
 
   it("keeps only the last 4000 characters of output", async () => {
-    dev.startDev("a", "npm run dev", "/app");
+    await dev.startDev("a", "npm run dev", "/app");
     last().stdout.emit("data", Buffer.from("a".repeat(3000)));
     last().stdout.emit("data", Buffer.from("b".repeat(3000)));
     const { log } = await dev.devStatus("a");
@@ -122,39 +128,60 @@ describe("devStatus", () => {
 });
 
 describe("startDev", () => {
-  it("spawns the command in a detached shell in the card's folder", () => {
-    dev.startDev("a", "npm run dev", "/app");
-    expect(spawn).toHaveBeenCalledWith("npm run dev", { cwd: "/app", shell: true, detached: true, stdio: ["ignore", "pipe", "pipe"] });
+  it("spawns the command in a detached shell in the card's folder", async () => {
+    await dev.startDev("a", "npm run dev", "/app");
+    expect(spawn).toHaveBeenCalledWith("npm run dev", { cwd: "/app", env: { PATH: "/bin" }, shell: true, detached: true, stdio: ["ignore", "pipe", "pipe"] });
+    expect(devSecrets).toHaveBeenCalledWith("a", "npm run dev", "/app");
   });
 
-  it("leaves a running server with the same command alone", () => {
-    dev.startDev("a", "npm run dev", "/app");
-    dev.startDev("a", "npm run dev", "/app");
+  it("starts through the secrets launcher when the vault has values, writing its request to stdin", async () => {
+    const stdin = { end: vi.fn() };
+    spawn.mockImplementationOnce(() => {
+      const child = Object.assign(new FakeChild(++nextPid), { stdin });
+      children.push(child);
+      return child;
+    });
+    devSecrets.mockResolvedValueOnce({ launch: { bin: "/Electron", args: ["/app/secret-env.cjs"], env: { ELECTRON_RUN_AS_NODE: "1" }, stdin: '{"grant":"g"}', names: ["DATABASE_URL", "API_KEY"] } });
+    await dev.startDev("a", "npm run dev", "/app");
+    expect(spawn).toHaveBeenCalledWith("/Electron", ["/app/secret-env.cjs"], { cwd: "/app", env: { PATH: "/bin", ELECTRON_RUN_AS_NODE: "1" }, detached: true, stdio: ["pipe", "pipe", "pipe"] });
+    expect(stdin.end).toHaveBeenCalledWith('{"grant":"g"}');
+    expect((await dev.devStatus("a")).log).toBe("With vault secrets: DATABASE_URL, API_KEY");
+  });
+
+  it("starts the plain way with the vault's note in the log", async () => {
+    devSecrets.mockResolvedValueOnce({ note: "Started without vault secrets: not approved." });
+    await dev.startDev("a", "npm run dev", "/app");
+    expect((await dev.devStatus("a")).log).toBe("Started without vault secrets: not approved.");
+  });
+
+  it("leaves a running server with the same command alone", async () => {
+    await dev.startDev("a", "npm run dev", "/app");
+    await dev.startDev("a", "npm run dev", "/app");
     expect(spawn).toHaveBeenCalledTimes(1);
     expect(kill).not.toHaveBeenCalled();
   });
 
   it("replaces a server started with another command, killing its process group", async () => {
-    dev.startDev("a", "npm run dev", "/app");
+    await dev.startDev("a", "npm run dev", "/app");
     const first = last();
-    dev.startDev("a", "pnpm dev", "/app");
+    await dev.startDev("a", "pnpm dev", "/app");
     expect(kill).toHaveBeenCalledWith(-first.pid, "SIGTERM");
     expect(spawn).toHaveBeenCalledTimes(2);
     expect((await dev.devStatus("a")).command).toBe("pnpm dev");
   });
 
-  it("restarts the same command once the old server has exited, without signalling it", () => {
-    dev.startDev("a", "npm run dev", "/app");
+  it("restarts the same command once the old server has exited, without signalling it", async () => {
+    await dev.startDev("a", "npm run dev", "/app");
     last().emit("exit", 0);
-    dev.startDev("a", "npm run dev", "/app");
+    await dev.startDev("a", "npm run dev", "/app");
     expect(spawn).toHaveBeenCalledTimes(2);
     expect(kill).not.toHaveBeenCalled();
   });
 
   it("doesn't mark the new server failed when the replaced one exits non-zero", async () => {
-    dev.startDev("a", "one", "/app");
+    await dev.startDev("a", "one", "/app");
     const first = last();
-    dev.startDev("a", "two", "/app");
+    await dev.startDev("a", "two", "/app");
     first.emit("exit", 143);
     expect((await dev.devStatus("a")).state).toBe("starting");
   });
@@ -167,7 +194,7 @@ describe("stopDev", () => {
   });
 
   it("forgets the server and kills its process group", async () => {
-    dev.startDev("a", "npm run dev", "/app");
+    await dev.startDev("a", "npm run dev", "/app");
     const child = last();
     dev.stopDev("a");
     expect(kill).toHaveBeenCalledWith(-child.pid, "SIGTERM");
@@ -175,8 +202,8 @@ describe("stopDev", () => {
     expect(await dev.devStatus("a")).toMatchObject({ state: "stopped", command: undefined });
   });
 
-  it("falls back to killing the shell when the group signal fails", () => {
-    dev.startDev("a", "npm run dev", "/app");
+  it("falls back to killing the shell when the group signal fails", async () => {
+    await dev.startDev("a", "npm run dev", "/app");
     kill.mockImplementationOnce(() => {
       throw new Error("ESRCH");
     });
@@ -186,11 +213,11 @@ describe("stopDev", () => {
 });
 
 describe("on exit", () => {
-  it("stops every server Weft started", () => {
+  it("stops every server Weft started", async () => {
     expect(exitHooks).toHaveLength(1);
-    dev.startDev("a", "x", "/app");
+    await dev.startDev("a", "x", "/app");
     const a = last();
-    dev.startDev("b", "y", "/app");
+    await dev.startDev("b", "y", "/app");
     const b = last();
     exitHooks[0]!();
     expect(kill).toHaveBeenCalledWith(-a.pid, "SIGTERM");

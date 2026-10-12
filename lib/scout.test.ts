@@ -18,6 +18,7 @@ vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
 }));
 
 process.env.THREADBOARD_DATA = fs.mkdtempSync(path.join(os.tmpdir(), "weft-scout-"));
+const { SECRET_GUARD_HOOKS } = await import("./secret-guard");
 const { headCommit, markStarted, readScout, scoutFile, scoutPrompt, scoutState, startScout } = await import("./scout");
 
 const finding = { file: "lib/a.ts", line: 3, smell: "Long Function", category: "refactor", severity: "high", fix: "Split it" };
@@ -56,7 +57,7 @@ describe("startScout", () => {
     expect(sdk.calls).toEqual([
       {
         prompt: scoutPrompt(),
-        options: expect.objectContaining({ model: "sonnet", cwd: dir, tools: ["Read", "Grep", "Glob"], settingSources: [], persistSession: false }) as unknown,
+        options: expect.objectContaining({ model: "sonnet", cwd: dir, tools: ["Read", "Grep", "Glob"], settingSources: [], persistSession: false, hooks: SECRET_GUARD_HOOKS }) as unknown,
       },
     ]);
     const report = readScout(dir);

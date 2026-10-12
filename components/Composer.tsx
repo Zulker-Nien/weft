@@ -1,18 +1,22 @@
 "use client";
 
-import { Extension, EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react";
+import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Placeholder } from "@tiptap/extensions";
 import { Markdown } from "@tiptap/markdown";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import { api } from "@/lib/client";
+import { isMac } from "@/lib/hotkeys";
+import { rankSkills } from "@/lib/skill-rank";
 import type { SkillInfo } from "@/lib/types";
 import { mediaMarkdown } from "@/lib/media";
 import { currentBinding, formatBinding, matches } from "@/lib/shortcuts";
 import { useDictation } from "@/lib/use-dictation";
 import Icon, { Spinner, type IconName } from "./Icon";
+import SecretPasteBar, { useSecretPaste } from "./SecretPaste";
 import { Media, insertFiles, pendingMedia } from "./MediaNode";
 import Tip from "./Tip";
+import { submitFor, submitKeys } from "./submit-keys";
 
 // The prompt box for new threads and replies: rich text that reads and writes Markdown, images and
 // videos pasted or dropped right where they go, dictation, and a raw Markdown view.
@@ -47,16 +51,6 @@ function slashAtCursor(e: Editor): SlashQuery | null {
   const query = match?.[2];
   if (query === undefined) return null;
   return { query, from: $from.pos - query.length - 1, to: $from.pos };
-}
-
-function rankSkills(skills: SkillInfo[], query: string) {
-  const q = query.toLowerCase();
-  if (!q) return skills;
-  const starts = skills.filter((s) => s.name.toLowerCase().startsWith(q));
-  const rest = skills.filter(
-    (s) => !starts.includes(s) && (s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q)),
-  );
-  return [...starts, ...rest];
 }
 
 function SkillTypeahead({
@@ -248,6 +242,8 @@ const Composer = forwardRef<
     // A reply box sends on Enter and keeps its formatting bar folded; a new thread sends on ⌘↵.
     variant: "dialog" | "reply";
     onSubmit: () => void;
+    // ⌃↵ on macOS, where ⌘ is the mod key: the New thread dialog starts the thread and stays open.
+    onSubmitAlt?: () => void;
     // Called with the Markdown as it changes, for saving drafts.
     onChange?: (markdown: string) => void;
     // Buttons at the right end of the bottom bar, such as Send.
@@ -260,21 +256,24 @@ const Composer = forwardRef<
     cwd?: string;
   }
 >(function Composer(
-  { initial = "", placeholder, autoFocus, variant, onSubmit, onChange, actions, sizeClass, className = "", cwd },
+  { initial = "", placeholder, autoFocus, variant, onSubmit, onSubmitAlt, onChange, actions, sizeClass, className = "", cwd },
   ref,
 ) {
   const [source, setSource] = useState<string | null>(null);
   const [showFormat, setShowFormat] = useState(variant === "dialog");
   const [dragging, setDragging] = useState(false);
+  const secretPaste = useSecretPaste();
   const fileInput = useRef<HTMLInputElement>(null);
   const sourceBox = useRef<HTMLTextAreaElement>(null);
   // The editor, for the paste and drop handlers, which are set up before it exists.
   const editorRef = useRef<Editor | null>(null);
   const onSubmitRef = useRef(onSubmit);
+  const onSubmitAltRef = useRef(onSubmitAlt);
   const onChangeRef = useRef(onChange);
   const placeholderRef = useRef(placeholder);
   useEffect(() => {
     onSubmitRef.current = onSubmit;
+    onSubmitAltRef.current = onSubmitAlt;
     onChangeRef.current = onChange;
   });
 
@@ -293,23 +292,7 @@ const Composer = forwardRef<
       Placeholder.configure({ placeholder: () => placeholderRef.current }),
       Markdown,
       Media,
-      Extension.create({
-        name: "submitKeys",
-        addKeyboardShortcuts() {
-          return {
-            "Mod-Enter": () => {
-              onSubmitRef.current();
-              return true;
-            },
-            // In a reply, Enter sends, except inside a list or code block, where it starts a new line.
-            Enter: ({ editor: e }) => {
-              if (variant !== "reply" || e.isActive("codeBlock") || e.isActive("listItem")) return false;
-              onSubmitRef.current();
-              return true;
-            },
-          };
-        },
-      }),
+      submitKeys(variant, () => ({ submit: onSubmitRef.current, submitAlt: onSubmitAltRef.current })),
     ],
     editorProps: {
       attributes: {
@@ -319,6 +302,7 @@ const Composer = forwardRef<
         const files = [...(event.clipboardData?.files ?? [])];
         const text = event.clipboardData?.getData("text/plain") ?? "";
         const html = event.clipboardData?.getData("text/html") ?? "";
+        if (secretPaste.hold(text)) return true;
         // Copying a picture gives the file plus a scrap of HTML or alt text; copying from a
         // spreadsheet gives a picture of the cells plus the text, and the text is what's wanted.
         if (files.length && (!text.trim() || (html.includes("<img") && text.length < 300))) {
@@ -532,6 +516,10 @@ const Composer = forwardRef<
             onChangeRef.current?.(e.target.value);
           }}
           onPaste={(e) => {
+            if (secretPaste.hold(e.clipboardData.getData("text/plain"))) {
+              e.preventDefault();
+              return;
+            }
             const files = [...e.clipboardData.files];
             if (files.length && !e.clipboardData.getData("text/plain").trim()) {
               e.preventDefault();
@@ -539,10 +527,10 @@ const Composer = forwardRef<
             }
           }}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey || (variant === "reply" && !e.shiftKey))) {
-              e.preventDefault();
-              onSubmitRef.current();
-            }
+            const send = submitFor(e, variant, Boolean(onSubmitAltRef.current), isMac());
+            if (!send) return;
+            e.preventDefault();
+            (send === "alt" ? onSubmitAltRef : onSubmitRef).current?.();
           }}
           spellCheck={false}
           aria-label="Markdown"
@@ -551,6 +539,8 @@ const Composer = forwardRef<
       ) : (
         <EditorContent editor={editor} className="min-h-0 flex-1 overflow-hidden" />
       )}
+
+      <SecretPasteBar guard={secretPaste} onPaste={(text) => (source === null ? secretPaste.pasteInto(editor?.view, text) : insertIntoSource(text))} />
 
       {dragging && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg text-[13px] font-medium text-accent">

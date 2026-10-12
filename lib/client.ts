@@ -1,7 +1,13 @@
 import type { MenuItem } from "./card-menu";
 import type { MediaKind } from "./media";
+import type { TagInfo, TagRow } from "./tags";
 import type { VaultBridge } from "./vault-view";
+import type { VercelBridge } from "./vercel-view";
+import type { SupabaseBridge } from "./supabase-view";
+import type { BlastcpBridge } from "./blastcp-view";
 import type {
+  AccountProvider,
+  AccountView,
   Automation,
   Backend,
   Card,
@@ -10,9 +16,6 @@ import type {
   DevServerStatus,
   Effort,
   GithubRepo,
-  LibraryItem,
-  LibraryKind,
-  LibraryScope,
   LocalRepo,
   LoginView,
   PermissionMode,
@@ -34,8 +37,8 @@ export interface BrowserState {
 }
 
 // What the app menu, dock, tray, global shortcuts and weft:// links ask a window to do.
-// open-card and run-recipe carry an id.
-export type MenuAction = "new-thread" | "settings" | "open-card" | "find" | "terminal" | "run-recipe";
+// open-card carries an id.
+export type MenuAction = "new-thread" | "settings" | "open-card" | "find" | "terminal";
 
 // Exposed by electron/preload.cjs; absent when the board runs in a normal browser tab.
 export interface ShellBridge {
@@ -88,9 +91,17 @@ export interface ShellBridge {
   };
   // The secrets vault in Electron main (lib/vault-view.ts). Missing in older shells.
   vault?: VaultBridge;
+  // Vercel in Electron main (lib/vercel-view.ts). Missing in older shells.
+  vercel?: VercelBridge;
+  // Supabase in Electron main (lib/supabase-view.ts). Missing in older shells.
+  supabase?: SupabaseBridge;
+  // BlastCP in Electron main (lib/blastcp-view.ts). Missing in older shells.
+  blastcp?: BlastcpBridge;
   onMenu(callback: (action: MenuAction, payload?: string) => void): () => void;
   // The board's first cards are on screen; resolves to this launch's timing. Missing in older shells.
   startupReady?(): Promise<StartupResult>;
+  // The startup screen's buttons; "relaunch" restarts Weft (a shell from before it ignores it). Missing in older shells.
+  splashAction?(action: "retry" | "logs" | "quit" | "relaunch"): void;
 }
 
 // One launch's timing from electron/startup-timer.cjs: usual is the median of recent launches (null until
@@ -118,8 +129,8 @@ export interface NewCardInput {
   permissionMode?: PermissionMode;
   model?: string;
   effort?: Effort;
-  // The library recipe it runs, if it came from one.
-  recipeId?: string;
+  // Tags to start with (lib/tags.ts); they count as yours.
+  tags?: string[];
   start: boolean;
 }
 
@@ -184,10 +195,23 @@ export const api = {
   rename: (id: string, title: string) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { title }),
   setMode: (id: string, permissionMode: PermissionMode) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { permissionMode }),
   archive: (id: string, archived: boolean) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { archived }),
+  // ★ and tags. Tags are normalized on the server, become yours (tagsBy "user"), and new ones join the catalog.
+  mark: (id: string, patch: { starred?: boolean; tags?: string[] }) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, patch),
+  // The tag catalog (lib/tag-store.ts): every tag with its colour, description and card count, by name.
+  tags: () => call<{ tags: TagRow[] }>("GET", "/api/tags"),
+  createTag: (name: string, color?: string, description?: string) => call<{ tag: TagInfo }>("POST", "/api/tags", { name, color, description }),
+  // rename gives it a new name on every card (merging into a tag that already has it).
+  updateTag: (name: string, patch: { rename?: string; color?: string; description?: string }) =>
+    call<{ tag: TagInfo }>("PATCH", "/api/tags", { name, ...patch }),
+  deleteTag: (name: string) => call<{ ok: true }>("DELETE", "/api/tags", { name }),
+  setStarred: (id: string, starred: boolean) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { starred }),
+  setTags: (id: string, tags: string[]) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { tags }),
   remove: (id: string) => call("DELETE", `/api/cards/${id}`),
   send: (id: string, text: string) => call<{ card: Card }>("POST", `/api/cards/${id}/messages`, { text }),
   // A stopped or failed card's Restart: its last message again, in a fresh CLI.
   restart: (id: string) => call<{ card: Card }>("POST", `/api/cards/${id}/messages`, { restart: true }),
+  // Replaces your last message and the turn it started, stopping that turn if it's running.
+  editLast: (id: string, text: string) => call<{ card: Card }>("POST", `/api/cards/${id}/messages`, { text, edit: true }),
   // Sends text to the thread at `at` (unix ms), even if Weft was closed then (it goes on the next start).
   schedule: (id: string, text: string, at: number) => call<{ card: Card }>("POST", `/api/cards/${id}/scheduled`, { text, at }),
   unschedule: (id: string, messageId: string) => call<{ card: Card }>("DELETE", `/api/cards/${id}/scheduled`, { messageId }),
@@ -231,16 +255,8 @@ export const api = {
     call<{ login: LoginView | null }>("POST", "/api/login", { backend, action, text }),
   // Starts a CLI ahead of time: a card's own, or a spare in a project folder.
   warm: (body: { cardId?: string; cwd?: string; backend?: Backend }) => call<{ ok: true }>("POST", "/api/warm", body),
-  // folder picks which project's recipes the page offers.
-  newThreadPage: (folder?: string | null) => call<{ url: string }>("POST", "/api/new-thread-page", { folder }),
-  // The library (lib/library.ts): yours plus one project's, or every project's (all).
-  library: (folder?: string | null, all = false) =>
-    call<{ items: LibraryItem[] }>("GET", `/api/library?${all ? "all=1" : folder ? `folder=${encodeURIComponent(folder)}` : ""}`),
-  star: (cardId: string, kind: LibraryKind, scope: LibraryScope = "project") =>
-    call<{ item: LibraryItem }>("POST", "/api/library", { cardId, kind, scope }),
-  updateLibraryItem: (id: string, patch: { title?: string; kind?: LibraryKind; scope?: LibraryScope; ticked?: number[] }) =>
-    call<{ item: LibraryItem }>("PATCH", `/api/library/${id}`, patch),
-  removeLibraryItem: (id: string) => call("DELETE", `/api/library/${id}`),
+  // The splash page the browser pane shows beside the New thread dialog.
+  newThreadPage: () => call<{ url: string }>("POST", "/api/new-thread-page", {}),
   // Prompts the user wrote, in cards on the board. Matched words in each snippet sit between \u0001 and \u0002.
   searchPrompts: (q: string) =>
     call<{ hits: { cardId: string; at: number; snippet: string }[]; indexing: boolean }>("GET", `/api/search?q=${encodeURIComponent(q)}`),
@@ -253,7 +269,16 @@ export const api = {
   transcribe,
   repos: (fresh = false) => call<{ repos: LocalRepo[] }>("GET", `/api/repos${fresh ? "?fresh=1" : ""}`),
   githubRepos: (fresh = false) => call<{ repos: GithubRepo[] }>("GET", `/api/repos/github${fresh ? "?fresh=1" : ""}`),
+  // Your Weft account (lib/account.ts). signIn returns the provider's page to open in the system browser.
+  account: () => call<AccountView>("GET", "/api/account"),
+  signIn: (provider: AccountProvider) => call<{ url: string }>("POST", "/api/account", { action: "oauth", provider }),
+  magicLink: (email: string) => call<{ ok: true }>("POST", "/api/account", { action: "email", email }),
+  signOut: () => call<{ ok: true }>("POST", "/api/account", { action: "signout" }),
   cloneRepo: (fullName: string) => call<{ path: string; projects: Project[] }>("POST", "/api/repos/clone", { fullName }),
+  // A folder's open GitHub issues as Backlog cards, now and every 5 minutes after (lib/github-issues.ts).
+  importIssues: (folder: string) =>
+    call<{ folder: string; added: number; updated: number; archived: number }>("POST", "/api/github/issues", { folder }),
+  stopIssues: (folder: string) => call<{ folders: string[] }>("DELETE", "/api/github/issues", { folder }),
 };
 
 // A thread snapshot with the live items that arrived while it loaded, which are newer than it.

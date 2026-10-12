@@ -2,7 +2,9 @@ import os from "node:os";
 import { startSessionSync } from "./import";
 import { startSearchIndex } from "./search";
 import { boardDigest, lastSeen, rememberSeen, snapshot, withDigest } from "./copilot-digest";
+import { startIssueSync } from "./github-issues";
 import { endSession, ensureSpare, sendUserMessage, warmUp } from "./runner";
+import { resumeInterrupted } from "./resume";
 import { startScheduler } from "./scheduler";
 import { listProjects } from "./settings";
 import { clearThread, createCard, getCard, listCards, updateCard } from "./store";
@@ -64,6 +66,10 @@ export function prewarm() {
   startSearchIndex();
   // Send the messages queued for a set time (lib/scheduler.ts), including any that came due while closed.
   startScheduler();
+  // Sync the GitHub issues of the folders that opted in, every 5 minutes (lib/github-issues.ts).
+  startIssueSync();
+  // Carry on the turns the last quit cut off (lib/resume.ts).
+  resumeInterrupted();
   ensureCopilot();
   warmUp(COPILOT_ID);
   const recent = listProjects()[0]?.path ?? listCards().find((c) => c.role !== "copilot")?.cwd;

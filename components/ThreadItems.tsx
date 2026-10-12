@@ -3,6 +3,7 @@
 import { memo, useState } from "react";
 import { describeToolRun, shortToolName, toolAction } from "@/lib/format";
 import type { ThreadItem } from "@/lib/types";
+import CrashGuard from "./CrashGuard";
 import Icon, { Spinner } from "./Icon";
 import Markdown from "./Markdown";
 import MediaView from "./MediaView";
@@ -32,12 +33,15 @@ export function groupThread(items: readonly (ThreadItem | null | undefined)[]): 
   return entries;
 }
 
+// An answer can run long (one per question), so it goes under the title instead of squeezing it.
 function PermissionLine({ item }: { item: Permission }) {
   return (
-    <div className="flex items-start gap-2 text-[12px]">
-      <Icon name="lock" size={12} className={`mt-0.5 ${item.decision ? "text-faint" : "text-warn"}`} />
-      <span className="min-w-0 flex-1 text-muted">{item.title}</span>
-      <span className={item.decision === "allow" ? "text-ok" : item.decision === "deny" ? "text-danger" : "text-warn"}>
+    <div className={`flex text-[12px] ${item.answer ? "flex-col gap-1" : "items-start gap-2"}`}>
+      <span className="flex min-w-0 flex-1 items-start gap-2">
+        <Icon name="lock" size={12} className={`mt-0.5 shrink-0 ${item.decision ? "text-faint" : "text-warn"}`} />
+        <span className="min-w-0 flex-1 text-muted">{item.title}</span>
+      </span>
+      <span className={`${item.answer ? "pl-5" : "shrink-0"} ${item.decision === "allow" ? "text-ok" : item.decision === "deny" ? "text-danger" : "text-warn"}`}>
         {item.answer
           ? `Answered: ${item.answer}`
           : item.decision === "allow"
@@ -135,6 +139,35 @@ export function ToolRun({ calls, live }: { calls: (ToolCall | Permission)[]; liv
   );
 }
 
+// A message you edited with ↑ and the turn it started, folded to one line you can open.
+function EditedFold({ items }: { items: ThreadItem[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="text-[11.5px] text-faint">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex items-center gap-1 hover:text-muted"
+      >
+        <Icon name={open ? "chevronDown" : "chevronRight"} size={11} />
+        Edited · {open ? "hide" : "show"} the version you replaced
+      </button>
+      {open && (
+        <div className="mt-2 flex flex-col gap-3 border-l border-line pl-3 opacity-60">
+          {groupThread(items).map((entry) =>
+            entry.kind === "tools" ? (
+              <ToolRun key={entry.key} calls={entry.calls} live={false} />
+            ) : (
+              <ThreadMessage key={entry.key} item={entry.item} />
+            ),
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // One message or marker in a thread. Items don't change once written, so a re-render while the
 // agent streams skips them.
 export const ThreadMessage = memo(function ThreadMessage({ item }: { item: ThreadItem }) {
@@ -163,5 +196,48 @@ export const ThreadMessage = memo(function ThreadMessage({ item }: { item: Threa
           <div className="h-px flex-1 bg-line" />
         </div>
       );
+    case "edited":
+      return <EditedFold items={item.items} />;
   }
 });
+
+// A thread's messages and tool runs, then the reply streaming in. While ↑ edits a message (editFrom is
+// its index), that message is outlined and the turn it will replace, everything after it, fades.
+export function ThreadEntries({
+  entries,
+  live,
+  streaming,
+  editFrom,
+}: {
+  entries: Entry[];
+  live: boolean;
+  streaming: string;
+  editFrom?: number;
+}) {
+  return (
+    <>
+      {entries.map((entry) => {
+        // One message that fails to draw is a chip in its place; the rest of the thread and the reply box stay.
+        const row = (
+          <CrashGuard key={entry.key} inline what={entry.kind === "tools" ? "tool run" : "message"} className="self-start">
+            {entry.kind === "tools" ? <ToolRun calls={entry.calls} live={live} /> : <ThreadMessage item={entry.item} />}
+          </CrashGuard>
+        );
+        if (editFrom === undefined || entry.key < editFrom) return row;
+        const mark = entry.key === editFrom ? "rounded-lg outline-1 outline-offset-2 outline-warn outline-dashed" : "opacity-40";
+        return (
+          <div key={entry.key} className={mark}>
+            {row}
+          </div>
+        );
+      })}
+      {streaming && (
+        <div className={editFrom === undefined ? undefined : "opacity-40"}>
+          <CrashGuard inline what="reply in progress">
+            <Markdown text={streaming} streaming />
+          </CrashGuard>
+        </div>
+      )}
+    </>
+  );
+}

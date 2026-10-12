@@ -66,6 +66,15 @@ describe("settings", () => {
     expect(s.settingsView().defaultPermissionMode).toBe("acceptEdits");
   });
 
+  it("new threads start on the claude backend until another default is saved", async () => {
+    let s = await load();
+    expect(s.defaultBackend()).toBe("claude");
+    s.setDefaultBackend("puku");
+    s = await load();
+    expect(s.defaultBackend()).toBe("puku");
+    expect(s.settingsView().defaultBackend).toBe("puku");
+  });
+
   it("an empty automations list is kept, not replaced by the defaults", async () => {
     const s = await load();
     s.setAutomations([]);
@@ -125,6 +134,19 @@ describe("settings", () => {
     const s = await load();
     for (let i = 0; i < 45; i++) s.touchProject(`/p${i}`);
     expect(s.listProjects()).toHaveLength(40);
+  });
+
+  it("turns GitHub issue sync on and off per folder, without duplicates, and keeps it across a reload", async () => {
+    let s = await load();
+    expect(s.issueFolders()).toEqual([]);
+    s.setIssueSync("/a", true);
+    s.setIssueSync("/b", true);
+    s.setIssueSync("/a", true);
+    expect(s.issueFolders()).toEqual(["/b", "/a"]);
+    s = await load();
+    expect(s.issueFolders()).toEqual(["/b", "/a"]);
+    s.setIssueSync("/b", false);
+    expect(s.issueFolders()).toEqual(["/a"]);
   });
 
   it("settings survive a reload and settingsView bundles them", async () => {

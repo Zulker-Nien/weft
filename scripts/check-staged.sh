@@ -7,6 +7,18 @@ root="$(git rev-parse --show-toplevel)"
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/weft-staged.XXXXXX")"
 trap 'rm -rf "$tmp"' EXIT
 
+# A secret in a commit lives in history for good, so scan the staged changes first.
+if command -v gitleaks > /dev/null 2>&1; then
+  if ! gitleaks git --pre-commit --staged --redact --no-banner --no-color --verbose "$root" > "$tmp/gitleaks.log" 2>&1; then
+    echo "pre-commit: gitleaks found what looks like a secret in the staged changes:" >&2
+    grep -E "^(RuleID|File|Line):" "$tmp/gitleaks.log" | head -30 >&2
+    echo "Move it to .env.local (or Weft's vault). A false alarm? Add a 'gitleaks:allow' comment on that line." >&2
+    exit 1
+  fi
+else
+  echo "pre-commit: gitleaks isn't installed, so secrets weren't scanned (brew install gitleaks)." >&2
+fi
+
 git -C "$root" checkout-index --all --prefix="$tmp/"
 ln -s "$root/node_modules" "$tmp/node_modules"
 cd "$tmp" || exit 1

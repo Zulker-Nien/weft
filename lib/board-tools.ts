@@ -1,13 +1,13 @@
 import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { firstMessage } from "./automations";
-import { getItem, listLibrary } from "./library";
-import { blanksIn } from "./library-view";
 import { markSeen } from "./copilot-digest";
 import { resolveFolder } from "./folders";
 import { asText, clip, firstLine, shortToolName, titleFromPrompt } from "./format";
 import { defaultPermissionMode, touchProject } from "./settings";
 import { createCard, getCard, getThread, listCards, updateCard } from "./store";
+import { rememberTags } from "./tag-store";
+import { normalizeTags } from "./tags";
 import type { Backend, Card, PermissionMode, ThreadItem } from "./types";
 
 // What the board tools need from the runner, passed in to avoid a circular import.
@@ -22,18 +22,19 @@ export const COPILOT_PROMPT = `You are the Weft copilot: the orchestrator for th
 Each card on the board is a separate Claude Code or puku-cli thread working in a project folder. Columns: Backlog (not started), Running, Needs you (waiting on a permission answer), Review (turn finished), Done.
 Use the mcp__board__* tools to see and run the board: list_cards and read_thread to check on work, create_card to add a thread to Backlog, start_card to run it, send_message to reply to a thread, move_card, stop_card, and answer_permission when the user tells you to approve or deny something.
 Delegate real work to threads instead of doing it yourself. Give each new thread a self-contained prompt and the right folder; it knows nothing about this chat.
-The user's library (list_library) keeps cards they starred: recipes (prompts they run again, with {blanks}), to-dos and notes. When they ask for something like before ("a media kit like last time"), look for a recipe, fill its blanks in the prompt, and pass its recipe_id to create_card.
+Cards can be starred (★, worth keeping) and carry short tags like "bug" or "launch"; list_cards shows both. Tag new cards when the user's words name one, and use set_tags when they ask.
 You're in a small chat window, so keep replies short.`;
 
 // The copilot uses these without asking: they read the board or only rearrange it.
 // Starting, replying to, and answering for a thread run agents, so the user approves those.
-export const SAFE_BOARD_TOOLS = new Set(["list_cards", "read_thread", "list_library", "create_card", "move_card", "stop_card"]);
+export const SAFE_BOARD_TOOLS = new Set(["list_cards", "read_thread", "create_card", "move_card", "stop_card", "set_tags"]);
 
 // This app's own tools (the browser pane, and the board tools: list_cards, create_card, and the copilot's others) skip the prompt.
 // source is the MCP server's type; only in-process ("sdk") servers are Weft's own.
 export function isTrustedTool(toolName: string, source?: string) {
   if (source !== "sdk") return false;
-  if (toolName.startsWith("mcp__browser__")) return true;
+  // The secrets tools ask for Touch ID themselves, so a permission prompt first would be a second yes.
+  if (toolName.startsWith("mcp__browser__") || toolName.startsWith("mcp__secrets__")) return true;
   return toolName.startsWith("mcp__board__") && SAFE_BOARD_TOOLS.has(toolName.slice("mcp__board__".length));
 }
 
@@ -114,8 +115,8 @@ interface NewBoardCard {
   permissionMode: PermissionMode;
   // The card whose thread asked for this one.
   parentId?: string;
-  // The library recipe it runs (lib/library.ts).
-  recipeId?: string;
+  // Tags to start with; they count as the user's, and new ones join the catalog (lib/tag-store.ts).
+  tags?: string[];
 }
 
 // The one place a card is made on behalf of a thread, whether it is the copilot's or a board thread's.
@@ -127,48 +128,30 @@ export function createBoardCard(args: NewBoardCard): Card {
     backend: args.cli ?? "claude",
     permissionMode: args.permissionMode,
     parentId: args.parentId,
-    ...(args.recipeId ? { recipeId: args.recipeId } : {}),
+    ...tagsPatch(args.tags),
   });
   touchProject(card.cwd);
   return card;
 }
 
-// The library: recipes with their prompts and blanks, so the copilot can run one; to-dos and notes by title.
-function listLibraryTool() {
-  return tool(
-    "list_library",
-    "List the user's library: recipes (prompts they run again, with {blanks} to fill), to-dos (steps for them, with how many are ticked) and notes. Recipes include their prompt.",
-    { folder: z.string().optional().describe("Only this project's and the user's own; left out, every project's") },
-    ({ folder }) =>
-      attempt(() => {
-        const items = listLibrary(folder ? { folder: resolveFolder(folder) } : { all: true });
-        if (!items.length) return "The library is empty.";
-        return items
-          .map((i) =>
-            [
-              `id: ${i.id}`,
-              `${i.kind}: ${i.title}`,
-              `scope: ${i.scope === "mine" ? "mine (every project)" : i.folder}`,
-              i.kind === "recipe" && `folder: ${i.folder}`,
-              i.kind === "recipe" && i.blanks?.length && `blanks: ${i.blanks.map((b) => `{${b.name}}${b.hint ? ` (${b.hint})` : ""}`).join(", ")}`,
-              i.kind === "recipe" && `prompt: ${i.prompt}`,
-              i.kind === "todo" && i.steps && `ticked: ${i.ticked?.length ?? 0} of ${i.steps}`,
-            ]
-              .filter(Boolean)
-              .join("\n"),
-          )
-          .join("\n\n");
-      }),
-  );
+// Tags a thread or the copilot set count as the user's, so retitle leaves them alone.
+function tagsPatch(raw: string[] = []): Pick<Card, "tags" | "tagsBy"> {
+  const tags = normalizeTags(raw);
+  if (!tags.length) return {};
+  rememberTags(tags);
+  return { tags, tagsBy: "user" };
 }
+
+const TAGS = z.array(z.string()).optional().describe("Short labels for the card, like bug or launch");
 
 // One line per card, so a whole board fits in a tool result (the full detail is read_thread's).
 export function cardLine(card: Card) {
   return [
     card.id,
     card.column,
-    clip(card.title, 80),
+    `${card.starred ? "★ " : ""}${clip(card.title, 80)}`,
     card.cwd.replace(/^\/Users\/[^/]+/, "~"),
+    card.tags?.length && `tags: ${card.tags.join(", ")}`,
     card.stage,
     card.remaining && `remaining: ${clip(card.remaining, 60)}`,
     card.pending && `waiting on: ${clip(card.pending.title, 60)}`,
@@ -184,7 +167,7 @@ const LIST_LIMIT = 40;
 function listCardsTool() {
   return tool(
     "list_cards",
-    "List the threads on the board, one line each: id | column | title | folder | stage | remaining | waiting on | latest. Open cards only unless include_done is true (then done and archived ones too); newest first, up to limit (default 40).",
+    "List the threads on the board, one line each: id | column | title (★ when starred) | folder | tags | stage | remaining | waiting on | latest. Open cards only unless include_done is true (then done and archived ones too); newest first, up to limit (default 40).",
     {
       column: COLUMN.optional(),
       include_done: z.boolean().optional().describe("Also list done and archived cards (default false)"),
@@ -227,8 +210,9 @@ export function threadBoardMcpServer(
           title: z.string().optional(),
           folder: z.string().optional().describe("Project folder; defaults to this thread's own folder"),
           start: z.boolean().optional().describe("Run it now (default true); false leaves it in Backlog"),
+          tags: TAGS,
         },
-        ({ prompt, title, folder, start }) =>
+        ({ prompt, title, folder, start, tags }) =>
           attempt(() => {
             const parentId = getCardId();
             const parent = parentId ? getCard(parentId) : undefined;
@@ -239,6 +223,7 @@ export function threadBoardMcpServer(
               // Same trust level as the thread that asked.
               permissionMode: parent?.permissionMode ?? "default",
               parentId: parent?.id,
+              tags,
             });
             if (start === false) return `Created ${card.id} in Backlog: ${card.title}`;
             actions.start(card.id, firstMessage(card));
@@ -257,7 +242,6 @@ export function boardMcpServer(actions: BoardActions) {
     alwaysLoad: true,
     tools: [
       listCardsTool(),
-      listLibraryTool(),
       tool(
         "read_thread",
         "Read a thread's conversation: user messages, agent replies, tool calls, and permission requests.",
@@ -278,16 +262,24 @@ export function boardMcpServer(actions: BoardActions) {
           title: z.string().optional(),
           cli: z.enum(["claude", "puku"]).optional(),
           permission_mode: z.enum(["default", "acceptEdits", "auto", "bypassPermissions"]).optional(),
-          recipe_id: z.string().optional().describe("The library recipe this runs (from list_library), with its {blanks} filled in the prompt"),
+          tags: TAGS,
         },
-        ({ recipe_id, ...args }) =>
+        (args) =>
           attempt(() => {
-            const recipe = recipe_id ? getItem(recipe_id) : undefined;
-            if (recipe_id && recipe?.kind !== "recipe") throw new Error(`No recipe ${recipe_id}. Use list_library to get recipe ids.`);
-            const left = recipe ? blanksIn(args.prompt) : [];
-            if (left.length) throw new Error(`Fill in ${left.map((b) => `{${b}}`).join(", ")} in the prompt first.`);
-            const card = createBoardCard({ ...args, permissionMode: args.permission_mode ?? defaultPermissionMode(), recipeId: recipe?.id });
+            const card = createBoardCard({ ...args, permissionMode: args.permission_mode ?? defaultPermissionMode() });
             return `Created ${card.id} in Backlog: ${card.title}`;
+          }),
+      ),
+      tool(
+        "set_tags",
+        "Replace a card's tags (an empty list clears them). Tags are short lowercase labels, like GitHub's.",
+        { card_id: z.string(), tags: z.array(z.string()) },
+        ({ card_id, tags }) =>
+          attempt(() => {
+            const card = boardCard(card_id);
+            const patch = tagsPatch(tags);
+            updateCard(card.id, { tags: patch.tags ?? [], tagsBy: "user" });
+            return patch.tags ? `Tagged “${card.title}”: ${patch.tags.join(", ")}.` : `Cleared “${card.title}”'s tags.`;
           }),
       ),
       tool("start_card", "Start a Backlog card running its prompt.", { card_id: z.string() }, ({ card_id }) =>

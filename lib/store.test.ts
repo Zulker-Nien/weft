@@ -41,6 +41,16 @@ describe("store cards", () => {
     expect(saved.cards.map((c: Card) => c.title).sort()).toEqual(["a2", "b"]);
   });
 
+  it("stamps columnAt only when the column changes", async () => {
+    const store = await load();
+    store.createCard(input(), "a");
+    expect(store.updateCard("a", { column: "backlog" }).columnAt).toBeUndefined();
+    const moved = store.updateCard("a", { column: "review" }).columnAt;
+    expect(moved).toBeGreaterThan(0);
+    await new Promise((r) => setTimeout(r, 5));
+    expect(store.updateCard("a", { title: "t2", column: "review" }).columnAt).toBe(moved);
+  });
+
   it("updateCard throws for an unknown card", async () => {
     const store = await load();
     expect(() => store.updateCard("nope", {})).toThrow("No card nope");
@@ -74,7 +84,7 @@ describe("store cards", () => {
       path.join(dir, "board.json"),
       JSON.stringify({
         cards: [
-          { ...base, id: "r", title: "r", column: "running" },
+          { ...base, id: "r", title: "r", column: "running", wrappingUp: true },
           { ...base, id: "p", title: "p", column: "needs_you", pending: { id: "1" } },
           { ...base, id: "d", title: "d", column: "done" },
         ],
@@ -85,9 +95,21 @@ describe("store cards", () => {
     expect(r.column).toBe("review");
     expect(r.lastLine).toBe("Stopped when the app closed");
     expect(r.warm).toBe(false);
+    expect(r.interrupted).toBe(true);
+    expect(r.wrappingUp).toBeUndefined();
     expect(store.getCard("p")!.column).toBe("review");
     expect(store.getCard("p")!.pending).toBeNull();
     expect(store.getCard("d")!.column).toBe("done");
+  });
+
+  it("marks a carry-on turn cut off again for another resume, until three in a row", async () => {
+    fs.mkdirSync(dir, { recursive: true });
+    const base = { prompt: "p", cwd: "/", backend: "claude", createdAt: 1, updatedAt: 1, column: "running" };
+    const cards = [{ ...base, id: "again", title: "a", resumes: 2 }, { ...base, id: "stuck", title: "s", resumes: 3 }];
+    fs.writeFileSync(path.join(dir, "board.json"), JSON.stringify({ cards }));
+    const store = await load();
+    expect(store.getCard("again")).toMatchObject({ column: "review", lastLine: "Stopped when the app closed", interrupted: true });
+    expect(store.getCard("stuck")!.interrupted).toBeUndefined();
   });
 
   it("addCards saves many at once", async () => {
@@ -120,6 +142,23 @@ describe("store threads", () => {
     store.clearThread("c");
     expect(store.getThread("c")).toEqual([]);
     expect(JSON.parse(fs.readFileSync(path.join(dir, "threads", "c.json"), "utf8"))).toEqual([]);
+  });
+
+  it("foldThread folds the rest of the thread into one edited item and tells the board to truncate", async () => {
+    const store = await load();
+    const { subscribe } = await import("./bus");
+    const seen: unknown[] = [];
+    const off = subscribe((e) => seen.push(e));
+    store.appendThread("c", { kind: "user", text: "one", at: 1 });
+    store.appendThread("c", { kind: "user", text: "two", at: 2 });
+    store.appendThread("c", { kind: "assistant", text: "reply", at: 3 });
+    seen.length = 0;
+    store.foldThread("c", 1);
+    off();
+    const folded = { kind: "edited", at: expect.any(Number) as number, items: [{ kind: "user", text: "two", at: 2 }, { kind: "assistant", text: "reply", at: 3 }] };
+    expect(store.getThread("c")).toEqual([{ kind: "user", text: "one", at: 1 }, folded]);
+    expect(JSON.parse(fs.readFileSync(path.join(dir, "threads", "c.json"), "utf8"))).toHaveLength(2);
+    expect(seen).toContainEqual({ type: "thread", cardId: "c", item: folded, index: 1, truncate: true });
   });
 
   it("an unknown thread is empty", async () => {

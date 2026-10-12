@@ -56,8 +56,8 @@
 }
 
 /* Scenes (lib/theme.ts): a picture behind the board and a palette drawn from it, over the light or
-   dark one in data-theme. --sunken is see-through so the columns frost over the picture; --scrim
-   keeps text readable on it. */
+   dark one in data-theme. --sunken is see-through so wells and placeholders sit lightly on the
+   picture; --scrim keeps text readable on it. */
 :root[data-scene="twin-suns"] {
   --scene: url("/api/scenes/twin-suns");
   --scrim: linear-gradient(180deg, rgb(12 9 14 / 0.35), rgb(20 12 8 / 0.1) 55%, rgb(12 8 6 / 0.45));
@@ -166,8 +166,11 @@
   background: var(--scrim), var(--scene) center 62% / cover no-repeat, var(--canvas);
 }
 
-:root[data-scene] [data-column] {
-  backdrop-filter: blur(10px) saturate(1.2);
+/* Columns stay clear over a scene so the picture shows between the cards; a faint edge keeps their
+   shape. A drag over one still lights it up (bg-accent-soft). */
+:root[data-scene] [data-column].bg-sunken {
+  background: transparent;
+  border-color: var(--line-strong);
 }
 
 @theme inline {

@@ -9,6 +9,20 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 ## [Unreleased]
 
 ### Added
+- ★ star and tags replace the library. ☆ on a card or thread header (or K in its menu) stars it, a starred card is
+  never auto-archived, and the rail's ★ shows only starred cards. Tags follow GitHub's label rules and show as up to
+  two pills on a card's stage line; click one to filter the board. Library cards became starred cards tagged
+  `recipe`, `to-do` or `note`.
+- The 🏷 tags drawer (⌘L), like GitHub's labels page: new tag with a colour, rename, recolour, delete, click to
+  filter, drop a card to tag it. **Tags…** in the card menu (G), or a click on the thread header's tags, edits a
+  card's tags with autocomplete.
+- Auto tags: the Haiku call that names a card after its turn also gives an untagged card 1 to 3 tags, reusing the
+  board's own; tags you set are never changed. The copilot can set tags too.
+- GitHub issues become Backlog cards: ⌘K → "Import GitHub issues into <project>" reads its open issues through `gh`,
+  labels as tags and "#N" on the card, and checks again every 5 minutes. A closed issue archives its card if it
+  never started.
+- A build error mid-edit (a stray `}` in Board.tsx) no longer covers the board with Next's Build Error overlay: the board
+  keeps running the last version that built, and a small bar names the broken file until it is fixed.
 - The `?` keyboard shortcuts sheet is bigger and easier to read: up to 1100px wide, larger text and key caps, accent
   section headings, and each shortcut's fine print (in brackets or after a colon) on a dim second line.
 - Shift+`S` adds a secret: it opens the 🔐 drawer on its Add form, and "Add a secret" in the ⌘K palette and the `?` sheet does the same.
@@ -21,7 +35,7 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
   `.vercel/project.json`, so the Vercel CLI in threads works on the right project.
 - Supabase's bolt on the left rail links a project to Supabase: paste an access token once (kept in the Keychain),
   pick one of your projects, and see its state, region, API URL and which local migrations it hasn't applied, with
-  Restore for a paused project and links to its tables, SQL, auth, logs and keys. The link is
+  Restore for a paused project and links to its auth users, logs, keys, usage and dashboard. The link is
   `supabase/.temp/project-ref`, so the Supabase CLI in threads works on the right project.
 - A linked Vercel project's card links straight to the latest deploy's page, runtime logs, env vars, domains and the
   dashboard; personal projects (no team) now link to their own dashboard too.
@@ -68,7 +82,7 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 - ⌘K is wider with larger text, and each card row shows its last line of output (or its error) and how long ago it changed.
 - Auto-updates: the packaged app checks GitHub Releases, downloads in the background and offers Restart to Update;
   Weft → Check for Updates… checks now. An unsigned build offers the download instead.
-- Secrets vault: 🔐 on the library rail keeps each project's secrets encrypted on this Mac, imports `.env` files
+- Secrets vault: 🔐 on the left rail keeps each project's secrets encrypted on this Mac, imports `.env` files
   with a preview, nudges when `.env.local` has values to import, and asks for Touch ID to reveal or copy one.
 - Vault: after an import Weft can write `.env.local` from the vault (gitignored, mode 0600, `# Managed by Weft`) and keep
   it in step; edit it by hand and the drawer offers to import your change.

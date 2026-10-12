@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
+import { SHOW_DIR } from "./show-dir";
 import type { Card } from "./types";
 
 // The uncommitted pile: everything in a project's working tree that differs from HEAD. Review cards
@@ -189,7 +190,7 @@ export function pilePrompt({ pile, map, commitScript, origin }: PilePromptInput)
     "",
     "How to go:",
     "1. Run `git status --porcelain` first: the tree may have moved since this list was made. Fold in what changed.",
-    `2. Write a checklist page at /tmp/weft-show/commit-${name}/index.html, for someone who doesn't read code. Open it with mcp__browser__open_url and rewrite it after every step, so the pane always shows where we are.`,
+    `2. Write a checklist page at ${SHOW_DIR}/commit-${name}/index.html, for someone who doesn't read code. Open it with mcp__browser__open_url and rewrite it after every step, so the pane always shows where we are.`,
     "   - At the top: a big progress line in plain words (\"2 of 7 committed\") and what happens next, one sentence.",
     "   - One visual card per change, no card ids, short enough to take in at a glance: its picture (the `picture:` URL above; else its emoji on a big colored tile), its title as a headline, ONE plain sentence (under 25 words) on what it changes for the person using the app (no file names, no jargon), and at most two \"Try it\" bullets of under 15 words each, from its `try:` steps.",
     "   - Checks as three small badges: Style, Types, Tests, each ✓, ✗ (with a few plain words why) or … waiting. A \"Committed\" stamp once committed (\"Pushed\" once pushed).",

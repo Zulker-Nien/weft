@@ -128,21 +128,74 @@ describe("CardView", () => {
 });
 
 describe("CardView star", () => {
-  it("has a ☆ that opens the star menu without opening the card", async () => {
-    const onStarMenu = vi.fn();
-    const { onOpen } = renderCard({}, { onStarMenu });
+  it("has a ☆ that stars the card without opening it", async () => {
+    const onStar = vi.fn();
+    const { onOpen } = renderCard({}, { onStar });
     await userEvent.click(screen.getByRole("button", { name: "Star" }));
-    expect(onStarMenu).toHaveBeenCalledOnce();
+    expect(onStar).toHaveBeenCalledOnce();
     expect(onOpen).not.toHaveBeenCalled();
   });
 
   it("shows ★ on a starred card", () => {
-    renderCard({ libraryId: "lib1" }, { onStarMenu: vi.fn() });
+    renderCard({ starred: true }, { onStar: vi.fn() });
     expect(screen.getByRole("button", { name: "Starred" })).toHaveTextContent("★");
   });
 
-  it("has no star button without a menu to open", () => {
-    renderCard({ libraryId: "lib1" });
+  it("has no star button without a handler", () => {
+    renderCard({ starred: true });
     expect(screen.queryByRole("button", { name: /Star/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("CardView copilot", () => {
+  const copilot = { id: "copilot", role: "copilot" as const, title: "Copilot", column: "review" as const };
+
+  it("says it runs the whole board instead of naming its folder", () => {
+    renderCard(copilot);
+    expect(screen.getByText("whole board")).toBeInTheDocument();
+    expect(screen.queryByText("app")).not.toBeInTheDocument();
+  });
+
+  it("can't be dragged or starred", () => {
+    renderCard(copilot, { onStar: vi.fn() });
+    expect(screen.getByText("Copilot").closest("[data-card-id]")).toHaveAttribute("draggable", "false");
+    expect(screen.queryByRole("button", { name: /Star/ })).not.toBeInTheDocument();
+  });
+
+  it("opens on click", async () => {
+    const { onOpen } = renderCard(copilot);
+    await userEvent.click(screen.getByText("Copilot"));
+    expect(onOpen).toHaveBeenCalledOnce();
+  });
+});
+
+describe("CardView tags and issue", () => {
+  it("shows two tags in the footer and +N for the rest", () => {
+    renderCard({ tags: ["bug", "ui", "docs", "api"] });
+    expect(screen.getByText("bug")).toBeInTheDocument();
+    expect(screen.getByText("ui")).toBeInTheDocument();
+    expect(screen.queryByText("docs")).not.toBeInTheDocument();
+    expect(screen.getByText("+2")).toHaveAttribute("title", "docs, api");
+  });
+
+  it("a tag click filters the board without opening the card", async () => {
+    const onTag = vi.fn();
+    const { onOpen } = renderCard({ tags: ["bug"] }, { onTag });
+    await userEvent.click(screen.getByRole("button", { name: "bug" }));
+    expect(onTag).toHaveBeenCalledWith("bug");
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it("links the card's GitHub issue", () => {
+    renderCard({ issue: { repo: "aimhuge/weft", number: 42, url: "https://github.com/aimhuge/weft/issues/42", state: "open", updatedAt: "" } });
+    const link = screen.getByRole("link", { name: "#42" });
+    expect(link).toHaveAttribute("href", "https://github.com/aimhuge/weft/issues/42");
+    expect(link).toHaveAttribute("title", "aimhuge/weft#42 (open)");
+  });
+
+  it("shows nothing extra without tags or an issue", () => {
+    renderCard();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.queryByText(/^\+\d+$/)).not.toBeInTheDocument();
   });
 });

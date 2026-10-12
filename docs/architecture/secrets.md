@@ -73,7 +73,7 @@ secret get a conflict instead of one silently overwriting the other.
 
 ## Where you find it: the left rail
 
-The vault is a 🔐 icon on the library rail (`components/LibraryRail.tsx`), under ↻ ☑ ✎ and separated by a
+The vault is a 🔐 icon on the left rail (`SideRail` in `components/LibraryRail.tsx`), under ★ and 🏷 and separated by a
 divider. It adds no new row: its count badge carries the nudges ("3 missing", or a dot when `.env.local`
 holds values not yet imported). It opens the same drawer the library uses (over the board, or pushing it
 when pinned), with every board project's vault. A project filter at its top follows the top bar's project;

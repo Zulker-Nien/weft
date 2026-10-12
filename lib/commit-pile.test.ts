@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { describeCode, inRepo, mapPile, parseNumstat, parseStatus, pilePrompt, readPile, repoCards, type Pile } from "./commit-pile";
+import { SHOW_DIR } from "./show-dir";
 import type { Card } from "./types";
 
 function card(id: string, over: Partial<Card> = {}): Card {
@@ -120,7 +121,7 @@ describe("pilePrompt", () => {
     expect(prompt).toContain('- s.ts (modified): "Card a" (a, review), "Card c" (c, review)');
     expect(prompt).toContain('- busy.ts (modified): "Card b" (b, running)');
     expect(prompt).toContain("- loose.ts (new)");
-    expect(prompt).toContain("/tmp/weft-show/commit-app/index.html");
+    expect(prompt).toContain(`${SHOW_DIR}/commit-app/index.html`);
     expect(prompt).toContain("   picture: http://localhost:3000/api/attachments/shot.png\n   emoji: 🎛️\n   try: Header counter: Hover it\n   try: Click it\n   - a.ts (modified)");
     expect(prompt).toContain("for someone who doesn't read code");
     expect(prompt).toContain("Technical details");

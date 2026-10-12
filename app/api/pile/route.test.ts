@@ -3,6 +3,8 @@ import { GET } from "./route";
 
 vi.mock("next/server", () => ({ connection: async () => {} }));
 vi.mock("@/lib/skills", () => ({ PLUGIN_DIR: "/weft/plugin" }));
+// lib/show-dir.ts reads DATA_DIR from the store, which these tests mock.
+vi.mock("@/lib/show-dir", () => ({ SHOW_DIR: "/weft/show" }));
 vi.mock("@/lib/store", () => ({
   listCards: vi.fn(() => [
     { id: "a", title: "Card A", cwd: "/dev/app", column: "review", touchedFiles: ["/dev/app/a.ts"] },

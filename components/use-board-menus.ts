@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { api } from "@/lib/client";
-import { cardMenu, columnMenu, starMenu, resumeCommand, withAccelerators, type CardAction, type ColumnAction } from "@/lib/card-menu";
+import { cardMenu, columnMenu, resumeCommand, withAccelerators, type CardAction, type ColumnAction } from "@/lib/card-menu";
 import { toAccelerator, useShortcutList } from "@/lib/hotkeys";
-import type { Backend, Card, Column, DevServerStatus, LibraryKind, PermissionMode } from "@/lib/types";
+import type { Backend, Card, Column, DevServerStatus, PermissionMode } from "@/lib/types";
 
 // What the board's right-click menus act through: the same functions its buttons, drag and command palette use.
 export interface BoardMenuDeps {
@@ -20,9 +21,6 @@ export interface BoardMenuDeps {
   // cwd left out, the new-thread dialog picks its usual folder.
   openNew: (cwd?: string) => void;
   toggleArchived: () => void;
-  // Files the card in the library (lib/library.ts), and opens the library drawer on a kind.
-  star: (card: Card, kind: LibraryKind) => void;
-  showLibrary: (kind: LibraryKind) => void;
   toast: (message: string) => void;
   notify: (err: unknown) => void;
 }
@@ -33,6 +31,8 @@ export function useBoardMenus(deps: BoardMenuDeps) {
   // Menu items that have a board shortcut use its key, read from the registry: menu item id -> shortcut id.
   // Keys the open menu handles itself (Return, arrows…) are skipped, so card-open shows O, not ↩.
   const shortcuts = useShortcutList();
+  // The card whose tags are being edited (Tags…); the board shows components/TagsDialog.tsx for it.
+  const [tagging, setTagging] = useState<Card | null>(null);
   const keys = (map: Record<string, string>) =>
     Object.fromEntries(
       Object.entries(map).map(([item, id]) => {
@@ -50,46 +50,57 @@ export function useBoardMenus(deps: BoardMenuDeps) {
     if (picked) runCardAction(card, picked).catch(deps.notify);
   }
 
-  // Star, unstar, show in library. True when the action was one of these.
-  async function runLibraryAction(card: Card, action: CardAction) {
-    if (action.startsWith("star:")) {
-      deps.star(card, action.slice(5) as LibraryKind);
-    } else if (action === "unstar") {
-      if (card.libraryId) await api.removeLibraryItem(card.libraryId);
-      deps.toast(`Took “${card.title}” out of the library.`);
-    } else if (action === "show-in-library") {
-      const { items } = await api.library(null, true);
-      const kind = items.find((i) => i.id === card.libraryId)?.kind;
-      if (kind) deps.showLibrary(kind);
-      else deps.toast("It isn't in the library any more.");
-    } else {
-      return false;
-    }
+  // ★ on or off, from the menu or the ☆ on a card or thread. A starred card is never auto-archived.
+  function toggleStar(card: Card) {
+    api.mark(card.id, { starred: !card.starred }).catch(deps.notify);
+  }
+
+  // Every change in the Tags… dialog saves right away.
+  function saveTags(tags: string[]) {
+    if (tagging) api.mark(tagging.id, { tags }).catch(deps.notify);
+  }
+
+  // Star and Tags…: true when the action was one of these.
+  function runMarkAction(card: Card, action: CardAction) {
+    if (action === "star") toggleStar(card);
+    else if (action === "tags") setTagging(card);
+    else return false;
     return true;
   }
 
-  /** Move the card to the column named after the `move:` prefix (e.g. `move:running`). */
-  function runMoveAction(card: Card, action: CardAction) {
-    if (!action.startsWith("move:")) return false;
-    deps.move(card.id, action.slice(5) as Column);
+  // "Run on <other>" from the right-click menu. Auto-replays the last user message when the card
+  // hit a rate limit, so the user doesn't have to do a second click to keep work moving.
+  async function runSwitchAction(card: Card, action: CardAction) {
+    if (!action.startsWith("switch:")) return false;
+    const backend = action.slice(7) as Backend;
+    const replay = Boolean(card.rateLimitHit);
+    await api.switchBackend(card.id, backend, replay);
+    deps.toast(`Switched to ${backend === "puku" ? "puku-cli" : "Claude Code"}${replay ? " · replaying last message" : ""}.`);
     return true;
   }
 
-  /** Run a Weft skill the prefix names (e.g. `skill:done` sends `/done` to the card). */
+  // "Run /<skill>" — sends a slash command to the card's CLI.
   async function runSkillAction(card: Card, action: CardAction) {
     if (!action.startsWith("skill:")) return false;
     await api.send(card.id, `/${action.slice(6)}`);
     return true;
   }
 
-  /** Switch the card's permission mode to the one named after the `mode:` prefix. */
+  // "Move to …" — drags the card to another column.
+  function runMoveAction(card: Card, action: CardAction): boolean {
+    if (!action.startsWith("move:")) return false;
+    deps.move(card.id, action.slice(5) as Column);
+    return true;
+  }
+
+  // "Permissions: …" — flip the card's mode. Extracted to keep runCardAction's complexity in check.
   async function runModeAction(card: Card, action: CardAction) {
     if (!action.startsWith("mode:")) return false;
     await api.setMode(card.id, action.slice(5) as PermissionMode);
     return true;
   }
 
-  /** Start, restart or stop the card's dev server (the verb is the suffix after `dev:`). */
+  // "Start / Restart / Stop dev server" — runs the card's plan-defined dev command.
   async function runDevAction(card: Card, action: CardAction) {
     if (!action.startsWith("dev:")) return false;
     const { status } = await api.devAction(card.id, action.slice(4) as "start" | "restart" | "stop");
@@ -97,62 +108,52 @@ export function useBoardMenus(deps: BoardMenuDeps) {
     return true;
   }
 
-  /**
-   * Exact-string card actions: open, rename, start/stop, new-here, reveal/copy, archive/delete.
-   * Returns true if the action matched one of these cases.
-   */
-  async function runPlainAction(card: Card, action: CardAction) {
-    switch (action) {
-      case "open":
-        deps.openCard(card);
-        return true;
-      case "rename":
-        deps.renameCard(card);
-        return true;
-      case "start":
-        deps.move(card.id, "running");
-        return true;
-      case "stop":
-        await api.stop(card.id);
-        return true;
-      case "new-here":
-        deps.openNew(card.cwd);
-        return true;
-      case "reveal":
-        shell?.revealFolder(card.cwd);
-        return true;
-      case "copy-path":
-        await navigator.clipboard.writeText(card.cwd);
-        deps.toast("Copied the folder path.");
-        return true;
-      case "copy-resume":
-        await navigator.clipboard.writeText(resumeCommand(card));
-        deps.toast("Copied. Paste it in a terminal to pick the thread up.");
-        return true;
-      case "archive":
-        deps.toggleArchive(card);
-        return true;
-      case "delete":
-        if (window.confirm(`Delete “${card.title}”? Its CLI transcript stays on disk.`)) deps.remove(card);
-        return true;
-    }
-    return false;
-  }
-
   async function runCardAction(card: Card, action: CardAction) {
-    if (await runLibraryAction(card, action)) return;
+    if (runMarkAction(card, action)) return;
     if (runMoveAction(card, action)) return;
     if (await runSkillAction(card, action)) return;
     if (await runModeAction(card, action)) return;
     if (await runDevAction(card, action)) return;
-    if (action.startsWith("switch:")) {
-      const backend = action.slice(7) as Backend;
-      const replay = Boolean(card.rateLimitHit);
-      await api.switchBackend(card.id, backend, replay);
-      deps.toast(`Switched to ${backend === "puku" ? "puku-cli" : "Claude Code"}${replay ? " · replaying last message" : ""}.`);
-      return;
+    if (await runSwitchAction(card, action)) return;
+    await runSimpleAction(card, action, shell);
+  }
+
+  // The plain menu actions (open, rename, start, stop, reveal, copy, archive, delete): no API, just
+  // the deps and shell. Extracted to keep runCardAction's complexity under the cap.
+  async function runSimpleAction(card: Card, action: CardAction, shell: typeof window.threadboard) {
+    switch (action) {
+      case "open":
+        deps.openCard(card);
+        return;
+      case "rename":
+        deps.renameCard(card);
+        return;
+      case "start":
+        deps.move(card.id, "running");
+        return;
+      case "stop":
+        await api.stop(card.id);
+        return;
+      case "new-here":
+        deps.openNew(card.cwd);
+        return;
+      case "reveal":
+        return shell?.revealFolder(card.cwd);
+      case "copy-path":
+        await navigator.clipboard.writeText(card.cwd);
+        deps.toast("Copied the folder path.");
+        return;
+      case "copy-resume":
+        await navigator.clipboard.writeText(resumeCommand(card));
+        deps.toast("Copied. Paste it in a terminal to pick the thread up.");
+        return;
+      case "archive":
+        deps.toggleArchive(card);
+        return;
+      case "delete":
+        if (window.confirm(`Delete “${card.title}”? Its CLI transcript stays on disk.`)) deps.remove(card);
+        return;
     }
-    await runPlainAction(card, action);
   }
 
   // Right-clicking a column's empty space; a card's own menu stops the event before it gets here.
@@ -167,20 +168,8 @@ export function useBoardMenus(deps: BoardMenuDeps) {
     if (picked === "archive-done") deps.archive(done);
   }
 
-  // The ☆ on a card or in its thread: star it as a recipe, to-do or note, or show or unstar it. Outside the
-  // desktop app there's no native menu, so a click stars it as a note.
-  async function onStarMenu(card: Card, e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!shell?.popupMenu) {
-      if (!card.libraryId) deps.star(card, "note");
-      return;
-    }
-    const picked = (await shell.popupMenu(starMenu(card))) as CardAction | null;
-    if (picked) runCardAction(card, picked).catch(deps.notify);
-  }
-
-  return { onCardMenu, onColumnMenu, onStarMenu };
+  // editTags opens the Tags… dialog from elsewhere (the tags in a thread's header).
+  return { onCardMenu, onColumnMenu, toggleStar, tagging, editTags: setTagging, saveTags, closeTags: () => setTagging(null) };
 }
 
 // Keys a native menu uses to move and pick, so they can't be an item's key.

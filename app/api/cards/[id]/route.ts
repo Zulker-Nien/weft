@@ -5,12 +5,25 @@ import { fail, guard } from "@/lib/guard";
 import { archiveWhenIdle, endSession, isBusy, queueMessages, sendMessage, setPermissionMode } from "@/lib/runner";
 import { dismissSession } from "@/lib/settings";
 import { deleteCard, getCard, updateCard } from "@/lib/store";
+import { rememberTags } from "@/lib/tag-store";
+import { normalizeTags } from "@/lib/tags";
 import { COLUMNS, MODES, type Column, type PermissionMode } from "@/lib/types";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 // Running and Needs you follow the thread's live state, so they can't be set by hand.
 const MANUAL: Column[] = ["backlog", "review", "done"];
+
+// ★ (a starred card is never auto-archived) and tags. Tags you set stay yours: retitle stops picking them (lib/tags.ts).
+function setMarks(id: string, body: { starred?: unknown; tags?: unknown }) {
+  if (body.starred !== undefined) updateCard(id, { starred: Boolean(body.starred) });
+  if (body.tags === undefined) return;
+  if (!Array.isArray(body.tags)) throw new Error("Tags must be a list.");
+  const tags = normalizeTags(body.tags.map((t) => asText(t)));
+  updateCard(id, { tags, tagsBy: "user" });
+  // New ones join the catalog (lib/tag-store.ts), so they stay listed.
+  rememberTags(tags);
+}
 
 export async function PATCH(req: Request, { params }: Ctx) {
   const denied = guard(req);
@@ -24,6 +37,8 @@ export async function PATCH(req: Request, { params }: Ctx) {
       title?: unknown;
       cwd?: string;
       archived?: unknown;
+      starred?: unknown;
+      tags?: unknown;
       permissionMode?: PermissionMode;
     };
 
@@ -36,6 +51,8 @@ export async function PATCH(req: Request, { params }: Ctx) {
       if (card.role === "copilot") throw new Error("The copilot isn't on the board.");
       updateCard(id, { archived: Boolean(body.archived) });
     }
+
+    setMarks(id, body);
 
     // Takes effect mid-turn too: the open CLI switches modes right away.
     if (body.permissionMode !== undefined) {

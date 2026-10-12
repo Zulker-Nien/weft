@@ -21,7 +21,8 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["lib/**/*.ts", "app/api/**/*.ts"],
-      exclude: ["**/*.test.ts"],
+      // Test files, and the shared fakes they import (lib/runner.harness.ts).
+      exclude: ["**/*.test.ts", "**/*.harness.ts"],
       reporter: ["text-summary", "text", "json-summary"],
     },
   },

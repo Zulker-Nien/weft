@@ -10,6 +10,62 @@ import { ContinueButton, RestartButton, type ResumeHow } from "./CardResume";
 import CardPicture from "./CardPicture";
 import Icon, { Spinner } from "./Icon";
 import StarButton from "./StarButton";
+import CardMarks from "./CardMarks";
+
+// The footer's left side: CLI dot, folder (or "whole board" for the copilot), overlap, age, turns, scheduled
+// sends, open elsewhere, and the card's issue and tags when it has no progress line.
+function FooterMeta({ card, now, alsoHere, marks }: { card: Card; now: number; alsoHere: Card[]; marks: React.ReactNode }) {
+  const copilot = card.role === "copilot";
+  const scheduled = card.scheduled ?? [];
+  const nextSend = scheduled[0];
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <span
+        className={`size-1.5 shrink-0 rounded-full ${card.backend === "puku" ? "bg-puku" : "bg-claude"}`}
+        title={`${card.backend === "puku" ? "puku" : "claude"}${card.source === "claude-code" ? " · picked up from Claude Code" : ""}`}
+      />
+      {copilot ? (
+        <span className="flex shrink-0 items-center gap-1 font-medium text-accent" title="The copilot runs the whole board">
+          <Icon name="sparkles" size={10} />
+          whole board
+        </span>
+      ) : (
+        <span className="truncate font-medium text-muted" title={card.cwd}>{folderName(card.cwd)}</span>
+      )}
+      {isBusy(card) && alsoHere.length > 0 && (
+        <span
+          className="shrink-0 font-medium text-warn"
+          title={`Also running in this folder (shared working tree):\n${alsoHere.map((c) => c.title).join("\n")}`}
+        >
+          +{alsoHere.length} here
+        </span>
+      )}
+      <span className="shrink-0 whitespace-nowrap">
+        {timeAgo(card.lastActivity ?? card.updatedAt, now).replace(" ago", "")}
+        {card.turns ? ` · ${card.turns}t` : ""}
+      </span>
+      {marks}
+      {nextSend ? (
+        <span
+          className="flex shrink-0 items-center gap-0.5 text-accent"
+          title={`${scheduled.length} message${scheduled.length > 1 ? "s" : ""} scheduled; the next sends ${formatAt(nextSend.at, now)}`}
+        >
+          <Icon name="clock" size={10} />
+          {formatAt(nextSend.at, now)}
+        </span>
+      ) : null}
+      {card.openElsewhere && (
+        <span
+          className="flex shrink-0 items-center gap-1 text-muted"
+          title="This thread is open in the Claude app or a terminal right now"
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+          open
+        </span>
+      )}
+    </span>
+  );
+}
 
 export function BackendBadge({ backend }: { backend: Card["backend"] }) {
   return backend === "puku" ? (
@@ -55,16 +111,46 @@ function Summary({ card }: { card: Card }) {
   );
 }
 
+// Whether the card has a progress line: a stage or what's left, and in Done only what's left.
+function showsProgress(card: Card) {
+  // In Done, "Done" says nothing the column doesn't.
+  if (card.column === "done" && (stageStep(card.stage) === STAGES.length || !card.remaining)) return false;
+  return Boolean(card.stage || card.remaining);
+}
+
+// How far along the card is (the BOARD STATUS stage) and what's left, on one line; marks (the issue and
+// tags) go at its end, so they don't crowd the footer.
+function Progress({ card, marks }: { card: Card; marks: React.ReactNode }) {
+  const step = stageStep(card.stage);
+  const tone = TONE[card.column];
+  return (
+    <div className="mt-2 flex min-w-0 items-center gap-1.5 overflow-hidden text-[11px]">
+      {step > 0 && (
+        <span className="flex shrink-0 gap-[2px]" title={`${card.stage}: step ${step} of ${STAGES.length}`} aria-hidden>
+          {STAGES.map((s, i) => (
+            <span key={s} className={`h-[5px] w-[5px] rounded-full ${i < step ? tone.bar : "bg-line-strong"}`} />
+          ))}
+        </span>
+      )}
+      {card.stage && <span className={`max-w-[50%] shrink-0 truncate font-medium ${tone.text}`}>{card.stage}</span>}
+      {card.remaining && card.remaining !== "none" && (
+        <span className="min-w-0 shrink-[10] truncate text-faint" title={`Left: ${card.remaining}`}>· {card.remaining}</span>
+      )}
+      <span className="ml-auto flex shrink-0">{marks}</span>
+    </div>
+  );
+}
+
 // "Run on <other CLI>" — the one-click escape from a rate-limit error. Sits under the error line
 // on a rate-limited card; flips the card's backend and replays the last user message.
 function RateLimitSwitch({ card }: { card: Card }) {
   if (!card.rateLimitHit) return null;
-  const other: Card["backend"] = card.backend === "puku" ? "claude" : "puku";
+  const other = card.backend === "puku" ? "claude" : "puku";
   return (
     <button
       onClick={(e) => {
         e.stopPropagation();
-        api.switchBackend(card.id, other, true).catch(() => {});
+        void api.switchBackend(card.id, other, true).catch(() => {});
       }}
       className="mt-2 rounded-md bg-accent px-2.5 py-1 text-[12px] font-medium text-on-accent hover:opacity-90"
     >
@@ -73,28 +159,16 @@ function RateLimitSwitch({ card }: { card: Card }) {
   );
 }
 
-// How far along the card is (the BOARD STATUS stage) and what's left, on one line.
-function Progress({ card }: { card: Card }) {
-  const step = stageStep(card.stage);
-  // In Done, "Done" says nothing the column doesn't.
-  if (card.column === "done" && (step === STAGES.length || !card.remaining)) return null;
-  if (!card.stage && !card.remaining) return null;
-  const tone = TONE[card.column];
-  return (
-    <div className="mt-2 flex min-w-0 items-center gap-2 text-[11px]">
-      {step > 0 && (
-        <span className="flex shrink-0 gap-[2px]" title={`${card.stage}: step ${step} of ${STAGES.length}`} aria-hidden>
-          {STAGES.map((s, i) => (
-            <span key={s} className={`h-[5px] w-[5px] rounded-full ${i < step ? tone.bar : "bg-line-strong"}`} />
-          ))}
-        </span>
-      )}
-      {card.stage && <span className={`shrink-0 font-medium ${tone.text}`}>{card.stage}</span>}
-      {card.remaining && card.remaining !== "none" && (
-        <span className="truncate text-faint" title={`Left: ${card.remaining}`}>· {card.remaining}</span>
-      )}
-    </div>
-  );
+// Stopped in Needs you because the CLI is logged out (no permission request): the card offers Log in.
+function waitsForLogin(card: Card) {
+  return card.column === "needs_you" && !card.pending && /^Log in to /.test(card.lastLine ?? "");
+}
+
+// The border says a lot: selection, unseen, or needs-you's amber. Extracted to keep CardView's complexity in check.
+function cardBorder(card: Card, selected: boolean, unseen: boolean) {
+  if (selected) return "border-accent ring-1 ring-accent";
+  if (unseen) return "border-accent/70 ring-1 ring-accent/40 card-unseen";
+  return card.column === "needs_you" ? "border-warn/60" : "border-line hover:border-line-strong";
 }
 
 export default function CardView({
@@ -107,7 +181,8 @@ export default function CardView({
   onStop,
   onResume,
   onContextMenu,
-  onStarMenu,
+  onStar,
+  onTag,
   alsoHere = [],
 }: {
   card: Card;
@@ -122,25 +197,25 @@ export default function CardView({
   onResume?: (how: ResumeHow) => void;
   // Right-click: the card's menu (lib/card-menu.ts).
   onContextMenu?: (e: React.MouseEvent) => void;
-  // The ☆: file the card in the library (lib/card-menu.ts starMenu).
-  onStarMenu?: (e: React.MouseEvent) => void;
+  // The ☆: star or unstar the card (api.mark).
+  onStar?: () => void;
+  // A click on one of its tag pills: the board filters to that tag.
+  onTag?: (tag: string) => void;
   // Other busy cards in this folder (lib/overlap.ts busyHere); flagged only while this one is busy too.
   alsoHere?: Card[];
 }) {
   // The request already answered here, so a second click can't answer it (or the next one) again.
   const [answeredId, setAnsweredId] = useState<string | null>(null);
   const live = isLive(card);
-  const scheduled = card.scheduled ?? [];
-  const nextSend = scheduled[0];
+  // The copilot opens its own window and can't be moved, starred or filed under a project.
+  const copilot = card.role === "copilot";
+  const fixed = live || copilot;
+  // The issue and tags sit on the progress line, or in the footer when the card has none.
+  const marks = <CardMarks card={card} onTag={onTag} />;
+  const progress = showsProgress(card);
   const answered = answeredId !== null && answeredId === card.pending?.id;
-  const needsLogin = card.column === "needs_you" && !card.pending && /^Log in to /.test(card.lastLine ?? "");
-  const border = selected
-    ? "border-accent ring-1 ring-accent"
-    : unseen
-      ? "border-accent/70 ring-1 ring-accent/40 card-unseen"
-      : card.column === "needs_you"
-      ? "border-warn/60"
-      : "border-line hover:border-line-strong";
+  const needsLogin = waitsForLogin(card);
+  const border = cardBorder(card, selected, unseen);
 
   function answer(allow: boolean) {
     if (!card.pending || answered) return;
@@ -152,7 +227,7 @@ export default function CardView({
     <div
       role="button"
       tabIndex={0}
-      draggable={!live}
+      draggable={!fixed}
       onDragStart={(e) => {
         e.dataTransfer.setData("text/plain", card.id);
         e.dataTransfer.effectAllowed = "move";
@@ -160,7 +235,7 @@ export default function CardView({
       data-card-id={card.id}
       onClick={onOpen}
       onContextMenu={onContextMenu}
-      className={`group relative rounded-lg border bg-card px-3 py-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent ${border} ${live ? "" : "cursor-grab active:cursor-grabbing"}`}
+      className={`group relative rounded-lg border bg-card px-3 py-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent ${border} ${fixed ? "" : "cursor-grab active:cursor-grabbing"}`}
     >
       {unseen && (
         <span title="New since you last looked" className="absolute right-1 top-1 z-10 size-2.5 animate-pulse rounded-full border-2 border-card bg-accent" />
@@ -175,8 +250,7 @@ export default function CardView({
         </div>
         <CardPicture card={card} />
       </div>
-      <Progress card={card} />
-      <RestartButton card={card} onResume={onResume} />
+      {progress && <Progress card={card} marks={marks} />}
 
       {needsLogin && (
         <button
@@ -189,6 +263,8 @@ export default function CardView({
           Log in
         </button>
       )}
+
+      <RestartButton card={card} onResume={onResume} />
 
       {card.pending?.questions && (
         <button
@@ -228,45 +304,9 @@ export default function CardView({
       )}
 
       <div className="mt-2 flex items-center justify-between gap-2 border-t border-line pt-1.5 text-[11px] text-faint">
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span
-            className={`size-1.5 shrink-0 rounded-full ${card.backend === "puku" ? "bg-puku" : "bg-claude"}`}
-            title={`${card.backend === "puku" ? "puku" : "claude"}${card.source === "claude-code" ? " · picked up from Claude Code" : ""}`}
-          />
-          <span className="truncate font-medium text-muted" title={card.cwd}>{folderName(card.cwd)}</span>
-          {isBusy(card) && alsoHere.length > 0 && (
-            <span
-              className="shrink-0 font-medium text-warn"
-              title={`Also running in this folder (shared working tree):\n${alsoHere.map((c) => c.title).join("\n")}`}
-            >
-              +{alsoHere.length} here
-            </span>
-          )}
-          <span className="shrink-0 whitespace-nowrap">
-            {timeAgo(card.lastActivity ?? card.updatedAt, now).replace(" ago", "")}
-            {card.turns ? ` · ${card.turns}t` : ""}
-          </span>
-          {nextSend ? (
-            <span
-              className="flex shrink-0 items-center gap-0.5 text-accent"
-              title={`${scheduled.length} message${scheduled.length > 1 ? "s" : ""} scheduled; the next sends ${formatAt(nextSend.at, now)}`}
-            >
-              <Icon name="clock" size={10} />
-              {formatAt(nextSend.at, now)}
-            </span>
-          ) : null}
-          {card.openElsewhere && (
-            <span
-              className="flex shrink-0 items-center gap-1 text-muted"
-              title="This thread is open in the Claude app or a terminal right now"
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-              open
-            </span>
-          )}
-        </span>
+        <FooterMeta card={card} now={now} alsoHere={alsoHere} marks={progress ? null : marks} />
         <ContinueButton card={card} onResume={onResume} />
-        <StarButton variant="card" starred={Boolean(card.libraryId)} onClick={onStarMenu} />
+        {!copilot && <StarButton variant="card" starred={Boolean(card.starred)} onClick={onStar} />}
         {live && (
           <button
             onClick={(e) => {

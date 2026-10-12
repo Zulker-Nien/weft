@@ -19,17 +19,20 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 ## Board and organization
 
 - `Now` **Projects bar** — a bar above the columns listing the project folders in use, to filter the board to one or more projects and sort cards by activity or age.
+- `Done` **Recently changed in ⌘K** — the palette opens on the cards that moved column in the last day, latest move first (`recentMoves` in `lib/board-view.ts`, stamped as `columnAt` by `lib/store.ts`).
+- `Done` **Bigger ⌘K with the last output** — the palette is 840px wide with larger type; each card row shows its last line of output (or error) and how long ago it changed (`preview` and `when` on `PaletteItem`, filled in `components/board-palette.ts`).
 - `Now` **Filter quick-open** — the filter box shows its `/` key, lists the top matching cards as you type (Enter opens one) and hands the text to the ⌘K palette.
 - `P1` **Order within a column** — drag to reorder cards inside a column and keep that order, so the top of Backlog is what runs next.
 - `P1` **Archive instead of delete** — Done cards move to a searchable archive after N days; today delete also removes the card's thread view for good.
 - `P1` **Undo** — a short undo toast after a move, stop, or delete, since a misplaced drag or delete is easy to make and hard to fix.
 - `Done` **Archive keys** — `Shift+A` archives the focused card (else the open thread) and steps focus to the next one, `Shift+E` archives the Done column, and `Z` or the toast's Undo restores the last archive (`lib/archive.ts`). Archive is the first action with undo.
 - `Done` **Card actions menu** — right-click a card for a native, one-click menu (`lib/card-menu.ts`): open, rename, start, move, stop, run Weft skills, dev server, new thread here, reveal folder, copy path or resume command, archive, delete. Columns get New thread, and Done gets show archived and archive all. Every item has a key that picks it while the menu is open (`D` Done, `1` `/weft:done`, `Y` YOLO). Fork isn't in it yet.
-- `Done` **Card library** — star a card as a recipe (a Claude skill with `{blanks}`, run again from the New thread dialog with its page in the pane), a to-do (its page, with saved ticks; the card leaves the board) or a note; a 38px rail with a drawer, Mine and project levels like Claude Code, and copilot access (docs/architecture/library.md). A ☆ on every card and thread header stars it, and the rail lights up while you drag a card to it.
-- `P2` **Library page snapshots** — keep a picture and the text of a live site a card showed, not just its link, when it's starred.
-- `P2` **Fill recipe blanks in the pane** — make the recipe page's blanks a form that fills the prompt, instead of editing the prompt.
+- ~~`Done` **Card library**~~ Replaced by star + tags (2026-10-12). Its recipes, to-dos and notes became starred cards tagged `recipe`, `to-do` or `note`; the files stay on disk.
+- `Done` **Star and tags** — ☆ on every card and thread header (card menu `K`) stars a card, which is never auto-archived, and the rail's ★ shows only starred ones. Tags follow GitHub label rules (lowercase, ≤50 chars, ≤8 per card): up to two pills on the card's stage line, a tags dialog (`G`), and the 🏷 drawer (⌘L) like GitHub's labels page, with a colour catalog in `~/.weft/tags.json`. The retitle Haiku call also tags untagged cards from the board's own vocabulary, and the copilot has `set_tags` (docs/architecture/tags.md).
+- ~~`P2` **Library page snapshots**~~ Dropped with the library.
+- ~~`P2` **Fill recipe blanks in the pane**~~ Dropped with the library.
 - `P2` **Swimlanes by project** — optional rows per project folder, so a board spanning several repos stays readable.
-- `P2` **Labels** — free-form colored tags (bug, refactor, spike) that the projects bar can filter on.
+- ~~`P2` **Labels**~~ Shipped as tags: colored, filter the board from a pill or the 🏷 drawer.
 - `P2` **Priority** — a priority field that sorts Backlog and that the run queue respects.
 - `P2` **Saved views** — named filter and sort combinations, such as "this repo, Needs you first".
 - `P2` **Bulk actions** — select several cards to start, stop, move, or archive them together.
@@ -62,8 +65,8 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `Now` **Images in threads** — tool screenshots, images pasted into Claude Code sessions and local images an agent shows with `![](path)` appear inline, saved in `~/.weft/attachments`; click for full size.
 - `Now` **Live sessions move columns** — a session busy in another app moves to Running, one waiting on a question to Needs you, read from Claude Code's own session list every 5 seconds.
 - `P2` **Subagent drill-down** — subagent turns are hidden today; show them nested under the Task call that started them.
-- `Done` **Continue and retry from the card** — a ▶ in the footer of any idle card with a session sends "continue" (for a model that gave up too early); a stopped or failed card also gets **Restart**, its last message again in a fresh CLI (`lib/card-resume.ts`, `lib/restart.ts`).
-- `P2` **Edit and resend** — edit your last message and rerun the turn from there.
+- `Done` **Continue and retry from the card** — a ▶ in the footer of any idle card with a session sends "continue" (for a model that gave up too early); a stopped or failed card also gets **Restart**, its last message again in a fresh CLI (`lib/card-resume.ts`, `lib/restart.ts`). **▶ Resume N** in the Review header carries on every turn there that a restart cut off or that failed (`lib/resume-actions.ts`).
+- `Now` **Edit your last message** — ↑ in an empty reply box brings it back; Enter stops a running turn, rewinds the conversation to before the message (`resumeSessionAt`), folds the old turn into an "Edited" line, and sends the new text. Files stay as the turn left them. Claude board threads only; others send the edit as a new message. Still open: editing an older message, and undoing that turn's file edits (`rewindFiles`).
 - `P2` **Auto-title** — name a card from its first exchange when you left the title blank, instead of the first 60 characters of the prompt.
 - `P2` **Slash commands and skills in the reply box** — list the CLI's slash commands and skills available in the card's folder.
 - `P2` **File mentions** — `@` autocompletes file paths from the card's folder in prompts and replies.
@@ -114,6 +117,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `Done` **Threads can hand off work** — every board thread has `mcp__board__list_cards` (read-only) and `mcp__board__create_card` (starts in its own folder by default, records `parentId`); no move, stop, archive or read of other cards.
 - `P3` **Show spawned cards** — use `parentId` to show which card started another on the board.
 - `Done` **Copilot event feed** — with each of your messages the copilot gets a digest of cards that finished, need you, or failed since your last one (`lib/copilot-digest.ts`); no extra turns run.
+- `Done` **Copilot on the board** — the copilot shows as a card (✨ whole board) at the top of its column; click opens its window, Allow/Deny/Stop work on the card, a search hides it.
 - `P2` **Copilot acts on its own** — start a copilot turn when a card finishes or needs you, instead of waiting for your next message.
 - `P1` **Away digest** — "what happened while I was away": a short per-card summary of results since you last looked.
 - `P2` **Spec to cards** — paste a spec; the copilot proposes a set of cards with folders and order, and creates them after you approve.
@@ -160,6 +164,15 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `P2` **Danger highlighting** — mark `rm -rf`, force pushes, writes outside the project folder, and installs from unknown sources in the prompt.
 - `P2` **Folder boundary** — prompt or block when a card edits files outside its folder or worktree.
 - `P2` **Sandboxed cards** — run a card under the CLI's sandbox or in a container, and require it for auto permission mode.
+- `Done` **Secrets vault (local)** — 🔐 on the rail: a vault per repo, encrypted in Electron main, `.env` import with a preview, a nudge for `.env.local`, Touch ID to reveal or copy.
+- `Done` **Vault: every project, by hand** — the drawer holds every board project's vault behind a project filter that follows the top bar (overridable); Add and Change Value… type secrets in without a `.env` file; Copy to <project> copies one between vaults in main.
+- `Done` **Vault: add a secret by key** — Shift+`S` (also in the ⌘K palette and the `?` sheet) opens the 🔐 drawer on its Add form.
+- `Done` **Vault: threads fill fields** — `mcp__secrets__list` (names only) and `mcp__secrets__fill_field` (Touch ID per card and site, then main types the value into the pane, masked, read back as `‹NAME›`).
+- `Done` **Vault: values for commands** — `mcp__secrets__run`: approve the exact command and names (once or always), main runs it with no shell and the values in its env, output redacted to `‹NAME›`; dev servers get development values; a secrets-using card's stored tool results are redacted.
+- `P1` **Vault: values for API calls and requests** — a header or body value for an HTTP request a thread makes (Supabase Management API), and `mcp__secrets__request` (Needs you with a paste field).
+- `P2` **Vault: remembered approvals in the drawer** — list and remove the commands set to Always allow; patterns like `npm run job:*`.
+- `Done` **Vault: `.env.local` written back** — Weft writes the file from the vault with a `# Managed by Weft` header and watches it for hand edits.
+- `Done` **Account token behind safeStorage** — the Supabase session lives in `~/.weft/account.sealed`, sealed by Electron main; the server reads it through main.
 - `P2` **Secret masking** — hide tokens and `.env` values in thread views, tool output, and exports.
 - `P2` **Audit log** — an append-only record of every allowed and denied tool call: card, time, and whether you or the copilot answered.
 - `P2` **Per-launch API token** — require a token on `/api` in addition to the host and header checks, since any local process can call it today.
@@ -168,10 +181,13 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 ## Speed and reliability
 
 - `Now` **Warm, pre-started CLIs** — keep a spare CLI loaded per project so a new card's first turn skips the 12–50 s wait for MCP servers, plugins, and hooks.
-- `Now` **Error boundaries** — each card, the thread, the browser pane, the library, the terminal and the footer sit in their own boundary (`components/CrashGuard.tsx`), with `app/error.tsx` and `app/global-error.tsx` behind them, so a thread's half-written edit breaks one piece, not the whole board. At startup a failed load or a crashed renderer shows the start screen's error with Retry (`electron/startup-screen.cjs`).
+- `Now` **Error boundaries** — each card, the thread, the browser pane, the rail, the terminal and the footer sit in their own boundary (`components/CrashGuard.tsx`), and so do smaller pieces: every dialog's body (its header and ✕ stay), each rail drawer, each header badge, the Copilot and account buttons, the project bar, the New thread dialog, and inside a thread each message and tool run, the reply in progress, the permission request, the review panel and the reply box (small spots get an inline chip with the error on hover); Board's pieces, the header badges, the reply box and the review panel load through `guarded()` (`components/guarded.tsx`), so a module that throws while loading is caught in its spot too, and `app/error.tsx` hides the browser pane so its message shows, with `app/error.tsx` and `app/global-error.tsx` behind them, so a thread's half-written edit breaks one piece, not the whole board. A build error, which no boundary can catch, swaps Next's overlay for a small bar over the last version that built (`components/BuildErrorBar.tsx`). At startup a failed load or a crashed renderer shows the start screen's error with Retry (`electron/startup-screen.cjs`).
+- `Done` **Import guard** — a build error is past any boundary (nothing compiles), so a PostToolUse hook on every thread (`lib/import-check.ts`, in `guardedCli()`) reports imports an edit just broke: an export removed that another file still imports, or a name or module that isn't there. ~20ms per edit, text matching, no type-checker. Came from a star+tag card whose parallel subagents removed `starMenu` while the board still imported it.
+- `Done` **Restart guard** — every restart of Weft's server cut off every running card (10 launches and ~30 dropped cards in four days, some from threads running `kill -9` on the server). A PreToolUse hook (`lib/restart-guard.ts`, in `guardedCli()`) denies Bash that would kill Weft's server, app or port, or start a second Weft in its folder, while other turns run, and tells the thread how many it would cut off and to ask you; the thread prompt says the same. A CLI that keeps working after its turn ended now shows Running, so the restart recovery catches it. Next: let the user OK a restart from the board, and restart once those turns finish.
+- `Now` **Startup timer** — each launch's phases are saved to `~/.weft/startup.jsonl` (`electron/startup-timer.cjs`), and a launch well over the usual time shows a toast naming the slowest phase (`lib/use-startup-check.ts`). On 2026-10-11 two changes came out of it: the login-shell PATH (~1s of `zsh -ilc`) is now saved and refreshed in the background, and `.next` is kept between launches, along with Turbopack's cache, unless a stale server had to be killed.
 - `P1` **Crash-safe storage** — write `board.json` and thread files to a temp file and rename, and keep a rolling backup, so a crash mid-write can't lose the board.
 - `P1` **Concurrency cap and run queue** — limit how many cards run at once; extra starts wait and begin in priority order.
-- `P1` **Resume after restart** — cards that were running come back as "Stopped when the app closed"; offer a one-click (or automatic) resume.
+- `Done` **Resume after restart** — a card that was running (or waiting on a permission) when the app closed carries on by itself after the restart: `lib/store.ts` marks it `interrupted` on load and `lib/resume.ts` sends its session a "Weft restarted, pick up where you left off" turn. Up to three carry-ons in a row (`resumes`), so a turn that keeps getting cut off stops for Resume all.
 - `P2` **Append-only thread files** — threads are rewritten in full on every new item; switch to append-only JSONL so long threads stay cheap.
 - `P2` **Paged thread loading** — load the last N items when opening a card and fetch older ones on scroll.
 - `P2` **Event replay on reconnect** — number SSE events and replay missed ones, instead of reloading the whole board after every reconnect.
@@ -186,6 +202,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `Now` **Desktop notifications** — a native notification when a card needs you, finishes, or fails; clicking it opens the card.
 - `P1` **Dock badge** — the Needs you count on the Dock icon, so you can tell at a glance whether anything is waiting.
 - `P2` **Menu bar list** — a menu bar icon listing cards that need you, with Allow and Deny right there.
+- `Done` **Keep Working** — the menu bar icon's switch for staying awake with the lid shut (`pmset disablesleep` behind a one-time sudoers rule). It runs until threads finish or for 1/2/3/8 hours, and a watchdog puts sleep back at the deadline, at 10% battery, or if Weft dies (`electron/keep-working.cjs`).
 - `P2` **Unread dots** — a dot on cards with new output you haven't opened.
 - `P2` **Notification rules** — choose per project which events notify you, plus quiet hours.
 - `P2` **Answer from the notification** — Allow and Deny buttons on the notification itself.
@@ -246,7 +263,12 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 
 ## Integrations
 
-- `P1` **GitHub issue to card** — create a card from an issue (body as prompt, link kept); comment on or close the issue when the card is done.
+- `Now` **GitHub Issues sync** — in phases (docs/architecture/github-issues.md):
+  - `P1` Phase 1, card → issue: make an issue from a card, its tags as labels, and link the two.
+  - `Done` Phase 2, issues → cards: ⌘K "Import GitHub issues into <project>" opts a folder in; its open issues become Backlog cards through `gh` (body + link + "Fixes owner/name#N" as the prompt, labels as tags), re-checked every 5 min. A closed issue archives its card if it never started; started cards are never touched; a deleted card stays deleted (`lib/github-issues.ts`).
+  - `P2` Phase 3, two-way: title, labels and open/closed kept in step both ways.
+  - `P2` Phase 4, Projects v2: a GitHub Project's Status column follows the card's column.
+  - `P2` Phase 5, comments: a turn's summary posted to the issue (summaries only, vault values removed, a warning on a public repo).
 - `P2` **PR review comments back to the card** — new review comments on a card's PR show up as a reply draft on that card.
 - `P2` **Open in editor** — open a card's folder or worktree in VS Code, Cursor, or Zed, and jump to a file and line from a tool row.
 - ~~`P2` **Open in terminal** — open a terminal in the card's folder or worktree.~~ Shipped as the terminal drawer (Control-backtick as in VS Code, or `t`): a shell per folder that follows the open card or selected project, split side by side up to three (⌘\\).
@@ -254,6 +276,9 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `P2` **Board CLI** — `weft add "fix the flaky test" --cwd .` to create cards from a terminal or script.
 - `P2` **Linear** — create cards from Linear issues and keep issue status in step with the card's column.
 - `P2` **Slack** — post Done and Needs-you summaries to a channel, and create cards from a slash command.
+- ~~`P2` **BlastCP queue on the rail**~~ Shipped as the BlastCP rocket on the rail: connect with OAuth, link a property per project, see its next posts, drafts and failures, open them in the pane. Next: draft a post from a card, and a rail badge for posts waiting on you.
+- ~~`P2` **Link a Vercel project**~~ Shipped as ▲ on the rail: token in the Keychain, link an existing project or make a new one (with its GitHub repo connected), see the latest deploy. Next, in the same drawer: connect GitHub on an already-linked project, deploy and redeploy, push 🔐 vault values to Vercel environments (diff first), and build and runtime logs.
+- ~~`P2` **Link a Supabase project**~~ Shipped as the bolt on the rail: token in the Keychain, link a project (or pick up `.mcp.json`'s), see its state, region, unapplied migrations, Restore a paused one. Next: push migrations from the drawer, copy the URL and keys into the 🔐 vault, add the Supabase MCP server for threads, create a project in place.
 - `P2` **Vercel previews** — after a push, open the preview deployment in the card's browser tab and save the URL on the card.
 - `P3` **Sentry** — create a card from an error with its stack trace and a link back.
 - `P3` **Jira and GitLab** — the same issue and PR flows for teams on those tools.
@@ -262,13 +287,14 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 ## Settings and onboarding
 
 - `Now` **Settings dialog** — one place to edit the thread prompt, how long idle CLIs stay open, recent projects, and CLI login state.
+- `Now` **Weft account** — optional sign-in: a GitHub "Sign in" button in the top bar right of Copilot (your avatar once signed in, `components/AccountButton.tsx`), and Settings → Weft account with GitHub, Google or an email link, against the Weft prod Supabase project (`lib/account.ts`, `components/AccountSettings.tsx`). PKCE in the system browser with a loopback redirect to `/api/account/callback`, so it works in dev and packaged builds; the session lives in `~/.weft/account.json` (0600). A `profiles` table with row-level security is filled on first sign-in (`supabase/migrations/`). Nothing uses the account yet: it's the base for page sync, share links and shared boards.
 - `P1` **First-run check** — on first launch, check for `claude` and `puku-cli`, their login state, and `git`, then pick a first project folder.
 - `P2` **Guided first card** — a starter card in a scratch folder that shows Running, Needs you, Review, and the browser pane in a couple of minutes.
 - `P2` **Data folder in settings** — choose where the board is stored from settings instead of the `THREADBOARD_DATA` variable.
 - `Now` **Shortcuts sheet** — `?` lists every keyboard shortcut (board, composer, terminal, app menu), searchable by words or keys; hold ⌘ or ⇧ for a cheat card; tooltips, the filter box and right-click menus show keys.
 - `P2` **Export and import settings** — move the thread prompt, templates, and rules to another machine as one file.
 - `Now` **Theme** — light, dark, or follow the system, from Settings → Appearance; the desktop window chrome follows it too.
-- `Now` **Scene themes** — Twin Suns, Canyon, Coast Road, Neon City, Snow Pass and Salt Flats: Weft's own pictures behind the board, each with a palette drawn from it and frosted columns (Settings → Appearance, or ⌘K "Theme: …").
+- `Now` **Scene themes** — Twin Suns, Canyon, Coast Road, Neon City, Snow Pass and Salt Flats: Weft's own pictures behind the board, each with a palette drawn from it and clear columns (Settings → Appearance, or ⌘K "Theme: …").
 
 ## Packaging, updates and distribution
 
@@ -288,7 +314,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `Done` **Runner tests** — `lib/runner.test.ts` drives the SDK loop against a fake `query()`: results, permissions and questions, stop, the turn queue, warm spares, login, and the CLI going away. No stub CLI executable yet.
 - `Done` **Coverage per project** — the header's "49% coverage" follows the project in view, hovers a breakdown, and without a report is a **Set up coverage** button that starts a `/weft:setup-done` thread there.
 - `Done` **A quality score that never maxes out** — the header's code quality badge earns 90 from the checklist (coverage, file size, lint lockdown, types, guardrails) and the last 10 from a **refactor scout**: a read-only Sonnet run that ranks concrete findings (file:line, Fowler smell, category, one-line fix, plus lint rules not yet on and loose types), cached per project with its commit, started once for a project with no report, then refreshed by `/weft:done` or **Re-scout now** (never just because HEAD moved). Each finding starts its own card from the badge's menu. Next: let the copilot hand out findings, and show which ones a card fixed.
-- `Done` **Commit the uncommitted pile** — the header's "+N/-N" beside the quality badge (moved up from the status strip) counts the project's uncommitted lines; clicking it starts a card that maps `git status` onto the Review cards' `touchedFiles` (shared, busy and unclaimed files flagged) and commits card by card, by path, with a live checklist page (`lib/commit-pile.ts`, `app/api/pile`). Each change on the page has a review bar whose buttons answer the thread through `weft://reply` links, so you act on the page instead of typing in the thread. Next: let the copilot suggest it when Review piles up, and mark a card's files as committed so the overlap warning forgets them.
+- `Done` **Commit the uncommitted pile** — the header's "+N/-N" beside the quality badge (moved up from the status strip) counts the project's uncommitted lines; clicking it starts a card that maps `git status` onto the Review cards' `touchedFiles` (shared, busy and unclaimed files flagged) and commits card by card, by path, with a live checklist page (`lib/commit-pile.ts`, `app/api/pile`). Each change on the page has a review bar whose buttons answer the thread through `weft://reply` links, so you act on the page instead of typing in the thread. Its Commit buttons are `weft://commit` links that commit, push and move the card to Done with no LLM turn (`lib/pile-commit.ts`); the thread steps in only when a step fails. Next: let the copilot suggest it when Review piles up, and mark a card's files as committed so the overlap warning forgets them.
 - `P1` **UI tests** — *started: behavior tests (jsdom + Testing Library, `components/*.test.tsx`) for the card (busy-folder "+N here", Allow/Deny, Stop), the reply box (send, queue while running, Send now, send later, busy-folder warning) and the new-thread dialog (Start vs backlog, folder, busy-folder hint).* Still to do: the board, the thread view, and the real TipTap composer (stubbed in these tests).
 - `P2` **CI** — lint, typecheck, and tests on every push.
 - `P2` **End-to-end tests** — drive the Electron app: create a card, start it, allow a request, reply, drag it to Done.

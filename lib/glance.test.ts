@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { backdropFor, extractHtml, glancePrompt, newThreadPage, shouldWriteGlance, starterPage } from "./glance";
+import { backdropFor, extractHtml, glancePrompt, newThreadPage, nextScene, shouldWriteGlance, starterPage } from "./glance";
 
 describe("extractHtml", () => {
   it("takes the page out of a code fence and chat around it", () => {
@@ -89,7 +89,22 @@ describe("backdropFor", () => {
   });
 });
 
+describe("nextScene", () => {
+  it("cycles through every scene in turn, then starts over", () => {
+    const names = ["a.jpg", "b.jpg", "c.jpg"];
+    const first = names.indexOf(nextScene(names));
+    const seen = [names[first], nextScene(names), nextScene(names), nextScene(names)];
+    expect(seen).toEqual([0, 1, 2, 3].map((i) => names[(first + i) % 3]));
+    expect(nextScene([])).toBe("splash-speeder.jpg");
+  });
+});
+
 describe("newThreadPage", () => {
+  it("shows the scene it's given, the speeder by default", () => {
+    expect(newThreadPage()).toContain("splash-speeder.jpg");
+    expect(newThreadPage("backdrop-canyon.jpg")).toContain("backdrop-canyon.jpg");
+  });
+
   it("is the splash with no ask yet", () => {
     const html = newThreadPage();
     expect(html).toContain("<h1>New thread</h1>");
@@ -98,16 +113,6 @@ describe("newThreadPage", () => {
     expect(html).not.toContain('class="recipes"');
   });
 
-  it("offers up to six recipes as weft://recipe links, with their blanks", () => {
-    const recipes = Array.from({ length: 8 }, (_, i) => ({ id: `r${i}`, title: `Recipe <${i}>`, blanks: i === 0 ? [{ name: "product" }] : [] }));
-    const html = newThreadPage(recipes);
-    expect(html).toContain("or start from a recipe");
-    expect(html).toContain('href="weft://recipe/r0"');
-    expect(html).toContain("Recipe &lt;0&gt;");
-    expect(html).toContain("{product}");
-    expect(html).toContain('href="weft://recipe/r5"');
-    expect(html).not.toContain('href="weft://recipe/r6"');
-  });
 });
 
 // The pane side: a fresh copy of the module with the shell, Haiku and the store faked, and its pages
@@ -118,7 +123,8 @@ describe("pages glance writes and opens in the pane", () => {
     paneThumb: vi.fn<(key: string) => Promise<Buffer | undefined>>(),
     openInPane: vi.fn<(url: string, key: string) => Promise<void>>(async () => {}),
     complete: vi.fn<(prompt: string) => Promise<string>>(),
-    getCard: vi.fn<(id: string) => { id: string; title: string; prompt?: string; emoji?: string; titleBy?: "user" | "auto" } | undefined>(),
+    getCard: vi.fn<(id: string) => { id: string; title: string; prompt?: string; emoji?: string; titleBy?: "user" | "auto"; tags?: string[]; tagsBy?: "user" | "auto"; role?: "copilot" } | undefined>(),
+    listCards: vi.fn(() => [{ tags: ["auth"] }, { tags: ["auth", "bug"] }]),
     decorateCard: vi.fn(),
     saveAttachmentData: vi.fn(() => ({ url: "/api/attachments/pane-1.jpg" })),
   };
@@ -142,7 +148,7 @@ describe("pages glance writes and opens in the pane", () => {
     vi.stubEnv("WEFT_ASSETS_DIR", path.join(dataDir, "no-assets"));
     vi.doMock("./browser-tools", () => ({ paneUrl: h.paneUrl, paneThumb: h.paneThumb, openInPane: h.openInPane }));
     vi.doMock("./haiku", () => ({ complete: h.complete }));
-    vi.doMock("./store", () => ({ DATA_DIR: dataDir, getCard: h.getCard, decorateCard: h.decorateCard }));
+    vi.doMock("./store", () => ({ DATA_DIR: dataDir, getCard: h.getCard, decorateCard: h.decorateCard, listCards: h.listCards }));
     vi.doMock("./attachments", () => ({ saveAttachmentData: h.saveAttachmentData }));
     g = await import("./glance");
   });
@@ -159,7 +165,7 @@ describe("pages glance writes and opens in the pane", () => {
     vi.useFakeTimers();
     h.paneUrl.mockResolvedValue("");
     h.paneThumb.mockResolvedValue(undefined);
-    h.getCard.mockReturnValue({ id: "c1", title: "Login", prompt: "Add login", emoji: "🔐" });
+    h.getCard.mockReturnValue({ id: "c1", title: "Login", prompt: "Add login", emoji: "🔐", tags: ["auth"] });
     h.complete.mockResolvedValue(PAGE);
   });
 
@@ -245,7 +251,7 @@ describe("pages glance writes and opens in the pane", () => {
     it("asks Haiku once for a tile emoji when the card has none, keeping only a real emoji", async () => {
       const emojiReplies = ["Sure! 🔐", "no idea", new Error("down")];
       for (const reply of emojiReplies) {
-        h.getCard.mockReturnValue({ id: "c1", title: "Login", prompt: "Add login" });
+        h.getCard.mockReturnValue({ id: "c1", title: "Login", prompt: "Add login", tags: ["auth"] });
         h.complete.mockImplementation((prompt) =>
           !prompt.startsWith("Reply with exactly one emoji") ? Promise.resolve(PAGE)
           : reply instanceof Error ? Promise.reject(reply) : Promise.resolve(reply));
@@ -255,7 +261,7 @@ describe("pages glance writes and opens in the pane", () => {
       expect(h.decorateCard.mock.calls).toEqual([["c1", { emoji: "🔐" }]]);
     });
     describe("retitling", () => {
-      const weak = { id: "c1", title: "Image attachment", prompt: "[Image #1]", emoji: "🔐" };
+      const weak = { id: "c1", title: "Image attachment", prompt: "[Image #1]", emoji: "🔐", tags: ["bug"] };
       const titleCalls = () => h.complete.mock.calls.filter(([p]) => p.startsWith("Name this coding thread"));
       const reply = (title: string | Error) => (prompt: string) =>
         !prompt.startsWith("Name this coding thread") ? Promise.resolve(PAGE) : title instanceof Error ? Promise.reject(title) : Promise.resolve(title);
@@ -293,6 +299,43 @@ describe("pages glance writes and opens in the pane", () => {
         h.complete.mockImplementation(reply("🐞 Auto"));
         await settle(g.glanceAfterTurn("c1", turn, () => true));
         expect(h.decorateCard).not.toHaveBeenCalledWith("c1", expect.objectContaining({ titleBy: "auto" }));
+      });
+    });
+
+    describe("tagging", () => {
+      const named = { id: "c1", title: "Login", prompt: "Add login", emoji: "🔐" };
+      const nameCalls = () => h.complete.mock.calls.map(([p]) => p).filter((p) => /^(Name|Tag) this coding thread/.test(p));
+      const answer = (text: string) => (prompt: string) => Promise.resolve(/^(Name|Tag) this coding thread/.test(prompt) ? text : PAGE);
+
+      it("tags a named card from the board's vocabulary, asking only for tags", async () => {
+        h.getCard.mockReturnValue(named);
+        h.complete.mockImplementation(answer("Tags: Auth, UI"));
+        await settle(g.glanceAfterTurn("c1", turn, () => true));
+        expect(nameCalls()[0]).toMatch(/^Tag this coding thread/);
+        expect(nameCalls()[0]).toContain("This board already uses: auth, bug.");
+        expect(h.decorateCard).toHaveBeenCalledWith("c1", { tags: ["auth", "ui"], tagsBy: "auto" });
+      });
+
+      it("names and tags an unnamed, untagged card in one call", async () => {
+        h.getCard.mockReturnValue({ ...named, title: "Image attachment" });
+        h.complete.mockImplementation(answer("Title: 🐞 Build break\nTags: bug, build"));
+        await settle(g.glanceAfterTurn("c1", turn, () => true));
+        expect(nameCalls()).toHaveLength(1);
+        expect(h.decorateCard).toHaveBeenCalledWith("c1", { title: "🐞 Build break", titleBy: "auto", emoji: "🐞", tags: ["bug", "build"], tagsBy: "auto" });
+      });
+
+      it("leaves tags you set, cleared or added meanwhile, and the copilot, alone", async () => {
+        for (const card of [{ ...named, tagsBy: "user" as const }, { ...named, role: "copilot" as const }]) {
+          h.getCard.mockReturnValue(card);
+          await settle(g.glanceAfterTurn("c1", turn, () => true));
+        }
+        expect(nameCalls()).toHaveLength(0);
+        h.getCard.mockReturnValueOnce(named).mockReturnValue({ ...named, tags: ["mine"], tagsBy: "user" });
+        h.complete.mockImplementation(answer("Tags: bug"));
+        await settle(g.glanceAfterTurn("c1", turn, () => true));
+        h.getCard.mockReturnValueOnce(named).mockReturnValue(undefined);
+        await settle(g.glanceAfterTurn("c1", turn, () => true));
+        expect(h.decorateCard).not.toHaveBeenCalled();
       });
     });
   });

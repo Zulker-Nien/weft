@@ -36,6 +36,16 @@ every API route shares it), and returns the running `Session`. `drive()` (`lib/r
   over); omitted for the puku backend because puku-cli's CLI rejects the flag,
   and omitted for the copilot card
 
+### Resume after a restart
+
+A CLI process doesn't outlive the app, so `loadState()` (`lib/store.ts`) moves a card that was `running` or had a
+`pending` permission to Review as "Stopped when the app closed" and sets `interrupted`. On the first board load,
+`prewarm()` (`lib/copilot.ts`) calls `resumeInterrupted()` (`lib/resume.ts`), which sends each such card's session
+`RESUME_TEXT` with `sendMessage()` and sets `resumed`. The next `sendMessage()` clears both flags. A card that is still
+`resumed` when the app closes again isn't marked, so a turn that keeps getting cut off is resumed once, not on every
+launch. Cards with no `sessionId`, archived cards and the copilot aren't resumed; a send that throws (folder gone)
+leaves the card in Review with the reason in `error`.
+
 ### Warm sessions and keep-alive
 
 `scheduleIdle()` (`lib/runner.ts`) starts a timer for `keepAliveMinutes()` minutes
@@ -99,6 +109,31 @@ rules don't queue anything; `firstMessage()` appends "Start by using the /x skil
 prompt, used by every path that starts a Backlog card (`POST /api/cards`, the PATCH to running,
 the copilot's `start_card`). The copilot's `move_card` never runs automations.
 
+### Editing your last message (↑)
+
+Each prompt a Claude board thread sends carries a uuid (`randomUUID()` in `sendMessage()`), kept on
+its thread item as `id` and passed to the CLI as the `SDKUserMessage`'s `uuid`, so the session
+transcript in `~/.claude/projects` records the prompt under it. ↑ in an empty reply box with nothing
+queued pulls the last message back (`lastSent()`, `lib/edit-last.ts`; `useEditLast()` in
+`lib/use-edit-last.ts` wires it into `ThreadView`), and Enter posts it to
+`POST /api/cards/[id]/messages` with `edit: true`.
+
+`editLastMessage()` (`lib/runner.ts`) closes the card's CLI (which ends a running turn and flushes
+its transcript), drops anything queued behind it, then looks the prompt up in the transcript
+(`sessionRewindPoint()`, `lib/rewind.ts`). The prompt's `parentUuid` is the last entry of the turn
+before it, so the card reopens with `resume` plus `resumeSessionAt` set to it, which drops that
+prompt and everything after it from the conversation; a prompt with no parent opened the session, so
+the edit starts a fresh one. `foldThread()` (`lib/store.ts`) folds the old message and its turn into
+one `{ kind: "edited" }` item (the board truncates its copy on the `truncate` flag of the thread
+event), and the new text goes out through `sendUserMessage()`. Files the dropped turn changed stay
+as they are; the reply box says how many edits stay.
+
+When the transcript doesn't hold the prompt (a picked-up session, a puku thread, a message from
+before prompts were tagged, or a slash command the CLI expands), nothing is folded and the edit goes
+out as a new message after the old one; the reply box says so before you send. Rewinding writes to
+the session, so one that's open in another app is continued as a copy (`forkSession`), as a
+normal send does. An edited send can't use a warm spare, so it starts a cold CLI.
+
 ### Scheduled messages (send later)
 
 The reply box's clock button (`components/SendLater.tsx`, Alt+Enter) saves a message on the card
@@ -122,10 +157,14 @@ can't schedule. The card shows the next time as a clock badge in its footer.
 ### Archiving after Done
 
 Moving a card to Done also calls `archiveWhenIdle()` (`lib/runner.ts`): with no queued or running
-turn it sets `card.archived` at once; otherwise the id goes in `archiveAfter` and the `result`
-handler archives it (`column: "done", archived: true`) once the queue drains. A stopped or
-errored turn drops the id, leaving the card in Done unarchived. `sendMessage()` clears `archived`,
-and a move to any other column does too. The board hides archived cards until "Show N archived"
+turn it sets `card.archived` at once; otherwise the id goes in `archiveAfter`, the card gets
+`wrappingUp: true`, and the `result` handler archives it (`column: "done", archived: true`,
+`wrappingUp: false`) once the queue drains. Typing `/done` does the same through `sendUserMessage()`.
+While `wrappingUp` the card stays `column: "running"` (spinner, ■ Stop, the Running count and restart
+recovery all key on it) but `shownColumn()` in `lib/board-view.ts` files it under Done. A stopped or
+errored turn drops the id and clears the flag, so the card lands in Review unarchived; a starred card
+is never archived; a restart clears the flag (`loadState` in `lib/store.ts`). `sendMessage()` clears
+`archived`, and a move to any other column does too. The board hides archived cards until "Show N archived"
 in the Done header (`components/Board.tsx`). Archived cards don't count toward the header's
 "need you" and "running" totals or a project chip's dots (`summarizeProjects` in `lib/board-view.ts`),
 so a hidden card never shows a count you can't find.
@@ -316,7 +355,7 @@ While the card is in Review, `components/ReviewPanel.tsx` sits at the bottom of 
 
 The browser pane keeps one page per card (`views` in `electron/browser-pane.cjs`, keyed by card id; `"board"` when no card is open). `Board` calls `browser.setActive(selectedId)`, so opening a card shows its page (if it has one) and closing the card hides the pane. `browser.open(url, cardId)` from the board activates that card's browser; agent tools (`browserMcpServer(() => session.cardId)` in `lib/browser-tools.ts`) pass the card id to the control server and load into their own card's browser without taking over the screen. `browser.prune` closes the browsers of deleted cards.
 
-`BROWSER_PROMPT` also tells every thread to show something current there on every turn, quick answers included: with no app page yet, it renders its work (commits, plans, diffs, test runs) as an HTML file under `/tmp/weft-show/` and opens it with `open_url`.
+`BROWSER_PROMPT` also tells every thread to show something current there on every turn, quick answers included: with no app page yet, it renders its work (commits, plans, diffs, test runs) as an HTML file under `~/.weft/show/` (`SHOW_DIR`, `lib/show-dir.ts`; it was `/tmp/weft-show/` until macOS kept clearing it) and opens it with `open_url`.
 
 ## Prompt search
 

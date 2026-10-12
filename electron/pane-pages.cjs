@@ -1,6 +1,6 @@
 // Where each card's browser was, so a restart puts it back: ~/.weft/pages/index.json, one entry per card,
-// shaped like the card_pages rows a cloud sync would upload later. Pages a thread wrote to a temp folder
-// (/tmp/weft-show/…) are copied beside the index, since macOS clears those on reboot.
+// shaped like the card_pages rows a cloud sync would upload later. Threads write pages to ~/.weft/show now,
+// but a page in a temp folder (older /tmp/weft-show/… ones) is copied beside the index, since macOS clears those.
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");

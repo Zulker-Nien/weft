@@ -5,6 +5,7 @@ import path from "node:path";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { projectRoot } from "./quality";
 import { MAX_FINDINGS, parseFindings, type ScoutReport, type ScoutState } from "./scout-view";
+import { SECRET_GUARD_HOOKS } from "./secret-guard";
 import { DATA_DIR } from "./store";
 
 // The refactor scout: a read-only Sonnet run that reads a project and lists concrete improvements the
@@ -71,6 +72,8 @@ async function scout(root: string) {
       settingSources: [],
       strictMcpConfig: true,
       persistSession: false,
+      // It reads the whole project, .env files included unless turned away.
+      hooks: SECRET_GUARD_HOOKS,
       maxTurns: MAX_TURNS,
     },
   })) {

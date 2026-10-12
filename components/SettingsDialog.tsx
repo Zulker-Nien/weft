@@ -6,6 +6,7 @@ import { setShowBacklog, setShowProgress, showBacklog, showProgress } from "@/li
 import { api } from "@/lib/client";
 import { SHORTCUTS, bindingFromEvent, currentBinding, formatBinding, setBinding } from "@/lib/shortcuts";
 import type { Automation, Backend, CliStatus, PermissionMode, SettingsView } from "@/lib/types";
+import AccountSettings from "./AccountSettings";
 import AppearancePicker from "./AppearancePicker";
 import AutomationSettings from "./AutomationSettings";
 import Icon, { Spinner } from "./Icon";
@@ -185,6 +186,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [prompt, setPrompt] = useState("");
   const [keepAlive, setKeepAlive] = useState(0);
   const [mode, setMode] = useState<PermissionMode>("auto");
+  const [defaultBackend, setDefaultBackend] = useState<Backend>("claude");
   const [rules, setRules] = useState<Automation[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -221,6 +223,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
         setPrompt(s.threadPrompt);
         setKeepAlive(s.keepAliveMinutes);
         setMode(s.defaultPermissionMode);
+        setDefaultBackend(s.defaultBackend);
         setRules(s.automations);
       },
       (err: unknown) => {
@@ -261,6 +264,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const promptChanged = settings !== null && prompt.trim() !== settings.threadPrompt.trim();
   const keepAliveChanged = settings !== null && keepAlive !== settings.keepAliveMinutes;
   const modeChanged = settings !== null && mode !== settings.defaultPermissionMode;
+  const defaultBackendChanged = settings !== null && defaultBackend !== settings.defaultBackend;
   // A rule left without a skill is dropped rather than refused.
   const rulesToSave = rules.filter((r) => r.skill.trim());
   const rulesChanged = settings !== null && JSON.stringify(rulesToSave) !== JSON.stringify(settings.automations);
@@ -275,6 +279,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
     if (promptChanged) patch.threadPrompt = isDefaultPrompt ? "" : prompt;
     if (keepAliveChanged) patch.keepAliveMinutes = keepAlive;
     if (modeChanged) patch.defaultPermissionMode = mode;
+    if (defaultBackendChanged) patch.defaultBackend = defaultBackend;
     if (rulesChanged) patch.automations = rulesToSave;
     if (Object.keys(patch).length === 0) {
       onClose();
@@ -387,6 +392,17 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
                   />
                 </section>
 
+                <section className="flex items-center justify-between gap-4">
+                  <div className="flex flex-col gap-0.5">
+                    <h3 className={sectionTitle}>Default CLI</h3>
+                    <p className={sectionHint}>What new threads start on. You can still switch mid-flight from a card&apos;s menu.</p>
+                  </div>
+                  <select value={defaultBackend} aria-label="Default CLI" onChange={(e) => { setDefaultBackend(e.target.value as Backend); setSaveError(null); }}
+                    className="rounded-md border border-line-strong bg-canvas px-2.5 py-[7px] text-[12.5px] text-ink outline-none focus:border-accent">
+                    <option value="claude">Claude Code</option> <option value="puku">puku-cli</option>
+                  </select>
+                </section>
+
                 <section className="flex flex-col gap-2">
                   <SectionHeader titleClass={sectionTitle} hintClass={sectionHint} title="Keep conversations open" hint={`A thread's CLI stays open between messages so replies start right away.`} />
                   <select
@@ -415,6 +431,8 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
                 />
               </>
             )}
+
+            <AccountSettings titleClass={sectionTitle} hintClass={sectionHint} />
 
             <section className="flex flex-col gap-2">
               <div className="flex items-center justify-between gap-4">

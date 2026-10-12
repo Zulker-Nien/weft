@@ -1,67 +1,86 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api } from "@/lib/client";
-import { libraryCounts, libraryGroups, libraryItemMenu, libraryPinned, setLibraryPinned, todoProgress, type LibraryItemAction, type LibraryView } from "@/lib/library-view";
-import { LIBRARY_KINDS, type Card, type LibraryItem, type LibraryKind } from "@/lib/types";
+import { railPinned, setRailPinned, starredCount, toggleTag, type RailFilter, type RailPanel } from "@/lib/rail-view";
+import type { Card } from "@/lib/types";
+import { useVault } from "@/lib/use-vault";
+import { filterVaults, railBadge } from "@/lib/vault-view";
+import { useVercel } from "@/lib/use-vercel";
+import { vercelTitle } from "@/lib/vercel-view";
+import { useSupabase } from "@/lib/use-supabase";
+import { supabaseTitle } from "@/lib/supabase-view";
+import { useBlastcp } from "@/lib/use-blastcp";
+import { blastcpTitle } from "@/lib/blastcp-view";
+import BlastcpDrawer from "./BlastcpDrawer";
+import BlastcpLogo from "./BlastcpLogo";
+import RailIconButton from "./RailIconButton";
+import CrashGuard from "./CrashGuard";
 import Icon from "./Icon";
+import VaultButton from "./VaultButton";
+import VaultDrawer from "./VaultDrawer";
+import VercelDrawer from "./VercelDrawer";
+import SupabaseDrawer from "./SupabaseDrawer";
+import SupabaseLogo from "./SupabaseLogo";
+import TagsDrawer from "./TagsDrawer";
+import type { TagCatalog } from "./use-tag-catalog";
 
-// The library (lib/library.ts) on the board's left edge: a 38px rail of ↻ ☑ ✎ with counts, and a drawer
-// that slides over the board (or, pinned, pushes it over). Drop a card on an icon to file it there.
-export default function LibraryRail({
+// The board's left edge: a 38px rail. ★ filters the board to starred cards (drop a card on it to star it),
+// 🏷 opens the drawer of every tag (components/TagsDrawer.tsx; a tag there filters the board). The drawer
+// slides over the board, or, pinned, pushes it over. Below a divider, 🔐 opens the same drawer on the secrets
+// vault of the board's project(s), and ▲ on their Vercel links, Supabase's bolt on their Supabase projects,
+// and BlastCP's rocket on the BlastCP property each one posts as.
+// The drawers under the divider, each with its icon, title and label.
+const TOOLS = { vault: ["🔐", "Secrets", "Secrets vault"], vercel: ["▲", "Vercel", "Vercel"], supabase: [<SupabaseLogo key="supabase" />, "Supabase", "Supabase"], blastcp: [<BlastcpLogo key="blastcp" />, "BlastCP", "BlastCP"] } as const;
+type Tool = keyof typeof TOOLS;
+const isTool = (panel: RailPanel | null): panel is Tool => panel !== null && panel in TOOLS;
+
+export default function SideRail({
   open,
   onOpen,
   project,
+  folders,
   cards,
-  version,
-  onStar,
-  onOpenItem,
-  onRun,
-  onOpenCard,
+  filter,
+  onFilter,
+  onStarCard,
+  onTagCard,
+  catalog,
+  onOpenUrl,
   notify,
 }: {
   // Which drawer is open, if any.
-  open: LibraryKind | null;
-  onOpen: (kind: LibraryKind | null) => void;
+  open: RailPanel | null;
+  onOpen: (panel: RailPanel | null) => void;
   // The board's selected project folder, or null for all of them.
   project: string | null;
+  // The folders whose vaults 🔐 shows: every project on the board (its filter starts on project).
+  folders: string[];
   cards: Card[];
-  // Bumped when the library changes on the server ("library" events), to reload.
-  version: number;
-  onStar: (cardId: string, kind: LibraryKind) => void;
-  // Shows a to-do's or note's page in the browser pane.
-  onOpenItem: (item: LibraryItem) => void;
-  // Opens the New thread dialog on a recipe.
-  onRun: (item: LibraryItem) => void;
-  onOpenCard: (cardId: string) => void;
+  // ★ and the tag the board is narrowed to (lib/rail-view.ts filterCards).
+  filter: RailFilter;
+  onFilter: (filter: RailFilter) => void;
+  // A card dropped on ★, or on a tag in the drawer.
+  onStarCard: (cardId: string) => void;
+  onTagCard: (cardId: string, tag: string) => void;
+  // Every tag with its colour and count, and the calls that change them (components/use-tag-catalog.ts).
+  catalog: TagCatalog;
+  // Shows a page (a deploy) in the board's browser pane.
+  onOpenUrl: (url: string) => void;
   notify: (err: unknown) => void;
 }) {
-  const [items, setItems] = useState<LibraryItem[]>([]);
-  const [chosenView, setView] = useState<LibraryView>("project");
-  const [pinned, setPinned] = useState(() => typeof window !== "undefined" && libraryPinned());
-  const [dropOn, setDropOn] = useState<LibraryKind | null>(null);
-  // A card is being dragged somewhere on the board: the rail lights up to show it takes drops.
+  const [pinned, setPinned] = useState(() => typeof window !== "undefined" && railPinned());
+  // A card is being dragged somewhere on the board: ★ and 🏷 light up to show they take drops.
   const [cardDrag, setCardDrag] = useState(false);
-  // With every project on the board, "This project" means nothing.
-  const view: LibraryView = chosenView === "project" && !project ? "all" : chosenView;
-
-  useEffect(() => {
-    let live = true;
-    api
-      .library(project, view === "all")
-      .then(({ items }) => live && setItems(items))
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, [project, view, version]);
+  const vault = useVault(folders);
+  const vaultBadge = railBadge(filterVaults(vault.overview?.vaults ?? [], project));
+  const vercel = useVercel(folders, open === "vercel");
+  const supabase = useSupabase(folders, open === "supabase");
+  const blastcp = useBlastcp(folders, open === "blastcp");
+  const starred = starredCount(cards);
 
   useEffect(() => {
     const start = (e: DragEvent) => setCardDrag(e.target instanceof Element && e.target.closest("[data-card-id]") !== null);
-    const end = () => {
-      setCardDrag(false);
-      setDropOn(null);
-    };
+    const end = () => setCardDrag(false);
     window.addEventListener("dragstart", start);
     window.addEventListener("dragend", end);
     window.addEventListener("drop", end);
@@ -72,56 +91,25 @@ export default function LibraryRail({
     };
   }, []);
 
-  const counts = libraryCounts(items, view, project);
-  const runs = (id: string) => cards.filter((c) => c.recipeId === id).length;
-
   function pin(next: boolean) {
     setPinned(next);
-    setLibraryPinned(next);
+    setRailPinned(next);
   }
 
-  function drop(kind: LibraryKind, e: React.DragEvent) {
-    e.preventDefault();
-    setDropOn(null);
-    const id = e.dataTransfer.getData("text/plain");
-    if (id && cards.some((c) => c.id === id)) onStar(id, kind);
-  }
+  const onDropStar = (id: string) => {
+    if (cards.some((c) => c.id === id)) onStarCard(id);
+  };
 
-  async function itemMenu(item: LibraryItem, e: React.MouseEvent) {
-    const shell = window.threadboard;
-    if (!shell?.popupMenu) return;
-    e.preventDefault();
-    const card = item.cardId ? cards.find((c) => c.id === item.cardId) : undefined;
-    const picked = (await shell.popupMenu(libraryItemMenu(item, Boolean(card)))) as LibraryItemAction | null;
-    if (!picked) return;
-    const actions: Record<LibraryItemAction, () => unknown> = {
-      run: () => onRun(item),
-      open: () => onOpenItem(item),
-      card: () => card && onOpenCard(card.id),
-      scope: () => api.updateLibraryItem(item.id, { scope: item.scope === "mine" ? "project" : "mine" }),
-      kind: () => api.updateLibraryItem(item.id, { kind: item.kind === "todo" ? "note" : "todo" }),
-      remove: () => api.removeLibraryItem(item.id),
-    };
-    try {
-      await actions[picked]();
-    } catch (err) {
-      notify(err);
-    }
-  }
-
-  const kind = LIBRARY_KINDS.find((k) => k.id === open);
-  const groups = open ? libraryGroups(items, open, view, project) : [];
-
-  const drawer = kind && (
+  const drawerShell = ([icon, title, label]: readonly [React.ReactNode, string, string], body: React.ReactNode) => (
     <aside
       className={`flex w-[260px] shrink-0 flex-col border-r border-line bg-panel ${pinned ? "" : "absolute bottom-0 left-full top-0 z-20 shadow-[6px_0_18px_rgb(0_0_0/0.12)]"}`}
-      aria-label={`Library: ${kind.plural}`}
+      aria-label={label}
     >
       <div className="flex items-center gap-1.5 border-b border-line px-3 py-2">
         <span className="text-[14px]" aria-hidden>
-          {kind.icon}
+          {icon}
         </span>
-        <h2 className="flex-1 text-[13px] font-semibold text-ink">{kind.plural}</h2>
+        <h2 className="flex-1 text-[13px] font-semibold text-ink">{title}</h2>
         <button
           onClick={() => pin(!pinned)}
           title={pinned ? "Unpin: slide over the board" : "Pin: keep it open beside the board"}
@@ -134,88 +122,42 @@ export default function LibraryRail({
           <Icon name="x" size={13} />
         </button>
       </div>
-
-      <div className="mx-3 my-2 flex rounded-md border border-line-strong p-0.5 text-[11.5px]" role="group" aria-label="Show">
-        {(
-          [
-            ["project", "This project"],
-            ["mine", "Mine"],
-            ["all", "All"],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            disabled={id === "project" && !project}
-            onClick={() => setView(id)}
-            aria-pressed={view === id}
-            title={id === "project" && !project ? "Pick a project in the bar above first" : undefined}
-            className={`flex-1 rounded px-1.5 py-0.5 disabled:opacity-40 ${view === id ? "bg-sunken font-medium text-ink" : "text-muted hover:text-ink"}`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-        {groups.length === 0 && (
-          <p className="px-2 py-4 text-center text-[11.5px] leading-snug text-faint">
-            {open === "recipe"
-              ? "Keep a card's prompt to run again with new blanks:"
-              : open === "todo"
-                ? "Keep a card whose result is steps for you to do; its page keeps your ticks:"
-                : "Keep a card's answer to look up later:"}
-            <span className="mt-2 block text-left text-muted">
-              · hover a card and click <b className="text-warn">☆</b>
-              <br />· or click ☆ at the top of an open thread
-              <br />· or drag the card onto {LIBRARY_KINDS.find((k) => k.id === open)?.icon} here
-            </span>
-          </p>
-        )}
-        {groups.map((group) => (
-          <section key={group.key}>
-            <h3 className="px-1.5 pb-1 pt-2.5 text-[10.5px] font-semibold uppercase tracking-wider text-faint">{group.label}</h3>
-            {group.items.map((item) => (
-              <Row key={item.id} item={item} runs={runs(item.id)} onClick={() => (item.kind === "recipe" ? onRun(item) : onOpenItem(item))} onContextMenu={(e) => void itemMenu(item, e)} />
-            ))}
-          </section>
-        ))}
-      </div>
+      {/* A drawer that fails to draw keeps its header (Pin, ✕) and leaves the rail's icons working. */}
+      <CrashGuard key={title} what="drawer" name={title} className="m-2">
+        {body}
+      </CrashGuard>
     </aside>
   );
 
+  const toolBodies: Record<Tool, React.ReactNode> = {
+    vault: <VaultDrawer {...vault} project={project} notify={notify} />,
+    vercel: <VercelDrawer {...vercel} project={project} onOpenUrl={onOpenUrl} notify={notify} />,
+    supabase: <SupabaseDrawer {...supabase} project={project} onOpenUrl={onOpenUrl} notify={notify} />,
+    blastcp: <BlastcpDrawer {...blastcp} project={project} onOpenUrl={onOpenUrl} notify={notify} />,
+  };
+  const drawer = isTool(open)
+    ? drawerShell(TOOLS[open], toolBodies[open])
+    : open === "tags" &&
+      drawerShell(
+        ["🏷", "Tags", "Tags"],
+        <TagsDrawer catalog={catalog} active={filter.tag} onFilter={(tag) => onFilter(toggleTag(filter, tag))} onDropCard={onTagCard} />,
+      );
+  const toggle = (panel: Tool) => () => onOpen(open === panel ? null : panel);
+
   return (
     <div className="relative flex shrink-0">
-      <nav className="flex w-[38px] flex-col items-center gap-1 border-r border-line bg-panel pt-2" aria-label="Library">
-        {LIBRARY_KINDS.map((k) => {
-          const count = counts[k.id];
-          return (
-            <button
-              key={k.id}
-              onClick={() => onOpen(open === k.id ? null : k.id)}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDropOn(k.id);
-              }}
-              onDragLeave={() => setDropOn((d) => (d === k.id ? null : d))}
-              onDrop={(e) => drop(k.id, e)}
-              title={`${k.plural}${k.id === "recipe" ? ": cards to run again" : k.id === "todo" ? ": steps for you" : ": answers to keep"} · drop a card here to file it`}
-              aria-pressed={open === k.id}
-              className={`relative grid size-7 place-items-center rounded-md text-[14px] ${open === k.id || cardDrag ? "bg-accent-soft text-accent" : "text-muted hover:bg-sunken hover:text-ink"} ${dropOn === k.id ? "outline-2 outline-offset-2 outline-dashed outline-accent" : cardDrag ? "ring-1 ring-accent" : ""}`}
-            >
-              <span aria-hidden>{k.icon}</span>
-              <span className="sr-only">{k.plural}</span>
-              {count > 0 && (
-                <span className="absolute -right-1 -top-1 min-w-[14px] rounded-full bg-accent px-1 text-center text-[9px] font-semibold leading-[14px] text-on-accent">
-                  {count}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      <nav className="flex w-[38px] flex-col items-center gap-1 border-r border-line bg-panel pt-2" aria-label="Rail">
+        <StarRailButton on={Boolean(filter.starred)} count={starred} cardDrag={cardDrag} onClick={() => onFilter({ ...filter, starred: !filter.starred })} onDropCard={onDropStar} />
+        <TagsRailButton open={open === "tags"} tag={filter.tag} cardDrag={cardDrag} onOpen={(next) => onOpen(next ? "tags" : null)} />
+        <span className="my-1 h-px w-5 bg-line" aria-hidden />
+        <VaultButton open={open === "vault"} badge={vaultBadge} onClick={() => onOpen(open === "vault" ? null : "vault")} />
+        <RailIconButton icon="▲" label="Vercel" open={open === "vercel"} title={vercelTitle(vercel.status, project)} onClick={toggle("vercel")} />
+        <RailIconButton icon={<SupabaseLogo />} label="Supabase" open={open === "supabase"} title={supabaseTitle(supabase.status, project)} onClick={toggle("supabase")} />
+        <RailIconButton icon={<BlastcpLogo />} label="BlastCP" open={open === "blastcp"} title={blastcpTitle(blastcp.status, project)} onClick={toggle("blastcp")} />
       </nav>
       {cardDrag && !open && (
         <span className="pointer-events-none absolute left-full top-2 z-30 ml-1.5 whitespace-nowrap rounded-md bg-ink px-2 py-1 text-[11.5px] text-canvas shadow-lg">
-          Drop on ↻ recipe · ☑ to-do · ✎ note to keep it
+          Drop on ☆ to star it · 🏷 to tag it
         </span>
       )}
       {drawer}
@@ -223,38 +165,51 @@ export default function LibraryRail({
   );
 }
 
-function Row({ item, runs, onClick, onContextMenu }: { item: LibraryItem; runs: number; onClick: () => void; onContextMenu: (e: React.MouseEvent) => void }) {
-  const progress = todoProgress(item);
+// ★: filters the board to starred cards (again shows every card); its badge counts them. Drop a card on it to star it.
+function StarRailButton({ on, count, cardDrag, onClick, onDropCard }: { on: boolean; count: number; cardDrag: boolean; onClick: () => void; onDropCard: (cardId: string) => void }) {
+  const [dropOn, setDropOn] = useState(false);
   return (
-    <div
-      role="button"
-      tabIndex={0}
+    <button
       onClick={onClick}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") onClick();
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDropOn(true);
       }}
-      onContextMenu={onContextMenu}
-      title={item.description || item.title}
-      className="mb-1.5 cursor-pointer rounded-lg border border-line bg-card px-2.5 py-2 outline-none hover:border-line-strong focus-visible:ring-2 focus-visible:ring-accent"
+      onDragLeave={() => setDropOn(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDropOn(false);
+        const id = e.dataTransfer.getData("text/plain");
+        if (id) onDropCard(id);
+      }}
+      title={on ? "Showing starred cards · click to show every card" : "Show only starred cards · drop a card here to star it"}
+      aria-pressed={on}
+      className={`relative grid size-7 place-items-center rounded-md text-[15px] ${on || cardDrag ? "bg-accent-soft text-warn" : "text-muted hover:bg-sunken hover:text-warn"} ${dropOn ? "outline-2 outline-offset-2 outline-dashed outline-accent" : cardDrag ? "ring-1 ring-accent" : ""}`}
     >
-      <div className="flex items-start gap-2">
-        <span className="line-clamp-2 min-w-0 flex-1 text-[12.5px] font-medium leading-snug text-ink">{item.title}</span>
-        {item.kind === "recipe" && (
-          <span className="shrink-0 rounded bg-accent px-1.5 text-[10.5px] font-medium leading-[18px] text-on-accent">Run</span>
-        )}
-      </div>
-      {progress && (
-        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-sunken" aria-hidden>
-          <div className="h-full rounded-full bg-ok" style={{ width: `${Math.round(progress.fraction * 100)}%` }} />
-        </div>
-      )}
-      <div className="mt-1 text-[10.5px] text-faint">
-        {item.kind === "recipe"
-          ? `${item.blanks?.length ? item.blanks.map((b) => `{${b.name}}`).join(" ") + " · " : ""}${runs ? `used ${runs}×` : "not run yet"}`
-          : progress
-            ? progress.label
-            : new Date(item.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-      </div>
-    </div>
+      <span aria-hidden>{on ? "★" : "☆"}</span>
+      <span className="sr-only">Starred cards</span>
+      {count > 0 && <span className="absolute -right-1 -top-1 min-w-[14px] rounded-full bg-accent px-1 text-center text-[9px] font-semibold leading-[14px] text-on-accent">{count}</span>}
+    </button>
+  );
+}
+
+// 🏷: opens the tags drawer; a dot when the board is filtered to a tag. Dragging a card over it opens the
+// drawer, so the card can drop on a tag.
+function TagsRailButton({ open, tag, cardDrag, onOpen }: { open: boolean; tag?: string; cardDrag: boolean; onOpen: (open: boolean) => void }) {
+  return (
+    <button
+      onClick={() => onOpen(!open)}
+      onDragOver={(e) => {
+        e.preventDefault();
+        if (!open) onOpen(true);
+      }}
+      title={tag ? `Showing #${tag} · open the tags` : "Tags: filter the board, add, rename, recolour"}
+      aria-pressed={open}
+      className={`relative grid size-7 place-items-center rounded-md text-[14px] ${open || tag || cardDrag ? "bg-accent-soft text-accent" : "text-muted hover:bg-sunken hover:text-ink"} ${cardDrag ? "ring-1 ring-accent" : ""}`}
+    >
+      <span aria-hidden>🏷</span>
+      <span className="sr-only">Tags</span>
+      {tag && <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-accent ring-2 ring-panel" aria-label={`Filtered to ${tag}`} />}
+    </button>
   );
 }

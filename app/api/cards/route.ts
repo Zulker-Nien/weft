@@ -5,11 +5,12 @@ import { prewarm } from "@/lib/copilot";
 import { resolveFolder } from "@/lib/folders";
 import { asText, titleFromPrompt } from "@/lib/format";
 import { fail, guard } from "@/lib/guard";
-import { getItem } from "@/lib/library";
 import { projectRoot } from "@/lib/repos";
 import { sendMessage } from "@/lib/runner";
 import { defaultPermissionMode, listProjects, touchProject } from "@/lib/settings";
 import { createCard, getCard, listCards } from "@/lib/store";
+import { rememberTags } from "@/lib/tag-store";
+import { normalizeTags } from "@/lib/tags";
 import { MODES, type Backend, type Effort, type PermissionMode } from "@/lib/types";
 
 const BACKENDS: Backend[] = ["claude", "puku"];
@@ -54,10 +55,21 @@ export async function POST(req: Request) {
 
     const effort = backend === "claude" && EFFORTS.includes(body.effort as Effort) ? (body.effort as Effort) : undefined;
 
-    // Only a recipe that's really in the library; its runs show on its page.
-    const recipeId = typeof body.recipeId === "string" && getItem(body.recipeId)?.kind === "recipe" ? body.recipeId : undefined;
+    // Tags given here are yours, so retitle won't pick others (lib/retitle.ts); new ones join the catalog.
+    const tags = Array.isArray(body.tags) ? normalizeTags(body.tags.map((t) => asText(t))) : [];
+    rememberTags(tags);
 
-    const card = createCard({ title, ...(typedTitle ? { titleBy: "user" as const } : {}), prompt, cwd, backend, permissionMode, model, effort, ...(recipeId ? { recipeId } : {}) });
+    const card = createCard({
+      title,
+      ...(typedTitle ? { titleBy: "user" as const } : {}),
+      prompt,
+      cwd,
+      backend,
+      permissionMode,
+      model,
+      effort,
+      ...(tags.length ? { tags, tagsBy: "user" as const } : {}),
+    });
     touchProject(cwd);
     if (body.start) sendMessage(card.id, firstMessage(card));
     return Response.json({ card: getCard(card.id) });

@@ -6,7 +6,7 @@ import { api, mergeThread, type BrowserState, type MenuAction, type NewCardInput
 import { worktreeParent } from "@/lib/format";
 import { busyHere } from "@/lib/overlap";
 import { planResets } from "@/lib/schedule";
-import { COLUMNS, type BoardEvent, type Card, type Column, type LibraryItem, type LibraryKind, type LoginView, type Project, type ThreadItem } from "@/lib/types";
+import { COLUMNS, type BoardEvent, type Card, type Column, type LoginView, type Project, type ThreadItem } from "@/lib/types";
 import { useShortcutHint, useShortcutListener, useShortcuts } from "@/lib/hotkeys";
 import { playChime, preloadChimes } from "@/lib/chimes";
 import {
@@ -16,41 +16,56 @@ import {
   SORTERS,
   stepThrough,
   summarizeProjects,
-  type ProjectSummary,
   topMatches,
   type SortKey,
 } from "@/lib/board-view";
 import { useBoardEvents } from "@/lib/use-events";
 import { useDesktopBridge } from "@/lib/use-desktop-bridge";
 import { useStartupCheck } from "@/lib/use-startup-check";
+import { readViewPrefs, writeViewPrefs } from "@/lib/view-prefs";
 import { useNow } from "@/lib/use-now";
 import { useToast } from "@/lib/use-toast";
+import { useCopilotCard } from "@/lib/use-copilot-card";
 import { resumeActions } from "@/lib/resume-actions";
 import { archivedMessage, neighborAfter } from "@/lib/archive";
 import { useEscape } from "@/lib/use-escape";
-import BrowserPane from "./BrowserPane";
+import { announceAccountChange } from "@/lib/use-account";
+import ColumnPlaceholder from "./ColumnPlaceholder";
 import CrashGuard from "./CrashGuard";
-import CommandPalette, { type PaletteItem } from "./CommandPalette";
+import { guarded } from "./guarded";
+import type { PaletteItem } from "./CommandPalette";
 import { boardPaletteItems, promptItems } from "./board-palette";
 import { boardShortcuts } from "./board-shortcuts";
+import { addSecret } from "@/lib/use-vault";
 import Icon from "./Icon";
-import { leavesBoard, libraryPinned } from "@/lib/library-view";
-import LibraryRail from "./LibraryRail";
-import ColumnSection from "./ColumnSection";
-import { useSwitchAll } from "./switch-all-button";
-import HeaderBadges from "./HeaderBadges";
-import LoginDialog from "./LoginDialog";
-import NewCardDialog from "./NewCardDialog";
+import ColumnHeader from "./ColumnHeader";
+import { filterCards, isFiltering, railPinned, addTag, toggleTag, type RailFilter, type RailPanel } from "@/lib/rail-view";
+import { TagColors } from "./TagPill";
+import { useTagCatalog } from "./use-tag-catalog";
 import { useBoardMenus } from "./use-board-menus";
+import { useSwitchAll } from "./switch-all-button";
 import ProjectBar, { folderName } from "./ProjectBar";
 import FilterBox from "./FilterBox";
-import SettingsDialog from "./SettingsDialog";
-import ShortcutsDialog from "./ShortcutsDialog";
-import BoardFooter from "./BoardFooter";
-import ModifierHint from "./ModifierHint";
-import TerminalDrawer from "./TerminalDrawer";
-import ThreadPanel from "./ThreadPanel";
 import { NO_DRAG } from "@/lib/no-drag";
+
+// Each loads in its own CrashGuard (components/guarded.tsx), so a piece a thread left half-written, even one that
+// fails as its module loads, breaks only its own spot on the board.
+const AccountButton = guarded(() => import("./AccountButton"), { inline: true, what: "account button" });
+const CopilotButton = guarded(() => import("./CopilotButton"), { inline: true, what: "copilot button" });
+const BrowserPane = guarded(() => import("./BrowserPane"), { what: "browser pane", className: "m-3 w-[360px] self-start" });
+const CardView = guarded(() => import("./CardView"), { what: "card" });
+const SideRail = guarded(() => import("./LibraryRail"), { what: "rail", className: "m-3 w-[220px] self-start" });
+const TagsDialog = guarded(() => import("./TagsDialog"), { what: "tags dialog", className: "fixed left-4 top-16 z-50" });
+const HeaderBadges = guarded(() => import("./HeaderBadges"), { inline: true, what: "header badges" });
+const BoardFooter = guarded(() => import("./BoardFooter"), { what: "footer" });
+const ModifierHint = guarded(() => import("./ModifierHint"), { inline: true, what: "modifier hint", className: "fixed bottom-2 right-2 z-50" });
+const LoginDialog = guarded(() => import("./LoginDialog"), { what: "login dialog", className: "fixed left-4 top-16 z-50" });
+const NewCardDialog = guarded(() => import("./NewCardDialog"), { what: "New thread dialog", className: "m-3 w-[360px] self-start" });
+const SettingsDialog = guarded(() => import("./SettingsDialog"), { what: "settings", className: "fixed left-4 top-16 z-50" });
+const ShortcutsDialog = guarded(() => import("./ShortcutsDialog"), { what: "shortcuts sheet", className: "fixed left-4 top-16 z-50" });
+const TerminalDrawer = guarded(() => import("./TerminalDrawer"), { what: "terminal", className: "m-3" });
+const ThreadPanel = guarded(() => import("./ThreadPanel"), { what: "thread", className: "m-3 w-[360px] self-start" });
+const CommandPalette = guarded(() => import("./CommandPalette"), { what: "command palette", className: "fixed left-4 top-16 z-50" });
 
 // The browser pane's page beside the New thread dialog (not a card's).
 const NEW_THREAD_PANE = "new-thread";
@@ -65,30 +80,15 @@ const CLOSED_BROWSER: BrowserState = {
   zoom: 100,
 };
 
+// Cards shown per column until "Show more"; picking up Claude Code sessions can put hundreds in one.
+const COLUMN_LIMIT = 40;
 // Cards the filter box lists under itself while typing.
 const FILTER_MATCHES = 5;
-
-// The selected project and sort order, remembered per browser.
-const VIEW_PREFS = "threadboard.view";
-
-function readPrefs(): { project?: string | null; sort?: SortKey } {
-  try {
-    return JSON.parse(localStorage.getItem(VIEW_PREFS) ?? "{}") as { project?: string | null; sort?: SortKey };
-  } catch {
-    return {};
-  }
-}
 
 function without(set: ReadonlySet<string>, id: string) {
   const next = new Set(set);
   next.delete(id);
   return next;
-}
-
-function writePrefs(prefs: { project: string | null; sort: SortKey }) {
-  try {
-    localStorage.setItem(VIEW_PREFS, JSON.stringify(prefs));
-  } catch {}
 }
 
 function lastFolder() {
@@ -132,21 +132,21 @@ export default function Board() {
   const [showNew, setShowNew] = useState(false);
   // The folder "New Thread in This Folder" asked for; otherwise the dialog picks.
   const [newCwd, setNewCwd] = useState<string | undefined>();
-  // The library recipe the New thread dialog runs, if it was opened from one.
-  const [recipe, setRecipe] = useState<LibraryItem | null>(null);
-  // The library rail's open drawer; libraryVersion bumps on "library" events so it reloads.
-  const [libraryOpen, setLibraryOpen] = useState<LibraryKind | null>(null);
-  const [libraryVersion, setLibraryVersion] = useState(0);
-  // A library page to show in the pane once the open card has closed (closing it hides the pane).
-  const libraryPage = useRef<string | null>(null);
+  // The left rail's open drawer (🏷 tags, 🔐 and the tools under it).
+  const [libraryOpen, setLibraryOpen] = useState<RailPanel | null>(null);
+  // ★ and 🏷 on the rail narrow the board to starred cards, a tag, or both.
+  const [railFilter, setRailFilter] = useState<RailFilter>({});
   // The card opened from Rename…, so its title opens ready to edit.
   const [renameId, setRenameId] = useState<string | null>(null);
+  // The card just started from New thread, so its reply box opens focused and the keyboard stays in the board.
+  const [startedId, setStartedId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<Column | null>(null);
   const [webBrowserOpen, setWebBrowserOpen] = useState(false);
   const [browserWidth, setBrowserWidth] = useState(560);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalHeight, setTerminalHeight] = useState(240);
-  const [copilotNeedsYou, setCopilotNeedsYou] = useState(false);
+  const { copilot, update: updateCopilot, load: loadCopilot } = useCopilotCard();
+  const copilotNeedsYou = copilot?.column === "needs_you";
   const [projects, setProjects] = useState<Project[]>([]);
   const [project, setProject] = useState<string | null>(null);
   // Worktree folder -> its main repo, from the server; the bar shows each worktree's cards under that repo.
@@ -168,7 +168,6 @@ export default function Board() {
   const columns = useRef(new Map<string, Column>());
   // Each card's last known error, to chime when a new one appears.
   const errors = useRef(new Map<string, string | undefined>());
-  const copilotColumn = useRef<Column | null>(null);
   // Moves you made, by card: where to and when, so their chime is skipped.
   const ownMoves = useRef(new Map<string, { column: Column; at: number }>());
   const selectedRef = useRef<string | null>(null);
@@ -222,6 +221,7 @@ export default function Board() {
       selectedRef.current = id;
       setSelectedId(id);
       setRenameId(null);
+      setStartedId(null);
       if (id) setUnseen((prev) => (prev.has(id) ? without(prev, id) : prev));
       setThread([]);
       setStreaming("");
@@ -235,13 +235,9 @@ export default function Board() {
     (event: BoardEvent) => {
       switch (event.type) {
         case "card":
-          // The copilot is a thread too, but it has its own window.
+          // The copilot is a thread too, but it has its own window and no project.
           if (event.card.role === "copilot") {
-            if (copilotColumn.current && copilotColumn.current !== "needs_you" && event.card.column === "needs_you") {
-              playChime("needs_you");
-            }
-            copilotColumn.current = event.card.column;
-            setCopilotNeedsYou(event.card.column === "needs_you");
+            updateCopilot(event.card);
             break;
           }
           {
@@ -282,7 +278,7 @@ export default function Board() {
         case "thread":
           if (event.cardId !== selectedRef.current) break;
           setThread((prev) => {
-            const next = prev.slice();
+            const next = event.truncate ? prev.slice(0, event.index) : prev.slice();
             next[event.index] = event.item;
             return next;
           });
@@ -291,8 +287,8 @@ export default function Board() {
         case "delta":
           if (event.cardId === selectedRef.current) setStreaming((text) => text + event.text);
           break;
-        case "library":
-          setLibraryVersion((v) => v + 1);
+        case "account":
+          announceAccountChange();
           break;
         case "projects":
           resolveFolders(event.projects.map((p) => p.path));
@@ -324,16 +320,10 @@ export default function Board() {
           setProjects(settings.projects);
         })
         .catch(() => {});
-      const prefs = readPrefs();
+      const prefs = readViewPrefs();
       if (prefs.project !== undefined) setProject(prefs.project);
       if (prefs.sort && prefs.sort in SORTERS) setSort(prefs.sort);
-      api
-        .copilot()
-        .then(({ card }) => {
-          copilotColumn.current = card.column;
-          setCopilotNeedsYou(card.column === "needs_you");
-        })
-        .catch(() => {});
+      loadCopilot();
       if (selectedRef.current) loadThread(selectedRef.current);
     },
   );
@@ -344,8 +334,7 @@ export default function Board() {
     const bridge = window.threadboard;
     if (!showNew || !bridge) return;
     const before = bridge.browser.getState();
-    // Run from a recipe, the pane shows the recipe's page: its blanks, what it makes and its last runs.
-    const page = recipe ? Promise.resolve({ url: libraryPageUrl(recipe.id) }) : api.newThreadPage(newCwd ?? project);
+    const page = api.newThreadPage();
     const shown = page.then(({ url }) => bridge.browser.open(url, NEW_THREAD_PANE)).catch(() => {});
     return () => {
       void Promise.all([before, shown]).then(([state]) => {
@@ -353,15 +342,7 @@ export default function Board() {
         if (!selectedRef.current) bridge.browser.setVisible(state.visible);
       });
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the folder is read once, as the dialog opens
-  }, [showNew, recipe]);
-
-  // After the bridge has put the board's own browser back on screen (lib/use-desktop-bridge.ts runs first).
-  useEffect(() => {
-    if (!libraryPage.current || selectedId) return;
-    showPage(libraryPage.current);
-    libraryPage.current = null;
-  }, [selectedId]);
+  }, [showNew]);
 
   // The menu, dock, tray, and shortcuts reach the board through onMenu, which always sees the latest state.
   useEffect(() => {
@@ -385,39 +366,39 @@ export default function Board() {
         case "terminal":
           toggleTerminal();
           break;
-        // A recipe picked on the New thread page (weft://recipe/<id>).
-        case "run-recipe":
-          if (payload) runRecipe(payload);
-          break;
       }
     };
   });
 
   useEffect(() => window.threadboard?.onMenu((action, payload) => onMenu.current(action, payload)), []);
 
-  const filtering = Boolean(project || query.trim());
+  const filtering = Boolean(project || query.trim() || isFiltering(railFilter));
   // Picking another project or changing the filter collapses the columns again.
-  const view = `${project ?? ""}\n${query.trim()}`;
+  const view = `${project ?? ""}\n${query.trim()}\n${railFilter.starred ? "★" : ""}${railFilter.tag ?? ""}`;
   const expandedColumns = expanded.view === view ? expanded.columns : [];
 
   const byColumn = useMemo(
-    () => groupByColumn(cards, { project, query, sort, showArchived }, rootOf),
-    [cards, project, query, sort, showArchived, rootOf],
+    () => groupByColumn(filterCards(cards, railFilter), { project, query, sort, showArchived }, rootOf),
+    [cards, railFilter, project, query, sort, showArchived, rootOf],
   );
   const archivedCount = cards.filter((c) => c.archived && (!project || rootOf(c.cwd) === project)).length;
   // The Done cards on screen that Shift+E and "Archive all" file away.
-  const { resume } = resumeActions([], notify);
-  const doneToArchive = (byColumn.get("done") ?? []).filter((c) => !c.archived);
+  const doneToArchive = (byColumn.get("done") ?? []).filter((c) => !c.archived && c.column === "done");
+  const { resume, all: resumeAll } = resumeActions(byColumn.get("review") ?? [], notify);
   // Backlog hides unless Settings turns it on, but never hides cards waiting in it.
   const backlogOn = useSyncExternalStore(subscribeBoardPrefs, showBacklog, () => false);
   const visibleColumns = COLUMNS.filter(
     (c) => c.id !== "backlog" || backlogOn || cards.some((card) => card.column === "backlog" && !card.archived),
   );
 
-  const projectSummaries = useMemo<ProjectSummary[]>(
-    () => summarizeProjects(projects, cards, rootOf),
-    [projects, cards, rootOf],
-  );
+  const projectSummaries = useMemo(() => summarizeProjects(projects, cards, rootOf), [projects, cards, rootOf]);
+
+  // The 🔐 drawer's vaults: every project's on the board, so you can add secrets to any of them and copy
+  // between them; its filter starts on the selected project.
+  const railFolders = useMemo(() => {
+    const paths = projects.map((p) => p.path);
+    return project && !paths.includes(project) ? [project, ...paths] : paths;
+  }, [project, projects]);
 
   const selected = cards.find((c) => c.id === selectedId) ?? null;
   // An open card, or the New thread form, fills a framed window with the browser pane beside it.
@@ -520,6 +501,7 @@ export default function Board() {
         toggleTerminal,
         openSettings: () => setShowSettings(true),
         openHelp: () => setShowHelp(true),
+        addSecret: () => addSecret(setLibraryOpen),
         jumpToNeedsYou: () => void jumpToNeedsYou(),
         archiveCards,
         unarchive,
@@ -532,6 +514,7 @@ export default function Board() {
         move,
         chooseProject,
         openCard,
+        toast: setToast,
       },
     );
   }
@@ -586,18 +569,17 @@ export default function Board() {
       else setWebBrowserOpen(false);
     }
     setProject(path);
-    writePrefs({ project: path, sort });
+    writeViewPrefs({ project: path, sort });
     // Have a CLI ready in that folder for the next new thread.
     if (path) api.warm({ cwd: path }).catch(() => {});
   }
 
   function chooseSort(next: SortKey) {
     setSort(next);
-    writePrefs({ project, sort: next });
+    writeViewPrefs({ project, sort: next });
   }
 
   function openNew(folder?: string) {
-    setRecipe(null);
     setNewCwd(folder);
     setShowNew(true);
     const cwd = folder ?? project ?? lastFolder();
@@ -637,58 +619,11 @@ export default function Board() {
     return cards.find((c) => c.id === el?.dataset.cardId) ?? selected ?? undefined;
   }
 
-
-  // The New thread dialog filled in from a library recipe; a project's recipe runs in its folder.
-  function openRecipe(item: LibraryItem) {
-    select(null);
-    setRecipe(item);
-    setNewCwd(item.scope === "project" ? item.folder : undefined);
-    setShowNew(true);
-    const cwd = item.scope === "project" ? item.folder : (project ?? lastFolder());
-    if (cwd) api.warm({ cwd }).catch(() => {});
-  }
-
-  function runRecipe(id: string) {
-    api
-      .library(null, true)
-      .then(({ items }) => {
-        const item = items.find((i) => i.id === id && i.kind === "recipe");
-        if (item) openRecipe(item);
-        else notify("That recipe isn't in the library any more.");
-      })
-      .catch(notify);
-  }
-
-  function openLibraryItem(item: LibraryItem) {
-    if (!libraryPinned()) setLibraryOpen(null);
-    setShowNew(false);
-    const url = libraryPageUrl(item.id);
-    if (!selectedRef.current) {
-      showPage(url);
-      return;
-    }
-    libraryPage.current = url;
-    select(null);
-  }
-
-  // Files a card in the library. Haiku writes a recipe, so that one takes a few seconds.
-  function star(card: Card, kind: LibraryKind) {
-    // A thread in your home folder has no project, so it's yours.
-    const scope = card.cwd === home ? "mine" : "project";
-    if (kind === "recipe") setToast(`Saving “${card.title}” as a recipe…`);
-    api
-      .star(card.id, kind, scope)
-      .then(({ item }) => {
-        if (leavesBoard(kind, card)) {
-          archiveCards([card], `Starred “${item.title}” as a to-do and took it off the board.`);
-          return;
-        }
-        setToast(
-          kind === "recipe" ? `Saved as the recipe “${item.title}”, /${item.skill}.` : `Starred “${item.title}” as a ${kind === "todo" ? "to-do" : "note"}.`,
-          { label: "Show", run: () => setLibraryOpen(kind) },
-        );
-      })
-      .catch(notify);
+  // A card dropped on a tag in the 🏷 drawer gets that tag.
+  function tagCard(cardId: string, tag: string) {
+    const card = cards.find((c) => c.id === cardId);
+    const next = card && addTag(card.tags, tag);
+    if (next) api.mark(cardId, { tags: next }).catch(notify);
   }
 
   function openCard(card: Card) {
@@ -709,8 +644,8 @@ export default function Board() {
   // and its browser are one window, so they close together.
   useEscape(Boolean(selectedId), () => select(null), { panel: true });
   useEscape(browserOpen && !selectedId && !showNew, toggleBrowser, { panel: true });
-  // Registered last, so an open library drawer closes before the browser does.
-  useEscape(Boolean(libraryOpen) && !selectedId && !showNew && !libraryPinned(), () => setLibraryOpen(null), { panel: true });
+  // Registered last, so an open rail drawer closes before the browser does.
+  useEscape(Boolean(libraryOpen) && !selectedId && !showNew && !railPinned(), () => setLibraryOpen(null), { panel: true });
 
   function toggleTerminal() {
     setTerminalOpen((open) => !open);
@@ -728,6 +663,7 @@ export default function Board() {
     api.move(id, column).catch(notify);
   }
 
+
   function drop(column: Column, e: React.DragEvent) {
     e.preventDefault();
     setDragOver(null);
@@ -736,7 +672,8 @@ export default function Board() {
     if (card && card.column !== column) move(id, column);
   }
 
-  const { onCardMenu, onColumnMenu, onStarMenu } = useBoardMenus({
+  const tagCatalog = useTagCatalog(cards, notify);
+  const { onCardMenu, onColumnMenu, toggleStar, tagging, editTags, saveTags, closeTags } = useBoardMenus({
     doneShown: byColumn.get("done") ?? [],
     archivedCount,
     showArchived,
@@ -754,8 +691,6 @@ export default function Board() {
     },
     openNew,
     toggleArchived: () => setShowArchived((v) => !v),
-    star,
-    showLibrary: setLibraryOpen,
     toast: setToast,
     notify,
   });
@@ -780,12 +715,16 @@ export default function Board() {
   }
 
   // A started card opens right away, so its browser shows the splash-style starter page (lib/glance.ts).
-  async function create(input: NewCardInput) {
+  async function create(input: NewCardInput, opts?: { stay?: boolean }) {
     const { card } = await api.create(input);
-    if (input.start) select(card.id);
+    // Started with ⌃↵: the dialog stays open for the next thread, so don't open this one.
+    if (!input.start || opts?.stay) return;
+    select(card.id);
+    setStartedId(card.id);
   }
 
   return (
+    <TagColors.Provider value={tagCatalog.colors}>
     <div className="flex h-screen flex-col">
       <header
         className={`flex shrink-0 items-center gap-3 border-b border-line bg-panel ${mac ? "app-drag mac-title-bar pr-4" : "px-4 py-2.5"}`}
@@ -800,16 +739,8 @@ export default function Board() {
         </span>
         <HeaderBadges cwd={selected?.cwd ?? project ?? latest?.cwd} cards={cards} start={improveQuality} notify={notify} toast={setToast} />
         <div className="flex-1" />
-        <button
-          onClick={toggleCopilot}
-          title={hint("copilot", "Copilot")}
-          className={`relative flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12.5px] ${copilotOpen ? "border-accent bg-accent-soft text-accent" : "border-line-strong text-ink hover:bg-sunken"}`}
-        >
-          <Icon name="sparkles" size={14} /> Copilot
-          {copilotNeedsYou && (
-            <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-warn" title="The copilot needs you" />
-          )}
-        </button>
+        <CopilotButton open={copilotOpen} needsYou={copilotNeedsYou} title={hint("copilot", "Copilot")} onClick={toggleCopilot} />
+        <AccountButton onOpenSettings={() => setShowSettings(true)} />
         <button
           onClick={toggleBrowser}
           title={hint("browser", "Browser")}
@@ -843,12 +774,15 @@ export default function Board() {
         </button>
       </header>
 
+      <CrashGuard what="project bar" className="mx-3 mt-2">
       <ProjectBar
         projects={projectSummaries}
         total={cards.length}
         selected={project}
         onSelect={chooseProject}
         filter={
+          <>
+          <RailFilterChip filter={railFilter} onClear={setRailFilter} />
           <FilterBox
             query={query}
             onQuery={setQuery}
@@ -856,34 +790,33 @@ export default function Board() {
             onOpen={openCard}
             onSearchAll={() => openPalette(query)}
           />
+          </>
         }
         sort={sort}
         onSort={chooseSort}
         home={home}
         onMenuOpenChange={setMenuOpen}
       />
+      </CrashGuard>
 
       <div className="flex min-h-0 flex-1">
-        <CrashGuard what="library" className="m-3 w-[220px] self-start">
-        <LibraryRail
+        <SideRail
           open={libraryOpen}
           onOpen={setLibraryOpen}
           project={project}
+          folders={railFolders}
           cards={cards}
-          version={libraryVersion}
-          onStar={(id, kind) => {
+          filter={railFilter}
+          onFilter={setRailFilter}
+          onStarCard={(id) => {
             const card = cards.find((c) => c.id === id);
-            if (card) star(card, kind);
+            if (card && !card.starred) toggleStar(card);
           }}
-          onOpenItem={openLibraryItem}
-          onRun={openRecipe}
-          onOpenCard={(id) => {
-            const card = cards.find((c) => c.id === id);
-            if (card) openCard(card);
-          }}
+          onTagCard={tagCard}
+          catalog={tagCatalog}
+          onOpenUrl={showPage}
           notify={notify}
         />
-        </CrashGuard>
         <main
           className="flex min-w-0 flex-1 gap-3 overflow-x-auto p-3"
           onDoubleClick={(e) => {
@@ -891,49 +824,102 @@ export default function Board() {
             if (!(e.target as HTMLElement).closest("[data-card-id], button, a, input, textarea, [contenteditable]")) openNew();
           }}
         >
-          {visibleColumns.map((column) => (
-            <ColumnSection
-              key={column.id}
-              column={column}
-              list={byColumn.get(column.id) ?? []}
-              cards={cards}
-              selectedId={selectedId}
-              unseen={unseen}
-              now={now}
-              loaded={loaded}
-              filtering={filtering}
-              showArchived={showArchived}
-              archivedCount={archivedCount}
-              dragOver={dragOver}
-              expandedColumns={expandedColumns}
-              view={view}
-              switchAll={switchAll}
-              setShowArchived={setShowArchived}
-              setExpanded={setExpanded}
-              setDragOver={setDragOver}
-              drop={drop}
-              onColumnMenu={onColumnMenu}
-              onCardMenu={onCardMenu}
-              onStarMenu={onStarMenu}
-              openCard={openCard}
-              openNew={openNew}
-              resume={resume}
-              onAnswer={(card, allow) => void api.answer(card.id, allow, undefined, card.pending?.id).catch(notify)}
-              onStop={(card) => void api.stop(card.id).catch(notify)}
-              notify={notify}
-            />
-          ))}
+          {visibleColumns.map((column) => {
+            const list = byColumn.get(column.id) ?? [];
+            const shown = expandedColumns.includes(column.id) ? list : list.slice(0, COLUMN_LIMIT);
+            // The copilot runs the whole board, so a project filter keeps it; a search hides it.
+            const pilot = loaded && copilot?.column === column.id && !query.trim() && !isFiltering(railFilter) ? copilot : null;
+            const count = list.length + (pilot ? 1 : 0);
+            return (
+              <section
+                key={column.id}
+                data-column={column.id}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(column.id);
+                }}
+                onDragLeave={() => setDragOver((c) => (c === column.id ? null : c))}
+                onDrop={(e) => drop(column.id, e)}
+                onContextMenu={(e) => void onColumnMenu(column.id, e)}
+                className={`flex w-[264px] min-w-[220px] shrink-0 flex-col rounded-xl border ${dragOver === column.id ? "border-accent bg-accent-soft" : "border-transparent bg-sunken"}`}
+              >
+                <ColumnHeader
+                  column={column}
+                  count={loaded ? count : null}
+                  needsYou={column.id === "needs_you" && count > 0}
+                  archivedCount={archivedCount}
+                  showArchived={showArchived}
+                  onToggleArchived={() => setShowArchived((v) => !v)}
+                  toArchive={doneToArchive.length}
+                  archiveTip={hint("archive-done", `Archive all ${doneToArchive.length}`)}
+                  onArchiveAll={() => archiveCards(doneToArchive)}
+                  resumeAll={column.id === "review" ? resumeAll : undefined}
+                  onSwitchAll={column.id === "running" || column.id === "needs_you" ? () => switchAll(column.id) : undefined}
+                />
+                <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
+                  {pilot && (
+                      <CardView
+                        guardName={pilot.title}
+                        card={pilot}
+                        now={now}
+                        selected={copilotOpen}
+                        onOpen={toggleCopilot}
+                        onAnswer={(allow) => void api.answer(pilot.id, allow, undefined, pilot.pending?.id).catch(notify)}
+                        onStop={() => void api.stop(pilot.id).catch(notify)}
+                      />
+                  )}
+                  {shown.map((card) => (
+                    <CardView
+                      key={card.id}
+                      guardName={card.title}
+                      card={card}
+                      now={now}
+                      selected={card.id === selectedId}
+                      unseen={unseen.has(card.id)}
+                      alsoHere={busyHere(cards, card)}
+                      onOpen={() => openCard(card)}
+                      onAnswer={(allow) => void api.answer(card.id, allow, undefined, card.pending?.id).catch(notify)}
+                      onStop={() => void api.stop(card.id).catch(notify)}
+                      onResume={(how) => resume(card.id, how)}
+                      onContextMenu={(e) => void onCardMenu(card, e)}
+                      onStar={() => toggleStar(card)}
+                      onTag={(tag) => setRailFilter((f) => toggleTag(f, tag))}
+                    />
+                  ))}
+                  {shown.length < list.length && (
+                    <button
+                      onClick={() => setExpanded({ view, columns: [...expandedColumns, column.id] })}
+                      className="rounded-lg px-2 py-1.5 text-center text-[12px] text-muted hover:bg-card hover:text-ink"
+                    >
+                      Show {list.length - shown.length} more
+                    </button>
+                  )}
+                  <ColumnPlaceholder column={column.id} loaded={loaded} empty={count === 0} filtering={filtering} />
+                  {column.id === "backlog" && (
+                    <button
+                      onClick={() => openNew()}
+                      className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12.5px] text-muted hover:bg-card hover:text-ink"
+                    >
+                      <Icon name="plus" size={13} /> Add a thread
+                    </button>
+                  )}
+                </div>
+              </section>
+            );
+          })}
         </main>
 
         {framed && <div style={NO_DRAG} className="fixed inset-0 z-30 bg-black/40" onClick={() => (showNew ? setShowNew(false) : select(null))} aria-hidden="true" />}
         <div style={framed ? { ...NO_DRAG, bottom: terminalOpen ? terminalHeight + 16 : undefined } : undefined} className={framed ? "fixed inset-4 z-40 flex overflow-hidden rounded-xl border border-line-strong bg-panel shadow-2xl" : "contents"}>
         {showNew ? (
-          <NewCardDialog key={recipe?.id ?? "new"} cards={cards} home={home} recipe={recipe ?? undefined} defaultCwd={newCwd ?? project ?? undefined} recentCwd={[...cards].sort((a, b) => b.updatedAt - a.updatedAt).find((c) => c.cwd !== home)?.cwd} onClose={() => setShowNew(false)} onCreate={create} />
+          <NewCardDialog cards={cards} home={home} defaultCwd={newCwd ?? project ?? undefined} recentCwd={[...cards].sort((a, b) => b.updatedAt - a.updatedAt).find((c) => c.cwd !== home)?.cwd} onClose={() => setShowNew(false)} onCreate={create} />
         ) : selected && (
-          <CrashGuard key={selected.id} what="thread" name={selected.title} className="m-3 w-[360px] self-start">
           <ThreadPanel
+            key={selected.id}
+            guardName={selected.title}
             card={selected}
-            onStarMenu={(e) => void onStarMenu(selected, e)}
+            onStar={() => toggleStar(selected)}
+            onTags={() => editTags(selected)}
             alsoHere={busyHere(cards, selected)}
             resets={planResets(cards)}
             items={thread}
@@ -959,12 +945,11 @@ export default function Board() {
             onRename={(title) => void api.rename(selected.id, title).catch(notify)}
             onMode={(mode) => void api.setMode(selected.id, mode).catch(notify)}
             editTitle={renameId === selected.id}
+            focusReply={startedId === selected.id}
           />
-          </CrashGuard>
         )}
 
         {browserOpen && (
-          <CrashGuard what="browser pane" className="m-3 w-[360px] self-start">
           <BrowserPane
             desktop={desktop}
             state={browser}
@@ -974,23 +959,21 @@ export default function Board() {
             onClose={showNew ? () => setShowNew(false) : selected ? () => select(null) : toggleBrowser}
             expanded={framed}
           />
-          </CrashGuard>
         )}
         </div>
       </div>
 
-      <CrashGuard what="footer"><BoardFooter stats={footerStats} cwd={footerCwd} backend={footerBackend} onHelp={() => setShowHelp(true)} /></CrashGuard>
+      <BoardFooter stats={footerStats} cwd={footerCwd} backend={footerBackend} onHelp={() => setShowHelp(true)} />
       {/* After the footer so an open card can stop just above it; z-40 keeps it over the card's backdrop. */}
       {terminalOpen && (
         <div style={NO_DRAG} className="relative z-40">
-          <CrashGuard what="terminal" className="m-3">
           <TerminalDrawer key={terminalCwd} cwd={terminalCwd} height={terminalHeight} onHeight={setTerminalHeight} onClose={toggleTerminal} />
-          </CrashGuard>
         </div>
       )}
 
       {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
       {showHelp && <ShortcutsDialog onClose={() => setShowHelp(false)} />}
+      {tagging && <TagsDialog card={tagging} all={tagCatalog.tags.map((t) => ({ tag: t.name, count: t.count }))} onChange={saveTags} onClose={closeTags} />}
       <ModifierHint />
       {showPalette && <CommandPalette initialQuery={paletteQuery} items={paletteItems()} findPrompts={findPrompts} currentProject={project ? { path: project, name: folderName(project) } : null} onClose={() => setShowPalette(false)} />}
       {login && <LoginDialog login={login} onClose={() => setLogin(null)} />}
@@ -1017,12 +1000,28 @@ export default function Board() {
         </div>
       )}
     </div>
+    </TagColors.Provider>
   );
 }
 
-// Library pages are served by Weft itself (app/api/library/[id]/page), so a to-do's ticks can save.
-function libraryPageUrl(id: string) {
-  return `${window.location.origin}/api/library/${id}/page`;
+// The rail's ★ and tag filter, shown beside the filter box so it's clear why cards are missing: one click clears each.
+function RailFilterChip({ filter, onClear }: { filter: RailFilter; onClear: (filter: RailFilter) => void }) {
+  if (!isFiltering(filter)) return null;
+  const chip = "flex shrink-0 items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11.5px] font-medium text-accent hover:opacity-80";
+  return (
+    <>
+      {filter.starred && (
+        <button onClick={() => onClear({ ...filter, starred: undefined })} title="Show every card, not just starred ones" className={chip}>
+          ★ starred <Icon name="x" size={10} />
+        </button>
+      )}
+      {filter.tag && (
+        <button onClick={() => onClear({ ...filter, tag: undefined })} title={`Show every card, not just #${filter.tag}`} className={`${chip} max-w-[140px]`}>
+          <span className="truncate">#{filter.tag}</span> <Icon name="x" size={10} />
+        </button>
+      )}
+    </>
+  );
 }
 
 // In the board's own browser (no card open), or a new tab outside the desktop app.

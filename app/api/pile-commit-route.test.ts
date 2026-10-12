@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 
 // POST /api/cards/:id/commit, a commit walk-through button (lib/pile-commit.ts is tested on its own).
 
+// lib/show-dir.ts reads DATA_DIR from the store, which these tests mock.
+vi.mock("@/lib/show-dir", () => ({ SHOW_DIR: "/weft/show" }));
 vi.mock("@/lib/store", () => ({ getCard: (id: string) => (id === "pile" ? { id } : undefined) }));
 vi.mock("@/lib/runner", () => ({}));
 vi.mock("@/lib/automations", () => ({}));

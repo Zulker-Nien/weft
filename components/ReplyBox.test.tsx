@@ -77,6 +77,13 @@ describe("ReplyBox", () => {
     expect(localStorage.getItem("weft.reply.c1")).toBe("closing fast");
   });
 
+  it("takes focus as it opens when asked (a card just started), and only then", () => {
+    const { box } = setup({ autoFocus: true });
+    expect(box).toHaveFocus();
+    cleanup();
+    expect(setup().box).not.toHaveFocus();
+  });
+
   it("warns when other threads are running in this folder", () => {
     setup({ alsoHere: [makeCard({ id: "c2", title: "Refactor auth", column: "running" })] });
     expect(screen.getByText("Also running here: Refactor auth")).toBeInTheDocument();
@@ -131,6 +138,79 @@ describe("ReplyBox", () => {
     it("the placeholder says the next message waits", () => {
       const { box } = setup({ live: true });
       expect(box).toHaveAttribute("placeholder", expect.stringMatching(/send when this turn is done/));
+    });
+  });
+
+  describe("↑ edits your last message", () => {
+    const editLast = (over: Partial<NonNullable<Props["editLast"]>> = {}) => ({
+      text: "make it blue",
+      canRewind: true,
+      fileEdits: 0,
+      onEdit: vi.fn<(text: string) => Promise<void>>(() => Promise.resolve()),
+      ...over,
+    });
+
+    it("pulls it back, and Enter replaces it instead of sending a new message", async () => {
+      const edit = editLast({ fileEdits: 2 });
+      const onEditing = vi.fn();
+      const { onSend, box } = setup({ editLast: edit, onEditing });
+      await userEvent.type(box, "{ArrowUp}");
+      expect(box).toHaveValue("make it blue");
+      expect(onEditing).toHaveBeenLastCalledWith(true);
+      expect(screen.getByText(/Enter replaces the reply below · Esc cancels · 2 file edits stay/)).toBeInTheDocument();
+      await userEvent.clear(box);
+      await userEvent.type(box, "make it red{Enter}");
+      expect(edit.onEdit).toHaveBeenCalledWith("make it red");
+      expect(onSend).not.toHaveBeenCalled();
+      expect(box).toHaveValue("");
+      expect(onEditing).toHaveBeenLastCalledWith(false);
+    });
+
+    it("Escape cancels the edit and keeps the thread open", async () => {
+      const outside = vi.fn();
+      window.addEventListener("keydown", outside);
+      const edit = editLast({ fileEdits: 1 });
+      const { box } = setup({ editLast: edit });
+      await userEvent.type(box, "{ArrowUp}");
+      expect(screen.getByText(/1 file edit stays/)).toBeInTheDocument();
+      await userEvent.type(box, "{Escape}");
+      window.removeEventListener("keydown", outside);
+      expect(box).toHaveValue("");
+      expect(outside).not.toHaveBeenCalledWith(expect.objectContaining({ key: "Escape" }));
+      expect(screen.queryByText(/Editing/)).not.toBeInTheDocument();
+      expect(edit.onEdit).not.toHaveBeenCalled();
+    });
+
+    it("says a running turn stops, and a thread that can't rewind sends a copy", async () => {
+      const first = setup({ editLast: editLast(), live: true });
+      await userEvent.type(first.box, "{ArrowUp}");
+      expect(screen.getByText(/Enter stops this turn and replaces it/)).toBeInTheDocument();
+      cleanup();
+      const second = setup({ editLast: editLast({ canRewind: false }) });
+      await userEvent.type(second.box, "{ArrowUp}");
+      expect(screen.getByText(/this thread can't rewind, so it sends as a new message/)).toBeInTheDocument();
+    });
+
+    it("an emptied box cancels, a failed edit keeps the text, and a queued message comes back first", async () => {
+      const onEdit = vi.fn<(text: string) => Promise<void>>(() => Promise.resolve());
+      const edit = editLast({ onEdit });
+      const { box, rerender } = setup({ editLast: edit });
+      await userEvent.type(box, "{ArrowUp}");
+      await userEvent.clear(box);
+      await userEvent.type(box, "{Enter}");
+      expect(onEdit).not.toHaveBeenCalled();
+      expect(screen.queryByText(/Editing/)).not.toBeInTheDocument();
+
+      onEdit.mockRejectedValueOnce(new Error("Thread is gone"));
+      await userEvent.type(box, "{ArrowUp}{Enter}");
+      expect(await screen.findByText("Thread is gone")).toBeInTheDocument();
+      expect(box).toHaveValue("make it blue");
+      await userEvent.type(box, "{Escape}");
+
+      rerender({ editLast: edit, live: true });
+      await userEvent.type(box, "queued one{Enter}{ArrowUp}");
+      expect(box).toHaveValue("queued one");
+      expect(screen.queryByText(/Editing/)).not.toBeInTheDocument();
     });
   });
 

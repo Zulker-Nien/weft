@@ -5,29 +5,30 @@ const {
   BaseWindow,
   BrowserWindow,
   Menu,
-  Tray,
   WebContentsView,
   app,
-  clipboard,
   dialog,
   globalShortcut,
   ipcMain,
-  nativeImage,
   nativeTheme,
   session,
   shell,
-  webContents,
 } = require("electron");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { registerAboutBridge, showAboutWindow } = require("./about.cjs");
+const { registerAboutBridge } = require("./about.cjs");
 const { createBrowserPane } = require("./browser-pane.cjs");
+const { createMenus } = require("./menus.cjs");
+const { createPageLinks } = require("./page-links.cjs");
 const { createPanePages } = require("./pane-pages.cjs");
 const { fixPath } = require("./env.cjs");
 const { startServer } = require("./server.cjs");
+const { createStartupScreen } = require("./startup-screen.cjs");
+const { createStartupTimer } = require("./startup-timer.cjs");
 const { registerTerminal } = require("./terminal.cjs");
+const { themeSource } = require("./theme-source.cjs");
 const { loadWindowState, trackWindowState } = require("./window-state.cjs");
 
 const APP_NAME = "Weft";
@@ -47,20 +48,34 @@ app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 let win;
 let appView;
 let copilotWin;
-let tray;
 let server;
 let quitting = false;
 // weft:// links that arrive before the board is ready.
 const pendingLinks = [];
+const timer = createStartupTimer({
+  version: app.getVersion(),
+  mode: app.isPackaged ? "packaged" : process.env.THREADBOARD_PROD ? "prod" : "dev",
+});
 
+// The secrets vault, set up further down; the pane types its values in for threads (fillSecret).
+// With it, the commands and dev servers that run with vault values (electron/secret-run.cjs).
+let vault, secretRun;
 const pane = createBrowserPane({
-  getWindow: () => win,
-  getAppView: () => appView,
+  secrets: () => vault, secretRun: () => secretRun,
+  getWindow: () => win, getAppView: () => appView,
   token: TOKEN,
-  onContents: (contents) => attachContextMenu(contents),
+  onContents: (contents) => menus.attachContextMenu(contents),
   pages: createPanePages(dataDir()),
-  // weft:// links clicked inside a pane page, like a recipe page's past runs.
-  onLink: (url) => handleLink(url),
+  // weft:// links clicked inside a pane page, like a walk-through's buttons.
+  onLink: (url, from) => pageLinks.handle(url, from) || handleLink(url),
+  // The Weft account's session, sealed by safeStorage; the server reads it here instead of a plain file.
+  routes: require("./account-store.cjs").accountRoutesFor(dataDir()),
+});
+// A walk-through page's buttons: replies, and commits that run with no turn.
+const pageLinks = createPageLinks({
+  getServer: () => server,
+  contentsFor: (key) => pane.contentsFor(key),
+  warn: (message, detail) => dialog.showMessageBox(win, { type: "warning", message, detail }),
 });
 
 // Only one Weft runs at a time; opening it again brings the existing window forward.
@@ -88,7 +103,7 @@ function background() {
 const THEME_COOKIE = "weft-theme";
 
 function setThemeSource(value) {
-  nativeTheme.themeSource = value === "light" || value === "dark" ? value : "system";
+  nativeTheme.themeSource = themeSource(value);
 }
 
 async function followThemeChoice() {
@@ -120,45 +135,29 @@ function showMain() {
 
 // ---- Startup screen ----
 
-function onSplash() {
-  return appView && appView.webContents.getURL().startsWith("file:");
-}
-
-// The version rides in the query string: the splash is a bare file:// page with no bridge.
-function loadSplash() {
-  return appView.webContents.loadFile(path.join(__dirname, "splash.html"), { query: { v: app.getVersion() } });
-}
-
-async function showSplash(status) {
-  if (!onSplash()) await loadSplash();
-  await appView.webContents.executeJavaScript(`setStatus(${JSON.stringify(status)})`).catch(() => {});
-}
-
-async function showFailure(message) {
-  showMain();
-  const detail = server?.logPath ? ` Details are in ${server.logPath}.` : "";
-  if (!onSplash()) await loadSplash();
-  await appView.webContents.executeJavaScript(`showError(${JSON.stringify(message + detail)})`).catch(() => {});
-}
-
+const startup = createStartupScreen({ view: () => appView, version: app.getVersion(), showMain, logPath: () => server?.logPath });
 let controlUrl;
 
 async function boot() {
-  await showSplash("Finding your command-line tools…");
+  await startup.show("Finding your command-line tools…");
   await fixPath();
-  await showSplash("Starting the board…");
+  timer.mark("path");
+  await startup.show("Starting the board…");
   controlUrl ??= await pane.startControlServer();
   try {
     server = await startServer({
       preferredPort: PREFERRED_PORT,
-      env: { THREADBOARD_SHELL_URL: controlUrl, THREADBOARD_SHELL_TOKEN: TOKEN },
-      onFatal: (message) => showFailure(message),
+      env: { THREADBOARD_SHELL_URL: controlUrl, THREADBOARD_SHELL_TOKEN: TOKEN, THREADBOARD_APP_PID: String(process.pid) },
+      onFatal: (message) => startup.fail(message),
+      onMark: timer.mark,
     });
   } catch (err) {
-    await showFailure(err.message);
+    await startup.fail(err.message);
     return;
   }
-  await appView.webContents.loadURL(server.url);
+  timer.mark("server");
+  await startup.loadBoard(server.url);
+  timer.mark("page");
   for (const link of pendingLinks.splice(0)) handleLink(link);
 }
 
@@ -209,8 +208,9 @@ function createMainWindow() {
     pane.open(url).catch(() => {});
     return { action: "deny" };
   });
-  attachContextMenu(appView.webContents);
+  menus.attachContextMenu(appView.webContents);
   appView.webContents.once("did-finish-load", () => win?.show());
+  startup.watch(appView.webContents);
 }
 
 function sendCopilotState() {
@@ -245,7 +245,7 @@ function createCopilot() {
     pane.open(url).catch(() => {});
     return { action: "deny" };
   });
-  attachContextMenu(copilotWin.webContents);
+  menus.attachContextMenu(copilotWin.webContents);
   // Closing hides it, so it reopens instantly with the conversation in place.
   copilotWin.on("close", (event) => {
     if (!quitting) {
@@ -283,8 +283,8 @@ function toggleCopilot() {
 // ---- weft:// links ----
 // weft://new?prompt=…&folder=…&title=…&cli=puku&start=1   create a card (in the most recent project by default)
 // weft://card/<id>                                        open a card
-// weft://recipe/<id>                                      the New thread dialog, filled in from a library recipe
 // weft://copilot                                          open the copilot
+// weft://reply and weft://commit come from a card's own page in the pane (page-links.cjs)
 
 async function handleLink(raw) {
   if (!server) {
@@ -301,7 +301,6 @@ async function handleLink(raw) {
   if (action === "copilot") return showCopilot();
   showMain();
   if (action === "card") return sendMenu("open-card", url.pathname.replace(/^\/+/, ""));
-  if (action === "recipe") return sendMenu("run-recipe", decodeURIComponent(url.pathname.replace(/^\/+/, "")));
   if (action !== "new") return;
   const prompt = url.searchParams.get("prompt");
   if (!prompt) return sendMenu("new-thread");
@@ -330,238 +329,23 @@ async function handleLink(raw) {
   }
 }
 
-// ---- Menus, tray, dock ----
+// ---- Menus, tray, dock (menus.cjs) ----
 
-function focusedContents() {
-  return webContents.getFocusedWebContents() ?? appView?.webContents;
-}
-
-// The browser pane's pages zoom in Chrome's steps and report it to the pane's toolbar; the board
-// keeps its half-level steps.
-function zoomFocused(action) {
-  const c = focusedContents();
-  if (!c) return;
-  if (pane.owns(c)) return pane.zoom(action);
-  c.setZoomLevel(action === "reset" ? 0 : c.getZoomLevel() + (action === "in" ? 0.5 : -0.5));
-}
-
-function buildMenu() {
-  // Not `role: "about"`: the native panel shows text and nothing else; ours is a window (about.cjs).
-  const aboutItem = { label: `About ${APP_NAME}`, click: showAboutWindow };
-  const template = [
-    ...(mac
-      ? [
-          {
-            label: APP_NAME,
-            submenu: [
-              aboutItem,
-              { type: "separator" },
-              {
-                label: "Settings…",
-                accelerator: "CmdOrCtrl+,",
-                click: () => {
-                  showMain();
-                  sendMenu("settings");
-                },
-              },
-              {
-                label: "Open at Login",
-                type: "checkbox",
-                checked: app.getLoginItemSettings().openAtLogin,
-                click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }),
-              },
-              { type: "separator" },
-              { role: "services" },
-              { type: "separator" },
-              { role: "hide" },
-              { role: "hideOthers" },
-              { role: "unhide" },
-              { type: "separator" },
-              { role: "quit" },
-            ],
-          },
-        ]
-      : []),
-    {
-      label: "File",
-      submenu: [
-        {
-          label: "New Thread",
-          accelerator: "CmdOrCtrl+N",
-          click: () => {
-            showMain();
-            sendMenu("new-thread");
-          },
-        },
-        { type: "separator" },
-        { label: "Close Window", accelerator: "CmdOrCtrl+W", click: () => BaseWindow.getFocusedWindow()?.close() },
-      ],
-    },
-    {
-      label: "Edit",
-      submenu: [
-        { role: "undo" },
-        { role: "redo" },
-        { type: "separator" },
-        { role: "cut" },
-        { role: "copy" },
-        { role: "paste" },
-        { role: "selectAll" },
-        { type: "separator" },
-        {
-          label: "Find Cards",
-          accelerator: "CmdOrCtrl+F",
-          click: () => {
-            showMain();
-            sendMenu("find");
-          },
-        },
-      ],
-    },
-    {
-      label: "View",
-      submenu: [
-        { label: "Copilot", accelerator: "CmdOrCtrl+J", click: toggleCopilot },
-        { label: "Browser", accelerator: "CmdOrCtrl+Shift+B", click: () => pane.setVisible(!pane.isVisible()) },
-        {
-          label: "Terminal",
-          // VS Code's toggle; Control on macOS too.
-          accelerator: "Ctrl+`",
-          click: () => {
-            showMain();
-            sendMenu("terminal");
-          },
-        },
-        { type: "separator" },
-        { label: "Reload", accelerator: "CmdOrCtrl+R", click: () => focusedContents()?.reload() },
-        { label: "Developer Tools", accelerator: "Alt+CmdOrCtrl+I", click: () => focusedContents()?.toggleDevTools() },
-        { type: "separator" },
-        { label: "Actual Size", accelerator: "CmdOrCtrl+0", click: () => zoomFocused("reset") },
-        {
-          label: "Zoom In",
-          accelerator: "CmdOrCtrl+Plus",
-          click: () => zoomFocused("in"),
-        },
-        {
-          label: "Zoom Out",
-          accelerator: "CmdOrCtrl+-",
-          click: () => zoomFocused("out"),
-        },
-        { type: "separator" },
-        { label: "Enter Full Screen", accelerator: "Ctrl+Cmd+F", click: () => win?.setFullScreen(!win.isFullScreen()) },
-      ],
-    },
-    {
-      label: "Window",
-      submenu: [
-        { label: "Minimize", accelerator: "CmdOrCtrl+M", click: () => BaseWindow.getFocusedWindow()?.minimize() },
-        { label: "Zoom", click: () => win?.maximize() },
-        { type: "separator" },
-        { label: "Board", accelerator: "CmdOrCtrl+1", click: showMain },
-        { label: "Copilot", accelerator: "CmdOrCtrl+2", click: showCopilot },
-      ],
-    },
-    {
-      role: "help",
-      submenu: [
-        { label: "Open Logs Folder", click: () => shell.openPath(app.getPath("logs")) },
-        { label: "Open Data Folder", click: () => shell.openPath(dataDir()) },
-        ...(mac ? [] : [{ type: "separator" }, aboutItem]),
-      ],
-    },
-  ];
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
-}
-
-function attachContextMenu(contents) {
-  contents.on("context-menu", (_event, params) => {
-    const items = [];
-    if (params.linkURL && /^https?:/i.test(params.linkURL)) {
-      items.push(
-        { label: "Open Link in Browser Pane", click: () => pane.open(params.linkURL).catch(() => {}) },
-        { label: "Open Link in Default Browser", click: () => shell.openExternal(params.linkURL) },
-        { label: "Copy Link", click: () => clipboard.writeText(params.linkURL) },
-        { type: "separator" },
-      );
-    }
-    if (params.isEditable) items.push({ role: "cut" }, { role: "copy" }, { role: "paste" }, { role: "selectAll" });
-    else if (params.selectionText) items.push({ role: "copy" });
-    if (!app.isPackaged) items.push({ type: "separator" }, { label: "Inspect Element", click: () => contents.inspectElement(params.x, params.y) });
-    while (items.length && items[0].type === "separator") items.shift();
-    while (items.length && items.at(-1).type === "separator") items.pop();
-    if (items.length) Menu.buildFromTemplate(items).popup();
-  });
-}
-
-function clip(text, max) {
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
-}
-
-function createTray() {
-  const icon = path.join(ASSETS, "trayTemplate.png");
-  if (!fs.existsSync(icon)) return;
-  tray = new Tray(nativeImage.createFromPath(icon));
-  tray.setToolTip(APP_NAME);
-  updateTray([]);
-}
-
-// The menu bar icon shows how many cards need you, and lists them.
-function updateTray(waiting) {
-  if (!tray) return;
-  const count = waiting.length;
-  tray.setTitle(count > 0 ? ` ${count}` : "");
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: count > 0 ? `${count} ${count === 1 ? "card needs" : "cards need"} you` : "Nothing needs you", enabled: false },
-      ...waiting.slice(0, 8).map((card) => ({
-        label: clip(card.title, 48),
-        click: () => {
-          showMain();
-          sendMenu("open-card", card.id);
-        },
-      })),
-      { type: "separator" },
-      { label: `Open ${APP_NAME}`, click: showMain },
-      { label: "Copilot", accelerator: COPILOT_SHORTCUT, click: showCopilot },
-      {
-        label: "New Thread",
-        click: () => {
-          showMain();
-          sendMenu("new-thread");
-        },
-      },
-      { type: "separator" },
-      { label: `Quit ${APP_NAME}`, click: () => app.quit() },
-    ]),
-  );
-}
-
-async function refreshWaiting(count) {
-  if (mac) app.dock.setBadge(count > 0 ? String(count) : "");
-  if (!server) return;
-  try {
-    const { cards } = await (await fetch(`${server.url}/api/cards`)).json();
-    updateTray(cards.filter((card) => card.column === "needs_you"));
-  } catch {}
-}
-
-function setupDock() {
-  if (!mac) return;
-  const icon = path.join(ASSETS, "icon.png");
-  if (!app.isPackaged && fs.existsSync(icon)) app.dock.setIcon(icon);
-  app.dock.setMenu(
-    Menu.buildFromTemplate([
-      {
-        label: "New Thread",
-        click: () => {
-          showMain();
-          sendMenu("new-thread");
-        },
-      },
-      { label: "Copilot", click: showCopilot },
-    ]),
-  );
-}
+const menus = createMenus({
+  APP_NAME,
+  ASSETS,
+  COPILOT_SHORTCUT,
+  mac,
+  pane,
+  getWin: () => win,
+  getAppView: () => appView,
+  getServer: () => server,
+  showMain,
+  sendMenu,
+  showCopilot,
+  toggleCopilot,
+  dataDir,
+});
 
 // ---- IPC from the board and copilot ----
 
@@ -587,9 +371,7 @@ ipcMain.handle("dialog:openFolder", async () => {
   const result = await dialog.showOpenDialog(win, { properties: ["openDirectory", "createDirectory"] });
   return result.canceled ? null : result.filePaths[0];
 });
-ipcMain.on("shell:openExternal", (_e, url) => {
-  if (/^https?:\/\//i.test(String(url))) shell.openExternal(String(url));
-});
+ipcMain.on("shell:openExternal", (_e, url) => /^https?:\/\//i.test(String(url)) && shell.openExternal(String(url)));
 // The board's right-click menus (lib/card-menu.ts): shown natively so the narrow board never clips them.
 // Resolves to the picked item's id, or null when dismissed.
 ipcMain.handle("menu:popup", (e, items) =>
@@ -618,18 +400,31 @@ ipcMain.on("shell:reveal", (_e, folder) => {
   const dir = String(folder);
   if (path.isAbsolute(dir) && fs.existsSync(dir)) shell.openPath(dir);
 });
-ipcMain.on("badge:set", (_e, count) => refreshWaiting(Number(count) || 0));
+// The secrets vault answers the board window only; threads reach values only through the pane typing them in, behind Touch ID.
+vault = require("./vault.cjs").setupVault({ ipcMain, dataDir: dataDir(), window: () => win, board: () => appView?.webContents });
+secretRun = require("./secret-run.cjs").setupSecretRun({ vault, dataDir: dataDir(), window: () => win });
+// So does Vercel: its token is in the Keychain and its links are .vercel/project.json.
+require("./vercel.cjs").setupVercel({ ipcMain, dataDir: dataDir(), board: () => appView?.webContents });
+// And Supabase: its token is in the Keychain and its links are supabase/.temp/project-ref.
+require("./supabase.cjs").setupSupabase({ ipcMain, dataDir: dataDir(), board: () => appView?.webContents });
+// And BlastCP: its sign-in is in the Keychain too, and which property a folder posts as is in the data folder.
+require("./blastcp.cjs").setupBlastcp({ ipcMain, dataDir: dataDir(), board: () => appView?.webContents });
+// The board's first cards are on screen: save this launch's timing and tell the board if it ran slow.
+ipcMain.handle("startup:ready", () => timer.finish());
+ipcMain.on("badge:set",(_e, count) => menus.refreshWaiting(Number(count) || 0));
 ipcMain.on("splash:action", async (_e, action) => {
-  if (action === "quit") return app.quit();
+  // "relaunch": a drawer whose main side arrived after launch (BlastCP) starts Weft again on the new code.
+  if (action === "relaunch") app.relaunch();
+  if (action === "quit" || action === "relaunch") return app.quit();
   if (action === "logs") return shell.openPath(app.getPath("logs"));
   if (action !== "retry") return;
   if (!server) return boot();
-  await showSplash("Restarting…");
+  await startup.show("Restarting…");
   try {
     await server.restart();
-    await appView.webContents.loadURL(server.url);
+    await startup.loadBoard(server.url);
   } catch (err) {
-    showFailure(err.message);
+    startup.fail(err.message);
   }
 });
 
@@ -637,13 +432,15 @@ ipcMain.on("splash:action", async (_e, action) => {
 
 app.whenReady().then(async () => {
   if (!primary) return;
+  timer.mark("ready");
   await followThemeChoice();
   registerAboutBridge({ tagline: TAGLINE, dataDir, getServer: () => server });
   if (app.isPackaged) app.setAsDefaultProtocolClient(PROTOCOL);
-  buildMenu();
-  setupDock();
+  menus.buildMenu();
+  menus.setupDock();
   createMainWindow();
-  createTray();
+  menus.createTray();
+  menus.updater.start();
   if (!globalShortcut.register(COPILOT_SHORTCUT, toggleCopilot)) {
     console.warn(`Couldn't register ${COPILOT_SHORTCUT}; another app may be using it.`);
   }
@@ -664,6 +461,7 @@ app.on("before-quit", () => {
 });
 
 app.on("will-quit", () => {
+  menus.keepWorking?.stopSync();
   globalShortcut.unregisterAll();
   killTerminals();
   server?.stop();

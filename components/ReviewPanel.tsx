@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { stepUrl } from "@/lib/review";
 import { api } from "@/lib/client";
 import type { Card, DevServerStatus, ReviewPlan, ThreadItem } from "@/lib/types";
-import { readDraft, writeDraft } from "@/lib/drafts";
+import { moveDraft, readDraft, replyDraftKey, writeDraft } from "@/lib/drafts";
 import Composer, { type ComposerHandle } from "./Composer";
 import Icon from "./Icon";
 
@@ -167,6 +167,16 @@ function Tour({
   const steps = plan.steps;
   const step = steps[Math.min(index, steps.length - 1)];
   const url = step ? stepUrl(plan, step) : undefined;
+
+  // The tour takes the reply box's place when the card lands in Review, maybe mid-sentence: bring what you
+  // were typing along into this step's box, focused at its end, so you keep typing. An effect, so it runs
+  // after the reply box's unmount has written its last keystrokes.
+  useEffect(() => {
+    const moved = moveDraft(replyDraftKey(cardId), feedbackKey(cardId, boxStep.current));
+    if (!moved) return;
+    composer.current?.write(moved);
+    setEmpty(false);
+  }, [cardId]);
 
   // Show each step's page as you reach it.
   useEffect(() => {

@@ -27,7 +27,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!plan?.dev) return fail("The review tour has no dev command.");
     if (action === "restart") stopDev(id);
     else if (plan.url && (await reachable(plan.url))) return Response.json({ status: await devStatus(id, plan.url) });
-    startDev(id, plan.dev, card.cwd);
+    await startDev(id, plan.dev, card.cwd);
   } else return fail("Unknown action.");
   return Response.json({ status: await devStatus(id, plan?.url) });
 }

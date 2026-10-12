@@ -12,7 +12,7 @@ const db = vi.hoisted(() => ({ cards: new Map<string, Card>(), threads: new Map<
 vi.mock("next/server", () => ({ connection: async () => {} }));
 
 vi.mock("@/lib/store", () => ({
-  // Read at import by modules the library routes pull in (lib/attachments.ts); nothing is written there.
+  // Read at import by modules the routes pull in (lib/attachments.ts); nothing is written there.
   DATA_DIR: "/tmp/weft-api-test-data",
   listCards: vi.fn(() => [...db.cards.values()]),
   getCard: vi.fn((id: string) => db.cards.get(id)),
@@ -100,17 +100,15 @@ vi.mock("@/lib/login", () => ({
   cancelLogin: vi.fn(),
 }));
 
-vi.mock("@/lib/library", () => ({
-  getItem: vi.fn(() => undefined),
-  listLibrary: vi.fn(() => []),
-  starCard: vi.fn((card: Card, kind: string, scope: string) => Promise.resolve({ id: "lib-1", kind, scope, title: card.title })),
-  updateItem: vi.fn((id: string, patch: Record<string, unknown>) => ({ id, ...patch })),
-  removeItem: vi.fn(),
-  itemDir: vi.fn(() => "/nowhere"),
-  recipePage: vi.fn(() => "<html>recipe page</html>"),
-  recipeRuns: vi.fn(() => []),
-  withTicks: vi.fn((html: string) => `${html}<script>ticks</script>`),
-  PAGE_HEADERS: { "content-security-policy": "script-src 'self' 'unsafe-inline'" },
+vi.mock("@/lib/tag-store", () => ({
+  listTags: vi.fn(() => [{ name: "bug", count: 2 }]),
+  createTag: vi.fn((name: string, color?: string) => {
+    if (!name) throw new Error("A tag needs a name.");
+    return { name, color };
+  }),
+  updateTag: vi.fn((name: string, patch: { name?: string }) => ({ name: patch.name ?? name })),
+  deleteTag: vi.fn(),
+  rememberTags: vi.fn(),
 }));
 
 const runner = await import("@/lib/runner");
@@ -139,11 +137,8 @@ const newProjectRoute = await import("./projects/new/route");
 const importRoute = await import("./import/route");
 const loginRoute = await import("./login/route");
 const cloneRoute = await import("./repos/clone/route");
-const library = await import("@/lib/library");
-const libraryRoute = await import("./library/route");
-const libraryItemRoute = await import("./library/[id]/route");
-const libraryPageRoute = await import("./library/[id]/page/route");
-const libraryFileRoute = await import("./library/[id]/files/[name]/route");
+const tagStore = await import("@/lib/tag-store");
+const tagsRoute = await import("./tags/route");
 
 const WRITE = { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" };
 
@@ -204,9 +199,9 @@ const writes: [string, (r: Request) => Promise<Response>][] = [
   ["POST /import", (r) => importRoute.POST(r)],
   ["POST /login", (r) => loginRoute.POST(r)],
   ["POST /repos/clone", (r) => cloneRoute.POST(r)],
-  ["POST /library", (r) => libraryRoute.POST(r)],
-  ["PATCH /library/:id", (r) => libraryItemRoute.PATCH(r, ctx("x"))],
-  ["DELETE /library/:id", (r) => libraryItemRoute.DELETE(r, ctx("x"))],
+  ["POST /tags", (r) => tagsRoute.POST(r)],
+  ["PATCH /tags", (r) => tagsRoute.PATCH(r)],
+  ["DELETE /tags", (r) => tagsRoute.DELETE(r)],
 ];
 
 describe("guard on write routes", () => {
@@ -230,93 +225,37 @@ describe("guard on write routes", () => {
   });
 });
 
-describe("POST /cards from a recipe", () => {
-  it("keeps recipeId only when it names a recipe in the library", async () => {
-    vi.mocked(library.getItem).mockImplementation((id: string) => (id === "r1" ? ({ id, kind: "recipe" } as never) : id === "n1" ? ({ id, kind: "note" } as never) : undefined));
-    await cardsRoute.POST(req("/cards", { method: "POST", body: { prompt: "p", cwd: tmp, recipeId: "r1" } }));
-    expect(store.createCard).toHaveBeenLastCalledWith(expect.objectContaining({ recipeId: "r1" }));
-    for (const recipeId of ["n1", "gone", 7]) {
-      await cardsRoute.POST(req("/cards", { method: "POST", body: { prompt: "p", cwd: tmp, recipeId } }));
-      expect(store.createCard).toHaveBeenLastCalledWith(expect.not.objectContaining({ recipeId: expect.anything() as unknown }));
-    }
+describe("POST /cards with tags", () => {
+  it("keeps them normalized as yours, and adds new ones to the catalog", async () => {
+    await cardsRoute.POST(req("/cards", { method: "POST", body: { prompt: "p", cwd: tmp, tags: ["#UI", " Bug "] } }));
+    expect(store.createCard).toHaveBeenLastCalledWith(expect.objectContaining({ tags: ["ui", "bug"], tagsBy: "user" }));
+    expect(tagStore.rememberTags).toHaveBeenLastCalledWith(["ui", "bug"]);
+    await cardsRoute.POST(req("/cards", { method: "POST", body: { prompt: "p", cwd: tmp, tags: "ui" } }));
+    expect(store.createCard).toHaveBeenLastCalledWith(expect.not.objectContaining({ tags: expect.anything() as unknown }));
   });
 });
 
-describe("/library", () => {
-  it("lists one project's and yours, or every project's with all=1", () => {
-    libraryRoute.GET(req("/library?folder=%2Fdev%2Fapp"));
-    expect(library.listLibrary).toHaveBeenLastCalledWith({ folder: "/dev/app", all: false });
-    libraryRoute.GET(new Request("http://localhost:3457/api/library?all=1", { headers: WRITE }));
-    expect(library.listLibrary).toHaveBeenLastCalledWith({ folder: null, all: true });
+describe("/tags", () => {
+  it("lists the catalog", async () => {
+    const res = tagsRoute.GET(req("/tags", { headers: { host: "localhost:3457" } }));
+    expect(await res.json()).toEqual({ tags: [{ name: "bug", count: 2 }] });
   });
 
-  it("stars a board card, as a note in its project unless told otherwise", async () => {
-    const card = addCard({ title: "Kit" });
-    const res = await libraryRoute.POST(req("/library", { method: "POST", body: { cardId: card.id } }));
-    expect((await body(res)).item).toMatchObject({ kind: "note", scope: "project" });
-    await libraryRoute.POST(req("/library", { method: "POST", body: { cardId: card.id, kind: "recipe", scope: "mine" } }));
-    expect(library.starCard).toHaveBeenLastCalledWith(expect.objectContaining({ id: card.id }), "recipe", "mine", expect.anything());
-    await libraryRoute.POST(req("/library", { method: "POST", body: { cardId: card.id, kind: "bogus", scope: "bogus" } }));
-    expect(library.starCard).toHaveBeenLastCalledWith(expect.anything(), "note", "project", expect.anything());
+  it("creates, renames, recolours and deletes by name in the body", async () => {
+    expect(await (await tagsRoute.POST(req("/tags", { method: "POST", body: { name: "bug", color: "#ff0000", description: "d" } }))).json()).toEqual({ tag: { name: "bug", color: "#ff0000" } });
+    expect(tagStore.createTag).toHaveBeenLastCalledWith("bug", "#ff0000", "d");
+    expect(await (await tagsRoute.PATCH(req("/tags", { method: "PATCH", body: { name: "bug", rename: "defect" } }))).json()).toEqual({ tag: { name: "defect" } });
+    expect(tagStore.updateTag).toHaveBeenLastCalledWith("bug", { name: "defect", color: undefined, description: undefined });
+    expect(await (await tagsRoute.DELETE(req("/tags", { method: "DELETE", body: { name: "bug" } }))).json()).toEqual({ ok: true });
+    expect(tagStore.deleteTag).toHaveBeenLastCalledWith("bug");
   });
 
-  it("won't star a missing card or the copilot", async () => {
-    addCard({ id: "copilot", role: "copilot" });
-    for (const cardId of ["nope", "copilot"]) {
-      expect((await libraryRoute.POST(req("/library", { method: "POST", body: { cardId } }))).status).toBe(404);
-    }
-    expect(library.starCard).not.toHaveBeenCalled();
-  });
-
-  it("PATCH passes on only valid fields", async () => {
-    await libraryItemRoute.PATCH(req("/library/i", { method: "PATCH", body: { title: "  New  ", kind: "todo", scope: "mine", ticked: [0, "x", 2], folder: "/etc" } }), ctx("i"));
-    expect(library.updateItem).toHaveBeenLastCalledWith("i", { title: "New", kind: "todo", scope: "mine", ticked: [0, 2] });
-    await libraryItemRoute.PATCH(req("/library/i", { method: "PATCH", body: { title: " ", kind: "page", scope: "everyone" } }), ctx("i"));
-    expect(library.updateItem).toHaveBeenLastCalledWith("i", {});
-  });
-
-  it("DELETE removes it", async () => {
-    expect((await libraryItemRoute.DELETE(req("/library/i", { method: "DELETE" }), ctx("i"))).status).toBe(200);
-    expect(library.removeItem).toHaveBeenCalledWith("i");
-  });
-});
-
-describe("GET /library/:id/page and files", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-lib-page-"));
-  fs.mkdirSync(path.join(dir, "files"));
-  fs.writeFileSync(path.join(dir, "index.html"), "<html>steps</html>");
-  fs.writeFileSync(path.join(dir, "files", "1-shot.png"), "png");
-  fs.writeFileSync(path.join(dir, "secret.txt"), "no");
-  const read = { host: "localhost:3457" };
-
-  it("serves a recipe's page, and a to-do's saved page with its ticks wired, under the CSP", async () => {
-    vi.mocked(library.getItem).mockReturnValue({ id: "r", kind: "recipe" } as never);
-    let res = await libraryPageRoute.GET(req("/library/r/page", { headers: read }), ctx("r"));
-    expect(await res.text()).toBe("<html>recipe page</html>");
-    expect(res.headers.get("content-security-policy")).toContain("script-src");
-
-    vi.mocked(library.getItem).mockReturnValue({ id: "t", kind: "todo" } as never);
-    vi.mocked(library.itemDir).mockReturnValue(dir);
-    res = await libraryPageRoute.GET(req("/library/t/page", { headers: read }), ctx("t"));
-    expect(await res.text()).toBe("<html>steps</html><script>ticks</script>");
-  });
-
-  it("404s for an item that's gone or a page that wasn't saved", async () => {
-    vi.mocked(library.getItem).mockReturnValue(undefined);
-    expect((await libraryPageRoute.GET(req("/library/x/page", { headers: read }), ctx("x"))).status).toBe(404);
-    vi.mocked(library.getItem).mockReturnValue({ id: "n", kind: "note" } as never);
-    vi.mocked(library.itemDir).mockReturnValue(path.join(dir, "missing"));
-    expect((await libraryPageRoute.GET(req("/library/n/page", { headers: read }), ctx("n"))).status).toBe(404);
-  });
-
-  it("serves a page's files, and nothing outside files/", async () => {
-    vi.mocked(library.getItem).mockReturnValue({ id: "t", kind: "todo" } as never);
-    vi.mocked(library.itemDir).mockReturnValue(dir);
-    const file = (name: string) => libraryFileRoute.GET(req(`/library/t/files/${name}`, { headers: read }), { params: Promise.resolve({ id: "t", name }) });
-    const ok = await file("1-shot.png");
-    expect(ok.status).toBe(200);
-    expect(ok.headers.get("content-type")).toBe("image/png");
-    for (const name of ["../secret.txt", "../index.html", ".hidden", "nope.png"]) expect((await file(name)).status).toBe(404);
+  it("answers 400 with the error when the store refuses, or the body isn't JSON", async () => {
+    const bad = await tagsRoute.POST(req("/tags", { method: "POST", body: {} }));
+    expect(bad.status).toBe(400);
+    expect((await body(bad)).error).toBe("A tag needs a name.");
+    expect((await tagsRoute.PATCH(req("/tags", { method: "PATCH", body: "{" }))).status).toBe(400);
+    expect((await tagsRoute.DELETE(req("/tags", { method: "DELETE", body: "{" }))).status).toBe(400);
   });
 });
 
@@ -329,6 +268,7 @@ describe("guard on read routes", () => {
     ["GET /settings", (r) => settingsRoute.GET(r)],
     ["GET /projects", (r) => projectsRoute.GET(r)],
     ["GET /login", (r) => loginRoute.GET(r)],
+    ["GET /tags", (r) => Promise.resolve(tagsRoute.GET(r))],
   ];
 
   it.each(reads)("%s rejects a foreign host", async (_name, call) => {

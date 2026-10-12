@@ -74,9 +74,9 @@ describe("guard", () => {
     expect((await call(req("/x", { headers: READ }))).status).toBe(200);
   });
 
-  it("POST /new-thread-page rejects a foreign host and a missing x-threadboard header", async () => {
-    expect((await newThreadPageRoute.POST(req("/new-thread-page", { method: "POST", headers: { host: "evil.com", "x-threadboard": "1" } }))).status).toBe(403);
-    expect((await newThreadPageRoute.POST(req("/new-thread-page", { method: "POST", headers: READ }))).status).toBe(403);
+  it("POST /new-thread-page rejects a foreign host and a missing x-threadboard header", () => {
+    expect(newThreadPageRoute.POST(req("/new-thread-page", { method: "POST", headers: { host: "evil.com", "x-threadboard": "1" } })).status).toBe(403);
+    expect(newThreadPageRoute.POST(req("/new-thread-page", { method: "POST", headers: READ })).status).toBe(403);
     expect(glance.newThreadUrl).not.toHaveBeenCalled();
   });
 });
@@ -154,7 +154,7 @@ describe("GET /quality", () => {
 
 describe("POST /new-thread-page", () => {
   it("returns the splash page url", async () => {
-    const res = await newThreadPageRoute.POST(req("/new-thread-page", { method: "POST" }));
+    const res = newThreadPageRoute.POST(req("/new-thread-page", { method: "POST" }));
     expect(await res.json()).toEqual({ url: "file:///pages/new-thread.html" });
   });
 
@@ -162,7 +162,7 @@ describe("POST /new-thread-page", () => {
     vi.mocked(glance.newThreadUrl).mockImplementationOnce(() => {
       throw new Error("ENOSPC");
     });
-    const res = await newThreadPageRoute.POST(req("/new-thread-page", { method: "POST" }));
+    const res = newThreadPageRoute.POST(req("/new-thread-page", { method: "POST" }));
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "ENOSPC" });
   });

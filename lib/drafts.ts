@@ -16,3 +16,18 @@ export function writeDraft(key: string, markdown: string) {
     else localStorage.removeItem(key);
   } catch {}
 }
+
+// What you were typing to a thread in its reply box.
+export const replyDraftKey = (cardId: string) => `weft.reply.${cardId}`;
+
+// Moves one draft onto the end of another and returns the result, e.g. the reply box's text into a review
+// step's feedback box when the tour takes the reply box's place. Nothing to move returns "".
+export function moveDraft(from: string, to: string): string {
+  const moving = readDraft(from);
+  if (!moving.trim()) return "";
+  const there = readDraft(to);
+  const merged = there.trim() ? `${there.trimEnd()}\n\n${moving}` : moving;
+  writeDraft(to, merged);
+  writeDraft(from, "");
+  return merged;
+}

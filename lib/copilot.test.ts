@@ -19,6 +19,8 @@ vi.mock("./runner", () => ({ sendUserMessage: vi.fn(), endSession: vi.fn(async (
 vi.mock("./import", () => ({ startSessionSync: vi.fn() }));
 vi.mock("./search", () => ({ startSearchIndex: vi.fn() }));
 vi.mock("./scheduler", () => ({ startScheduler: vi.fn() }));
+vi.mock("./resume", () => ({ resumeInterrupted: vi.fn() }));
+vi.mock("./github-issues", () => ({ startIssueSync: vi.fn() }));
 vi.mock("./settings", () => ({ listProjects: vi.fn(() => db.projects) }));
 
 const store = await import("./store");
@@ -26,6 +28,8 @@ const runner = await import("./runner");
 const { startSessionSync } = await import("./import");
 const { startSearchIndex } = await import("./search");
 const { startScheduler } = await import("./scheduler");
+const { resumeInterrupted } = await import("./resume");
+const { startIssueSync } = await import("./github-issues");
 const { lastSeen } = await import("./copilot-digest");
 const { ensureCopilot, sendToCopilot, resetCopilot, prewarm } = await import("./copilot");
 
@@ -117,10 +121,10 @@ describe("resetCopilot", () => {
 });
 
 describe("prewarm", () => {
-  it("starts session sync, search, the scheduler and the copilot's CLI, once per server", () => {
+  it("starts session sync, search, the scheduler, resumes and the copilot's CLI, once per server", () => {
     prewarm();
     prewarm();
-    for (const fn of [startSessionSync, startSearchIndex, startScheduler]) expect(fn).toHaveBeenCalledOnce();
+    for (const fn of [startSessionSync, startSearchIndex, startScheduler, resumeInterrupted, startIssueSync]) expect(fn).toHaveBeenCalledOnce();
     expect(db.cards.get(COPILOT_ID)?.role).toBe("copilot");
     expect(runner.warmUp).toHaveBeenCalledExactlyOnceWith(COPILOT_ID);
   });

@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { COPILOT_ID } from "@/lib/types";
 
 // The branches app/api/routes.test.ts doesn't reach: messages to the copilot, the login Terminal
-// action, the new-thread page's folder, a clone with no name, and loosely-shaped settings bodies.
+// action, a clone with no name, and loosely-shaped settings bodies.
 
 vi.mock("next/server", () => ({ connection: async () => {} }));
 vi.mock("@/lib/store", () => ({ getCard: vi.fn((id: string) => ({ id })) }));
-vi.mock("@/lib/runner", () => ({ sendUserMessage: vi.fn(), retryAfterLogin: vi.fn() }));
+vi.mock("@/lib/runner", () => ({ sendUserMessage: vi.fn(), editLastMessage: vi.fn(() => Promise.resolve()), retryAfterLogin: vi.fn() }));
 vi.mock("@/lib/restart", () => ({ restartTurn: vi.fn(() => Promise.resolve()) }));
 vi.mock("@/lib/copilot", () => ({ sendToCopilot: vi.fn() }));
 vi.mock("@/lib/login", () => ({
@@ -17,7 +17,6 @@ vi.mock("@/lib/login", () => ({
   sendLoginInput: vi.fn(),
   cancelLogin: vi.fn(),
 }));
-vi.mock("@/lib/glance", () => ({ newThreadUrl: vi.fn((folder: string | null) => `file:///new?${folder}`) }));
 vi.mock("@/lib/repos", () => ({
   cloneRepo: vi.fn((name: string) => (name ? Promise.resolve(`/dev/${name}`) : Promise.reject(new Error("Pick a repo.")))),
 }));
@@ -39,7 +38,6 @@ const repos = await import("@/lib/repos");
 const settings = await import("@/lib/settings");
 const messagesRoute = await import("./cards/[id]/messages/route");
 const loginRoute = await import("./login/route");
-const newThreadPageRoute = await import("./new-thread-page/route");
 const cloneRoute = await import("./repos/clone/route");
 const settingsRoute = await import("./settings/route");
 
@@ -58,6 +56,13 @@ describe("POST /cards/:id/messages", () => {
     const res = await messagesRoute.POST(post(`/cards/${COPILOT_ID}/messages`, { text: " hi " }), { params: Promise.resolve({ id: COPILOT_ID }) });
     expect(res.status).toBe(200);
     expect(copilot.sendToCopilot).toHaveBeenCalledWith("hi");
+    expect(runner.sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it("edit: true replaces the card's last message instead of sending a new one", async () => {
+    const res = await messagesRoute.POST(post("/cards/c1/messages", { text: " red ", edit: true }), { params: Promise.resolve({ id: "c1" }) });
+    expect(res.status).toBe(200);
+    expect(runner.editLastMessage).toHaveBeenCalledWith("c1", "red");
     expect(runner.sendUserMessage).not.toHaveBeenCalled();
   });
 
@@ -90,13 +95,6 @@ describe("POST /login", () => {
   });
 });
 
-describe("POST /new-thread-page", () => {
-  it("passes a folder through, and treats anything else or a bad body as none", async () => {
-    expect(await (await newThreadPageRoute.POST(post("/new-thread-page", { folder: "/dev/app" }))).json()).toEqual({ url: "file:///new?/dev/app" });
-    expect(await (await newThreadPageRoute.POST(post("/new-thread-page", { folder: 3 }))).json()).toEqual({ url: "file:///new?null" });
-    expect(await (await newThreadPageRoute.POST(post("/new-thread-page", "{"))).json()).toEqual({ url: "file:///new?null" });
-  });
-});
 
 describe("POST /repos/clone", () => {
   it("a body without a name asks the clone for an empty one, which fails", async () => {

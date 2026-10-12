@@ -9,7 +9,9 @@ import Modal from "./Modal";
 
 export type PaletteItem = {
   id: string;
-  group: "Commands" | "Projects" | "Cards" | "Prompts";
+  group: "Recently changed" | "Commands" | "Projects" | "Cards" | "Prompts";
+  // The card a card or prompt item opens, so one card isn't listed twice.
+  cardId?: string;
   label: string;
   // Dimmer text after the label, e.g. a project's path.
   detail?: string;
@@ -24,6 +26,10 @@ export type PaletteItem = {
   icon: IconName;
   // A line of the prompt that matched, with the matched words between \u0001 and \u0002.
   snippet?: string;
+  // A card's last line of output (or its error), on a second line.
+  preview?: string;
+  // How long ago the card last changed, at the row's right edge.
+  when?: string;
   // A key spec from the shortcut registry, drawn as key caps.
   keys?: string;
   run: () => void;
@@ -61,7 +67,7 @@ function ProjectChip({ name }: { name: string }) {
   return (
     <span
       title={`Project: ${name}`}
-      className="flex max-w-[150px] shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[11.5px] font-semibold"
+      className="flex max-w-[180px] shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[13.5px] font-semibold"
       style={{ color: projectInk(name), background: `oklch(0.65 0.14 ${hue} / 0.16)` }}
     >
       <span className="size-1.5 shrink-0 rounded-full" style={{ background: "currentColor" }} />
@@ -98,6 +104,40 @@ function Snippet({ text }: { text: string }) {
         );
       })}
     </>
+  );
+}
+
+// The row's title with its status pill and detail, and the matched prompt line or the card's last output below.
+function ItemText({ item }: { item: PaletteItem }) {
+  return (
+    <span className="min-w-0 flex-1 truncate text-[16px] font-medium text-ink">
+      {item.label}
+      {item.column && (
+        <span className={`ml-2 rounded px-1.5 py-px align-[1px] text-[12.5px] font-semibold ${COLUMN_PILL[item.column]}`}>
+          {COLUMN_LABEL[item.column]}
+        </span>
+      )}
+      {item.detail && <span className="ml-2 text-[14px] font-normal text-faint">{item.detail}</span>}
+      {item.snippet ? (
+        <span className="mt-1 block truncate text-[14.5px] font-normal text-muted">
+          <Snippet text={item.snippet} />
+        </span>
+      ) : (
+        item.preview && <span className="mt-0.5 block truncate text-[14.5px] font-normal text-muted">{item.preview}</span>
+      )}
+    </span>
+  );
+}
+
+function KeyCaps({ keys }: { keys: string }) {
+  return (
+    <span className="flex shrink-0 items-center gap-0.5">
+      {keyCaps(keys).map((cap, i) => (
+        <kbd key={i} className="min-w-[24px] rounded border border-line-strong bg-canvas px-1 py-px text-center font-mono text-[13px] text-muted">
+          {cap}
+        </kbd>
+      ))}
+    </span>
   );
 }
 
@@ -151,8 +191,12 @@ export default function CommandPalette({
     const inScope = (i: PaletteItem) => !scope || i.root === undefined || i.root === scope;
     const byGroup = (group: PaletteItem["group"]) => items.filter((i) => i.group === group && inScope(i));
     if (words.length === 0) {
-      // Nothing typed: every command and project, and only the latest cards (items arrive newest first).
-      return [...byGroup("Commands"), ...byGroup("Projects"), ...byGroup("Cards").slice(0, RECENT_CARDS)];
+      // Nothing typed: the cards that just changed column, every command and project, and the latest
+      // other cards (items arrive newest first).
+      const moved = byGroup("Recently changed");
+      const shown = new Set(moved.map((i) => i.cardId));
+      const latest = byGroup("Cards").filter((i) => !shown.has(i.cardId));
+      return [...moved, ...byGroup("Commands"), ...byGroup("Projects"), ...latest.slice(0, RECENT_CARDS)];
     }
     const promptItems = prompts.query === query.trim() ? prompts.items.filter(inScope) : [];
     return GROUPS.flatMap((group) => {
@@ -193,9 +237,9 @@ export default function CommandPalette({
   }
 
   return (
-    <Modal label="Command palette" onClose={onClose} placement="top" className="max-h-[min(520px,76vh)] w-full max-w-[600px] overflow-hidden">
-        <div className="flex shrink-0 items-center gap-2.5 border-b border-line px-4 py-3">
-          <Icon name="search" size={15} className="text-muted" />
+    <Modal label="Command palette" onClose={onClose} placement="top" className="max-h-[min(680px,82vh)] w-full max-w-[840px] overflow-hidden">
+        <div className="flex shrink-0 items-center gap-2.5 border-b border-line px-4 py-3.5">
+          <Icon name="search" size={19} className="text-muted" />
           <input
             autoFocus
             value={query}
@@ -209,12 +253,12 @@ export default function CommandPalette({
             aria-expanded="true"
             aria-controls="palette-results"
             aria-activedescendant={results[current] ? `palette-${results[current].id}` : undefined}
-            className="min-w-0 flex-1 bg-transparent text-[14px] text-ink outline-none placeholder:text-faint"
+            className="min-w-0 flex-1 bg-transparent text-[18px] text-ink outline-none placeholder:text-faint"
           />
           {currentProject && (
             <label
               title={`Tab: search ${scoped ? "every project" : `only ${currentProject.name}`}`}
-              className={`flex shrink-0 cursor-pointer select-none items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11.5px] font-medium ${
+              className={`flex shrink-0 cursor-pointer select-none items-center gap-1.5 rounded-full border px-2 py-0.5 text-[13.5px] font-medium ${
                 scoped ? "border-transparent bg-accent-soft text-accent" : "border-line-strong text-muted"
               }`}
             >
@@ -230,11 +274,11 @@ export default function CommandPalette({
               <span className="max-w-[140px] truncate">Only {currentProject.name}</span>
             </label>
           )}
-          <kbd className="rounded border border-line-strong bg-sunken px-1.5 py-0.5 font-mono text-[11px] text-muted">Esc</kbd>
+          <kbd className="rounded border border-line-strong bg-sunken px-1.5 py-0.5 font-mono text-[13px] text-muted">Esc</kbd>
         </div>
         <ul id="palette-results" ref={list} role="listbox" className="min-h-0 flex-1 overflow-y-auto p-1.5">
           {results.length === 0 && (
-            <li className="px-3 py-6 text-center text-[13px] text-muted">
+            <li className="px-3 py-6 text-center text-[15px] text-muted">
               Nothing matches “{query.trim()}”{scope && currentProject ? ` in ${currentProject.name}. Press Tab to search every project.` : ""}
             </li>
           )}
@@ -243,7 +287,7 @@ export default function CommandPalette({
             return (
               <li key={item.id} role="presentation">
                 {heading && (
-                  <div className="px-2.5 pb-1 pt-2.5 text-[10.5px] font-semibold uppercase tracking-wider text-faint">{item.group}</div>
+                  <div className="px-2.5 pb-1 pt-2.5 text-[12.5px] font-semibold uppercase tracking-wider text-faint">{item.group}</div>
                 )}
                 <div
                   id={`palette-${item.id}`}
@@ -257,35 +301,12 @@ export default function CommandPalette({
                   }`}
                 >
                   <span className={`flex shrink-0 ${item.project ? "" : "text-muted"}`} style={item.project ? { color: projectInk(item.project) } : undefined}>
-                    <Icon name={item.icon} size={14} />
+                    <Icon name={item.icon} size={18} />
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-ink">
-                    {item.label}
-                    {item.column && (
-                      <span className={`ml-2 rounded px-1.5 py-px align-[1px] text-[10.5px] font-semibold ${COLUMN_PILL[item.column]}`}>
-                        {COLUMN_LABEL[item.column]}
-                      </span>
-                    )}
-                    {item.detail && <span className="ml-2 text-[12px] font-normal text-faint">{item.detail}</span>}
-                    {item.snippet && (
-                      <span className="mt-1 block truncate text-[12.5px] font-normal text-muted">
-                        <Snippet text={item.snippet} />
-                      </span>
-                    )}
-                  </span>
+                  <ItemText item={item} />
                   {item.project && item.group !== "Projects" && !scope && <ProjectChip name={item.project} />}
-                  {item.keys && (
-                    <span className="flex shrink-0 items-center gap-0.5">
-                      {keyCaps(item.keys).map((cap, i) => (
-                        <kbd
-                          key={i}
-                          className="min-w-[20px] rounded border border-line-strong bg-canvas px-1 py-px text-center font-mono text-[11px] text-muted"
-                        >
-                          {cap}
-                        </kbd>
-                      ))}
-                    </span>
-                  )}
+                  {item.when && <span className="w-[64px] shrink-0 text-right text-[13.5px] tabular-nums text-faint">{item.when}</span>}
+                  {item.keys && <KeyCaps keys={item.keys} />}
                 </div>
               </li>
             );

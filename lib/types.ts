@@ -127,8 +127,12 @@ export interface Card {
   model?: string;
   effort?: Effort;
   column: Column;
+  // When the card last moved to another column; the command palette opens on the latest moves.
+  columnAt?: number;
   // Filed away after its Done automations finished; the board hides it until "Show archived".
   archived?: boolean;
+  // Running its /done (or Done's automations) and archived when that ends: the board shows it in Done meanwhile.
+  wrappingUp?: boolean;
   // Skills a "prompt-matches" automation has already run in this thread, so each runs once.
   promptSkills?: string[];
   // The card whose thread started this one, via the board tools.
@@ -169,10 +173,6 @@ export interface Card {
   forkedFrom?: string;
   // When Weft last finished a turn on this card, to tell its own session writes from other apps'.
   lastWeftTurn?: number;
-  // Starred: filed in the library (lib/library.ts) as this item. A starred card is never auto-archived.
-  libraryId?: string;
-  // The library recipe this card was run from.
-  recipeId?: string;
   // The card's thumbnail (lib/card-pictures.ts): its latest picture, and how many images its thread holds.
   thumb?: string;
   pictures?: number;
@@ -181,14 +181,37 @@ export interface Card {
   // Who last named the card: you (typed or renamed it) or Weft's retitle after its first turn (lib/retitle.ts).
   // Either way, Claude Code's own session title no longer replaces it.
   titleBy?: "user" | "auto";
+  // ★: worth keeping. A starred card is never auto-archived.
+  starred?: boolean;
+  // Short labels (lib/tags.ts), the same rules as GitHub labels so they sync with an issue's. Weft's
+  // retitle picks them after a turn (tagsBy "auto") until you edit them (tagsBy "user").
+  tags?: string[];
+  tagsBy?: "user" | "auto";
+  // The GitHub issue this card came from (lib/github-issues.ts).
+  issue?: CardIssue;
   // Messages to send at a set time (lib/schedule.ts), soonest first; lib/scheduler.ts sends them.
   scheduled?: ScheduledMessage[];
+  // A turn the app closed in the middle of; lib/resume.ts carries it on after the restart. `resumes` counts the
+  // carry-on turns in a row (your own message resets it), so a turn that keeps getting cut off stops after a few.
+  interrupted?: boolean;
+  resumes?: number;
   createdAt: number;
   updatedAt: number;
 }
 
+export interface CardIssue {
+  // "owner/name"
+  repo: string;
+  number: number;
+  url: string;
+  state: "open" | "closed";
+  // The issue's updated_at when Weft last read it, to tell its edits from ours.
+  updatedAt: string;
+}
+
 export type ThreadItem =
-  | { kind: "user"; text: string; at: number }
+  // id is the uuid Weft sent the prompt to the CLI with, so ↑ can rewind its turn (lib/edit-last.ts).
+  | { kind: "user"; text: string; at: number; id?: string }
   | { kind: "assistant"; text: string; at: number }
   | {
       kind: "tool";
@@ -213,7 +236,9 @@ export type ThreadItem =
       answer?: string;
       at: number;
     }
-  | { kind: "result"; text: string; costUsd?: number; isError: boolean; at: number };
+  | { kind: "result"; text: string; costUsd?: number; isError: boolean; at: number }
+  // A message you edited with ↑, and the turn it started, folded away when the edit went out.
+  | { kind: "edited"; items: ThreadItem[]; at: number };
 
 export interface Project {
   path: string;
@@ -257,53 +282,9 @@ export interface SettingsView {
   // The mode the new-thread dialog, the API and the copilot's create_card start a card in.
   defaultPermissionMode: PermissionMode;
   // What new threads start on; puku-cli is the escape hatch when Claude hits a plan limit.
-  defaultBackend?: Backend;
+  defaultBackend: Backend;
   automations: Automation[];
   projects: Project[];
-}
-
-// The library (lib/library.ts): starred cards, kept as a recipe to run again, a to-do page, or a note.
-export type LibraryKind = "recipe" | "todo" | "note";
-// "mine" is yours everywhere (like ~/.claude); "project" belongs to one folder.
-export type LibraryScope = "mine" | "project";
-
-export const LIBRARY_KINDS: { id: LibraryKind; label: string; plural: string; icon: string }[] = [
-  { id: "recipe", label: "Recipe", plural: "Recipes", icon: "↻" },
-  { id: "todo", label: "To-do", plural: "To do", icon: "☑" },
-  { id: "note", label: "Note", plural: "Notes", icon: "✎" },
-];
-
-export interface RecipeBlank {
-  name: string;
-  // What to put there, e.g. "investors? press? partners?".
-  hint?: string;
-}
-
-export interface LibraryItem {
-  id: string;
-  kind: LibraryKind;
-  scope: LibraryScope;
-  title: string;
-  // The project folder: where a project item belongs, and where a recipe runs by default.
-  folder: string;
-  // The card it was starred from.
-  cardId?: string;
-  // To-dos and notes: the page was saved (index.html in the item's folder). link is the page the card
-  // showed when it was a live site rather than a file.
-  page?: boolean;
-  link?: string;
-  // To-dos: how many checkboxes the page has, and which ones (by position) you ticked.
-  steps?: number;
-  ticked?: number[];
-  // Recipes: the skill it's saved as, its prompt with {blank}s, and what a run makes.
-  skill?: string;
-  skillPath?: string;
-  prompt?: string;
-  description?: string;
-  blanks?: RecipeBlank[];
-  makes?: string[];
-  createdAt: number;
-  updatedAt: number;
 }
 
 export type LoginState ="running" | "terminal" | "done" | "failed" | "cancelled";
@@ -328,14 +309,32 @@ export interface CliStatus {
 export type BoardEvent =
   | { type: "card"; card: Card }
   | { type: "card_deleted"; id: string }
-  // Appends when index === thread length, otherwise replaces the item at index.
-  | { type: "thread"; cardId: string; item: ThreadItem; index: number }
+  // Appends when index === thread length, otherwise replaces the item at index; truncate drops what follows it.
+  | { type: "thread"; cardId: string; item: ThreadItem; index: number; truncate?: boolean }
   // Streaming text of the assistant message in progress; cleared by the next assistant item.
   | { type: "delta"; cardId: string; text: string }
   | { type: "login"; login: LoginView }
   | { type: "projects"; projects: Project[] }
-  // Something in the library changed; the rail reloads.
-  | { type: "library" };
+  // You signed in or out of your Weft account (lib/account.ts).
+  | { type: "account" };
+
+// Your Weft account (lib/account.ts): optional, for cloud features.
+export type AccountProvider = "github" | "google";
+
+export interface AccountUser {
+  id: string;
+  email: string | null;
+  name: string | null;
+  avatar: string | null;
+  // "github", "google" or "email".
+  provider: string | null;
+}
+
+export interface AccountView {
+  // False until the app has a Supabase key; Settings then says sign-in isn't set up yet.
+  configured: boolean;
+  user: AccountUser | null;
+}
 
 // A folder the new-thread picker offers: a recent project, a git repo found on disk, or both.
 export interface LocalRepo {

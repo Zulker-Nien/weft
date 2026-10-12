@@ -47,6 +47,13 @@ describe("BROWSER_PROMPT", () => {
     expect(bt.BROWSER_PROMPT).toContain("carry the plan out in the same turn");
     expect(bt.BROWSER_PROMPT).toContain("not a stopping point");
   });
+
+  it("puts pages in ~/.weft/show, which survives a reboot, not /tmp", () => {
+    const showDir = path.join(process.env.THREADBOARD_DATA!, "show");
+    expect(bt.BROWSER_PROMPT).toContain(`${showDir}/<topic>.html`);
+    expect(bt.BROWSER_PROMPT).toContain(`${showDir}/<topic>/index.html`);
+    expect(bt.BROWSER_PROMPT).not.toContain("/tmp");
+  });
 });
 
 describe("talking to the shell", () => {

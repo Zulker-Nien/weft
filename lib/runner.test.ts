@@ -1,233 +1,40 @@
 // Characterization tests for lib/runner.ts: they pin what the SDK loop does today (one query() per card,
 // warm spares, permissions, the turn queue) so it can be refactored safely. Where today's behavior looks
-// wrong, the test still pins it and says so in a "CURRENT BEHAVIOR" comment.
+// wrong, the test still pins it and says so in a "CURRENT BEHAVIOR" comment. The fake SDK and the module
+// mocks live in lib/runner.harness.ts; ↑-to-edit's tests are in lib/runner-edit.test.ts.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { assistant, failure, flush, init, makeCard, nth, resetHarness, success, text, toolResultMsg, toolUse, type FakeQuery } from "./runner.harness";
 import type { Card, ThreadItem } from "./types";
 
-// Captured before any test fakes timers, so flush() always really waits.
-const realSetTimeout = globalThis.setTimeout;
+const h = await vi.hoisted(async () => (await import("./runner.harness")).harnessState());
 
-type Options = Record<string, unknown> & {
-  abortController: AbortController;
-  canUseTool: (toolName: string, input: Record<string, unknown>, opts: Record<string, unknown>) => Promise<Record<string, unknown>>;
-};
-
-// A scripted stand-in for the SDK's Query: tests push SDK messages with emit(), and it records the user
-// messages runner feeds into its prompt.
-class FakeQuery {
-  options: Options;
-  received: string[] = [];
-  inputClosed = false;
-  interrupt = vi.fn(async () => {});
-  setPermissionMode = vi.fn(async () => {});
-  setModel = vi.fn(async () => {});
-  applyFlagSettings = vi.fn(async () => {});
-  usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET = vi.fn((): Promise<unknown> => Promise.resolve({}));
-  private queue: unknown[] = [];
-  private wake?: () => void;
-  private done = false;
-  private error?: Error;
-
-  constructor({ prompt, options }: { prompt: AsyncIterable<{ message: { content: unknown } }>; options: Options }) {
-    this.options = options;
-    // The real SDK throws once its abort controller fires.
-    options.abortController.signal.addEventListener("abort", () => this.fail(new Error("Claude Code process aborted by user")));
-    void (async () => {
-      for await (const m of prompt) {
-        const c = m.message.content;
-        this.received.push(typeof c === "string" ? c : JSON.stringify(c));
-      }
-      this.inputClosed = true;
-    })();
-  }
-
-  get aborted() {
-    return this.options.abortController.signal.aborted;
-  }
-
-  emit(...msgs: unknown[]) {
-    this.queue.push(...msgs);
-    this.wake?.();
-  }
-
-  end() {
-    this.done = true;
-    this.wake?.();
-  }
-
-  fail(err: Error) {
-    this.error = err;
-    this.wake?.();
-  }
-
-  async *[Symbol.asyncIterator]() {
-    for (;;) {
-      while (this.queue.length) yield this.queue.shift();
-      if (this.error) throw this.error;
-      if (this.done) return;
-      await new Promise<void>((resolve) => (this.wake = resolve));
-      this.wake = undefined;
-    }
-  }
-}
-
-const h = vi.hoisted(() => ({
-  cards: new Map<string, Card>(),
-  threads: new Map<string, ThreadItem[]>(),
-  queries: [] as FakeQuery[],
-  keepAlive: 0,
-  openElsewhere: false,
-  startLogin: [] as { backend: string; onDone?: () => void }[],
-  skillsForPrompt: [] as string[],
-  publish: [] as unknown[],
-  execCalls: [] as string[][],
-  // Make the faked which / git / startLogin throw.
-  execFails: false,
-  loginFails: false,
-}));
-
-vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
-  query: (args: ConstructorParameters<typeof FakeQuery>[0]) => {
-    const q = new FakeQuery(args);
-    h.queries.push(q);
-    return q;
-  },
-  tool: (name: string) => ({ name }),
-  createSdkMcpServer: (opts: { name: string }) => ({ type: "sdk", name: opts.name }),
-}));
-
-vi.mock("./store", () => ({
-  DATA_DIR: "/nonexistent-weft-test-data",
-  getCard: (id: string) => h.cards.get(id),
-  listCards: () => [...h.cards.values()],
-  createCard: () => {
-    throw new Error("not used");
-  },
-  updateCard: (id: string, patch: Partial<Card>) => {
-    const card = h.cards.get(id);
-    if (!card) throw new Error(`No card ${id}`);
-    return Object.assign(card, patch);
-  },
-  getThread: (id: string) => {
-    if (!h.threads.has(id)) h.threads.set(id, []);
-    return h.threads.get(id)!;
-  },
-  appendThread: (id: string, item: ThreadItem) => {
-    if (!h.threads.has(id)) h.threads.set(id, []);
-    return h.threads.get(id)!.push(item) - 1;
-  },
-  replaceThreadItem: (id: string, index: number, item: ThreadItem) => {
-    h.threads.get(id)![index] = item;
-  },
-}));
-
-vi.mock("./bus", () => ({ publish: (e: unknown) => h.publish.push(e) }));
-vi.mock("./env", () => ({ cliEnv: () => ({ PATH: "/usr/bin" }) }));
-vi.mock("./import", () => ({ isOpenElsewhere: () => h.openElsewhere }));
-vi.mock("./settings", () => ({
-  keepAliveMinutes: () => h.keepAlive,
-  threadPrompt: () => "THREAD PROMPT",
-  defaultPermissionMode: () => "bypassPermissions",
-  touchProject: () => {},
-  automations: () => [],
-}));
-vi.mock("./login", () => ({
-  isNotLoggedInError: (text: string) => /not logged in|please run \/login|invalid api key/i.test(text),
-  isRateLimitError: (text: string) => /rate.?limit|hit your limit|usage limit|limit reached|limit exceeded/i.test(text),
-  startLogin: (backend: string, onDone?: () => void) => {
-    if (h.loginFails) throw new Error("claude isn't on this app's PATH.");
-    h.startLogin.push({ backend, onDone });
-    return {};
-  },
-}));
+vi.mock("@anthropic-ai/claude-agent-sdk", async () => (await import("./runner.harness")).sdkMock(h));
+vi.mock("./store", async () => (await import("./runner.harness")).storeMock(h));
+vi.mock("./bus", async () => (await import("./runner.harness")).busMock(h));
+vi.mock("./env", async () => (await import("./runner.harness")).envMock());
+vi.mock("./import", async () => (await import("./runner.harness")).importMock(h));
+vi.mock("./settings", async () => (await import("./runner.harness")).settingsMock(h));
+vi.mock("./login", async () => (await import("./runner.harness")).loginMock(h));
 vi.mock("./automations", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./automations")>()),
   skillsForPrompt: () => h.skillsForPrompt,
 }));
-vi.mock("node:child_process", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("node:child_process")>();
-  const execFileSync = (cmd: string, args: string[]) => {
-    h.execCalls.push([cmd, ...args]);
-    if (h.execFails) throw new Error("exec failed");
-    if (cmd === "/usr/bin/which") return "/opt/bin/puku-cli\n";
-    if (args.includes("rev-parse")) return "main\n";
-    if (args.includes("--numstat")) return "3\t1\ta.ts\n2\t0\tb.ts\n";
-    return "";
-  };
-  return { ...actual, default: { ...actual, execFileSync }, execFileSync };
-});
+vi.mock("node:child_process", async (importOriginal) =>
+  (await import("./runner.harness")).childProcessMock(h, await importOriginal<typeof import("node:child_process")>()),
+);
 
 type Runner = typeof import("./runner");
 let runner: Runner;
 let cwd: string;
-
 const g = globalThis as Record<string, unknown>;
-const GLOBALS = ["__threadboardSessions", "__threadboardSpares", "__threadboardLoginWaiters", "__weftQueued", "__weftArchiveAfter"];
 
-async function flush(times = 3) {
-  for (let i = 0; i < times; i++) await new Promise((resolve) => realSetTimeout(resolve, 2));
-}
-
-function addCard(over: Partial<Card> = {}): Card {
-  const id = over.id ?? `card-${h.cards.size + 1}`;
-  const card: Card = {
-    id,
-    title: "A card",
-    prompt: "do it",
-    cwd,
-    backend: "claude",
-    permissionMode: "default",
-    column: "todo" as Card["column"],
-    createdAt: 0,
-    updatedAt: 0,
-    ...over,
-  };
-  h.cards.set(id, card);
-  return card;
-}
-
+const addCard = (over: Partial<Card> = {}) => makeCard(h, cwd, over);
 const card = (id: string) => h.cards.get(id)!;
-const thread = (id: string) => h.threads.get(id) ?? [];
-// The item at index i (negative counts from the end); throws a clear error when it doesn't exist.
-function nth<T>(arr: readonly T[], i: number, what = "item"): T {
-  const item = arr.at(i);
-  if (item === undefined) throw new Error(`No ${what} at index ${String(i)} (have ${String(arr.length)})`);
-  return item;
-}
+const thread = (id: string): ThreadItem[] => h.threads.get(id) ?? [];
 const lastQuery = () => nth(h.queries, -1, "query");
-
-// SDK messages, with only the fields runner reads.
-const init = (sessionId = "sess-1") => ({ type: "system", subtype: "init", session_id: sessionId });
-const assistant = (...content: unknown[]) => ({ type: "assistant", parent_tool_use_id: null, message: { content } });
-const text = (t: string) => ({ type: "text", text: t });
-const toolUse = (id: string, name: string, input: Record<string, unknown>) => ({ type: "tool_use", id, name, input });
-const toolResultMsg = (id: string, content: string, isError = false) => ({
-  type: "user",
-  parent_tool_use_id: null,
-  message: { role: "user", content: [{ type: "tool_result", tool_use_id: id, content, is_error: isError }] },
-});
-const success = (result: string, over: Record<string, unknown> = {}) => ({
-  type: "result",
-  subtype: "success",
-  result,
-  is_error: false,
-  total_cost_usd: 0.25,
-  session_id: "sess-1",
-  modelUsage: {},
-  ...over,
-});
-const failure = (subtype: string, over: Record<string, unknown> = {}) => ({
-  type: "result",
-  subtype,
-  is_error: true,
-  total_cost_usd: 0.1,
-  session_id: "sess-1",
-  modelUsage: {},
-  ...over,
-});
 
 const STATUS = "BOARD STATUS: column=needs_you | stage=First shot | remaining=add a test";
 
@@ -239,19 +46,7 @@ async function send(id: string, msg = "hello") {
 }
 
 beforeEach(async () => {
-  h.cards.clear();
-  h.threads.clear();
-  h.queries.length = 0;
-  h.keepAlive = 0;
-  h.openElsewhere = false;
-  h.startLogin.length = 0;
-  h.skillsForPrompt = [];
-  h.publish.length = 0;
-  h.execCalls.length = 0;
-  h.execFails = false;
-  h.loginFails = false;
-  for (const key of GLOBALS) Reflect.deleteProperty(g, key);
-  cwd = fs.mkdtempSync(path.join(os.tmpdir(), "weft-runner-"));
+  cwd = resetHarness(h);
   vi.resetModules();
   runner = await import("./runner");
 });
@@ -264,9 +59,9 @@ afterEach(async () => {
 
 describe("sendMessage", () => {
   it("opens one query, moves the card to running and echoes the user item", async () => {
-    addCard({ id: "c1" });
+    addCard({ id: "c1", interrupted: true, resumes: 2 });
     runner.sendMessage("c1", "build it");
-    expect(card("c1")).toMatchObject({ column: "running", lastLine: "Thinking…", pending: null, archived: false });
+    expect(card("c1")).toMatchObject({ column: "running", lastLine: "Thinking…", pending: null, archived: false, interrupted: undefined, resumes: undefined });
     expect(thread("c1")).toEqual([expect.objectContaining({ kind: "user", text: "build it" })]);
     expect(runner.isBusy("c1")).toBe(true);
     await flush();
@@ -289,9 +84,9 @@ describe("sendMessage", () => {
       promptSuggestions: true,
       allowDangerouslySkipPermissions: true,
       pathToClaudeCodeExecutable: undefined,
-      env: { PATH: "/usr/bin" },
+      env: { PATH: "/usr/bin" }, hooks: { PreToolUse: [] },
     });
-    expect((q.options.systemPrompt as { append: string }).append).toContain("THREAD PROMPT");
+    expect((q.options.systemPrompt as { append: string }).append).toMatch(/mcp__secrets__fill_field[\s\S]*THREAD PROMPT/);
     expect(Object.keys(q.options.mcpServers as object)).toEqual(["browser", "secrets", "board"]);
   });
 
@@ -659,7 +454,7 @@ describe("queueMessages", () => {
     await flush();
     lastQuery().emit(success("wrapped up"));
     await flush();
-    expect(card("c1")).toMatchObject({ column: "done", archived: true });
+    expect(card("c1")).toMatchObject({ column: "done", archived: true, wrappingUp: false });
   });
 
   it("sendUserMessage queues the skills a prompt-matches rule wants", async () => {
@@ -886,6 +681,7 @@ describe("login", () => {
     await flush();
     expect(card("c1")).toMatchObject({ column: "review", error: "spawn ENOENT", lastLine: "Stopped", warm: false });
   });
+
 });
 
 describe("the CLI going away", () => {
@@ -1061,7 +857,7 @@ describe("edges", () => {
 
   it("archiveWhenIdle archives an idle card now, but keeps a starred one on the board", () => {
     addCard({ id: "c1" });
-    addCard({ id: "c2", libraryId: "lib-1" });
+    addCard({ id: "c2", starred: true });
     runner.archiveWhenIdle("c1");
     runner.archiveWhenIdle("c2");
     expect(card("c1").archived).toBe(true);
@@ -1200,7 +996,7 @@ describe("more edges", () => {
     lastQuery().emit(failure("error_during_execution"));
     await stopping;
     await flush();
-    expect(card("c1")).toMatchObject({ archived: false, column: "review" });
+    expect(card("c1")).toMatchObject({ archived: false, column: "review", wrappingUp: false });
   });
 
   it("a picked-up session changed outside Weft in the last 10 minutes is forked", async () => {

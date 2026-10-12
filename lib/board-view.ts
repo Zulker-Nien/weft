@@ -42,10 +42,15 @@ export function groupByColumn(cards: Card[], view: BoardView, rootOf: (cwd: stri
       const haystack = [card.title, card.prompt, card.lastLine, card.stage, card.remaining].join(" ").toLowerCase();
       if (!haystack.includes(needle)) continue;
     }
-    groups.get(card.column)?.push(card);
+    groups.get(shownColumn(card))?.push(card);
   }
   for (const list of groups.values()) list.sort(SORTERS[view.sort]);
   return groups;
+}
+
+// Where the board draws a card: a running one that's wrapping up (/done) already sits in Done.
+export function shownColumn(card: Card): Column {
+  return card.wrappingUp && card.column === "running" ? "done" : card.column;
 }
 
 // The cards a filter matches, most recently active first, for the filter box's quick-open list.
@@ -90,6 +95,16 @@ export function stepThrough<T>(options: readonly T[], current: T, by: number): T
   const at = Math.max(0, options.indexOf(current));
   const next = options[(at + by + options.length) % options.length];
   return next === undefined ? current : next;
+}
+
+export const RECENT_MOVE_MS = 24 * 60 * 60 * 1000;
+
+// The cards that moved column lately, latest move first: what the command palette opens on.
+export function recentMoves(cards: Card[], now: number, limit = 5): Card[] {
+  return cards
+    .filter((c) => c.role !== "copilot" && c.columnAt !== undefined && now - c.columnAt < RECENT_MOVE_MS)
+    .toSorted((a, b) => (b.columnAt ?? 0) - (a.columnAt ?? 0))
+    .slice(0, limit);
 }
 
 // Columns whose arrival marks a card unseen: the ones that want you to look.

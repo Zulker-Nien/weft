@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cardMenu, columnMenu, resumeCommand, starMenu, type MenuItem } from "./card-menu";
+import { cardMenu, columnMenu, resumeCommand, type MenuItem } from "./card-menu";
 import type { Card } from "./types";
 
 function card(over: Partial<Card> = {}): Card {
@@ -9,25 +9,12 @@ function card(over: Partial<Card> = {}): Card {
 const ids = (items: MenuItem[]) => items.flatMap((i) => ("id" in i ? [i.id] : []));
 const item = (items: MenuItem[], id: string) => items.find((i) => "id" in i && i.id === id) as { enabled?: boolean; checked?: boolean; label: string; accelerator?: string } | undefined;
 
-describe("starMenu", () => {
-  it("is just the library part of the card menu, with the same keys", () => {
-    expect(ids(starMenu(card()))).toEqual(["star:recipe", "star:todo", "star:note"]);
-    expect(item(starMenu(card()), "star:recipe")?.accelerator).toBe("Shift+R");
-    expect(ids(starMenu(card({ libraryId: "x" })))).toEqual(["show-in-library", "unstar"]);
-  });
-});
-
 describe("cardMenu", () => {
-  it("offers to star an unstarred card as each library kind, and to unstar a starred one", () => {
+  it("toggles the star, and edits tags, with their keys", () => {
     const plain = cardMenu(card());
-    expect(ids(plain)).toEqual(expect.arrayContaining(["star:recipe", "star:todo", "star:note"]));
-    expect(item(plain, "star:recipe")?.label).toBe("Save as Recipe");
-    expect(item(plain, "star:todo")?.accelerator).toBe("T");
-    expect(ids(plain)).not.toContain("unstar");
-
-    const starred = ids(cardMenu(card({ libraryId: "lib1" })));
-    expect(starred).toEqual(expect.arrayContaining(["show-in-library", "unstar"]));
-    expect(starred.some((id) => id.startsWith("star:"))).toBe(false);
+    expect(item(plain, "star")).toMatchObject({ label: "Star", accelerator: "K" });
+    expect(item(plain, "tags")).toMatchObject({ label: "Tags…", accelerator: "G" });
+    expect(item(cardMenu(card({ starred: true })), "star")?.label).toBe("Unstar");
   });
 
   it("offers every move except the card's own column, flat", () => {
@@ -107,7 +94,7 @@ describe("columnMenu", () => {
   });
 });
 
-describe("cardMenu dev server and library items", () => {
+describe("cardMenu dev server items", () => {
   const withDev = card({ review: { dev: "npm run dev", steps: [] } as unknown as Card["review"] });
 
   it("counts a starting server, or a reachable one Weft didn't start, as up", () => {
@@ -116,12 +103,6 @@ describe("cardMenu dev server and library items", () => {
       expect(got).toEqual(expect.arrayContaining(["dev:restart", "dev:stop"]));
       expect(got).not.toContain("dev:start");
     }
-  });
-
-  it("offers Show in Library and Unstar for a starred card instead of the Star items", () => {
-    const got = ids(cardMenu(card({ libraryId: "lib-1" })));
-    expect(got).toEqual(expect.arrayContaining(["show-in-library", "unstar"]));
-    expect(got.some((id) => id.startsWith("star:"))).toBe(false);
   });
 });
 

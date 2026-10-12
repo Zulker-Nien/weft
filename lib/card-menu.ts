@@ -1,5 +1,5 @@
 import { isLive } from "./format";
-import { BACKEND_LABELS, LIBRARY_KINDS, MODE_OPTIONS, type Backend, type Card, type Column, type DevServerStatus, type LibraryKind, type PermissionMode } from "./types";
+import { MODE_OPTIONS, type Backend, type Card, type Column, type DevServerStatus, type PermissionMode } from "./types";
 
 // The right-click menus on the board, as plain data: the board builds them, the desktop shell
 // shows them natively (electron/main.cjs) and hands back the id of the item picked.
@@ -27,9 +27,8 @@ export type CardAction =
   | "reveal"
   | "copy-path"
   | "copy-resume"
-  | `star:${LibraryKind}`
-  | "unstar"
-  | "show-in-library"
+  | "star"
+  | "tags"
   | "archive"
   | "delete";
 
@@ -69,11 +68,8 @@ const MENU_KEYS: Record<string, string> = {
   reveal: "F",
   "copy-path": "C",
   "copy-resume": "Shift+C",
-  "star:recipe": "Shift+R",
-  "star:todo": "T",
-  "star:note": "K",
-  unstar: "Shift+K",
-  "show-in-library": "I",
+  star: "K",
+  tags: "G",
   archive: "Shift+A",
   delete: "CmdOrCtrl+Backspace",
   // Column menus.
@@ -97,72 +93,46 @@ export function cardMenu(card: Card, dev?: DevServerStatus | null): MenuItem[] {
 
   if (live) items.push({ id: "stop", label: "Stop Turn" });
   for (const skill of MENU_SKILLS) items.push({ id: `skill:${skill}`, label: `Run /${skill}`, enabled: !live });
-  devServerItems(card, dev, items);
+  if (card.review?.dev) {
+    const up = dev?.state === "running" || dev?.state === "starting" || Boolean(dev?.reachable);
+    if (up) items.push({ id: "dev:restart", label: "Restart Dev Server" }, { id: "dev:stop", label: "Stop Dev Server" });
+    else items.push({ id: "dev:start", label: "Start Dev Server" });
+  }
   items.push(SEPARATOR);
 
-  permissionsItems(card, items);
-  items.push(SEPARATOR);
-
-  switchItem(card, live, items);
-  items.push(SEPARATOR);
-
-  fileItems(card, items);
-  items.push(SEPARATOR);
-
-  items.push(...starItems(card), SEPARATOR);
-
-  archiveItems(card, items);
-  return withAccelerators(items, MENU_KEYS);
-}
-
-// Dev server start/restart/stop, based on the current state.
-function devServerItems(card: Card, dev: DevServerStatus | null | undefined, items: MenuItem[]): void {
-  if (!card.review?.dev) return;
-  const up = dev?.state === "running" || dev?.state === "starting" || Boolean(dev?.reachable);
-  if (up) items.push({ id: "dev:restart", label: "Restart Dev Server" }, { id: "dev:stop", label: "Stop Dev Server" });
-  else items.push({ id: "dev:start", label: "Start Dev Server" });
-}
-
-// Applies mid-turn too. Only Claude Code board threads can skip every prompt (YOLO).
-function permissionsItems(card: Card, items: MenuItem[]): void {
+  // Applies mid-turn too. Only Claude Code board threads can skip every prompt (YOLO).
   for (const m of MODE_OPTIONS) {
     if (m.id === "bypassPermissions" && card.backend !== "claude") continue;
     items.push({ id: `mode:${m.id}`, label: `Permissions: ${m.label}`, checked: card.permissionMode === m.id });
   }
-}
+  items.push(SEPARATOR);
+  items.push(switchItem(card, live));
+  items.push(SEPARATOR);
 
-// The escape hatch for plan limits: one-click flip to the other CLI. Disabled mid-turn because
-// the endpoint refuses; the menu should match.
-function switchItem(card: Card, live: boolean, items: MenuItem[]): void {
-  const otherBackend: Backend = card.backend === "puku" ? "claude" : "puku";
-  items.push({
-    id: `switch:${otherBackend}`,
-    label: `Run on ${BACKEND_LABELS[otherBackend]}${card.rateLimitHit ? " (hit plan limit)" : ""}`,
-    enabled: !live,
-  });
-}
-
-// New thread, reveal in Finder, copy path, copy resume.
-function fileItems(card: Card, items: MenuItem[]): void {
   items.push({ id: "new-here", label: "New Thread in This Folder" }, { id: "reveal", label: "Reveal Folder in Finder" });
   items.push({ id: "copy-path", label: "Copy Folder Path" });
   if (card.sessionId && card.backend === "claude") items.push({ id: "copy-resume", label: "Copy Resume Command" });
-}
+  items.push(SEPARATOR);
 
-// Archive or unarchive, and delete.
-function archiveItems(card: Card, items: MenuItem[]): void {
+  items.push(...markItems(card), SEPARATOR);
+
   items.push({ id: "archive", label: card.archived ? "Unarchive" : "Archive" }, { id: "delete", label: "Delete…" });
+  return withAccelerators(items, MENU_KEYS);
 }
 
-// Starring files the card in the library (lib/library.ts); a starred card is never auto-archived.
-function starItems(card: Card): MenuItem[] {
-  if (card.libraryId) return [{ id: "show-in-library", label: "Show in Library" }, { id: "unstar", label: "Unstar (Remove from Library)" }];
-  return LIBRARY_KINDS.map((k) => ({ id: `star:${k.id}`, label: k.id === "recipe" ? "Save as Recipe" : `Star as ${k.label}` }));
+// The "Run on <other>" menu item. Extracted to keep cardMenu's complexity in check.
+function switchItem(card: Card, live: boolean): MenuItem {
+  const other: Backend = card.backend === "puku" ? "claude" : "puku";
+  return {
+    id: `switch:${other}`,
+    label: `Run on ${other === "puku" ? "puku-cli" : "Claude Code"}${card.rateLimitHit ? " (hit plan limit)" : ""}`,
+    enabled: !live,
+  };
 }
 
-// The ☆ on a card and in its thread's header: just the library part of the card's menu.
-export function starMenu(card: Card): MenuItem[] {
-  return withAccelerators(starItems(card), MENU_KEYS);
+// A starred card is never auto-archived. Tags are the card's own, or ones Weft picked (lib/tags.ts).
+function markItems(card: Card): MenuItem[] {
+  return [{ id: "star", label: card.starred ? "Unstar" : "Star" }, { id: "tags", label: "Tags…" }];
 }
 
 // What to paste in a terminal to pick the thread up in Claude Code.

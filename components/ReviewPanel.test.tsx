@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { makeCard } from "./test-utils";
 import ReviewPanel from "./ReviewPanel";
@@ -46,5 +47,33 @@ describe("ReviewPanel feedback draft", () => {
     await userEvent.type(screen.getByRole("textbox", { name: "Message" }), "broken{Enter}");
     expect(onSend).toHaveBeenCalled();
     expect(localStorage.getItem("weft.review.c1.0")).toBeNull();
+  });
+
+  it("brings what was typed in the reply box along when the tour takes its place", () => {
+    localStorage.setItem("weft.reply.c1", "wehn i hold cmd");
+    setup();
+    expect(screen.getByRole("textbox", { name: "Message" })).toHaveValue("wehn i hold cmd");
+    expect(localStorage.getItem("weft.reply.c1")).toBeNull();
+    expect(localStorage.getItem("weft.review.c1.0")).toBe("wehn i hold cmd");
+    expect(screen.getByRole("button", { name: "Send feedback" })).toBeEnabled();
+  });
+
+  it("adds the reply box's text after feedback already written for the step", () => {
+    localStorage.setItem("weft.review.c1.0", "earlier note");
+    localStorage.setItem("weft.reply.c1", "new thought");
+    setup();
+    expect(screen.getByRole("textbox", { name: "Message" })).toHaveValue("earlier note\n\nnew thought");
+  });
+
+  // The reply box writes its last keystrokes as it unmounts, in the same commit the tour mounts in.
+  it("picks up keystrokes the reply box writes while it unmounts", () => {
+    function LeavingReplyBox() {
+      useEffect(() => () => localStorage.setItem("weft.reply.c1", "typed just now"), []);
+      return null;
+    }
+    const onSend = vi.fn(() => Promise.resolve());
+    const view = render(<LeavingReplyBox />);
+    view.rerender(<ReviewPanel card={card} items={[]} onSend={onSend} />);
+    expect(screen.getByRole("textbox", { name: "Message" })).toHaveValue("typed just now");
   });
 });

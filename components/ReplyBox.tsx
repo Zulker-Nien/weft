@@ -2,23 +2,21 @@
 
 import { useEffect, useEffectEvent, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { api } from "@/lib/client";
-import { readDraft, writeDraft } from "@/lib/drafts";
+import { readDraft, replyDraftKey, writeDraft } from "@/lib/drafts";
 import { alsoHereLine } from "@/lib/overlap";
-import { formatAt, sendLaterOptions, type PlanResets } from "@/lib/schedule";
+import { sendLaterOptions, type PlanResets } from "@/lib/schedule";
 import { FIXED_SHORTCUTS } from "@/lib/shortcut-catalog";
 import { useNow } from "@/lib/use-now";
 import type { Backend, Card, ScheduledMessage } from "@/lib/types";
 import Composer, { type ComposerHandle } from "./Composer";
 import Icon, { Spinner } from "./Icon";
 import KeyCaps from "./KeyCaps";
+import { EditingNote, ReplyQueue } from "./ReplyQueue";
 import SendLater from "./SendLater";
 import Tip from "./Tip";
 
 // The key that stops a running turn from the reply box, as the shortcuts sheet lists it.
 const STOP_KEY = FIXED_SHORTCUTS.find((s) => s.id === "reply-stop")?.keys[0] ?? "ctrl+c";
-
-// What you were writing to a card, kept per card until it's sent.
-const draftKey = (cardId: string) => `weft.reply.${cardId}`;
 
 // While a turn runs, the box says the next message waits; idle, it shows the thread's suggested next message.
 function replyPlaceholder(live: boolean, suggestion: string | undefined, fallback: string) {
@@ -37,6 +35,9 @@ export default function ReplyBox({
   alsoHere = [],
   sendLater,
   status,
+  autoFocus,
+  editLast,
+  onEditing,
   onSend,
   onStop,
 }: {
@@ -58,10 +59,17 @@ export default function ReplyBox({
   };
   // The thread's statusline (context, tokens, plan limits), under the box where you scope the next message.
   status?: ReactNode;
+  // Focused as it opens: the card was just started, so the keyboard stays in the board (Escape closes it).
+  autoFocus?: boolean;
+  // Your last sent message, for ↑ to edit (board threads only). canRewind: Enter replaces it and its turn;
+  // otherwise the edit goes out as a new message. fileEdits: what its turn changed on disk, which stays.
+  editLast?: { text: string; canRewind: boolean; fileEdits: number; onEdit: (text: string) => Promise<void> };
+  // Tells the thread when an edit starts or ends, so it can mark the message and the reply it replaces.
+  onEditing?: (editing: boolean) => void;
   onSend: (text: string) => Promise<void>;
   onStop: () => Promise<void>;
 }) {
-  const [initial] = useState(() => readDraft(draftKey(cardId)));
+  const [initial] = useState(() => readDraft(replyDraftKey(cardId)));
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Messages written while the thread was working; they go out together once the turn ends.
@@ -69,6 +77,8 @@ export default function ReplyBox({
   // Held while you edit a message pulled back out of the queue (or after a queued send failed).
   const [paused, setPaused] = useState(false);
   const [laterOpen, setLaterOpen] = useState(false);
+  // ↑ pulled your last sent message back into the box; Enter replaces it, Escape lets it be.
+  const [editing, setEditingState] = useState(false);
   const now = useNow();
   const composer = useRef<ComposerHandle>(null);
   const draftTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -80,11 +90,13 @@ export default function ReplyBox({
   // The draft not yet written. Closing the thread writes it, so Escape can close with text in the box.
   const unsaved = useRef<{ cardId: string; markdown: string } | null>(null);
 
+  // Also clears a shown error: you are typing again, or the message just went out.
   function saveDraft(markdown: string, now = false) {
+    setError(null);
     clearTimeout(draftTimer.current);
     unsaved.current = { cardId, markdown };
     const write = () => {
-      if (unsaved.current) writeDraft(draftKey(unsaved.current.cardId), unsaved.current.markdown);
+      if (unsaved.current) writeDraft(replyDraftKey(unsaved.current.cardId), unsaved.current.markdown);
       unsaved.current = null;
     };
     if (now) write();
@@ -94,7 +106,7 @@ export default function ReplyBox({
   useEffect(
     () => () => {
       clearTimeout(draftTimer.current);
-      if (unsaved.current) writeDraft(draftKey(unsaved.current.cardId), unsaved.current.markdown);
+      if (unsaved.current) writeDraft(replyDraftKey(unsaved.current.cardId), unsaved.current.markdown);
     },
     [],
   );
@@ -121,15 +133,63 @@ export default function ReplyBox({
     sendOutgoing(outgoing.text);
   }, [outgoing]);
 
-  async function submit(now = false) {
-    if (sending) return;
-    let text: string;
+  // What's in the box, or null once it has shown why the box can't be read.
+  function readBox() {
     try {
-      text = composer.current?.read() ?? "";
+      return composer.current?.read() ?? "";
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      return null;
+    }
+  }
+
+  function setEditing(on: boolean) {
+    setEditingState(on);
+    onEditing?.(on);
+  }
+
+  function cancelEdit() {
+    composer.current?.clear();
+    saveDraft("", true);
+    setEditing(false);
+  }
+
+  // Enter on a message ↑ pulled back: it replaces the one you sent. An emptied box just cancels.
+  async function sendEdit(text: string) {
+    if (!text || !editLast) {
+      cancelEdit();
       return;
     }
+    setSending(true);
+    try {
+      await editLast.onEdit(text);
+      cancelEdit();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  // A scheduled message back into an empty box to edit; it stops being scheduled until you schedule it again.
+  function takeBackScheduled(m: ScheduledMessage) {
+    if (!composer.current?.isEmpty()) {
+      setError("Clear the box first to edit a scheduled message.");
+      return;
+    }
+    composer.current.write(m.text);
+    unschedule(m.id);
+  }
+
+  function unschedule(messageId: string) {
+    api.unschedule(cardId, messageId).catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+  }
+
+  async function submit(now = false) {
+    if (sending) return;
+    const text = readBox();
+    if (text === null) return;
+    if (editing) return sendEdit(text);
     if (!text && paused && queue.length > 0) {
       setPaused(false);
       return;
@@ -186,13 +246,8 @@ export default function ReplyBox({
   // Sends the message at `at` from the server, so it goes even if this thread is closed by then.
   async function scheduleAt(at: number) {
     setLaterOpen(false);
-    let text: string;
-    try {
-      text = composer.current?.read() ?? "";
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      return;
-    }
+    const text = readBox();
+    if (text === null) return;
     if (!text) {
       setError("Write a message first.");
       composer.current?.focus();
@@ -231,14 +286,28 @@ export default function ReplyBox({
           return;
         }
         if (takeSuggestion(e)) return;
+        // Escape drops an edit and leaves the message as it was sent (before it would close the thread).
+        if (editing && e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          cancelEdit();
+          return;
+        }
+        if (e.key !== "ArrowUp" || !composer.current?.isEmpty()) return;
         // Up in an empty box pulls the last queued message back to edit; the queue holds meanwhile.
         const last = queue.at(-1);
-        if (e.key === "ArrowUp" && last !== undefined && composer.current?.isEmpty()) {
+        if (last !== undefined) {
           e.preventDefault();
           e.stopPropagation();
           composer.current.write(last);
           setQueue((q) => q.slice(0, -1));
           setPaused(true);
+        } else if (editLast && !editing) {
+          // With nothing queued, it pulls back the last message you sent.
+          e.preventDefault();
+          e.stopPropagation();
+          composer.current.write(editLast.text);
+          setEditing(true);
         }
       }}
       onKeyDown={(e) => {
@@ -258,84 +327,28 @@ export default function ReplyBox({
           <span className="truncate">{alsoHereLine(alsoHere)}</span>
         </p>
       )}
-      {(queue.length > 0 || scheduled.length > 0) && (
-        <ul className="mb-2 flex flex-col gap-1">
-          {scheduled.map((m) => (
-            <li
-              key={m.id}
-              className="flex items-center gap-2 rounded-md bg-sunken px-2.5 py-1.5 text-[12.5px] text-muted"
-              title={`Sends ${new Date(m.at).toLocaleString("en-US", { weekday: "long", hour: "numeric", minute: "2-digit" })}, even if this thread is closed`}
-            >
-              <Icon name="clock" size={11} className="shrink-0" />
-              <span className="shrink-0 font-mono text-[11px]">{formatAt(m.at, now)}</span>
-              <button
-                type="button"
-                onClick={() => {
-                  // Back into an empty box to edit; it stops being scheduled until you schedule it again.
-                  if (!composer.current?.isEmpty()) {
-                    setError("Clear the box first to edit a scheduled message.");
-                    return;
-                  }
-                  composer.current.write(m.text);
-                  void api
-                    .unschedule(cardId, m.id)
-                    .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
-                }}
-                title="Take it back to edit"
-                className="min-w-0 flex-1 truncate text-left hover:text-ink"
-              >
-                {m.text}
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  void api
-                    .unschedule(cardId, m.id)
-                    .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
-                }
-                aria-label="Cancel scheduled message"
-                className="shrink-0 hover:text-ink"
-              >
-                <Icon name="x" size={12} />
-              </button>
-            </li>
-          ))}
-          {queue.map((text, i) => (
-            <li key={i} className="flex items-center gap-2 rounded-md bg-sunken px-2.5 py-1.5 text-[12.5px] text-muted">
-              <span className="shrink-0 text-[11px] uppercase tracking-wide">{paused ? "Paused" : "Queued"}</span>
-              <span className="min-w-0 flex-1 truncate">{text}</span>
-              <button
-                type="button"
-                onClick={() => void sendQueuedNow(i)}
-                disabled={sending}
-                title={live ? "Stop the current turn and send this now" : "Send this now"}
-                className="shrink-0 rounded px-1.5 py-0.5 text-[11.5px] text-ink hover:bg-line disabled:opacity-40"
-              >
-                Send now
-              </button>
-              <button
-                type="button"
-                onClick={() => setQueue((q) => q.filter((_, j) => j !== i))}
-                aria-label="Remove queued message"
-                className="shrink-0 hover:text-ink"
-              >
-                <Icon name="x" size={12} />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <ReplyQueue
+        scheduled={scheduled}
+        queue={queue}
+        paused={paused}
+        live={live}
+        sending={sending}
+        now={now}
+        onTakeBack={takeBackScheduled}
+        onUnschedule={unschedule}
+        onSendNow={(i) => void sendQueuedNow(i)}
+        onRemove={(i) => setQueue((q) => q.filter((_, j) => j !== i))}
+      />
+      {editing && editLast && <EditingNote {...editLast} live={live} />}
       <Composer
         ref={composer}
         variant="reply"
         cwd={cwd}
         initial={initial}
+        autoFocus={autoFocus}
         placeholder={replyPlaceholder(live, suggestion, placeholder)}
         onSubmit={() => void submit()}
-        onChange={(markdown) => {
-          setError(null);
-          saveDraft(markdown);
-        }}
+        onChange={saveDraft}
         sizeClass="min-h-[44px] max-h-[40vh]"
         actions={
           <>

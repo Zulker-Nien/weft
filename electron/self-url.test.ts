@@ -9,10 +9,11 @@ describe("isSelfUrl", () => {
     expect(isSelfUrl("http://127.0.0.1:3000/", own)).toBe(true);
   });
 
-  it("lets other ports, hosts and Weft's library pages through", () => {
+  it("lets other ports and hosts through", () => {
     expect(isSelfUrl("http://localhost:3001/", own)).toBe(false);
     expect(isSelfUrl("https://example.com/", own)).toBe(false);
-    expect(isSelfUrl("http://localhost:3000/api/library/page/x", own)).toBe(false);
+    // Any path on Weft's own server is Weft, even an API route.
+    expect(isSelfUrl("http://localhost:3000/api/tags", own)).toBe(true);
   });
 
   it("never treats file:// pages as Weft, even when Weft itself shows one", () => {

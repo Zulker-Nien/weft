@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { Card, LibraryItem, PendingPermission, Question, ThreadItem } from "./types";
+import type { Card, PendingPermission, Question, ThreadItem } from "./types";
 
 // Capture every tool the SDK MCP server registers, so the tests can call each handler directly.
 // The handler signature is (args, extra) -> { content, isError? } in MCP; the board wraps the result
@@ -71,13 +71,9 @@ vi.mock("./store", () => ({
   },
 }));
 
-// The library (lib/library.ts) reads ~/.weft at import, so it's a fake list the tests fill.
-const libraryItems: LibraryItem[] = [];
-vi.mock("./library", () => ({
-  getItem: (id: string) => libraryItems.find((i) => i.id === id),
-  listLibrary: ({ folder }: { folder?: string } = {}) =>
-    libraryItems.filter((i) => !folder || i.scope === "mine" || i.folder === folder),
-}));
+// The tag catalog (lib/tag-store.ts) writes ~/.weft/tags.json; here it just records what joined it.
+const remembered: string[][] = [];
+vi.mock("./tag-store", () => ({ rememberTags: (tags: string[]) => remembered.push(tags) }));
 
 const touched: string[] = [];
 vi.mock("./settings", () => ({
@@ -128,7 +124,7 @@ beforeEach(() => {
   updated.length = 0;
   touched.length = 0;
   captures.length = 0;
-  libraryItems.length = 0;
+  remembered.length = 0;
   // Every test gets its own real directory so the boards-tools.ts createBoardCard path can be
   // exercised end-to-end against the real folders.resolveFolder (only the "missing dir" test
   // deliberately points at a path that doesn't exist).
@@ -176,7 +172,7 @@ describe("isTrustedTool", () => {
   it("trusts Weft's own in-process tools: the browser pane and the safe board tools", () => {
     expect(isTrustedTool("mcp__browser__navigate", "sdk")).toBe(true);
     expect(isTrustedTool("mcp__board__list_cards", "sdk")).toBe(true);
-    expect(isTrustedTool("mcp__board__create_card", "sdk")).toBe(true);
+    expect(isTrustedTool("mcp__board__create_card", "sdk") && isTrustedTool("mcp__secrets__fill_field", "sdk")).toBe(true);
   });
 
   it("asks for board tools that run agents, and for anything else", () => {
@@ -186,7 +182,7 @@ describe("isTrustedTool", () => {
   });
 
   it("never trusts a tool from a server that isn't in-process, whatever its name", () => {
-    expect(isTrustedTool("mcp__browser__navigate", "stdio")).toBe(false);
+    expect(isTrustedTool("mcp__browser__navigate", "stdio") || isTrustedTool("mcp__secrets__fill_field", "stdio")).toBe(false);
     expect(isTrustedTool("mcp__board__list_cards", undefined)).toBe(false);
   });
 });
@@ -274,6 +270,13 @@ describe("describeBoardTool", () => {
 });
 
 describe("threadBoardMcpServer", () => {
+  it("create_card on a board thread takes tags too", async () => {
+    threadBoardMcpServer(() => undefined, { start: vi.fn() });
+    await capturedTool("create_card").handler({ prompt: "x", folder: testRoot, start: false, tags: ["Docs"] });
+    expect(nth(created, 0, "created card").input).toMatchObject({ tags: ["docs"], tagsBy: "user" });
+  });
+
+
   it("registers only list_cards and create_card (no read, start, send, move, stop, answer)", () => {
     threadBoardMcpServer(() => "parent-1", { start: vi.fn() });
     expect(captures.map((t) => t.name)).toEqual(["list_cards", "create_card"]);
@@ -305,6 +308,16 @@ describe("threadBoardMcpServer", () => {
     expect(lines.find((l: string) => l.startsWith("a "))!.length).toBeLessThan(200);
     expect(text).toContain("latest: done here");
     expect(text).not.toContain("second line");
+  });
+
+  it("list_cards marks starred cards with ★ and shows tags, only when a card has some", async () => {
+    threadBoardMcpServer(() => undefined, { start: vi.fn() });
+    cardStore.set("a", card({ id: "a", title: "Kept", starred: true, tags: ["bug fix", "ui"] }));
+    cardStore.set("b", card({ id: "b", title: "Plain", tags: [] }));
+    const lines = textOf(await capturedTool("list_cards").handler({})).split("\n");
+    expect(lines.find((l) => l.startsWith("a "))).toContain("| ★ Kept | ");
+    expect(lines.find((l) => l.startsWith("a "))).toContain("| tags: bug fix, ui");
+    expect(lines.find((l) => l.startsWith("b "))).not.toMatch(/★|tags:/);
   });
 
   it("list_cards leaves out done and archived cards by default and says how many", async () => {
@@ -412,9 +425,9 @@ describe("boardMcpServer (copilot)", () => {
     boardMcpServer({ start: vi.fn(), stop: async () => {}, answer: vi.fn(), isBusy: () => false });
     expect(captures.map((t) => t.name)).toEqual([
       "list_cards",
-      "list_library",
       "read_thread",
       "create_card",
+      "set_tags",
       "start_card",
       "send_message",
       "move_card",
@@ -508,37 +521,25 @@ describe("boardMcpServer (copilot)", () => {
     expect(nth(created, 1, "created card").input).toMatchObject({ permissionMode: "acceptEdits" });
   });
 
-  it("list_library shows recipes with their prompt and blanks, and to-dos with their ticks", async () => {
+  it("create_card tags the card as the user's, and adds new tags to the catalog", async () => {
     boardMcpServer({ start: vi.fn(), stop: async () => {}, answer: vi.fn(), isBusy: () => false });
-    expect(textOf(await capturedTool("list_library").handler({}))).toBe("The library is empty.");
-    libraryItems.push(
-      { id: "r1", kind: "recipe", scope: "mine", title: "Media kit", folder: testRoot, prompt: "Kit for {product}", blanks: [{ name: "product", hint: "which one" }], createdAt: 1, updatedAt: 1 },
-      { id: "t1", kind: "todo", scope: "project", title: "Set up DNS", folder: testRoot, steps: 4, ticked: [0], createdAt: 1, updatedAt: 1 },
-    );
-    const text = textOf(await capturedTool("list_library").handler({}));
-    expect(text).toContain("recipe: Media kit");
-    expect(text).toContain("scope: mine (every project)");
-    expect(text).toContain("blanks: {product} (which one)");
-    expect(text).toContain("prompt: Kit for {product}");
-    expect(text).toContain("todo: Set up DNS");
-    expect(text).toContain("ticked: 1 of 4");
+    await capturedTool("create_card").handler({ prompt: "X", folder: testRoot, tags: ["#Bug", "bug", " "] });
+    expect(nth(created, 0, "created card").input).toMatchObject({ tags: ["bug"], tagsBy: "user" });
+    expect(remembered).toEqual([["bug"]]);
+    // No tags, or only blank ones: nothing about tags on the card.
+    await capturedTool("create_card").handler({ prompt: "Y", folder: testRoot, tags: [" "] });
+    expect(nth(created, 1, "created card").input).not.toHaveProperty("tags");
   });
 
-  it("create_card runs a recipe only with its blanks filled, and records which recipe", async () => {
-    libraryItems.push({ id: "r1", kind: "recipe", scope: "mine", title: "Media kit", folder: testRoot, prompt: "Kit for {product}", createdAt: 1, updatedAt: 1 });
+  it("set_tags replaces a card's tags, or clears them, and refuses the copilot's own card", async () => {
+    cardStore.set("a", card({ id: "a", title: "A", tags: ["old"], tagsBy: "auto" }));
+    cardStore.set("copilot", card({ id: "copilot", role: "copilot" }));
     boardMcpServer({ start: vi.fn(), stop: async () => {}, answer: vi.fn(), isBusy: () => false });
-    const unfilled = await capturedTool("create_card").handler({ prompt: "Kit for {product}", folder: testRoot, recipe_id: "r1" });
-    expect(unfilled.isError).toBe(true);
-    expect(textOf(unfilled)).toContain("{product}");
-    const missing = await capturedTool("create_card").handler({ prompt: "Kit for Zeph", folder: testRoot, recipe_id: "nope" });
-    expect(textOf(missing)).toContain("No recipe nope");
-    expect(created).toHaveLength(0);
-
-    await capturedTool("create_card").handler({ prompt: "Kit for Zeph", folder: testRoot, recipe_id: "r1" });
-    expect(nth(created, 0, "created card").input).toMatchObject({ prompt: "Kit for Zeph", recipeId: "r1" });
-    // Without a recipe, a prompt with braces is just a prompt.
-    await capturedTool("create_card").handler({ prompt: "Explain {braces}", folder: testRoot });
-    expect(nth(created, 1, "created card").input).not.toHaveProperty("recipeId");
+    expect(textOf(await capturedTool("set_tags").handler({ card_id: "a", tags: ["UI", "launch"] }))).toBe("Tagged “A”: ui, launch.");
+    expect(cardStore.get("a")).toMatchObject({ tags: ["ui", "launch"], tagsBy: "user" });
+    expect(textOf(await capturedTool("set_tags").handler({ card_id: "a", tags: [] }))).toBe("Cleared “A”'s tags.");
+    expect(cardStore.get("a")?.tags).toEqual([]);
+    expect((await capturedTool("set_tags").handler({ card_id: "copilot", tags: ["x"] })).isError).toBe(true);
   });
 
   it("start_card moves from Backlog to Running via the first message and refuses other columns", async () => {

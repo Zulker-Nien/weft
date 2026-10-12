@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { readDraft, writeDraft } from "./drafts";
+import { moveDraft, readDraft, replyDraftKey, writeDraft } from "./drafts";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -29,5 +29,21 @@ describe("drafts", () => {
     });
     expect(readDraft("k")).toBe("");
     expect(() => writeDraft("k", "x")).not.toThrow();
+  });
+
+  it("moves a draft onto another, after what is already there", () => {
+    expect(replyDraftKey("c1")).toBe("weft.reply.c1");
+    writeDraft("from", "the rest");
+    expect(moveDraft("from", "to")).toBe("the rest");
+    expect(readDraft("from")).toBe("");
+    writeDraft("from", "more");
+    expect(moveDraft("from", "to")).toBe("the rest\n\nmore");
+    expect(readDraft("to")).toBe("the rest\n\nmore");
+  });
+
+  it("moves nothing when the source is blank", () => {
+    writeDraft("to", "kept");
+    expect(moveDraft("from", "to")).toBe("");
+    expect(readDraft("to")).toBe("kept");
   });
 });

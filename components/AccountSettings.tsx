@@ -1,0 +1,115 @@
+"use client";
+
+import { useState } from "react";
+import { type AccountBusy, type AccountWaiting, PROVIDER_LABELS, useAccount } from "@/lib/use-account";
+import type { AccountProvider, AccountUser } from "@/lib/types";
+import Avatar from "./Avatar";
+import { Spinner } from "./Icon";
+
+// How a signed-in user came in, from Supabase's app_metadata.provider.
+const PROVIDER_NAMES: Record<string, string> = { ...PROVIDER_LABELS, email: "email" };
+
+const BUTTON =
+  "flex shrink-0 items-center gap-1.5 rounded-md border border-line-strong px-2.5 py-1 text-[12.5px] text-ink hover:bg-sunken disabled:opacity-50";
+
+function SignedIn({ user, busy, onSignOut }: { user: AccountUser; busy: AccountBusy; onSignOut: () => void }) {
+  const label = user.name ?? user.email ?? "?";
+  const via = user.provider ? `via ${PROVIDER_NAMES[user.provider] ?? user.provider}` : "Signed in";
+  return (
+    <div className="flex items-center gap-3 rounded-md border border-line px-3 py-2.5">
+      <Avatar user={user} size={28} />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-[13px] text-ink">{label}</span>
+        <span className="truncate text-[12px] text-muted">
+          {user.name && user.email ? `${user.email} · ${via}` : via}
+        </span>
+      </span>
+      <button onClick={onSignOut} disabled={busy !== null} className={BUTTON}>
+        {busy === "signout" && <Spinner size={11} />}
+        Sign out
+      </button>
+    </div>
+  );
+}
+
+function SignInForm(props: {
+  busy: AccountBusy;
+  waiting: AccountWaiting | null;
+  onProvider: (provider: AccountProvider) => void;
+  onEmail: (email: string) => void;
+}) {
+  const { busy, waiting } = props;
+  const [email, setEmail] = useState("");
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {(Object.keys(PROVIDER_LABELS) as AccountProvider[]).map((id) => (
+          <button key={id} onClick={() => props.onProvider(id)} disabled={busy !== null} className={BUTTON}>
+            {busy === id && <Spinner size={11} />}
+            Continue with {PROVIDER_LABELS[id]}
+          </button>
+        ))}
+      </div>
+      <form
+        className="flex items-center gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          props.onEmail(email);
+        }}
+      >
+        <input
+          type="email"
+          value={email}
+          placeholder="you@example.com"
+          aria-label="Email for a sign-in link"
+          onChange={(e) => setEmail(e.target.value)}
+          className="w-[220px] rounded-md border border-line-strong bg-canvas px-2.5 py-1 text-[12.5px] text-ink outline-none focus:border-accent"
+        />
+        <button type="submit" disabled={busy !== null || !email.trim()} className={BUTTON}>
+          {busy === "email" && <Spinner size={11} />}
+          Email me a link
+        </button>
+      </form>
+      {waiting && (
+        <p className="flex items-center gap-2 text-[12.5px] text-muted">
+          <Spinner size={11} />
+          {waiting.email
+            ? `Sent a link to ${waiting.what}. Open it on this Mac to finish.`
+            : `Finish signing in with ${waiting.what} in your browser.`}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// The Weft account section of Settings. Optional: the board works the same signed out.
+export default function AccountSettings({ titleClass, hintClass }: { titleClass: string; hintClass: string }) {
+  const { state, busy, waiting, error, signIn, sendLink, signOut } = useAccount();
+
+  function body() {
+    if (state.kind === "loading") {
+      return (
+        <div className="flex items-center gap-2 py-2 text-[12.5px] text-muted">
+          <Spinner size={12} /> Checking your account
+        </div>
+      );
+    }
+    if (state.kind === "error") {
+      return <p className="break-words text-[12.5px] text-danger">Couldn&apos;t check your account: {state.error}</p>;
+    }
+    if (!state.view.configured) return <p className="text-[12.5px] text-muted">Sign-in isn&apos;t set up in this build yet.</p>;
+    if (state.view.user) return <SignedIn user={state.view.user} busy={busy} onSignOut={() => void signOut()} />;
+    return <SignInForm busy={busy} waiting={waiting} onProvider={(p) => void signIn(p)} onEmail={(e) => void sendLink(e)} />;
+  }
+
+  return (
+    <section className="flex flex-col gap-2">
+      <div className="flex flex-col gap-0.5">
+        <h3 className={titleClass}>Weft account</h3>
+        <p className={hintClass}>Optional. Signing in turns on cloud features like page sync and share links.</p>
+      </div>
+      {body()}
+      {error && <p className="break-words text-[12.5px] text-danger">{error}</p>}
+    </section>
+  );
+}

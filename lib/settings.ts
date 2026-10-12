@@ -37,6 +37,8 @@ interface Settings {
   projects: Project[];
   // Claude Code sessions whose cards were deleted, so syncing doesn't bring them back.
   dismissedSessions?: string[];
+  // Project folders whose open GitHub issues become Backlog cards (lib/github-issues.ts).
+  issueFolders?: string[];
 }
 
 const FILE = path.join(DATA_DIR, "settings.json");
@@ -51,6 +53,7 @@ function settings(): Settings {
       automations: saved.automations,
       projects: saved.projects ?? [],
       dismissedSessions: saved.dismissedSessions ?? [],
+      issueFolders: saved.issueFolders ?? [],
     };
   });
 }
@@ -116,6 +119,18 @@ export function dismissedSessions(): string[] {
 export function dismissSession(sessionId: string) {
   const s = settings();
   s.dismissedSessions = [...new Set([...(s.dismissedSessions ?? []), sessionId])];
+  save();
+}
+
+// The folders that sync their GitHub issues, in the order they were turned on.
+export function issueFolders(): string[] {
+  return [...(settings().issueFolders ?? [])];
+}
+
+export function setIssueSync(folder: string, on: boolean) {
+  const s = settings();
+  const rest = (s.issueFolders ?? []).filter((f) => f !== folder);
+  s.issueFolders = on ? [...rest, folder] : rest;
   save();
 }
 

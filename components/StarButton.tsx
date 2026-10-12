@@ -1,15 +1,14 @@
 "use client";
 
-// The ☆ that files a card in the library (lib/card-menu.ts starMenu): on a card it shows on hover, in a
-// thread's header always. Starred, it's a ★ that always shows and opens Show in Library and Unstar.
-// No onClick, no button.
+// The ☆ that stars a card: on a card it shows on hover, in a thread's header always. Starred, it's a ★
+// that always shows, and a click unstars it. A starred card is never auto-archived. No onClick, no button.
 export default function StarButton({
   starred,
   onClick,
   variant,
 }: {
   starred: boolean;
-  onClick?: (e: React.MouseEvent) => void;
+  onClick?: () => void;
   variant: "card" | "header";
 }) {
   if (!onClick) return null;
@@ -21,9 +20,9 @@ export default function StarButton({
       onClick={(e) => {
         // It sits inside a card, whose own click opens the thread.
         e.stopPropagation();
-        onClick(e);
+        onClick();
       }}
-      title={starred ? "Starred: show it in your library, or unstar it" : "Star: keep it in your library as a recipe, to-do or note"}
+      title={starred ? "Starred: click to unstar" : "Star: keep it, never auto-archived"}
       aria-label={starred ? "Starred" : "Star"}
       className={`hover:bg-sunken ${size} ${tone}`}
     >

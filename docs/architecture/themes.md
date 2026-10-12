@@ -1,7 +1,7 @@
 # Themes and scenes
 
 Settings → Appearance (or ⌘K "Theme: …") picks how the board looks: **System**, **Light**, **Dark**, or a **scene**:
-one of Weft's own pictures behind the board, with a palette drawn from it and frosted columns.
+one of Weft's own pictures behind the board, with a palette drawn from it and clear columns (a faint edge, no frost) so the picture shows between the cards.
 
 | Scene | Picture (`electron/assets/`) | Builds on |
 | --- | --- | --- |
@@ -21,7 +21,7 @@ one of Weft's own pictures behind the board, with a palette drawn from it and fr
 - `app/globals.css`: the light palette on `:root` and the dark one on `:root[data-theme="dark"]`; each scene is a
   `:root[data-scene="<id>"]` block that overrides the colors and sets `--scene` (its picture) and `--scrim`
   (a gradient that keeps text readable). `:root[data-scene] body` paints scrim, picture, then canvas;
-  `:root[data-scene] [data-column]` frosts the columns (`--sunken` is see-through so the picture shows).
+  `:root[data-scene] [data-column].bg-sunken` makes the columns clear with a faint `--line-strong` edge, so the picture shows between the cards; a drag still lights a column with `bg-accent-soft`.
 - `app/api/scenes/[id]/route.ts`: serves a scene's JPEG from `electron/assets/`. Only ids in `SCENES` resolve, so the
   id can't name another file; localhost-only like every route (`lib/guard.ts`); cached for a day.
 - `components/AppearancePicker.tsx`: the Settings control: three buttons, then a picture tile per scene.
@@ -49,4 +49,4 @@ and sets `nativeTheme.themeSource`.
 
 - Colors come only from CSS variables, so a scene needs no component changes; any new surface should use `--panel`,
   `--card` or `--sunken`, never a hard-coded color.
-- The picture is a CSS background on `body`, behind everything; a column's frost is its own `backdrop-filter`.
+- The picture is a CSS background on `body`, behind everything; columns are clear over it (no `backdrop-filter`).

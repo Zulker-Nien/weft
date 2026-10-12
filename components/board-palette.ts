@@ -1,10 +1,12 @@
-import { SORTERS, type ProjectSummary, type SortKey } from "@/lib/board-view";
+import { api } from "@/lib/client";
+import { activeAt, recentMoves, SORTERS, type ProjectSummary, type SortKey } from "@/lib/board-view";
+import { timeAgo } from "@/lib/format";
 import { SCENES, setTheme, THEMES } from "@/lib/theme";
 import { COLUMNS, type Card, type Column } from "@/lib/types";
 import type { PaletteItem } from "./CommandPalette";
 import { folderName, SORTS } from "./ProjectBar";
 
-// What the board's command palette lists (Board.tsx): its actions, the projects, and every card.
+// What the board's command palette lists (Board.tsx): the cards that just moved, its actions, the projects, and every card.
 
 export interface PaletteState {
   cards: Card[];
@@ -26,6 +28,7 @@ export interface PaletteActions {
   toggleTerminal: () => void;
   openSettings: () => void;
   openHelp: () => void;
+  addSecret: () => void;
   jumpToNeedsYou: () => void;
   archiveCards: (list: Card[]) => void;
   unarchive: (ids: string[]) => void;
@@ -38,10 +41,25 @@ export interface PaletteActions {
   move: (id: string, column: Column) => void;
   chooseProject: (path: string | null) => void;
   openCard: (card: Card) => void;
+  // Shows a message in the board's toast (Import GitHub issues reports its counts there).
+  toast?: (text: string) => void;
 }
 
 const command = (id: string, label: string, icon: PaletteItem["icon"], run: () => void, keys?: string, keywords?: string) =>
   ({ id: `cmd-${id}`, group: "Commands", label, icon, run, keys, keywords }) satisfies PaletteItem;
+
+// The open thread's project, or the most recent one: its open GitHub issues become Backlog cards (lib/github-issues.ts).
+function importIssuesItem(s: PaletteState, a: PaletteActions): PaletteItem[] {
+  const folder = s.selected ? s.rootOf(s.selected.cwd) : s.projectSummaries[0]?.path;
+  if (!folder) return [];
+  const name = folderName(folder);
+  const run = () =>
+    void api.importIssues(folder).then(
+      (r) => a.toast?.(`GitHub issues for ${name}: ${r.added} new, ${r.updated} updated, ${r.archived} archived. Checking again every 5 minutes.`),
+      (err: unknown) => a.toast?.(err instanceof Error ? err.message : String(err)),
+    );
+  return [command("import-issues", `Import GitHub issues into ${name}`, "github", run, undefined, "github issues backlog sync")];
+}
 
 function commandItems(s: PaletteState, a: PaletteActions): PaletteItem[] {
   const { doneToArchive, lastArchived, archivedCount, selected } = s;
@@ -53,7 +71,9 @@ function commandItems(s: PaletteState, a: PaletteActions): PaletteItem[] {
     command("terminal", "Toggle the terminal", "terminal", a.toggleTerminal, "t", "shell console command line"),
     command("settings", "Open settings", "sliders", a.openSettings, ","),
     command("help", "Show keyboard shortcuts", "zap", a.openHelp, "?", "hotkeys keys"),
+    command("add-secret", "Add a secret", "lock", a.addSecret, "shift+s", "vault env key token password"),
     command("needs-you", "Jump to a card that needs you", "alert", a.jumpToNeedsYou, "a", "waiting"),
+    ...importIssuesItem(s, a),
     ...(doneToArchive.length
       ? [command("archive-done", `Archive all ${doneToArchive.length} in Done`, "archive", () => a.archiveCards(doneToArchive), "shift+e", "clear file")]
       : []),
@@ -91,21 +111,30 @@ export function boardPaletteItems(s: PaletteState, a: PaletteActions): PaletteIt
     project: path ? folderName(path) : undefined,
     run: () => a.chooseProject(path),
   }));
-  const cardItems = s.cards
-    .filter((c) => c.role !== "copilot")
-    .toSorted(SORTERS.active)
-    .map((card): PaletteItem => ({
-      id: `card-${card.id}`,
-      group: "Cards",
-      label: card.title,
-      project: folderName(card.cwd),
-      column: card.column,
-      root: s.rootOf(card.cwd),
-      keywords: [card.prompt, card.lastLine, card.stage, card.remaining, folderName(card.cwd)].filter(Boolean).join(" "),
-      icon: "file",
-      run: () => a.openCard(card),
-    }));
-  return [...commandItems(s, a), ...projectItems, ...cardItems];
+  const now = Date.now();
+  const cardItem = (card: Card): PaletteItem => ({
+    id: `card-${card.id}`,
+    cardId: card.id,
+    group: "Cards",
+    label: card.title,
+    project: folderName(card.cwd),
+    column: card.column,
+    root: s.rootOf(card.cwd),
+    keywords: [card.prompt, card.lastLine, card.stage, card.remaining, folderName(card.cwd)].filter(Boolean).join(" "),
+    preview: (card.error || card.lastLine)?.replace(/\s+/g, " ").trim() || undefined,
+    when: timeAgo(activeAt(card), now),
+    icon: "file",
+    run: () => a.openCard(card),
+  });
+  const cardItems = s.cards.filter((c) => c.role !== "copilot").toSorted(SORTERS.active).map(cardItem);
+  // Shown only before you type; the same cards still match a search under Cards.
+  const movedItems = recentMoves(s.cards, now).map((card): PaletteItem => ({
+    ...cardItem(card),
+    id: `moved-${card.id}`,
+    group: "Recently changed",
+    when: timeAgo(card.columnAt ?? now, now),
+  }));
+  return [...movedItems, ...commandItems(s, a), ...projectItems, ...cardItems];
 }
 
 // The prompts the user wrote that matched a search, as palette items that open their card.
@@ -127,6 +156,7 @@ export function promptItems(
         column: card.column,
         root: rootOf(card.cwd),
         snippet: hit.snippet.replace(/\s+/g, " "),
+        when: timeAgo(activeAt(card), Date.now()),
         icon: "file",
         run: () => openCard(card),
       },

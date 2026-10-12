@@ -4,8 +4,11 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { publish } from "./bus";
 import { picturesPatch, threadPictures } from "./card-pictures";
+import { CLOSED_LINE, MAX_RESUMES } from "./card-resume";
+import { foldFrom } from "./edit-last";
 import type { Card, ThreadItem } from "./types";
 import { globalSingleton } from "./global-singleton";
+import { normalizeTags } from "./tags";
 
 // The app was called Threadboard and kept its data in ~/.threadboard. Move that folder to
 // ~/.weft the first time, unless ~/.weft already exists. If the move fails, keep using the old one.
@@ -44,15 +47,58 @@ function loadState(): State {
     for (const card of saved.cards) {
       // A card can't still be live after a restart: its CLI process is gone.
       card.warm = false;
+      delete card.wrappingUp;
       if (card.column === "running" || card.pending) {
         card.column = "review";
         card.pending = null;
-        card.lastLine = "Stopped when the app closed";
+        card.lastLine = CLOSED_LINE;
+        // lib/resume.ts carries the turn on, unless it's been cut off MAX_RESUMES carry-ons in a row.
+        if ((card.resumes ?? 0) < MAX_RESUMES) card.interrupted = true;
       }
       cards.set(card.id, card);
     }
+    if (migrateLibrary([...cards.values()])) fs.writeFileSync(BOARD_FILE, JSON.stringify({ cards: [...cards.values()] }, null, 2));
   }
   return { cards, threads: new Map() };
+}
+
+// The library (recipes, to-dos, notes) gave way to a star and tags. A card that was in it is starred and
+// tagged with its old kind, read from the library's items.json indexes, which stay where they are.
+// Returns whether any card changed, so the board is saved once.
+type LegacyCard = Card & { libraryId?: string; recipeId?: string };
+const KIND_TAGS: Record<string, string> = { recipe: "recipe", todo: "to-do", note: "note" };
+
+function migrateLibrary(cards: LegacyCard[]): boolean {
+  const old = cards.filter((c) => "libraryId" in c || "recipeId" in c);
+  if (!old.length) return false;
+  const kinds = libraryKinds();
+  for (const card of old) {
+    if (card.libraryId) {
+      card.starred = true;
+      const tag = KIND_TAGS[kinds.get(card.libraryId) ?? ""];
+      if (tag) Object.assign(card, { tags: normalizeTags([...(card.tags ?? []), tag]), tagsBy: "user" });
+    }
+    delete card.libraryId;
+    delete card.recipeId;
+  }
+  return true;
+}
+
+// Library item id -> kind, from ~/.weft/library/items.json and each project's under projects/.
+function libraryKinds(): Map<string, string> {
+  const dir = path.join(DATA_DIR, "library");
+  const projects = path.join(dir, "projects");
+  const indexes = [dir, ...(fs.existsSync(projects) ? fs.readdirSync(projects).map((d) => path.join(projects, d)) : [])];
+  const kinds = new Map<string, string>();
+  for (const index of indexes) {
+    try {
+      const { items } = JSON.parse(fs.readFileSync(path.join(index, "items.json"), "utf8")) as { items?: { id: string; kind: string }[] };
+      for (const item of items ?? []) kinds.set(item.id, item.kind);
+    } catch {
+      // No index there, or a broken one: those cards are starred without a kind tag.
+    }
+  }
+  return kinds;
 }
 
 function saveBoard() {
@@ -126,7 +172,9 @@ export function addCards(cards: Card[]) {
 export function updateCard(id: string, patch: Partial<Card>): Card {
   const card = state().cards.get(id);
   if (!card) throw new Error(`No card ${id}`);
-  Object.assign(card, patch, { updatedAt: Date.now() });
+  const now = Date.now();
+  const moved = patch.column !== undefined && patch.column !== card.column;
+  Object.assign(card, patch, { updatedAt: now }, moved ? { columnAt: now } : {});
   saveBoard();
   publish({ type: "card", card });
   return card;
@@ -171,7 +219,7 @@ function setPictures(cardId: string, patch?: Pick<Card, "pictures" | "thumb">) {
 }
 
 // Sets a card's fields that aren't activity (its pane capture, its emoji), leaving updatedAt alone.
-export function decorateCard(id: string, patch: Partial<Pick<Card, "thumb" | "emoji" | "title" | "titleBy">>) {
+export function decorateCard(id: string, patch: Partial<Pick<Card, "thumb" | "emoji" | "title" | "titleBy" | "tags" | "tagsBy">>) {
   const card = state().cards.get(id);
   if (!card) return;
   Object.assign(card, patch);
@@ -192,6 +240,16 @@ export function appendThread(cardId: string, item: ThreadItem): number {
   const card = state().cards.get(cardId);
   if (card) setPictures(cardId, picturesPatch(card, item));
   return items.length - 1;
+}
+
+// Folds the thread from `from` on into one "edited" item: the message ↑ edited and its turn.
+export function foldThread(cardId: string, from: number) {
+  const items = foldFrom(getThread(cardId), from, Date.now());
+  const folded = items[items.length - 1];
+  state().threads.set(cardId, items);
+  saveThread(cardId);
+  setPictures(cardId, threadPictures(items));
+  if (folded) publish({ type: "thread", cardId, item: folded, index: items.length - 1, truncate: true });
 }
 
 export function replaceThreadItem(cardId: string, index: number, item: ThreadItem) {

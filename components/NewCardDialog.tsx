@@ -2,8 +2,25 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api, type NewCardInput } from "@/lib/client";
-import { blanksIn } from "@/lib/library-view";
-import type { Backend, Effort, LibraryItem, PermissionMode } from "@/lib/types";
+import type { Backend, Effort, PermissionMode } from "@/lib/types";
+import {
+  BACKENDS,
+  DRAFT,
+  EFFORTS,
+  LAST_BACKEND,
+  LAST_CWD,
+  MODELS,
+  effortFor,
+  errorText,
+  headline,
+  lastEffort,
+  modelFor,
+  problemWith,
+  remember,
+  rememberPicks,
+  remembered,
+  startButton,
+} from "@/lib/new-thread";
 import Composer, { type ComposerHandle } from "./Composer";
 import Icon from "./Icon";
 import ModePicker from "./ModePicker";
@@ -11,104 +28,13 @@ import { alsoHereLine, busyInFolder } from "@/lib/overlap";
 import type { Card } from "@/lib/types";
 import RepoPicker from "./RepoPicker";
 import { useEscape } from "@/lib/use-escape";
-
-// A styled <select> with the chevron icon stacked on the right.
-function SelectField({
-  label,
-  value,
-  onChange,
-  options,
-  title,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  options: { id: string; label: string }[];
-  title?: string;
-}) {
-  return (
-    <label className="relative flex items-center gap-1.5 rounded-md border border-line-strong py-1.5 pl-2.5 pr-1.5 text-[12px] text-ink" title={title}>
-      <span className="sr-only">{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="cursor-pointer appearance-none bg-transparent pr-4 font-medium outline-none">
-        {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-      </select>
-      <Icon name="chevronDown" size={12} className="pointer-events-none absolute right-1.5" />
-    </label>
-  );
-}
-
-const LAST_CWD = "threadboard.cwd";
-const LAST_BACKEND = "threadboard.backend";
-const LAST_MODEL = "weft.model";
-const LAST_EFFORT = "weft.effort";
-// What you were writing, kept if the dialog closes before the thread is created.
-const DRAFT = "weft.newThreadDraft";
-
-function remembered(key: string) {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function remember(key: string, value: string | null) {
-  try {
-    if (value === null) localStorage.removeItem(key);
-    else localStorage.setItem(key, value);
-  } catch {}
-}
-
-const BACKENDS: { id: Backend; label: string }[] = [
-  { id: "claude", label: "Claude Code" },
-  { id: "puku", label: "puku-cli" },
-];
-
-// The Puku gateway serves these three and answers any other id as puku-ai-2.8.
-const MODELS: Record<Backend, { id: string; label: string }[]> = {
-  claude: [
-    { id: "claude-fable-5-1", label: "Fable 5.1" },
-    { id: "claude-opus-5-5", label: "Opus 5.5" },
-    { id: "claude-sonnet-5-5", label: "Sonnet 5.5" },
-    { id: "claude-haiku-5-5", label: "Haiku 5.5" },
-  ],
-  puku: [
-    { id: "opus-4.8", label: "Opus 4.8" },
-    { id: "puku-ai-2.8", label: "Puku AI 2.8" },
-    { id: "puku-ai-2.7", label: "Puku AI 2.7" },
-  ],
-};
-
-const DEFAULT_MODEL: Record<Backend, string> = {
-  claude: "claude-opus-5-5",
-  puku: "opus-4.8",
-};
-
-// The last model picked for this CLI, or its default.
-function modelFor(backend: Backend) {
-  const saved = remembered(`${LAST_MODEL}.${backend}`);
-  return saved !== null && MODELS[backend].some((m) => m.id === saved)
-    ? saved
-    : DEFAULT_MODEL[backend];
-}
-
-// "" leaves it to the model's own default. A new thread uses the last card's choice, High at first.
-const DEFAULT_EFFORT: Effort = "high";
-const EFFORTS: { id: Effort | ""; label: string }[] = [
-  { id: "", label: "Default effort" },
-  { id: "low", label: "Low effort" },
-  { id: "medium", label: "Medium effort" },
-  { id: "high", label: "High effort" },
-  { id: "xhigh", label: "Extra high effort" },
-  { id: "max", label: "Max effort" },
-];
+import { useHeldModifiers } from "@/lib/use-mod-held";
 
 export default function NewCardDialog({
   cards = [],
   home,
   defaultCwd,
   recentCwd,
-  recipe,
   onClose,
   onCreate,
 }: {
@@ -119,16 +45,11 @@ export default function NewCardDialog({
   defaultCwd?: string;
   // Folder of the most recently active card outside home, used when nothing else is remembered.
   recentCwd?: string;
-  // Run from a library recipe: its prompt, with {blanks} to fill in, instead of the draft.
-  recipe?: LibraryItem;
   onClose: () => void;
-  onCreate: (input: NewCardInput) => Promise<void>;
+  // stay: started with ⌃↵, so the dialog stays open for the next thread and the board doesn't jump to it.
+  onCreate: (input: NewCardInput, opts?: { stay?: boolean }) => Promise<void>;
 }) {
-  const [initial] = useState(() =>
-    recipe ? (recipe.prompt ?? "") : (remembered(DRAFT) ?? ""),
-  );
-  // The recipe's blanks still in the prompt; it can't start until they're filled in.
-  const [blanks, setBlanks] = useState(() => blanksIn(recipe?.prompt ?? ""));
+  const [initial] = useState(() => remembered(DRAFT) ?? "");
   const [cwd, setCwd] = useState(() => {
     // Home isn't a project, so only fall back to it when nothing better is known.
     const last = remembered(LAST_CWD);
@@ -143,20 +64,20 @@ export default function NewCardDialog({
   const [backend, setBackend] = useState<Backend>(
     () => (remembered(LAST_BACKEND) as Backend | null) ?? "claude",
   );
+  const pickedBackend = useRef(false);
   const [model, setModel] = useState(() => modelFor(backend));
-  const [effort, setEffort] = useState<Effort | "">(() => {
-    const saved = remembered(LAST_EFFORT);
-    return EFFORTS.find((e) => e.id === saved)?.id ?? DEFAULT_EFFORT;
-  });
+  const [effort, setEffort] = useState<Effort | "">(lastEffort);
   // Starts in Settings' default mode, unless you pick one before it loads.
   const [permissionMode, setPermissionMode] = useState<PermissionMode>("auto");
   const pickedMode = useRef(false);
-  // Same for the CLI: Settings' default, unless you pick one first.
-  const pickedBackend = useRef(false);
   // Cards get no worktree, so a busy card in this folder would share its working tree.
   const alsoHere = busyInFolder(cards, cwd);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The title of the thread ⌃↵ just started, while the dialog waits for the next one.
+  const [started, setStarted] = useState<string | null>(null);
+  // ⌘ or ⌃ held: the Start button names what ⌘↵ or ⌃↵ will do.
+  const startBtn = startButton(useHeldModifiers());
   const composer = useRef<ComposerHandle>(null);
   const draftTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEscape(true, onClose);
@@ -167,8 +88,7 @@ export default function NewCardDialog({
     api.settings().then(
       (s) => {
         if (!pickedMode.current) setPermissionMode(s.defaultPermissionMode);
-        const { defaultBackend } = s;
-        if (!pickedBackend.current && defaultBackend) setBackend(defaultBackend);
+        if (!pickedBackend.current) setBackend(s.defaultBackend);
       },
       () => {},
     );
@@ -176,11 +96,7 @@ export default function NewCardDialog({
 
   function saveDraft(markdown: string) {
     setError(null);
-    // A recipe's prompt isn't your draft: the draft you had stays for next time.
-    if (recipe) {
-      setBlanks(blanksIn(markdown));
-      return;
-    }
+    setStarted(null);
     clearTimeout(draftTimer.current);
     draftTimer.current = setTimeout(
       () => remember(DRAFT, markdown.trim() ? markdown : null),
@@ -195,51 +111,55 @@ export default function NewCardDialog({
     api.warm({ cwd: folder, backend }).catch(() => {});
   }
 
-  async function submit(start: boolean) {
-    if (busy) return;
-    let prompt: string;
+  // The prompt as written, or null (the reason shown, the box focused) when it can't start yet.
+  function promptToStart() {
     try {
-      prompt = composer.current?.read() ?? "";
+      const prompt = composer.current?.read() ?? "";
+      const problem = problemWith(prompt);
+      if (!problem) return prompt;
+      setError(problem);
+      composer.current?.focus();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorText(err));
+    }
+    return null;
+  }
+
+  // The thread is made: drop the draft, keep the picks for the next one, then close, or (stay) empty the box.
+  function afterCreate(prompt: string, stay: boolean) {
+    clearTimeout(draftTimer.current);
+    remember(DRAFT, null);
+    rememberPicks({ cwd, backend, model, effort });
+    if (!stay) {
+      onClose();
       return;
     }
-    if (!prompt) {
-      setError("Write a prompt first.");
-      composer.current?.focus();
-      return;
-    }
-    if (recipe && blanksIn(prompt).length) {
-      setError(
-        `Fill in ${blanksIn(prompt)
-          .map((b) => `{${b}}`)
-          .join(", ")} first.`,
-      );
-      composer.current?.focus();
-      return;
-    }
+    composer.current?.clear();
+    setStarted(headline(prompt));
+    setBusy(false);
+    composer.current?.focus();
+  }
+
+  // stay (⌃↵) starts the thread and leaves the dialog open, emptied, for another in the same folder.
+  async function submit(start: boolean, stay = false) {
+    if (busy) return;
+    const prompt = promptToStart();
+    if (prompt === null) return;
     setBusy(true);
     try {
-      await onCreate({
+      const input: NewCardInput = {
         prompt,
         cwd,
         backend,
         permissionMode,
         model,
-        effort: (backend === "claude" && effort) || undefined,
-        recipeId: recipe?.id,
+        effort: effortFor(backend, effort),
         start,
-      });
-      clearTimeout(draftTimer.current);
-      if (!recipe) remember(DRAFT, null);
-      remember(LAST_CWD, cwd);
-      remember(LAST_BACKEND, backend);
-      remember(`${LAST_MODEL}.${backend}`, model);
-      // Kept even when it's "", so picking Default effort sticks too.
-      remember(LAST_EFFORT, effort);
-      onClose();
+      };
+      await (stay ? onCreate(input, { stay }) : onCreate(input));
+      afterCreate(prompt, stay);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorText(err));
       setBusy(false);
     }
   }
@@ -248,11 +168,8 @@ export default function NewCardDialog({
   return (
     <aside className="flex w-[44%] min-w-[380px] shrink-0 flex-col bg-panel last:flex-1">
       <div className="flex shrink-0 items-center justify-between border-b border-line px-5 py-3.5">
-        <h2
-          className="min-w-0 truncate text-[15px] font-medium text-ink"
-          title={recipe?.description}
-        >
-          {recipe ? `↻ ${recipe.title}` : "New thread"}
+        <h2 className="min-w-0 truncate text-[15px] font-medium text-ink">
+          New thread
         </h2>
         <button
           onClick={onClose}
@@ -271,6 +188,7 @@ export default function NewCardDialog({
           initial={initial}
           onChange={saveDraft}
           onSubmit={() => void submit(true)}
+          onSubmitAlt={() => void submit(true, true)}
           placeholder="What should this thread do? Paste screenshots or videos right where they belong, or hit the mic and talk."
           sizeClass="h-full min-h-[180px]"
           className="flex-1"
@@ -280,21 +198,49 @@ export default function NewCardDialog({
       <div className="flex shrink-0 flex-wrap items-center gap-2 px-5 pt-3">
         <RepoPicker value={cwd} home={home} onChange={chooseFolder} />
 
-        <SelectField
-          label="Model"
-          value={model}
-          onChange={setModel}
-          options={MODELS[backend]}
-        />
+        <label className="relative flex items-center gap-1.5 rounded-md border border-line-strong py-1.5 pl-2.5 pr-1.5 text-[12px] text-ink">
+          <span className="sr-only">Model</span>
+          <select
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            className="cursor-pointer appearance-none bg-transparent pr-4 font-medium outline-none"
+          >
+            {MODELS[backend].map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+          <Icon
+            name="chevronDown"
+            size={12}
+            className="pointer-events-none absolute right-1.5"
+          />
+        </label>
 
         {backend === "claude" && (
-          <SelectField
-            label="Effort"
-            value={effort}
-            onChange={(v) => setEffort(v as Effort | "")}
-            options={EFFORTS}
+          <label
+            className="relative flex items-center gap-1.5 rounded-md border border-line-strong py-1.5 pl-2.5 pr-1.5 text-[12px] text-ink"
             title="How hard the model thinks before answering"
-          />
+          >
+            <span className="sr-only">Effort</span>
+            <select
+              value={effort}
+              onChange={(e) => setEffort(e.target.value as Effort | "")}
+              className="cursor-pointer appearance-none bg-transparent pr-4 font-medium outline-none"
+            >
+              {EFFORTS.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.label}
+                </option>
+              ))}
+            </select>
+            <Icon
+              name="chevronDown"
+              size={12}
+              className="pointer-events-none absolute right-1.5"
+            />
+          </label>
         )}
 
         <ModePicker
@@ -331,10 +277,6 @@ export default function NewCardDialog({
         <p className="min-w-0 flex-1 truncate text-[12px]">
           {error ? (
             <span className="text-danger">{error}</span>
-          ) : blanks.length > 0 ? (
-            <span className="font-medium text-accent">
-              Fill in {blanks.map((b) => `{${b}}`).join(" ")} in the prompt
-            </span>
           ) : alsoHere.length > 0 ? (
             <span
               className="flex min-w-0 items-center gap-1.5 text-warn"
@@ -343,26 +285,33 @@ export default function NewCardDialog({
               <Icon name="alert" size={12} className="shrink-0" />
               <span className="truncate">{alsoHereLine(alsoHere)}</span>
             </span>
+          ) : started ? (
+            <span className="text-muted">
+              Started “{started}” · write the next one
+            </span>
           ) : (
             <span className="text-faint">
-              <kbd className="font-sans">⌘↵</kbd> starts it · the title comes
-              from the prompt
+              <kbd className="font-sans">⌘↵</kbd> starts it ·{" "}
+              <kbd className="font-sans">⌃↵</kbd> starts it and stays open
             </span>
           )}
         </p>
         <button
           onClick={() => void submit(false)}
-          disabled={busy || blanks.length > 0}
+          disabled={busy}
           className="shrink-0 rounded-md border border-line-strong px-3 py-1.5 text-[13px] text-ink hover:bg-sunken disabled:opacity-50"
         >
           Add to backlog
         </button>
         <button
           onClick={() => void submit(true)}
-          disabled={busy || blanks.length > 0}
-          className="shrink-0 rounded-md bg-accent px-3.5 py-1.5 text-[13px] font-medium text-on-accent hover:opacity-90 disabled:opacity-50"
+          disabled={busy}
+          className="flex shrink-0 items-center gap-1.5 rounded-md bg-accent px-3.5 py-1.5 text-[13px] font-medium text-on-accent hover:opacity-90 disabled:opacity-50"
         >
-          Start now
+          {startBtn.label}
+          <kbd aria-hidden="true" className="font-sans font-normal opacity-60">
+            {startBtn.key}
+          </kbd>
         </button>
       </div>
     </aside>
