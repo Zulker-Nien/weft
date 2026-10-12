@@ -7,7 +7,7 @@ const signal = new AbortController().signal;
 
 describe("isSecretFile", () => {
   it.each([".env", ".env.local", "apps/web/.env.production.local", "/x/.envrc", ".dev.vars", ".env*", "'.env.local'", "/Users/me/.weft/account.json", "~/.weft/account.json",
-    "/Users/me/.weft/device-key.json", "~/.weft/device-key.json", "~/.weft/vercel-token.json", "/Users/me/.weft/vault/acme-web.json", "~/.weft/vault/", "~/.weft/vault"])(
+    "/Users/me/.weft/device-key.json", "~/.weft/device-key.json", "~/.weft/vercel-token.json", "~/.weft/supabase-token.json", "/Users/me/.weft/vault/acme-web.json", "~/.weft/vault/", "~/.weft/vault"])(
     "%s holds secrets",
     (file) => expect(isSecretFile(file, DATA)).toBe(true),
   );
@@ -126,6 +126,21 @@ describe("bashVerdict", () => {
     expect(bashVerdict(script, DATA)).toMatch(/can't be read here/);
     expect(bashVerdict(script.replace(".env.local", "README.md"), DATA)).toBeNull();
   });
+
+  // Under the 256-word cap, a 1 MB script with 8 groups was still 256 copies of itself (~300 MB of strings).
+  it("keeps a huge script with a few `{a, b}` groups to one copy", () => {
+    const groups = "f({a,b}) g({c,d}) h({e,g}) i({j,k}) l({m,n}) o({p,q}) r({s,t}) u({v,w})\n";
+    const script = `python3 - <<'EOF'\n${groups}${"x = 1\n".repeat(200_000)}print(open('.env.local').read())\nEOF`;
+    const started = performance.now();
+    expect(bashVerdict(script, DATA)).toMatch(/can't be read here/);
+    expect(bashVerdict(script.replace(".env.local", "README.md"), DATA)).toBeNull();
+    expect(performance.now() - started).toBeLessThan(2_000);
+  });
+
+  it.each(["~/.weft/account.json", "~/.weft/device-key.json", "~/.weft/vercel-token.json", "~/.weft/supabase-token.json", "~/.weft/vault/acme.json", "~/.weft/*", ".envrc", ".dev.vars", "/proc/1/environ"])(
+    "checks %s past the quick token filter",
+    (name) => expect(bashVerdict(`cat ${name}`, DATA)).toMatch(/can't be read here/),
+  );
 
   it("expands nested and repeated brace groups", () => {
     expect(bashVerdict("cat {README,{notes,docs/guide}}.md{,.bak}", DATA)).toBeNull();

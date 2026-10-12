@@ -24,6 +24,20 @@ Groups in one word also expand in a single pass (`expandGroups`), so a script's 
 
 **Key rule:** never expand input-controlled patterns without counting the result first.
 
+## Follow-up (2026-10-12): the OOM it caused, and the size cap
+
+The server.log crash at 2026-10-11 16:07 UTC (pid 31177, ~8 GB after 350 s, "Ineffective mark-compacts near heap
+limit") was this bug. 31177 was `next dev`'s server process (its own SQLite warning prints at startup; 32435 and
+32704 were later child processes). The native stack runs the CLI's stdout read (`LibuvStreamWrap::OnUvRead`, the SDK's
+hook callback) → a microtask → nested `Array.prototype.flatMap` → `RegExp.prototype.exec`: the old recursive expansion.
+No child-process buffer was at fault: `lib/devserver.ts`, `lib/login.ts`, `electron/secret-run.cjs` and
+`electron/server.cjs` all keep a capped tail.
+
+The 256-word cap still let a 1.2 MB heredoc with 8 groups become 256 copies (300 MB) and check ~51M tokens: 300+ s.
+Now the cap also counts characters (`MAX_EXPANDED_CHARS`, 64 KB; past it the word is checked once with its braces as
+spaces), `secretIn` checks each distinct token once, and tokens with no secret stem (`MAYBE_SECRET`, built from
+`DATA_NAMES`) skip `isSecretFile`'s `path.resolve`. Same script: ~0.2 s.
+
 ## Files
 
 `lib/secret-guard.ts`, `lib/secret-guard.test.ts`

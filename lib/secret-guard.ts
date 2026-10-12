@@ -16,13 +16,13 @@ const SECRET_FILE = /^(\.env([.*?[].*)?|\.envrc|\.dev\.vars)$/i;
 // Files that list names with placeholder values.
 const TEMPLATE = /\.(example|sample|template|dist|defaults)$/i;
 // Weft's own files in the data dir: the sign-in token, the device key, the vault (ciphertext, but
-// threads have no reason to read it) and the sealed Vercel token.
-const DATA_SECRET = /^(account\.json|device-key\.json|vercel-token\.json|vault(\/.*)?)$/i;
+// threads have no reason to read it) and the sealed Vercel and Supabase tokens.
+const DATA_SECRET = /^(account\.json|device-key\.json|vercel-token\.json|supabase-token\.json|vault(\/.*)?)$/i;
 // A process's environment, on Linux.
 const PROC_ENV = /^\/proc\/[^/]+\/environ$/;
 // What a glob like `.e*` or `account*` is tried against.
 const SECRET_NAMES = [".env", ".env.local", ".env.development.local", ".env.production", ".env.production.local", ".envrc", ".dev.vars"];
-const DATA_NAMES = ["account.json", "device-key.json", "vercel-token.json", "vault"];
+const DATA_NAMES = ["account.json", "device-key.json", "vercel-token.json", "supabase-token.json", "vault"];
 
 // A glob as a regex. As in the shell, a leading * or ? skips dotfiles unless dotGlob (ripgrep's globs don't).
 function globRegex(glob: string, dotGlob: boolean): RegExp {
@@ -35,8 +35,10 @@ function globRegex(glob: string, dotGlob: boolean): RegExp {
 }
 
 // Brace expansion multiplies: a heredoc of code with 25 `{a, b}` groups is 2^25 words, which froze the
-// board's server for good (2026-10-12). Past this many words, the glob's pieces are checked one by one.
+// board's server for good (2026-10-12). Past this many words, or this much text (256 copies of a 1 MB
+// heredoc is still 300 MB), the glob's pieces are checked one by one.
 const MAX_EXPANSIONS = 256;
+const MAX_EXPANDED_CHARS = 64_000;
 const GROUP = /\{([^{}]*)\}/g;
 
 const alternatives = (group: RegExpExecArray) => (group[1] ?? "").split(",");
@@ -59,8 +61,10 @@ function expandBraces(glob: string): string[] {
   for (;;) {
     const found = words.map((word) => ({ word, groups: [...word.matchAll(GROUP)] }));
     if (found.every((f) => f.groups.length === 0)) return words;
-    const total = found.reduce((n, f) => n + f.groups.reduce((k, m) => k * alternatives(m).length, 1), 0);
-    if (total > MAX_EXPANSIONS) return glob.split(/[\s{},]+/).filter(Boolean);
+    const counts = found.map((f) => f.groups.reduce((k, m) => k * alternatives(m).length, 1));
+    const total = counts.reduce((n, k) => n + k, 0);
+    const chars = found.reduce((n, f, i) => n + (counts[i] as number) * f.word.length, 0);
+    if (total > MAX_EXPANSIONS || chars > MAX_EXPANDED_CHARS) return [glob.replace(/[{},]/g, " ")];
     words = found.flatMap(expandGroups);
   }
 }
@@ -109,14 +113,14 @@ const ASSIGNMENT = /^[A-Za-z_]\w*=/;
 const nameOf = (words: string[]) => path.basename(words[0] ?? "");
 
 // `FOO=1 sudo env -u X cmd` runs cmd.
-function stripPrefixes(words: string[]): string[] {
+export function stripPrefixes(words: string[]): string[] {
   let i = 0;
   const skip = (w = "") => ASSIGNMENT.test(w) || PREFIXES.has(w);
   while (i < words.length && skip(words[i])) i++;
   return words.slice(i);
 }
 
-function unwrapEnv(words: string[]): string[] {
+export function unwrapEnv(words: string[]): string[] {
   if (nameOf(words) !== "env") return words;
   let i = 1;
   const option = (w = "") => w.startsWith("-") || ASSIGNMENT.test(w);
@@ -154,8 +158,20 @@ function pathTokens(word: string): string[] {
     .filter(Boolean);
 }
 
+// Every secret name above has one of these in it, or a glob reaches it; the rest skip path.resolve.
+const MAYBE_SECRET = new RegExp(`env|dev\\.vars|${DATA_NAMES.map((n) => n.split(".")[0]).join("|")}|[*?[]`, "i");
+
+// Each distinct token once: a 1 MB heredoc is ~600k tokens but only a few thousand different ones.
 function secretIn(words: string[], dataDir: string): string | undefined {
-  return words.flatMap(pathTokens).find((t) => isSecretFile(t, dataDir));
+  const seen = new Set<string>();
+  for (const word of words) {
+    for (const t of pathTokens(word)) {
+      if (seen.has(t)) continue;
+      seen.add(t);
+      if (MAYBE_SECRET.test(t) && isSecretFile(t, dataDir)) return t;
+    }
+  }
+  return undefined;
 }
 
 // The command xargs or find -exec runs on the names it's given.
@@ -371,6 +387,9 @@ export const secretGuard: HookCallback = (input) => {
   );
 };
 
-export const SECRET_GUARD_HOOKS: Partial<Record<HookEvent, HookCallbackMatcher[]>> = {
-  PreToolUse: [{ matcher: "Read|Edit|MultiEdit|NotebookRead|NotebookEdit|Grep|Bash|mcp__browser__open_url", hooks: [secretGuard] }],
+export const SECRET_GUARD_MATCHER: HookCallbackMatcher = {
+  matcher: "Read|Edit|MultiEdit|NotebookRead|NotebookEdit|Grep|Bash|mcp__browser__open_url",
+  hooks: [secretGuard],
 };
+
+export const SECRET_GUARD_HOOKS: Partial<Record<HookEvent, HookCallbackMatcher[]>> = { PreToolUse: [SECRET_GUARD_MATCHER] };
