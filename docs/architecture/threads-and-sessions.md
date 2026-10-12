@@ -54,8 +54,19 @@ stale session on next use, and `closeWhenIdle()` closes one after the keep-alive
 
 `ensureSpare(cwd, backend)` (`lib/runner.ts`) keeps up to `MAX_SPARES` (3) idle
 CLI processes keyed by `backend|cwd`. `adoptSpare()` (`lib/runner.ts`) hands a
-spare to a new card, flips its `permissionMode` via `query.setPermissionMode`, marks
-the card `warm: true`, and immediately starts a fresh spare for that folder.
+spare to a new card, switches it to the card's permission mode, model and effort
+(`switchSpare()` in `lib/spare-switch.ts`), marks the card `warm: true`, and immediately
+starts a fresh spare for that folder.
+
+### Commit and PR attribution
+
+A board thread signs its commits "Co-Authored-By: <model> on Weft" and its PRs "Generated with
+Claude Code on Weft". `signAsWeft()` (`lib/attribution.ts`) passes the CLI's `attribution` setting
+through `query.applyFlagSettings`, which replaces Claude Code's default lines, once the model is known:
+at the session's `init` message (the card's model, else the one the CLI reports) and again when a spare
+takes a card with a different model. `modelName()` turns an id like `claude-opus-5-5[1m]` into
+"Claude Opus 5.5"; an alias or a puku model reads "Claude". The copilot doesn't commit and puku-cli has
+its own attribution, so neither is signed.
 
 Spares open in the default permission mode (`defaultPermissionMode()` in `lib/settings.ts`, Auto unless
 changed in Settings), the same mode `POST /api/cards`, the New thread dialog and the copilot's `create_card`

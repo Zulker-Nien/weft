@@ -203,6 +203,9 @@ loads, so they run as `/weft:<name>`:
 - `/weft:commit` commits the thread's changes with a conventional message (the `commit` skill,
   without its Vercel preview deploy).
 
+A board thread's commits are co-authored by "Claude Opus 5.5 on Weft" (whichever model the card runs)
+and its PRs say "Generated with Claude Code on Weft".
+
 Settings → Skills and automations holds rules of the form "When … run …":
 
 - **a thread starts**: the skill is named in the thread's first message ("Start by using the /x
