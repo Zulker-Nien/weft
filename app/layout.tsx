@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import BuildErrorBar from "@/components/BuildErrorBar";
 import ThemeSync from "@/components/ThemeSync";
 import { THEME_SCRIPT } from "@/lib/theme";
 import "./globals.css";
@@ -33,6 +34,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="h-full overflow-hidden">
         <ThemeSync />
         {children}
+        <BuildErrorBar />
       </body>
     </html>
   );

@@ -415,3 +415,9 @@ button:disabled {
 .card-unseen {
   background-color: color-mix(in srgb, var(--accent) 8%, var(--card, transparent));
 }
+
+/* A build error: Next's overlay can't be closed and hides a board that still works, so components/BuildErrorBar.tsx
+   stands in for it (lib/build-error.ts sets the attribute). */
+html[data-build-error] nextjs-portal {
+  display: none;
+}
