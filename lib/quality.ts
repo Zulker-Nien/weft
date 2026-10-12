@@ -5,7 +5,7 @@ import { findCoverage, type CoverageReport } from "./coverage";
 import { MAX_LINES, type Check, type QualityReport, type Section } from "./quality-view";
 
 // Measures a project's code quality for the header badge: test coverage, file size, how locked down
-// the linter is, type safety and commit/CI guardrails. Reads files only; never runs the project's tools.
+// the linter is, type safety, commit/CI guardrails and documentation. Reads files only; never runs the project's tools.
 
 const SOURCE = /\.(tsx?|jsx?|mjs|cjs|mts|cts|py|go|rs|rb|java|kt|swift|vue|svelte)$/;
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", "out", "coverage", "vendor", "venv", "__pycache__", "target"]);
@@ -44,25 +44,30 @@ function walk(root: string, rel = "", out: string[] = []): string[] {
   return out;
 }
 
-// Source files, relative to root: git's tracked and untracked-but-not-ignored files, else a walk.
-export function listSources(root: string): string[] {
-  let files: string[];
+// Every file, relative to root: git's tracked and untracked-but-not-ignored files, else a walk.
+function listFiles(root: string): string[] {
   try {
-    files = execFileSync("git", ["ls-files", "-co", "--exclude-standard"], {
+    return execFileSync("git", ["ls-files", "-co", "--exclude-standard"], {
       cwd: root,
       encoding: "utf8",
       maxBuffer: 64 * 1024 * 1024,
       stdio: ["ignore", "pipe", "ignore"],
-    }).split("\n");
+    })
+      .split("\n")
+      .filter(Boolean);
   } catch {
-    files = walk(root);
+    return walk(root);
   }
+}
+
+// Source files, relative to root.
+export function listSources(files: string[]): string[] {
   return files.filter((f) => SOURCE.test(f) && !GENERATED.test(f) && !skipped(f)).slice(0, MAX_FILES);
 }
 
-function readSources(root: string): Source[] {
+function readSources(root: string, files: string[]): Source[] {
   const out: Source[] = [];
-  for (const rel of listSources(root)) {
+  for (const rel of listSources(files)) {
     try {
       const file = path.join(root, rel);
       if (fs.statSync(file).size > MAX_BYTES) continue;
@@ -241,6 +246,62 @@ function guardsSection(root: string, pkg: Pkg): Section {
   };
 }
 
+// A comment starting a line near the top: `//`, `/*`, ` *`, `#` (not a shebang) or a docstring.
+const TOP_COMMENT = /^(\/\/|\/\*|\s\*|#(?!!)|"""|''')/m;
+const TOP_LINES = 40;
+// Files shorter than this don't need to explain themselves.
+const MIN_EXPLAINED = 40;
+// A relative file or folder path in backticks: a slash, ending in an extension or a slash, no globs.
+const DOC_PATH = /`([\w@.-][\w@./-]*\/[\w@.-]*(?:\.[A-Za-z]\w*|\/))(?::\d+)*`/g;
+
+// Paths named in backticks that no longer exist. Only paths under a folder the repo has count, so build
+// output and app-bundle paths don't; changelogs name old paths on purpose, so only the root guides
+// (README, CLAUDE.md, …) and docs/architecture are read.
+function stalePaths(root: string, files: string[], docs: string[]): string[] {
+  const folders = new Set(files.flatMap((f) => (f.includes("/") ? [f.split("/")[0]] : [])));
+  const named = new Set(docs.flatMap((d) => [...read(root, d).matchAll(DOC_PATH)].map((m) => m[1] ?? "")));
+  return [...named].filter((p) => folders.has(p.split("/")[0]) && !fs.existsSync(path.join(root, p))).sort();
+}
+
+function docsSection(root: string, files: string[], sources: Source[]): Section {
+  const top = fs.readdirSync(root);
+  const has = (re: RegExp) => top.some((f) => re.test(f));
+  let architecture: string[] = [];
+  try {
+    architecture = fs.readdirSync(path.join(root, "docs", "architecture")).filter((f) => f.endsWith(".md")).map((f) => `docs/architecture/${f}`);
+  } catch {
+    // No architecture docs.
+  }
+  const guides = top.filter((f) => /\.md$/i.test(f) && !/^(CHANGELOG|HISTORY)/i.test(f));
+  const stale = stalePaths(root, files, [...guides, ...architecture]);
+  const code = sources.filter((s) => !s.test && s.lines >= MIN_EXPLAINED);
+  const explained = code.filter((s) => TOP_COMMENT.test(s.text.split("\n", TOP_LINES).join("\n"))).length;
+  const pct = code.length ? Math.round((100 * explained) / code.length) : 100;
+  const readme = has(/^README/i);
+  const agent = has(/^(CLAUDE|AGENTS)\.md$/);
+  const checks = [
+    { label: "a README", ok: readme },
+    { label: "an agent guide (CLAUDE.md or AGENTS.md)", ok: agent },
+    { label: "architecture docs in docs/architecture/", ok: architecture.length > 0 },
+    { label: "a CHANGELOG", ok: has(/^CHANGELOG/i) },
+    { label: `80%+ of source files over ${MIN_EXPLAINED} lines open with a comment saying what they're for`, ok: pct >= 80 },
+    {
+      label: `every file path the docs name exists${stale.length ? ` (missing: ${stale.slice(0, 5).join(", ")})` : ""}`,
+      ok: guides.length > 0 && stale.length === 0,
+    },
+  ];
+  const have = [readme && "README", agent && "agent guide", architecture.length && `${architecture.length} architecture doc${architecture.length === 1 ? "" : "s"}`].filter(Boolean);
+  return {
+    key: "docs",
+    name: "Documentation",
+    score: score(checks),
+    summary:
+      `${have.length ? have.join(", ") : "no docs"}; ${pct}% of files explained` +
+      (stale.length ? `, ${stale.length} stale path${stale.length === 1 ? "" : "s"}` : ""),
+    checks,
+  };
+}
+
 // The whole report for the project a folder belongs to.
 export function measureQuality(cwd: string): QualityReport {
   const root = projectRoot(cwd);
@@ -250,9 +311,10 @@ export function measureQuality(cwd: string): QualityReport {
   } catch {
     // A broken package.json reads as none.
   }
-  const sources = readSources(root);
+  const files = listFiles(root);
+  const sources = readSources(root, files);
   const cov = findCoverage(cwd);
-  const sections = [testsSection(cov), sizeSection(sources), lintSection(root, pkg), typesSection(root, sources), guardsSection(root, pkg)];
+  const sections = [testsSection(cov), sizeSection(sources), lintSection(root, pkg), typesSection(root, sources), guardsSection(root, pkg), docsSection(root, files, sources)];
   const scored = sections.flatMap((s) => (s.score === null ? [] : [s.score]));
   return {
     root,

@@ -227,7 +227,8 @@ folder, else the selected project, else your latest card's. It never reaches 100
 another refactor, a stricter lint rule or a better type:
 
 - **The checklist earns 90 points**: test coverage (`coverage/coverage-summary.json` from `npm run coverage`),
-  file size, lint lockdown, type safety and guardrails (pre-commit hook and CI), averaged (`lib/quality.ts`).
+  file size, lint lockdown, type safety, guardrails (pre-commit hook and CI) and documentation (README, agent guide,
+  architecture docs, a CHANGELOG, files that open with a comment, no stale paths in the docs), averaged (`lib/quality.ts`).
 - **The refactor scout earns the last 10.** A read-only Sonnet run (Read, Grep, Glob) reads the project and
   ranks up to 15 concrete findings, each with file:line, a Fowler-named smell (Long Function, Duplicated
   Code, Feature Envy, Primitive Obsession…), a category (refactor, lint, types, tests, guardrails) and a

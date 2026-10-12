@@ -1,7 +1,7 @@
 // What the header's code quality badge shows, and the prompt its click sends. Pure, so the client
 // can import it; lib/quality.ts measures a project on the server.
 
-export type QualityKey = "tests" | "size" | "lint" | "types" | "guards";
+export type QualityKey = "tests" | "size" | "lint" | "types" | "guards" | "docs";
 
 export type Check = { label: string; ok: boolean };
 
@@ -57,6 +57,10 @@ const HOW: Record<QualityKey, string> = {
   guards:
     "Add guardrails: a pre-commit hook that lints and type-checks (or tests) staged work, and a CI workflow that runs " +
     "lint, typecheck and tests on every push.",
+  docs:
+    "Document the project: a README for people, CLAUDE.md or AGENTS.md for agents (what the project values and a file " +
+    "map), docs/architecture/*.md for each subsystem, and a CHANGELOG. Open each source file with a comment saying " +
+    "what it's for, and fix or drop file paths the docs name that no longer exist.",
 };
 
 // The thread the badge starts: what's weak, worst first, and how to fix each.
