@@ -268,6 +268,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `Now` **Shortcuts sheet** — `?` lists every keyboard shortcut (board, composer, terminal, app menu), searchable by words or keys; hold ⌘ or ⇧ for a cheat card; tooltips, the filter box and right-click menus show keys.
 - `P2` **Export and import settings** — move the thread prompt, templates, and rules to another machine as one file.
 - `Now` **Theme** — light, dark, or follow the system, from Settings → Appearance; the desktop window chrome follows it too.
+- `Now` **Scene themes** — Twin Suns, Canyon, Coast Road, Neon City, Snow Pass and Salt Flats: Weft's own pictures behind the board, each with a palette drawn from it and frosted columns (Settings → Appearance, or ⌘K "Theme: …").
 
 ## Packaging, updates and distribution
 

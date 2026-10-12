@@ -50,7 +50,7 @@ export function shouldWriteGlance(turn: { openedPane: boolean; isError: boolean;
 const escape = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c);
 
 // The splash screen's art (electron/splash.html), reused so a new card opens on the same scene.
-const ASSETS = process.env.WEFT_ASSETS_DIR ?? path.join(process.cwd(), "electron", "assets");
+export const ASSETS = process.env.WEFT_ASSETS_DIR ?? path.join(process.cwd(), "electron", "assets");
 const asset = (name: string) => encodeURI(`file://${path.join(ASSETS, name)}`);
 
 // Shown the moment a turn starts on a card whose pane is blank, before any model has written anything:

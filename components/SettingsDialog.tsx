@@ -5,15 +5,13 @@ import { CHIMES, CHIME_KINDS, type ChimePrefs, chimePrefs, previewChime, setChim
 import { setShowBacklog, setShowProgress, showBacklog, showProgress } from "@/lib/board-prefs";
 import { api } from "@/lib/client";
 import { SHORTCUTS, bindingFromEvent, currentBinding, formatBinding, setBinding } from "@/lib/shortcuts";
-import { THEMES, type Theme, savedTheme, setTheme } from "@/lib/theme";
 import type { Automation, Backend, CliStatus, PermissionMode, SettingsView } from "@/lib/types";
+import AppearancePicker from "./AppearancePicker";
 import AutomationSettings from "./AutomationSettings";
-import Icon, { type IconName, Spinner } from "./Icon";
+import Icon, { Spinner } from "./Icon";
 import Modal from "./Modal";
 import ModePicker from "./ModePicker";
 import SwitchRow from "./SwitchRow";
-
-const THEME_ICONS: Record<Theme, IconName> = { system: "monitor", light: "sun", dark: "moon" };
 
 const KEEP_ALIVE: { minutes: number; label: string }[] = [
   { minutes: 0, label: "Until the app quits" },
@@ -170,8 +168,6 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [rules, setRules] = useState<Automation[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  // The dialog only mounts in the browser, so the cookie is there to read.
-  const [theme, setThemeChoice] = useState<Theme>(savedTheme);
   const [backlog, setBacklog] = useState(showBacklog);
   const [progress, setProgress] = useState(showProgress);
 
@@ -294,25 +290,9 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
             <section className="flex flex-col gap-2">
               <div className="flex flex-col gap-0.5">
                 <h3 className={sectionTitle}>Appearance</h3>
-                <p className={sectionHint}>Changes right away. System follows your computer&apos;s setting.</p>
+                <p className={sectionHint}>Changes right away. System follows your computer&apos;s setting; a scene puts its picture behind the board.</p>
               </div>
-              <div role="radiogroup" aria-label="Appearance" className="flex w-fit gap-0.5 rounded-md border border-line-strong p-0.5">
-                {THEMES.map((t) => (
-                  <button
-                    key={t.id}
-                    role="radio"
-                    aria-checked={theme === t.id}
-                    onClick={() => {
-                      setTheme(t.id);
-                      setThemeChoice(t.id);
-                    }}
-                    className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-[12.5px] ${theme === t.id ? "bg-accent-soft text-accent" : "text-muted hover:bg-sunken hover:text-ink"}`}
-                  >
-                    <Icon name={THEME_ICONS[t.id]} size={13} />
-                    {t.label}
-                  </button>
-                ))}
-              </div>
+              <AppearancePicker />
             </section>
 
             <SwitchRow

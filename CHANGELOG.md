@@ -9,6 +9,10 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 ## [Unreleased]
 
 ### Added
+- Scene themes: six of Weft's own pictures (Twin Suns, Canyon, Coast Road, Neon City, Snow Pass, Salt Flats) as
+  board backgrounds, each with its own palette, from Settings → Appearance or ⌘K.
+
+### Added
 - The code quality badge scores Documentation too: a README, an agent guide, architecture docs, a CHANGELOG, source
   files that open with a comment saying what they're for, and no file paths in the docs that no longer exist.
 
