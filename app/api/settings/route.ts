@@ -3,7 +3,7 @@ import { connection } from "next/server";
 import { patternRegex } from "@/lib/automations";
 import { asText } from "@/lib/format";
 import { fail, guard } from "@/lib/guard";
-import { setAutomations, setDefaultBackend, setDefaultPermissionMode, setKeepAliveMinutes, setThreadPrompt, settingsView } from "@/lib/settings";
+import { setAutomations, setDefaultBackend, setDefaultPermissionMode, setKeepAliveMinutes, setPushOnDone, setThreadPrompt, settingsView } from "@/lib/settings";
 import { SKILL_NAME } from "@/lib/skills";
 import { AUTOMATION_TRIGGERS, MODES, type Automation, type Backend, type PermissionMode } from "@/lib/types";
 
@@ -40,6 +40,7 @@ function validate(body: {
   defaultPermissionMode?: unknown;
   defaultBackend?: unknown;
   automations?: unknown;
+  pushOnDone?: unknown;
 }): Automation[] | undefined {
   if (body.threadPrompt !== undefined && typeof body.threadPrompt !== "string") {
     throw new Error("threadPrompt must be text.");
@@ -56,6 +57,7 @@ function validate(body: {
   if (body.defaultBackend !== undefined && !BACKENDS.includes(body.defaultBackend as Backend)) {
     throw new Error(`defaultBackend must be one of ${BACKENDS.join(", ")}.`);
   }
+  if (body.pushOnDone !== undefined && typeof body.pushOnDone !== "boolean") throw new Error("pushOnDone must be true or false.");
   // Validate automations now so a bad rule 400s before any settings setter runs.
   return body.automations === undefined ? undefined : readAutomations(body.automations);
 }
@@ -65,11 +67,13 @@ function commit(body: {
   keepAliveMinutes?: unknown;
   defaultPermissionMode?: unknown;
   defaultBackend?: unknown;
+  pushOnDone?: unknown;
 }, rules: Automation[] | undefined) {
   if (typeof body.threadPrompt === "string") setThreadPrompt(body.threadPrompt);
   if (typeof body.keepAliveMinutes === "number") setKeepAliveMinutes(body.keepAliveMinutes);
   if (body.defaultPermissionMode !== undefined) setDefaultPermissionMode(body.defaultPermissionMode as PermissionMode);
   if (body.defaultBackend !== undefined) setDefaultBackend(body.defaultBackend as Backend);
+  if (typeof body.pushOnDone === "boolean") setPushOnDone(body.pushOnDone);
   if (rules) setAutomations(rules);
 }
 

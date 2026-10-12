@@ -284,6 +284,8 @@ export interface SettingsView {
   // What new threads start on; puku-cli is the escape hatch when Claude hits a plan limit.
   defaultBackend: Backend;
   automations: Automation[];
+  // /weft:done runs `git push` after a clean commit (plugin/skills/done/push.sh).
+  pushOnDone: boolean;
   projects: Project[];
 }
 

@@ -225,7 +225,9 @@ Weft ships its own skills in `plugin/`, a Claude Code plugin named `weft` that e
 loads, so they run as `/weft:<name>`:
 
 - `/weft:done` wraps up a thread: architecture docs, lint, tests, then a commit of the files the
-  thread changed. A copy of the `done` skill from `fotoflo/claude-skills`.
+  thread changed, then a push of the branch. A copy of the `done` skill from `fotoflo/claude-skills`.
+  **Push on Done** in Settings (on by default) controls the push: it's a plain `git push` (`-u origin`
+  for a branch's first), never forced, so a rejected push leaves the commit local and the card in Review.
 - `/weft:commit` commits the thread's changes with a conventional message (the `commit` skill,
   without its Vercel preview deploy).
 

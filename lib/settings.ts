@@ -34,6 +34,8 @@ interface Settings {
   defaultBackend?: Backend;
   // Unset means the defaults; an empty list means the user removed them all.
   automations?: Automation[];
+  // Whether /weft:done pushes after it commits cleanly; unset means on. Its push.sh reads this file.
+  pushOnDone?: boolean;
   projects: Project[];
   // Claude Code sessions whose cards were deleted, so syncing doesn't bring them back.
   dismissedSessions?: string[];
@@ -51,6 +53,7 @@ function settings(): Settings {
       defaultPermissionMode: saved.defaultPermissionMode,
       defaultBackend: saved.defaultBackend,
       automations: saved.automations,
+      pushOnDone: saved.pushOnDone,
       projects: saved.projects ?? [],
       dismissedSessions: saved.dismissedSessions ?? [],
       issueFolders: saved.issueFolders ?? [],
@@ -112,6 +115,15 @@ export function setAutomations(list: Automation[]) {
   save();
 }
 
+export function pushOnDone() {
+  return settings().pushOnDone ?? true;
+}
+
+export function setPushOnDone(on: boolean) {
+  settings().pushOnDone = on;
+  save();
+}
+
 export function dismissedSessions(): string[] {
   return settings().dismissedSessions ?? [];
 }
@@ -164,6 +176,7 @@ export function settingsView(): SettingsView {
     defaultPermissionMode: defaultPermissionMode(),
     defaultBackend: defaultBackend(),
     automations: automations(),
+    pushOnDone: pushOnDone(),
     projects: listProjects(),
   };
 }

@@ -244,6 +244,7 @@ export const api = {
     defaultPermissionMode?: PermissionMode;
     defaultBackend?: Backend;
     automations?: Automation[];
+    pushOnDone?: boolean;
   }) =>
     call<SettingsView>("PATCH", "/api/settings", patch),
   addProject: (path: string) => call<{ path: string; projects: Project[] }>("POST", "/api/projects", { path }),

@@ -393,10 +393,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
                 </section>
 
                 <section className="flex items-center justify-between gap-4">
-                  <div className="flex flex-col gap-0.5">
-                    <h3 className={sectionTitle}>Default CLI</h3>
-                    <p className={sectionHint}>What new threads start on. You can still switch mid-flight from a card&apos;s menu.</p>
-                  </div>
+                  <SectionHeader titleClass={sectionTitle} hintClass={sectionHint} title="Default CLI" hint="What new threads start on. You can still switch mid-flight from a card&apos;s menu." />
                   <select value={defaultBackend} aria-label="Default CLI" onChange={(e) => { setDefaultBackend(e.target.value as Backend); setSaveError(null); }}
                     className="rounded-md border border-line-strong bg-canvas px-2.5 py-[7px] text-[12.5px] text-ink outline-none focus:border-accent">
                     <option value="claude">Claude Code</option> <option value="puku">puku-cli</option>
@@ -424,6 +421,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
 
                 <AutomationSettings
                   rules={rules}
+                  pushOnDone={settings.pushOnDone}
                   onChange={(next) => {
                     setRules(next);
                     setSaveError(null);

@@ -56,6 +56,7 @@ vi.mock("@/lib/settings", () => ({
   setDefaultPermissionMode: vi.fn(),
   defaultPermissionMode: vi.fn(() => "auto"),
   setAutomations: vi.fn(),
+  setPushOnDone: vi.fn(),
   settingsView: vi.fn(() => ({ threadPrompt: "tp", keepAliveMinutes: 5, automations: [] })),
 }));
 
@@ -682,9 +683,10 @@ describe("/settings", () => {
     expect(await (await settingsRoute.GET(req("/settings"))).json()).toEqual({ threadPrompt: "tp", keepAliveMinutes: 5, automations: [] });
   });
 
-  it("PATCH saves the prompt, keep-alive, default mode and automations", async () => {
+  it("PATCH saves the prompt, keep-alive, default mode, push on Done and automations", async () => {
     const res = await patch({
       threadPrompt: "be brief",
+      pushOnDone: false,
       keepAliveMinutes: 10,
       defaultPermissionMode: "acceptEdits",
       automations: [
@@ -696,6 +698,7 @@ describe("/settings", () => {
     expect(settings.setThreadPrompt).toHaveBeenCalledWith("be brief");
     expect(settings.setKeepAliveMinutes).toHaveBeenCalledWith(10);
     expect(settings.setDefaultPermissionMode).toHaveBeenCalledWith("acceptEdits");
+    expect(settings.setPushOnDone).toHaveBeenCalledWith(false);
     const [rules] = vi.mocked(settings.setAutomations).mock.calls[0]!;
     expect(rules[0]).toEqual({ id: "a1", on: "done", skill: "weft:done" });
     expect(rules[1]).toMatchObject({ on: "prompt-matches", skill: "deploy", pattern: "ship it" });
@@ -708,6 +711,7 @@ describe("/settings", () => {
       { keepAliveMinutes: -1 },
       { keepAliveMinutes: "10" },
       { defaultPermissionMode: "yolo" },
+      { pushOnDone: "no" },
       { automations: "nope" },
       { automations: [{ on: "sometimes", skill: "x" }] },
       { automations: [{ on: "done", skill: "bad skill!" }] },
@@ -722,6 +726,7 @@ describe("/settings", () => {
     expect(settings.setKeepAliveMinutes).not.toHaveBeenCalled();
     expect(settings.setDefaultPermissionMode).not.toHaveBeenCalled();
     expect(settings.setAutomations).not.toHaveBeenCalled();
+    expect(settings.setPushOnDone).not.toHaveBeenCalled();
   });
 });
 

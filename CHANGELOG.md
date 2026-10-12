@@ -9,6 +9,8 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 ## [Unreleased]
 
 ### Added
+- Push on Done: `/weft:done` pushes the branch after a clean commit (`plugin/skills/done/push.sh`), so moving a card to Done
+  ships it. On by default; turn it off in Settings. A plain `git push`, never forced: a rejected push leaves the card in Review.
 - ↑ in an empty reply box edits your last message (after any queued one). Enter stops a running turn, rewinds the
   conversation to before that message, folds the old message and its reply into an "Edited" line you can open, and
   sends the new text; Esc cancels. Files the replaced turn changed stay as they are. Claude board threads only:

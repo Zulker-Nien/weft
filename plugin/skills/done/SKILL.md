@@ -1,6 +1,6 @@
 ---
 name: done
-description: Wrap up a coding session — scout it for refactors, update docs, test, then commit. Weft runs it when you move a card to Done. Use when the user says "done", "wrap up", or "finish".
+description: Wrap up a coding session — scout it for refactors, update docs, test, then commit and push. Weft runs it when you move a card to Done. Use when the user says "done", "wrap up", or "finish".
 argument-hint: "[optional commit message]"
 model: sonnet
 ---
@@ -11,8 +11,8 @@ Wrap up the current coding session: commit it, document it, and scout it for wha
 
 Weft runs this in the card's own thread when the user moves the card to Done, so the session is this
 thread's conversation. Nobody is watching the turn: don't stop to ask unless something blocks the
-commit. Committed cleanly → `column=done`; tests fail or lint errors remain → `column=review` with
-what's left. Show the wrap-up in the browser pane, not as ASCII art.
+commit. Committed (and pushed, when Push on Done is on) → `column=done`; tests fail, lint errors
+remain or the push fails → `column=review` with what's left. Show the wrap-up in the browser pane, not as ASCII art.
 
 Every `Agent` call names its `model` (`"haiku"`): an agent without one inherits the parent's model,
 and a 1M-context parent bills 1M-context credits.
@@ -115,11 +115,16 @@ can create one.
 2. `${CLAUDE_SKILL_DIR}/commit.sh "message" file1 file2 ...` with exactly: the session files, the
    docs and lint fixes you verified, `SOUL.md` if it changed. It `git add`s each path and commits
    only those paths, so other sessions' staged work stays out.
+3. Only after a clean commit: `${CLAUDE_SKILL_DIR}/push.sh`. It follows Weft's "Push on Done" setting
+   (on by default) and pushes the branch with a plain `git push`, so commits other sessions made on
+   it go too. It exits 0 when it pushed or skipped on purpose (setting off, no remote); report which.
+   A failed push (rejected, offline, auth) keeps the commit local: don't force, pull, rebase or retry;
+   say why and end with `column=review`, `remaining=push by hand`.
 
 ## Phase 5: Report (you)
 
 Show it in the browser pane as one HTML page, and say it in a few lines: the commit (hash, files,
-+/- from `${CLAUDE_SKILL_DIR}/session-stats.sh <session files>`), tests passed/failed, docs touched,
++/- from `${CLAUDE_SKILL_DIR}/session-stats.sh <session files>`), pushed or not and why, tests passed/failed, docs touched,
 SOUL.md change, and the scout's top three with their fixes.
 
 ## Rules
@@ -127,4 +132,4 @@ SOUL.md change, and the scout's top three with their fixes.
 - Never `--no-verify`, `--amend`, force push, a bare `git commit`, `git reset` or `git stash`;
   other sessions share this index and tree.
 - Fix lint only in session files; no codebase-wide cleanup. The scout reports, it doesn't fix.
-- Never commit `.env`, secrets or credentials. Don't push unless asked.
+- Never commit `.env`, secrets or credentials. Push only through `push.sh`, which honors the setting.

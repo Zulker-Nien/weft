@@ -5,6 +5,7 @@ import { api } from "@/lib/client";
 import { AUTOMATION_TRIGGERS, type Automation, type AutomationTrigger, type SkillInfo } from "@/lib/types";
 import Icon, { Spinner } from "./Icon";
 import { SKILL_SOURCES } from "./SkillMenu";
+import SwitchRow from "./SwitchRow";
 
 function validPattern(source: string) {
   try {
@@ -21,11 +22,16 @@ const FIELD =
 // The Settings section for board automations ("when <trigger>, run <skill>") and the skills they can use.
 export default function AutomationSettings({
   rules,
+  pushOnDone,
   onChange,
 }: {
   rules: Automation[];
+  // Saved as soon as it's switched, like Settings' other switches; the rules wait for Save.
+  pushOnDone: boolean;
   onChange: (rules: Automation[]) => void;
 }) {
+  const [push, setPush] = useState(pushOnDone);
+  const [pushError, setPushError] = useState<string | null>(null);
   const [skills, setSkills] = useState<SkillInfo[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const listId = useId();
@@ -42,6 +48,14 @@ export default function AutomationSettings({
   }, []);
 
   const known = new Set(skills?.map((s) => s.name));
+  const togglePush = (on: boolean) => {
+    setPush(on);
+    setPushError(null);
+    api.saveSettings({ pushOnDone: on }).catch((err: unknown) => {
+      setPush(!on);
+      setPushError(err instanceof Error ? err.message : String(err));
+    });
+  };
   const update = (id: string, patch: Partial<Automation>) =>
     onChange(rules.map((rule) => (rule.id === id ? { ...rule, ...patch } : rule)));
 
@@ -126,6 +140,14 @@ export default function AutomationSettings({
           <Icon name="plus" size={12} /> Add automation
         </button>
       </div>
+
+      <SwitchRow
+        title="Push on Done"
+        hint="After /weft:done commits cleanly, it pushes the branch. Never forced: a rejected push leaves the card in Review."
+        on={push}
+        onChange={togglePush}
+      />
+      {pushError && <p className="text-[12px] text-danger">Couldn&apos;t save Push on Done: {pushError}</p>}
 
       <datalist id={listId}>
         {skills?.map((s) => (

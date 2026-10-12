@@ -75,6 +75,16 @@ describe("settings", () => {
     expect(s.settingsView().defaultBackend).toBe("puku");
   });
 
+  it("push on Done is on until it's turned off, and the off is written for push.sh to read", async () => {
+    let s = await load();
+    expect(s.pushOnDone()).toBe(true);
+    expect(s.settingsView().pushOnDone).toBe(true);
+    s.setPushOnDone(false);
+    s = await load();
+    expect(s.pushOnDone()).toBe(false);
+    expect(fs.readFileSync(path.join(dir, "settings.json"), "utf8")).toContain('"pushOnDone": false');
+  });
+
   it("an empty automations list is kept, not replaced by the defaults", async () => {
     const s = await load();
     s.setAutomations([]);
