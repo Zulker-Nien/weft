@@ -4,6 +4,8 @@
 const { WebContentsView } = require("electron");
 const http = require("node:http");
 const { isSelfUrl } = require("./self-url.cjs");
+const { createPaneSecrets } = require("./pane-secrets.cjs");
+const { click, typeText } = require("./pane-actions.cjs");
 
 // Chrome's zoom steps, as percentages; Zoom In/Out walk them.
 const ZOOM_STEPS = [25, 33, 50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300, 400, 500];
@@ -14,7 +16,7 @@ function stepZoom(percent, dir) {
   return [...ZOOM_STEPS].reverse().find((z) => z < percent - 0.5) ?? ZOOM_STEPS[0];
 }
 
-function createBrowserPane({ getWindow, getAppView, token, onContents, pages, onLink }) {
+function createBrowserPane({ getWindow, getAppView, token, onContents, pages, onLink, secrets }) {
   // One page per card (keyed by card id), so each review keeps its own browser; "board" is the
   // one shown with no card open. Only the active one is on screen.
   const BOARD = "board";
@@ -220,10 +222,11 @@ function createBrowserPane({ getWindow, getAppView, token, onContents, pages, on
     return view.webContents;
   }
 
-  async function pageText(key) {
+  // read_page never hands back a vault value a thread had typed in (electron/pane-secrets.cjs).
+  async function pageText(key = active) {
     const wc = requirePage(key);
     const text = await wc.executeJavaScript("document.body ? document.body.innerText : ''");
-    return { url: wc.getURL(), title: wc.getTitle(), text: String(text).slice(0, 30_000) };
+    return { url: wc.getURL(), title: paneSecrets.redact(key, wc.getTitle()), text: paneSecrets.redact(key, text).slice(0, 30_000) };
   }
 
   // highlight, a CSS selector, scrolls that element into view and draws an orange box around it for the shot
@@ -269,31 +272,7 @@ function createBrowserPane({ getWindow, getAppView, token, onContents, pages, on
     return { jpg: image.toJPEG(78).toString("base64") };
   }
 
-  async function click(selector, key) {
-    const wc = requirePage(key);
-    const found = await wc.executeJavaScript(`(() => {
-      const el = document.querySelector(${JSON.stringify(String(selector))});
-      if (!el) return false;
-      el.scrollIntoView({ block: "center" });
-      el.click();
-      return true;
-    })()`);
-    return { found };
-  }
-
-  async function typeText(selector, text, key) {
-    const wc = requirePage(key);
-    const found = await wc.executeJavaScript(`(() => {
-      const el = document.querySelector(${JSON.stringify(String(selector))});
-      if (!el) return false;
-      el.focus();
-      if (typeof el.select === "function") el.select();
-      else document.execCommand("selectAll");
-      return true;
-    })()`);
-    if (found) await wc.insertText(String(text));
-    return { found };
-  }
+  const paneSecrets = createPaneSecrets({ secrets, requirePage, typeText });
 
   function readJson(req) {
     return new Promise((resolve, reject) => {
@@ -318,8 +297,10 @@ function createBrowserPane({ getWindow, getAppView, token, onContents, pages, on
       "POST /browser/url": (body) => ({ url: views.get(body.key)?.webContents.getURL() || "" }),
       "POST /browser/screenshot": (body) => screenshot(body.key, body.highlight),
       "POST /browser/thumb": (body) => thumbnail(body.key),
-      "POST /browser/click": (body) => click(body.selector, body.key),
-      "POST /browser/type": (body) => typeText(body.selector, body.text, body.key),
+      "POST /browser/click": (body) => click(requirePage(body.key), body.selector),
+      "POST /browser/type": (body) => typeText(requirePage(body.key), body.selector, body.text),
+      "POST /secrets/list": (body) => paneSecrets.list(body.folder),
+      "POST /secrets/fill": (body) => paneSecrets.fill({ ...body, key: body.key ?? active }),
     };
     const server = http.createServer(async (req, res) => {
       const send = (status, body) => {

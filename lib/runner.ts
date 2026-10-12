@@ -7,6 +7,7 @@ import { signAsWeft } from "./attribution";
 import { isDoneCommand, skillsForPrompt } from "./automations";
 import { COPILOT_PROMPT, boardMcpServer, describeBoardTool, isTrustedTool, threadBoardMcpServer } from "./board-tools";
 import { BROWSER_PROMPT, browserMcpServer } from "./browser-tools";
+import { SECRETS_PROMPT, secretsMcpServer } from "./secret-tools";
 import { publish } from "./bus";
 import { firstLine, shortToolName, summarizeInput, toolAction } from "./format";
 import { cliEnv } from "./env";
@@ -560,10 +561,12 @@ function queryOptions(session: Session, executable: string | undefined): Options
     systemPrompt: {
       type: "preset",
       preset: "claude_code",
-      append: spec.copilot ? `${BROWSER_PROMPT}\n\n${COPILOT_PROMPT}` : `${BROWSER_PROMPT}\n\n${threadPrompt()}\n\n${REVIEW_PROMPT}`,
+      append: spec.copilot ? `${BROWSER_PROMPT}\n\n${COPILOT_PROMPT}` : `${BROWSER_PROMPT}\n\n${SECRETS_PROMPT}\n\n${threadPrompt()}\n\n${REVIEW_PROMPT}`,
     },
     mcpServers: {
       browser: browserMcpServer(cardId),
+      // Threads only: the copilot runs the board, not a project.
+      ...(spec.copilot ? {} : { secrets: secretsMcpServer(cardId, () => spec.cwd) }),
       board: spec.copilot ? boardMcpServer(boardActions) : threadBoardMcpServer(cardId, boardActions),
     },
     canUseTool: (toolName, input, opts) => {
