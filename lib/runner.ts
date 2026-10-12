@@ -3,6 +3,7 @@ import fs from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { query, type ModelUsage, type Options, type PermissionResult, type Query, type SDKMessage, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { messageContent } from "./attachments";
+import { signAsWeft } from "./attribution";
 import { isDoneCommand, skillsForPrompt } from "./automations";
 import { COPILOT_PROMPT, boardMcpServer, describeBoardTool, isTrustedTool, threadBoardMcpServer } from "./board-tools";
 import { BROWSER_PROMPT, browserMcpServer } from "./browser-tools";
@@ -15,6 +16,7 @@ import { isNotLoggedInError, startLogin } from "./login";
 import { editedPath, touchFile } from "./overlap";
 import { defaultPermissionMode, keepAliveMinutes, threadPrompt } from "./settings";
 import { PLUGIN_DIR } from "./skills";
+import { switchSpare } from "./spare-switch";
 import { extractReview, REVIEW_PROMPT } from "./review";
 import { extractStatus, type BoardStatus } from "./status";
 import { appendThread, getCard, getThread, replaceThreadItem, updateCard } from "./store";
@@ -289,18 +291,7 @@ function adoptSpare(card: Card): Session | undefined {
   }
   spare.cardId = card.id;
   sessions.set(card.id, spare);
-  if (card.permissionMode !== spare.spec.permissionMode) {
-    spare.spec.permissionMode = card.permissionMode;
-    void spare.query?.setPermissionMode(card.permissionMode).catch(() => {});
-  }
-  if (card.model && card.model !== spare.spec.model) {
-    spare.spec.model = card.model;
-    void spare.query?.setModel(card.model).catch(() => {});
-  }
-  if (card.effort && card.effort !== spare.spec.effort) {
-    spare.spec.effort = card.effort;
-    void spare.query?.applyFlagSettings({ effortLevel: card.effort }).catch(() => {});
-  }
+  switchSpare(spare.query, spare.spec, card);
   // The spare's init came before it had a card; without its id a CLI that dies mid-turn can't resume.
   safeUpdate(card.id, { warm: true, ...(spare.sessionId ? { sessionId: spare.sessionId } : {}) });
   scheduleIdle(spare);
@@ -595,6 +586,7 @@ async function drive(session: Session, executable: string | undefined) {
     for await (const msg of session.query) {
       const cardId = session.cardId;
       if (msg.type === "system" && msg.subtype === "init") session.sessionId = msg.session_id;
+      if (msg.type === "system" && msg.subtype === "init") signAsWeft(session.query, session.spec, session.spec.model ?? msg.model);
       // A spare's startup messages belong to no card yet.
       if (!cardId) continue;
       if (!getCard(cardId)) {

@@ -17,6 +17,8 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 ### Added
 - The code quality badge scores Documentation too: a README, an agent guide, architecture docs, a CHANGELOG, source
   files that open with a comment saying what they're for, and no file paths in the docs that no longer exist.
+- Commits from a board thread are co-authored by "Claude Opus 5.5 on Weft" (whichever model the card runs), and PRs
+  say "Generated with Claude Code on Weft".
 
 ## [0.3.0] - 2026-10-11
 
