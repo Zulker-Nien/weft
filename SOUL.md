@@ -94,7 +94,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   `components/AccountSettings.tsx`; schema in `supabase/migrations/`, MCP server in `.mcp.json`.
 - `electron/vault*.cjs` + `electron/dotenv.cjs` + `electron/device-key.cjs` + `components/VaultDrawer.tsx`: the 🔐 secrets vault
   (docs/architecture/secrets.md); decryption only in main, IPC to the board window only, `lib/vault-view.ts` + `lib/use-vault.ts` on the board side.
-- `electron/vercel*.cjs` + `lib/vercel-view.ts` + `lib/use-vercel.ts` + `components/Vercel*.tsx`: the ▲ Vercel drawer (token sealed
+- `electron/vercel*.cjs` + `lib/vercel-view.ts` + `lib/use-vercel.ts` + `lib/use-linked-status.ts` (the three drawers' cached status hook) + `components/Vercel*.tsx`: the ▲ Vercel drawer (token sealed
   in the Keychain, link or create a project as `.vercel/project.json`, latest deploy; docs/architecture/vercel.md).
 - `electron/supabase.cjs` + `lib/supabase-view.ts` + `lib/use-supabase.ts` + `components/Supabase*.tsx`: the Supabase drawer (its bolt
   on the rail; token sealed in the Keychain, link a project as `supabase/.temp/project-ref`, state, unapplied migrations; docs/architecture/supabase.md).

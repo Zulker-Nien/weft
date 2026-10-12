@@ -12,7 +12,7 @@ Instagram, YouTube, email…); a property is one brand you post as, inside a wor
 | Main side | `electron/blastcp.cjs` | Keeps the token sealed, calls BlastCP's MCP tools, keeps the links; IPC to the board window only |
 | Bridge | `electron/preload.cjs` → `window.threadboard.blastcp` | `status`, `connect`, `forget`, `workspaces`, `link`, `unlink` |
 | View | `lib/blastcp-view.ts` | Types, the queue at a glance, the property picker's order, the rail hover text |
-| Hook | `lib/use-blastcp.ts` | Loads status only while the drawer is open (and on window focus) |
+| Hook | `lib/use-blastcp.ts` | Loads status only while the drawer is open (and on window focus, at most every 30s); opens on the cached last status (`lib/use-linked-status.ts`) |
 | Drawer | `components/BlastcpDrawer.tsx`, wired in `components/LibraryRail.tsx` | Connect, link a property, the queue |
 
 ## Connecting

@@ -43,7 +43,7 @@ the latest deploy's page (its `inspectorUrl`), runtime logs, env vars, domains a
 `vercel.com/<team slug or your username>/<project>`; only with neither does it fall back to `vercel.com/dashboard`,
 and then the logs, env and domains links are left out. A link Vercel can't read keeps its ids and
 shows the error, so you can still unlink it. Status loads only while the drawer is open (`lib/use-vercel.ts`), on
-open, on folder change and on window focus, since each load is a few API calls per project.
+open, on folder change and on window focus, since each load is a few API calls per project. It opens on the last status it had (memory, then localStorage `weft:drawer-status:<name>`), refreshes it behind, and a focus asks again only after 30s (`lib/use-linked-status.ts`, shared by the three drawers).
 
 ## Files
 
@@ -52,7 +52,7 @@ open, on folder change and on window focus, since each load is a few API calls p
 - `electron/vercel-project.cjs`: request building, reading Vercel's answers (`deploymentOf`, `gitOf`,
   `productionUrl`), and the folder's side (`readLink`, `writeLink`, `ignoreVercel`, `frameworkOf`, `repoOf`).
 - `electron/preload.cjs`: `window.threadboard.vercel`.
-- `lib/vercel-view.ts`: types, the bridge, matching, labels, name rules. `lib/use-vercel.ts`: loading.
+- `lib/vercel-view.ts`: types, the bridge, matching, labels, name rules. `lib/use-vercel.ts`: loading, over `lib/use-linked-status.ts` (the cache).
 - `components/VercelDrawer.tsx` (token form, linked folders), `components/VercelPicker.tsx` (Link…),
   `components/VercelCreate.tsx` (+ New project).
 

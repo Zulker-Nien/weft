@@ -41,7 +41,7 @@ applied (`GET /v1/projects/:ref/database/migrations`, matched by the version bef
 dashboard on one line: Auth, Logs, Keys, Usage and Dash (`supabaseActions`). A paused project (free
 projects pause after a week) gets **Restore** (`POST /v1/projects/:ref/restore`).
 
-Status loads only while the drawer is open (`lib/use-supabase.ts`), on open, on folder change and on window focus.
+Status loads only while the drawer is open (`lib/use-supabase.ts`), on open, on folder change and on window focus. It opens on the last status it had (memory, then localStorage `weft:drawer-status:<name>`), refreshes it behind, and a focus asks again only after 30s (`lib/use-linked-status.ts`, shared by the three drawers).
 A Weft started before this drawer existed has no `supabase:` handlers in main; the drawer says so and offers
 Restart Weft (`needsRestart`).
 
@@ -50,7 +50,7 @@ Restart Weft (`needsRestart`).
 - `electron/supabase.cjs`: `createSupabase` (status, token, projects, link, unlink, restore), the folder's side
   (`readLink`, `writeLink`, `localMigrations`) and `registerSupabase`, whose IPC handlers answer the board window only.
 - `electron/preload.cjs`: `window.threadboard.supabase`.
-- `lib/supabase-view.ts`: types, the bridge, matching, labels, links. `lib/use-supabase.ts`: loading.
+- `lib/supabase-view.ts`: types, the bridge, matching, labels, links. `lib/use-supabase.ts`: loading, over `lib/use-linked-status.ts` (the cache).
 - `components/SupabaseDrawer.tsx` (token form, linked folders), `components/SupabasePicker.tsx` (Link…),
   `components/SupabaseLogo.tsx`.
 
@@ -63,4 +63,3 @@ Restart Weft (`needsRestart`).
 3. **MCP for threads**: offer to add the Supabase MCP server for the linked project to `.mcp.json`.
 4. **Create in place**: name, org, region, with a generated database password kept in the vault.
 5. **Usage and advisors**: security and performance advisors, and a badge when a project is paused or unhealthy.
-6. A shared `useDrawerStatus` for `lib/use-vercel.ts` and `lib/use-supabase.ts`, which are the same hook twice.
