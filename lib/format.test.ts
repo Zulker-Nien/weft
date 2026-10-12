@@ -68,10 +68,10 @@ describe("numbers and times", () => {
 
   it("formats a quota reset time, with the weekday when it is far off", () => {
     const now = new Date(2026, 9, 9, 8, 0).getTime();
-    const soon = new Date(2026, 9, 9, 14, 0).getTime() / 1000;
-    expect(formatReset(soon, now)).toBe("2pm");
+    const soon = new Date(2026, 9, 9, 23, 6).getTime() / 1000;
+    expect(formatReset(soon, now)).toBe("11:06pm");
     const later = new Date(2026, 9, 12, 14, 0).getTime() / 1000;
-    expect(formatReset(later, now)).toBe("mon 2pm");
+    expect(formatReset(later, now)).toBe("mon 2:00pm");
   });
 });
 

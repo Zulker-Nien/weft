@@ -191,10 +191,10 @@ export function cacheMinutesLeft(cache: CacheState, now: number) {
   return Math.max(0, Math.ceil((cache.at + cache.ttl * 1000 - now) / 60_000));
 }
 
-// "6am" or "fri 2pm", from unix seconds.
+// "6:00am" or "fri 2:06pm", from unix seconds.
 export function formatReset(resetsAt: number, now = Date.now()) {
   const d = new Date(resetsAt * 1000);
-  const time = d.toLocaleTimeString("en-US", { hour: "numeric" }).replace(" ", "").toLowerCase();
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).replace(" ", "").toLowerCase();
   const sameDay = d.getTime() - now < 20 * 3600_000;
   return sameDay ? time : `${d.toLocaleDateString("en-US", { weekday: "short" }).toLowerCase()} ${time}`;
 }
