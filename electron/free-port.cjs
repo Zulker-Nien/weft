@@ -20,10 +20,14 @@ function sleep(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
+// The build folder goes only when a stale server held the port: on a normal launch it keeps
+// Turbopack's cache (.next/dev/cache), so the board compiles warm.
 function freePort(port, distDir) {
+  let evicted = false;
   for (const signal of ["SIGTERM", "SIGKILL"]) {
     const pids = listeners(port).filter((pid) => pid !== process.pid);
     if (!pids.length) break;
+    evicted = true;
     for (const pid of pids) {
       console.log(`[weft] port ${port} is held by pid ${pid}; sending ${signal}`);
       try {
@@ -32,7 +36,7 @@ function freePort(port, distDir) {
     }
     sleep(500);
   }
-  if (distDir) fs.rmSync(path.join(ROOT, distDir), { recursive: true, force: true });
+  if (distDir && evicted) fs.rmSync(path.join(ROOT, distDir), { recursive: true, force: true });
 }
 
 module.exports = { freePort };
