@@ -79,6 +79,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `lib/import.ts`, `lib/search.ts`: pick up `~/.claude/projects` sessions as cards; search index.
 - `lib/hotkeys.ts` + `lib/shortcut-catalog.ts`: the keyboard shortcut registry and what the `?` sheet lists; tooltips, key badges,
   right-click menus and `ModifierHint` read their keys from it (docs/architecture/keyboard-shortcuts.md).
+- `lib/theme.ts` + `app/api/scenes` + `components/AppearancePicker.tsx` + `electron/theme-source.cjs`: System, Light, Dark or a scene
+  (one of Weft's pictures behind the board with its own palette, in `app/globals.css`; docs/architecture/themes.md).
 - `lib/store.ts`: storage in `~/.weft` (board.json, threads/, attachments/).
 - `app/api/*` + `lib/guard.ts`: localhost-only Host check, writes need `x-threadboard: 1`.
 - Components: `Board.tsx`, `ThreadView.tsx`, `ThreadItems.tsx`, `Markdown.tsx`, `ReviewPanel.tsx`;

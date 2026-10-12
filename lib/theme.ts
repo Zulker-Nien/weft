@@ -1,9 +1,25 @@
-// Light, dark, or follow the system. The choice lives in a cookie rather than localStorage because
-// the desktop app's server can land on a different port, and cookies don't care about ports. The
-// Electron shell reads the same cookie to match its window chrome (electron/main.cjs).
-export type Theme = "system" | "light" | "dark";
+// Light, dark, follow the system, or a scene: one of Weft's own pictures behind the board, with a
+// palette drawn from it. The choice lives in a cookie rather than localStorage because the desktop
+// app's server can land on a different port, and cookies don't care about ports. The Electron shell
+// reads the same cookie to match its window chrome (electron/theme-source.cjs).
+export type Base = "light" | "dark";
 
-export const THEMES: { id: Theme; label: string }[] = [
+// The pictures are electron/assets/*.jpg, served by app/api/scenes/[id]. Each scene's colors are in
+// app/globals.css under :root[data-scene="<id>"]; `base` is the light or dark palette it builds on.
+export const SCENES = [
+  { id: "twin-suns", label: "Twin Suns", image: "splash-speeder.jpg", base: "dark" },
+  { id: "canyon", label: "Canyon", image: "backdrop-canyon.jpg", base: "dark" },
+  { id: "coast-road", label: "Coast Road", image: "backdrop-coast-road.jpg", base: "dark" },
+  { id: "neon-city", label: "Neon City", image: "backdrop-neon-city.jpg", base: "dark" },
+  { id: "snow-pass", label: "Snow Pass", image: "backdrop-snow-pass.jpg", base: "dark" },
+  { id: "salt-flats", label: "Salt Flats", image: "backdrop-salt-flats.jpg", base: "light" },
+] as const satisfies readonly { id: string; label: string; image: string; base: Base }[];
+
+export type Scene = (typeof SCENES)[number];
+export type SceneId = Scene["id"];
+export type Theme = "system" | Base | SceneId;
+
+export const THEMES: { id: "system" | Base; label: string }[] = [
   { id: "system", label: "System" },
   { id: "light", label: "Light" },
   { id: "dark", label: "Dark" },
@@ -12,16 +28,25 @@ export const THEMES: { id: Theme; label: string }[] = [
 export const THEME_COOKIE = "weft-theme";
 export const DARK_QUERY = "(prefers-color-scheme: dark)";
 
+export const sceneUrl = (id: SceneId) => `/api/scenes/${id}`;
+export const sceneOf = (theme: string) => SCENES.find((s) => s.id === theme);
+
+const SAVED = ["light", "dark", ...SCENES.map((s) => s.id)].join("|");
+
 export function savedTheme(): Theme {
-  const match = document.cookie.match(new RegExp(`(?:^|; )${THEME_COOKIE}=(light|dark)`));
+  const match = document.cookie.match(new RegExp(`(?:^|; )${THEME_COOKIE}=(${SAVED})(?:;|$)`));
   return (match?.[1] as Theme | undefined) ?? "system";
 }
 
-// Sets <html data-theme> to the theme in effect: light or dark.
+// Sets <html data-theme> to the palette in effect, light or dark, and data-scene to the scene, if any.
 export function applyTheme() {
   const theme = savedTheme();
-  const dark = theme === "system" ? matchMedia(DARK_QUERY).matches : theme === "dark";
-  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  const scene = sceneOf(theme);
+  const dark = scene ? scene.base === "dark" : theme === "system" ? matchMedia(DARK_QUERY).matches : theme === "dark";
+  const root = document.documentElement;
+  root.dataset.theme = dark ? "dark" : "light";
+  if (scene) root.dataset.scene = scene.id;
+  else delete root.dataset.scene;
 }
 
 export function setTheme(theme: Theme) {
@@ -30,4 +55,5 @@ export function setTheme(theme: Theme) {
 }
 
 // applyTheme, inlined into <head> so the page never paints in the wrong theme.
-export const THEME_SCRIPT = `(function(){try{var m=document.cookie.match(/(?:^|; )${THEME_COOKIE}=(light|dark)/);var t=m?m[1]:matchMedia("${DARK_QUERY}").matches?"dark":"light";document.documentElement.dataset.theme=t}catch(e){}})()`;
+const BASES = JSON.stringify({ light: "light", dark: "dark", ...Object.fromEntries(SCENES.map((s) => [s.id, s.base])) });
+export const THEME_SCRIPT = `(function(){try{var b=${BASES},m=document.cookie.match(/(?:^|; )${THEME_COOKIE}=(${SAVED})(?:;|$)/),v=m?m[1]:"",r=document.documentElement;r.dataset.theme=b[v]||(matchMedia("${DARK_QUERY}").matches?"dark":"light");if(b[v]&&v!==b[v])r.dataset.scene=v}catch(e){}})()`;

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { makeCard } from "./test-utils";
 import { boardPaletteItems, promptItems, type PaletteActions, type PaletteState } from "./board-palette";
 
-vi.mock("@/lib/theme", () => ({ THEMES: [{ id: "dark", label: "Dark" }], setTheme: vi.fn() }));
+vi.mock("@/lib/theme", () => ({ THEMES: [{ id: "dark", label: "Dark" }], SCENES: [{ id: "canyon", label: "Canyon" }], setTheme: vi.fn() }));
 
 function actions(): PaletteActions {
   const names = [
@@ -36,6 +36,7 @@ describe("boardPaletteItems", () => {
     const items = boardPaletteItems(state(), actions());
     expect(ids(items)).toContain("cmd-new");
     expect(ids(items)).toContain("cmd-theme-dark");
+    expect(ids(items)).toContain("cmd-theme-canyon");
     expect(ids(items)).toContain("project-all");
     expect(ids(items)).not.toContain("cmd-reply");
     expect(ids(items)).not.toContain("cmd-archive-done");

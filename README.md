@@ -34,6 +34,9 @@ same time; Next.js allows one dev server per project folder.
   overlay over the board; Esc (or clicking outside) closes it, and so does sending `/done`.
 - **Browser pane zoom**: the % button in the pane's toolbar zooms the page (Chrome's steps, plus
   50–200% presets); ⌘+ / ⌘− / ⌘0 and ⌘+scroll work on the page too, and a trackpad pinch magnifies.
+- **Themes**: Settings → Appearance (or ⌘K "Theme: …") picks System, Light or Dark, or a scene: Twin Suns,
+  Canyon, Coast Road, Neon City, Snow Pass or Salt Flats puts that picture behind the board with a palette drawn
+  from it and frosted columns (`lib/theme.ts`, colors in `app/globals.css`; docs/architecture/themes.md).
 - **Menu bar icon**: shows how many cards need you and lists them; click one to open it.
 - **Dock**: the Needs you count on the icon, and New Thread and Copilot in its menu.
 - **Links**: `weft://new?prompt=…&folder=…&start=1` creates a card (in your most recent project
