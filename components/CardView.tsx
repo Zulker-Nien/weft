@@ -209,7 +209,8 @@ export default function CardView({
   const live = isLive(card);
   // The copilot opens its own window and can't be moved, starred or filed under a project.
   const copilot = card.role === "copilot";
-  const fixed = live || copilot;
+  // A running card is placed by its status line; one waiting on you (a question or a permission) can still be dragged.
+  const fixed = card.column === "running" || copilot;
   // The issue and tags sit on the progress line, or in the footer when the card has none.
   const marks = <CardMarks card={card} onTag={onTag} />;
   const progress = showsProgress(card);
@@ -278,7 +279,7 @@ export default function CardView({
         </button>
       )}
 
-      {card.column === "needs_you" && card.pending && !card.pending.questions && (
+      {card.pending && !card.pending.questions && (
         <div className="mt-2 flex gap-1.5">
           <button
             onClick={(e) => {

@@ -15,6 +15,7 @@ import StarButton from "./StarButton";
 import TagPill from "./TagPill";
 import { cardTags } from "@/lib/rail-view";
 import ThreadView from "./ThreadView";
+import CopilotEmpty from "./CopilotEmpty";
 
 // Loaded in its own CrashGuard (components/guarded.tsx), so a broken review panel leaves the thread and its reply box.
 const ReviewPanel = guarded(() => import("./ReviewPanel"), { what: "review panel", className: "mx-4 my-2" });
@@ -33,6 +34,7 @@ export default function ThreadPanel({
   onClose,
   onRename,
   onMode,
+  onNewChat,
   editTitle = false,
   focusReply,
   alsoHere,
@@ -55,6 +57,8 @@ export default function ThreadPanel({
   onRename: (title: string) => void;
   // Applies to the open CLI right away, mid-turn included.
   onMode: (mode: PermissionMode) => void;
+  // The copilot's New chat, in place of the board card's skills, star, archive and delete.
+  onNewChat?: () => void;
   // Opens with the title already being edited (Rename… in the card's right-click menu).
   editTitle?: boolean;
   // Opens with the reply box focused (a card just started from New thread).
@@ -64,56 +68,16 @@ export default function ThreadPanel({
   // The plan's next 5-hour and weekly resets, the reply box's default Send later times.
   resets: PlanResets;
 }) {
-  const [editing, setEditing] = useState(editTitle);
-  const hint = useShortcutHint();
   const live = isLive(card);
+  // The copilot opens here like any card, but it has no project and isn't filed, starred or renamed.
+  const pilot = card.role === "copilot";
 
   return (
     <aside className="flex w-[44%] min-w-[380px] shrink-0 flex-col bg-panel last:flex-1">
       <header className="flex items-start gap-3 border-b border-line px-4 py-3">
         <div className="min-w-0 flex-1">
-          {editing ? (
-            <input
-              autoFocus
-              defaultValue={card.title}
-              onFocus={(e) => e.currentTarget.select()}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") e.currentTarget.blur();
-                if (e.key === "Escape") {
-                  // Cancels the rename only; the thread stays open.
-                  e.stopPropagation();
-                  e.currentTarget.value = card.title;
-                  e.currentTarget.blur();
-                }
-              }}
-              onBlur={(e) => {
-                const title = e.currentTarget.value.trim();
-                setEditing(false);
-                if (title && title !== card.title) onRename(title);
-              }}
-              className="w-full rounded border border-accent bg-panel px-1 py-0.5 text-[14px] font-medium leading-snug text-ink outline-none"
-            />
-          ) : (
-            <h2
-              title="Click to rename"
-              onClick={() => setEditing(true)}
-              className="line-clamp-2 cursor-text rounded text-[14px] font-medium leading-snug text-ink hover:bg-sunken"
-            >
-              {card.title}
-            </h2>
-          )}
-          <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted">
-            <BackendBadge backend={card.backend} />
-            <CrashGuard inline what="mode picker"><ModePicker small value={card.permissionMode} onChange={onMode} yolo={card.backend === "claude"} /></CrashGuard>
-            <span className="min-w-[3rem] truncate" title={card.cwd}>{folderName(card.cwd)}</span>
-            {card.sessionId && (
-              <span className="shrink-0 whitespace-nowrap font-mono text-faint" title={card.sessionId}>· {card.sessionId.slice(0, 8)}</span>
-            )}
-            {card.warm && (
-              <span className="shrink-0 whitespace-nowrap text-ok" title="The CLI is open, so a reply starts right away">· live</span>
-            )}
-            <HeaderMarks card={card} onTags={onTags} />
-          </div>
+          <PanelTitle card={card} editable={!pilot} editTitle={editTitle} onRename={onRename} />
+          <HeaderMeta card={card} pilot={pilot} onMode={onMode} onTags={onTags} />
           {(card.stage || card.remaining) && (
             <div className="mt-1.5 flex min-w-0 items-center gap-1.5 text-[11.5px]">
               {card.stage && <span className="shrink-0 rounded bg-sunken px-1.5 py-px text-muted">{card.stage}</span>}
@@ -121,27 +85,11 @@ export default function ThreadPanel({
             </div>
           )}
         </div>
-        <CrashGuard inline what="skill menu"><SkillMenu cwd={card.cwd} disabled={live} onRun={(skill) => onSend(`/${skill}`)} /></CrashGuard>
-        <CrashGuard inline what="star"><StarButton variant="header" starred={Boolean(card.starred)} onClick={onStar} /></CrashGuard>
-        <button
-          onClick={onArchive}
-          disabled={live}
-          title={hint("archive", card.archived ? "Unarchive card" : "Archive card")}
-          aria-label={card.archived ? "Unarchive card" : "Archive card"}
-          className="rounded-md p-1.5 text-muted hover:bg-sunken hover:text-ink disabled:opacity-40"
-        >
-          <Icon name="archive" size={15} />
-        </button>
-        <button
-          onClick={() => {
-            if (window.confirm(`Delete “${card.title}”? Its CLI transcript stays on disk.`)) onDelete();
-          }}
-          title="Delete card"
-          aria-label="Delete card"
-          className="rounded-md p-1.5 text-muted hover:bg-sunken hover:text-danger"
-        >
-          <Icon name="trash" size={15} />
-        </button>
+        {pilot ? (
+          <NewChatButton onClick={onNewChat} />
+        ) : (
+          <CardActions card={card} live={live} onSend={onSend} onStar={onStar} onArchive={onArchive} onDelete={onDelete} />
+        )}
         {onClose && (
           <button
             onClick={onClose}
@@ -179,13 +127,142 @@ export default function ThreadPanel({
         streaming={streaming}
         onSend={onSend}
         onAnswer={onAnswer}
-        footer={card.column === "review" && <ReviewPanel card={card} items={items} onSend={onSend} />}
-        replaceReply={card.column === "review" && Boolean(card.review)}
         alsoHere={alsoHere}
-        scheduling={{ resets }}
+        {...threadExtras(card, pilot, items, onSend, resets)}
         focusReply={focusReply}
       />
     </aside>
+  );
+}
+
+// The thread's title; a click renames it (not the copilot's), Enter keeps the new name and Escape drops it.
+function PanelTitle({ card, editable, editTitle, onRename }: {
+  card: Card;
+  editable: boolean;
+  editTitle: boolean;
+  onRename: (title: string) => void;
+}) {
+  const [editing, setEditing] = useState(editTitle);
+  if (editing && editable) {
+    return (
+      <input
+        autoFocus
+        defaultValue={card.title}
+        onFocus={(e) => e.currentTarget.select()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") {
+            // Cancels the rename only; the thread stays open.
+            e.stopPropagation();
+            e.currentTarget.value = card.title;
+            e.currentTarget.blur();
+          }
+        }}
+        onBlur={(e) => {
+          const title = e.currentTarget.value.trim();
+          setEditing(false);
+          if (title && title !== card.title) onRename(title);
+        }}
+        className="w-full rounded border border-accent bg-panel px-1 py-0.5 text-[14px] font-medium leading-snug text-ink outline-none"
+      />
+    );
+  }
+  return (
+    <h2
+      title={editable ? "Click to rename" : undefined}
+      onClick={() => setEditing(true)}
+      className="line-clamp-2 cursor-text rounded text-[14px] font-medium leading-snug text-ink hover:bg-sunken"
+    >
+      {card.title}
+    </h2>
+  );
+}
+
+// Under the title: the CLI, its mode, the folder (the copilot covers the whole board), the session and its tags.
+function HeaderMeta({ card, pilot, onMode, onTags }: {
+  card: Card;
+  pilot: boolean;
+  onMode: (mode: PermissionMode) => void;
+  onTags?: () => void;
+}) {
+  return (
+    <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted">
+      <BackendBadge backend={card.backend} />
+      <CrashGuard inline what="mode picker"><ModePicker small value={card.permissionMode} onChange={onMode} yolo={card.backend === "claude" && !pilot} /></CrashGuard>
+      <span className="min-w-[3rem] truncate" title={card.cwd}>{pilot ? "✨ whole board" : folderName(card.cwd)}</span>
+      {card.sessionId && (
+        <span className="shrink-0 whitespace-nowrap font-mono text-faint" title={card.sessionId}>· {card.sessionId.slice(0, 8)}</span>
+      )}
+      {card.warm && (
+        <span className="shrink-0 whitespace-nowrap text-ok" title="The CLI is open, so a reply starts right away">· live</span>
+      )}
+      <HeaderMarks card={card} onTags={pilot ? undefined : onTags} />
+    </div>
+  );
+}
+
+// What the thread shows that differs for the copilot: no review panel or Send later, a few suggestions to start.
+function threadExtras(card: Card, pilot: boolean, items: ThreadItem[], onSend: (text: string) => Promise<void>, resets: PlanResets) {
+  if (pilot) {
+    return {
+      empty: <CopilotEmpty onAsk={(text) => void onSend(text).catch(() => {})} />,
+      placeholder: "Ask about your threads, or tell me what to start",
+    };
+  }
+  return {
+    footer: card.column === "review" && <ReviewPanel card={card} items={items} onSend={onSend} />,
+    replaceReply: card.column === "review" && Boolean(card.review),
+    scheduling: { resets },
+  };
+}
+
+// A board card's header buttons: its skills, star, archive and delete.
+function CardActions({ card, live, onSend, onStar, onArchive, onDelete }: {
+  card: Card;
+  live: boolean;
+  onSend: (text: string) => Promise<void>;
+  onStar?: () => void;
+  onArchive: () => void;
+  onDelete: () => void;
+}) {
+  const hint = useShortcutHint();
+  return (
+    <>
+      <CrashGuard inline what="skill menu"><SkillMenu cwd={card.cwd} disabled={live} onRun={(skill) => onSend(`/${skill}`)} /></CrashGuard>
+      <CrashGuard inline what="star"><StarButton variant="header" starred={Boolean(card.starred)} onClick={onStar} /></CrashGuard>
+      <button
+        onClick={onArchive}
+        disabled={live}
+        title={hint("archive", card.archived ? "Unarchive card" : "Archive card")}
+        aria-label={card.archived ? "Unarchive card" : "Archive card"}
+        className="rounded-md p-1.5 text-muted hover:bg-sunken hover:text-ink disabled:opacity-40"
+      >
+        <Icon name="archive" size={15} />
+      </button>
+      <button
+        onClick={() => {
+          if (window.confirm(`Delete “${card.title}”? Its CLI transcript stays on disk.`)) onDelete();
+        }}
+        title="Delete card"
+        aria-label="Delete card"
+        className="rounded-md p-1.5 text-muted hover:bg-sunken hover:text-danger"
+      >
+        <Icon name="trash" size={15} />
+      </button>
+    </>
+  );
+}
+
+// Starts the copilot over with an empty conversation.
+function NewChatButton({ onClick }: { onClick?: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      title="Start a new conversation"
+      className="shrink-0 rounded-md px-2 py-1 text-[11.5px] text-muted hover:bg-sunken hover:text-ink"
+    >
+      New chat
+    </button>
   );
 }
 

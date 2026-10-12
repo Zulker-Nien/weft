@@ -1,0 +1,56 @@
+# Weft account sign-in
+
+The Weft account is optional: the board works signed out, and signing in unlocks cloud features (page sync,
+share links). Sign-in runs in the system browser, never in the Weft browser pane, and uses Supabase Auth
+with PKCE so the verifier only ever lives on this machine.
+
+## Redirect target
+
+The OAuth and magic-link flows redirect to a stable, port-free URL Weft owns:
+
+```
+weft://account-callback
+```
+
+This is a custom URL scheme Weft registers with the OS when packaged (`app.setAsDefaultProtocolClient` in
+`electron/main.cjs`). The dev server's HTTP port changes on every Weft restart, so a `http://127.0.0.1:PORT/...`
+redirect would break after each launch; the `weft://` scheme doesn't carry a port, so the URL is permanent.
+
+`lib/account.ts:redirectUrl()` returns the scheme when the build is the desktop app
+(`process.env.THREADBOARD_SHELL_URL` is set), and falls back to the loopback HTTP origin for plain
+`next dev` (where the scheme isn't registered).
+
+## From link to session
+
+1. The user clicks **Sign in → GitHub** in the Weft top bar.
+2. The board calls `POST /api/account` → `startSignIn("github", origin)` → Supabase's `signInWithOAuth`
+   with `redirectTo: weft://account-callback` and `skipBrowserRedirect: true`.
+3. The board opens the Supabase authorize URL in the system browser via `shell.openExternal`.
+4. The user authorizes on GitHub. GitHub → Supabase → `weft://account-callback?code=…`.
+5. The OS hands the URL to the Weft app: `open-url` (mac) or `second-instance` (Linux/Windows).
+6. `handleLink` in `electron/main.cjs` sees the link is for the account callback and hands it to
+   `accountLink.handle()` (built by `createAccountLink()` in `electron/account-link.cjs`). The handler
+   parses the query string with `accountCallbackBody()` and POSTs it to `/api/account/weft-callback`
+   on the loopback server with `x-threadboard: 1` and `content-type: application/json`. The shared
+   `warnUser` (in `electron/main.cjs`) is the single dialog the account-callback path uses for
+   errors; `pageLinks` and `accountLink` both take it as `warn`, so the two flows stay in step.
+7. The route (`app/api/account/weft-callback/route.ts`) calls `finishSignIn(code)` (in
+   `lib/account.ts`), which exchanges the code against the PKCE verifier kept in the session file
+   (`~/.weft/account.json` or the Keychain via `electron/account-store.cjs`).
+8. Success is silent; the board's `useAccount` polling (every 2s while `waiting` is set) picks up
+   the new session. Errors render a small green/red page built by `accountPage()` in
+   `lib/account-page.ts`; that same helper backs the HTTP loopback callback at
+   `/api/account/callback`, so both flows show the user the same page. The Electron handler shows
+   the same message in a native dialog (it pulls the visible `<h1>`/`<p>` out of the HTML
+   response so the dialog matches the browser).
+
+## Supabase project setup
+
+For the sign-in flow to complete, the Supabase project's **Authentication → URL Configuration →
+Redirect URLs** allowlist must include `weft://account-callback`. The `Site URL` (used as a fallback)
+should not be relied on; set the allowlist entry explicitly.
+
+The GitHub provider itself is configured under **Authentication → Sign In / Providers → GitHub** with
+the GitHub OAuth app's client ID and secret, and the GitHub OAuth app's **Authorization callback URL**
+must be `https://<project-ref>.supabase.co/auth/v1/callback` so Supabase can exchange the OAuth code
+with GitHub.

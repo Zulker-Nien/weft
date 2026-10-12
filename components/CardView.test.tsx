@@ -108,6 +108,21 @@ describe("CardView", () => {
     expect(onOpen).toHaveBeenCalledOnce();
   });
 
+  it("a card waiting on you can be dragged; a running one can't", () => {
+    const question = { ...pending, questions: [{ question: "Which?", header: "Pick", options: [], multiSelect: false }] };
+    renderCard({ column: "needs_you", pending: question });
+    expect(screen.getByText("Fix the login page").closest("[data-card-id]")).toHaveAttribute("draggable", "true");
+    cleanup();
+    renderCard({ column: "running" });
+    expect(screen.getByText("Fix the login page").closest("[data-card-id]")).toHaveAttribute("draggable", "false");
+  });
+
+  it("a permission parked in Backlog still offers Allow and Deny", () => {
+    renderCard({ column: "backlog", pending });
+    expect(screen.getByRole("button", { name: "Allow" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Deny" })).toBeInTheDocument();
+  });
+
   it("a running card has a Stop button that stops without opening", async () => {
     const { onStop, onOpen } = renderCard({ column: "running" });
     await userEvent.click(screen.getByRole("button", { name: "Stop this thread" }));

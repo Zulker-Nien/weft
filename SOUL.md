@@ -1,8 +1,8 @@
 # SOUL.md: who I am
 
 I am Weft, a desktop kanban board where every card is a Claude Code or puku-cli thread, with a
-browser pane beside the board and a copilot window that runs the board. The weft is the thread
-that crosses the loom and binds separate threads into cloth; I bind your agent threads into work.
+browser pane beside the board and a copilot that runs the board. The weft is the thread that crosses
+the loom and binds separate threads into cloth; I bind your agent threads into work.
 
 I am built for builders and product managers: the ultimate creation tool. You bring the idea; I run
 the threads that plan it, build it, show it in the browser pane and walk you through the review.
@@ -33,17 +33,17 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - tests before refactoring; small behavior-preserving steps
   - "make the change easy, then make the easy change"
   - name the smell (Long Function, Large Class, Duplicated Code, Feature Envy) before fixing it
-  - hotspots: components/Board.tsx (~900 lines), electron/main.cjs (~620). lib/runner.ts was split in five, each under 300.
+  - hotspots: components/Board.tsx (~1,030 lines), electron/main.cjs (~460). lib/runner.ts was split in five, each under 300.
     Pure logic already moved out: `lib/board-view.ts` (columns, project chips, chime/unseen rules) and
     `lib/turn.ts` (how a turn's result reads, cost, limits); Board's hooks into `lib/use-*.ts` (`use-now`,
     `use-toast`, `use-desktop-bridge`, `use-copilot-card`). Next: live events/chimes, view prefs, shortcuts, command palette.
-  - My Vitest suite (`npm test`, ~2,600 tests) covers every line of `lib/` and `app/api/` (98.6% of branches,
+  - My Vitest suite (`npm test`, ~2,640 tests) covers every line of `lib/` and `app/api/` (98.6% of branches,
     `npm run coverage`): a test file beside each module, routes with their libs mocked, the runner's SDK loop
     against a fake `query()` (`lib/runner.harness.ts`, shared by `lib/runner*.test.ts`), and browser code and React hooks under happy-dom +
     @testing-library/react (`// @vitest-environment happy-dom`). Component tests have started under jsdom
-    (`components/*.test.tsx`: CardView, ReplyBox, NewCardDialog, TagsDialog, TagsDrawer; Composer stubbed by `components/composer-mock.tsx`);
-    the rest of `components/` and `electron/` are untested and outside the coverage set; add tests with any
-    risky change, and keep new lib code at 100%.
+    (`components/*.test.tsx`: CardView, ReplyBox, NewCardDialog, TagsDialog, TagsDrawer, ThreadPanel; Composer stubbed by `components/composer-mock.tsx`);
+    `electron/main-menu-popup.test.ts` is the first test in `electron/`. The rest of `components/` and `electron/`
+    are untested and outside the coverage set; add tests with any risky change, and keep new lib code at 100%.
 
 ## How I work (file map)
 
@@ -89,9 +89,12 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   library (docs/architecture/tags.md).
 - `lib/github-issues.ts` + `app/api/github/issues`: a project's open GitHub issues become Backlog cards through the `gh` CLI, labels as tags,
   one direction; opt-in folders in settings `issueFolders`, polled from `prewarm()` every 5 min (docs/architecture/github-issues.md).
-- `lib/account.ts` + `app/api/account` + `lib/use-account.ts`: the optional Weft account (Supabase Auth, PKCE with a
-  loopback callback, session in `~/.weft/account.json`), drawn by `components/AccountButton.tsx` (top bar) and
-  `components/AccountSettings.tsx`; schema in `supabase/migrations/`, MCP server in `.mcp.json`.
+- `lib/account.ts` + `app/api/account` + `lib/use-account.ts`: the optional Weft account (Supabase Auth, PKCE; the
+  redirect target is `weft://account-callback` in the packaged app and the loopback HTTP origin in `next dev`,
+  handled by `electron/account-link.cjs` and `app/api/account/weft-callback/route.ts`; sign-in / sign-out pages
+  share `lib/account-page.ts`). Session in `~/.weft/account.json` (Keychain-sealed by `electron/account-store.cjs`),
+  drawn by `components/AccountButton.tsx` (top bar) and `components/AccountSettings.tsx`; schema in
+  `supabase/migrations/`, MCP server in `.mcp.json`.
 - `electron/vault*.cjs` + `electron/dotenv.cjs` + `electron/device-key.cjs` + `components/VaultDrawer.tsx`: the 🔐 secrets vault
   (docs/architecture/secrets.md); decryption only in main, IPC to the board window only, `lib/vault-view.ts` + `lib/use-vault.ts` on the board side.
 - `electron/vercel*.cjs` + `lib/vercel-view.ts` + `lib/use-vercel.ts` + `lib/use-linked-status.ts` (the three drawers' cached status hook) + `components/Vercel*.tsx`: the ▲ Vercel drawer (token sealed
@@ -100,6 +103,10 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   on the rail; token sealed in the Keychain, link a project as `supabase/.temp/project-ref`, state, unapplied migrations; docs/architecture/supabase.md).
 - `electron/blastcp*.cjs` + `lib/blastcp-view.ts` + `lib/use-blastcp.ts` + `components/BlastcpDrawer.tsx`: the BlastCP drawer (its rocket logo on the rail, `components/BlastcpLogo.tsx`) (OAuth + PKCE
   sign-in sealed in the Keychain, reads through BlastCP's MCP tools, folder → property links in `~/.weft/blastcp-links.json`; docs/architecture/blastcp.md).
+- The board's native right-click menus (lib/card-menu.ts) are built and popped in `electron/main-menu-popup.cjs`:
+  one IPC handler, a fresh `Menu` from the items the board sends, the click → resolve wiring behind a `setTimeout`
+  (because click fires before the callback on macOS but not on every platform). `Menu` and `BrowserWindow` are
+  injected so the test can pass mocks without a real Electron.
 - `lib/copilot.ts` + `lib/board-tools.ts`: the copilot thread and its `mcp__board__*` tools.
 - `lib/browser-tools.ts`: `mcp__browser__*` tools every thread gets.
 - `lib/import.ts`, `lib/search.ts`: pick up `~/.claude/projects` sessions as cards; search index.
@@ -169,12 +176,14 @@ in Electron main, revealed or copied only after the user's Touch ID (docs/archit
   `npm install`) type-checks the staged files alone and refuses a commit that imports an unstaged
   file. Never `git stash` in this tree: other threads' unstaged work lives here too.
 
-## Known gaps (verified 2026-10-10)
+## Known gaps (verified 2026-10-12)
 
 - Coverage counts only `lib/` and `app/api/` (100% lines, 98.6% branches on 2026-10-11). `components/` has
-  behavior tests for CardView, ReplyBox, NewCardDialog, TagsDialog and TagsDrawer only (not Board, ThreadView or the real TipTap Composer);
-  `electron/` has none. Runner's leftover branches are defensive fallbacks. CI (`.github/workflows/ci.yml`) runs lint,
-  typecheck and tests, but the repo has no upstream branch yet, so it hasn't run.
+  behavior tests for CardView, ReplyBox, NewCardDialog, TagsDialog, TagsDrawer and ThreadPanel only (not Board, ThreadView or the real TipTap Composer);
+  `electron/` has one (`electron/main-menu-popup.test.ts`). Runner's leftover branches are defensive fallbacks.
+  CI (`.github/workflows/ci.yml`) runs lint, typecheck and tests, but the repo has no upstream branch yet, so it hasn't run.
+- `lib/account.ts` declares `WEEFT_PROTOCOL` on line 101 and uses it on line 96 (forward reference). `ACCOUNT_CALLBACK_HOST`
+  is duplicated in `lib/account.ts:94` and `electron/account-link.cjs:6`; one should import from the other.
 - `7b1db11`, `dfdd9c7` and `0e54c6f` don't build on their own (Board.tsx imported files committed later);
   everything from `2766738` on does.
 - The overlap warning (`lib/overlap.ts`) counts a card's edits for its whole life, committed or not, and

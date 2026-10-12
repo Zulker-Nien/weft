@@ -300,6 +300,14 @@ only files that are still uncommitted, pushes if asked, moves the change's card 
 the thread and stamps the page. Only a failure (a pre-commit hook that refuses, a rejected push) goes to the thread as
 a message, so it can fix it; Skip and typed requests still go to the thread.
 
+Next to it, a list icon and a number (**☰ 7**) count the cards waiting in Backlog in that repo. Click it to start a
+card that plans them into sprints (`lib/sprint-plan.ts`, `app/api/sprint`). It reads each Backlog card against the
+code without editing anything, sizes it S/M/L, and flags duplicates, cards already done, cards too vague to start
+and cards too big for one go. It then groups the cards into sprints of 3 or 4 that touch different files, so a
+sprint's cards can run side by side in one folder, clear of the cards already at work. The plan is a page in the
+browser pane with one column per sprint, and its buttons (Start this sprint, Move to sprint…, Merge, Split, Archive)
+answer the thread through `weft://reply` links. It starts a sprint's cards, or adds and archives cards, only when you say so.
+
 ## Progress: streaks, badges and your builder card
 
 Beside the code quality badge, **🔥 25 · Lv 15** is your streak and level (Settings > Show progress turns it
@@ -475,8 +483,9 @@ sees, of what finished, needs you or failed on the board since your last message
 copilot opens as a pop-up at `/copilot`.
 
 The copilot also shows as a card at the top of whichever column it is in (Running, Needs you, Review),
-marked ✨ whole board instead of a folder. Click it to open or close the copilot window; Allow, Deny and
-Stop work from the card. A project filter keeps it; a search hides it. It can't be dragged or starred.
+marked ✨ whole board instead of a folder. Click it to open it like any card, in the same window with its own
+browser pane beside it (New chat in place of star, archive and delete); the ✨ button and ⌃⌥Space still open the
+separate copilot window. Allow, Deny and Stop work from the card. A project filter keeps it; a search hides it. It can't be dragged or starred.
 
 ## Terminal
 

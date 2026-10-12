@@ -209,6 +209,14 @@ permission thread item with the decision, moves the card back to `running` if no
 requests are queued, and resolves the SDK's `Promise<PermissionResult>` with
 `{ behavior: "allow", updatedInput }` (and the answers) or `{ behavior: "deny" }`.
 
+A card waiting on you (a question or an Allow/Deny prompt) can be dragged to Backlog, Review or
+Done to triage the thread out of "Needs you" without answering it: `fixed = card.column ===
+"running" || copilot` in `components/CardView.tsx`, so any card that's not running and isn't the
+copilot is draggable, and the Allow/Deny row is gated on `card.pending`, so it stays offered
+wherever the card parks. On the server, `moveCard(card, column)` in `app/api/cards/[id]/route.ts`
+permits the move when `card.pending && MANUAL.includes(column)`; the original question stays open
+and answering it later (in Backlog/Review/Done) runs the turn on.
+
 ### `AskUserQuestion` -> `QuestionForm`
 
 `readQuestions()` (`lib/turn.ts`) sanitizes the SDK's `questions` array
@@ -264,6 +272,23 @@ polls `auth status` every 3 seconds (up to 10 minutes) until it reports `loggedI
 (`listCards().filter((c) => c.role !== "copilot")` in the cards route) but its thread
 still runs through `runner.ts`. `resetCopilot()` ends its session, clears its
 thread, and re-warms it.
+
+The copilot opens two ways:
+
+- As a card in the main window's "Running" column, rendered by `components/Board.tsx` with the
+  same `CardView` and `ThreadPanel` as a board card. Clicking the copilot card runs `select(id)`,
+  not `openCard`, so it doesn't bring up the same "Running" card a second time; the thread
+  panel's `pilot` branch swaps the card header's skill/star/archive/delete buttons for a single
+  "New chat" button (`NewChatButton` in `components/ThreadPanel.tsx`) and replaces the empty
+  thread with `CopilotEmpty` (`components/CopilotEmpty.tsx`). The copilot card is not draggable
+  (`fixed = card.column === "running" || copilot` in `CardView.tsx`) and can't be starred,
+  deleted, archived or filed under a project, so the column/context menu keys (`CardActions` /
+  `open-card` / `delete` etc.) reject it on the server side too.
+- In its own `BrowserWindow` (the `copilot:toggle` shortcut `Control+Alt+Space`, the
+  `weft://copilot` link, the tray/menu item). The window is hidden on close so the conversation
+  survives; `useDesktopBridge()` exposes its open state as `copilotOpen` for the header button.
+  The board's `browser.prune` includes `COPILOT_ID` alongside the live cards, so a stale copilot
+  pane is closed the same way a stale card pane is.
 
 `lib/board-tools.ts` registers the `mcp__board__*` MCP server used only by the
 copilot: `list_cards`, `read_thread`, `create_card`, `move_card`, `stop_card` are in

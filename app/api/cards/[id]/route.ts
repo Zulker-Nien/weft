@@ -7,7 +7,7 @@ import { dismissSession } from "@/lib/settings";
 import { deleteCard, getCard, updateCard } from "@/lib/store";
 import { rememberTags } from "@/lib/tag-store";
 import { normalizeTags } from "@/lib/tags";
-import { COLUMNS, MODES, type Column, type PermissionMode } from "@/lib/types";
+import { COLUMNS, MODES, type Card, type Column, type PermissionMode } from "@/lib/types";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -23,6 +23,28 @@ function setMarks(id: string, body: { starred?: unknown; tags?: unknown }) {
   updateCard(id, { tags, tagsBy: "user" });
   // New ones join the catalog (lib/tag-store.ts), so they stay listed.
   rememberTags(tags);
+}
+
+// Your drag to another column (Running only from Backlog; Needs you never by hand).
+function moveCard(card: Card, column: Column) {
+  if (!COLUMNS.some((c) => c.id === column)) throw new Error("Unknown column.");
+  if (card.role === "copilot") throw new Error("The copilot isn't on the board.");
+  // A turn waiting on you can be parked in Backlog, Review or Done; answering it later runs it on.
+  const waiting = Boolean(card.pending) && MANUAL.includes(column);
+  if (isBusy(card.id) && !waiting) throw new Error("Stop the thread before moving it.");
+  if (column === "running") {
+    if (card.column !== "backlog") throw new Error("Reply in the thread to run it again.");
+    sendMessage(card.id, firstMessage(card));
+  } else if (MANUAL.includes(column)) {
+    updateCard(card.id, { column });
+    // Your own move runs that column's automations (Settings), such as weft:done for Done.
+    queueMessages(card.id, messagesForMove(card, column));
+    // Done files the card away once its automations (weft:done) have run.
+    if (column === "done") archiveWhenIdle(card.id);
+    else updateCard(card.id, { archived: false });
+  } else {
+    throw new Error("Cards move to Needs you on their own.");
+  }
 }
 
 export async function PATCH(req: Request, { params }: Ctx) {
@@ -70,24 +92,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
       updateCard(id, { cwd: resolveFolder(body.cwd), error: undefined });
     }
 
-    if (body.column && body.column !== card.column) {
-      if (!COLUMNS.some((c) => c.id === body.column)) throw new Error("Unknown column.");
-      if (card.role === "copilot") throw new Error("The copilot isn't on the board.");
-      if (isBusy(id)) throw new Error("Stop the thread before moving it.");
-      if (body.column === "running") {
-        if (card.column !== "backlog") throw new Error("Reply in the thread to run it again.");
-        sendMessage(id, firstMessage(card));
-      } else if (MANUAL.includes(body.column)) {
-        updateCard(id, { column: body.column });
-        // Your own move runs that column's automations (Settings), such as weft:done for Done.
-        queueMessages(id, messagesForMove(card, body.column));
-        // Done files the card away once its automations (weft:done) have run.
-        if (body.column === "done") archiveWhenIdle(id);
-        else updateCard(id, { archived: false });
-      } else {
-        throw new Error("Cards move to Needs you on their own.");
-      }
-    }
+    if (body.column && body.column !== card.column) moveCard(card, body.column);
     return Response.json({ card: getCard(id) });
   } catch (err) {
     return fail(err);

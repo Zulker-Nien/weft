@@ -86,8 +86,21 @@ export async function accountView(): Promise<AccountView> {
   return { configured: true, user: data.session ? toAccountUser(data.session.user) : null };
 }
 
-// Where Supabase sends the browser back to: this server, at the origin the board called it on.
+// The custom URL scheme the desktop app registers as the OAuth redirect target, so the URL is
+// stable across dev server port changes (the port is picked at random on every Weft restart).
+// In packaged builds the OS hands weft://account-callback back to Electron's main process, which
+// forwards the code to /api/account/weft-callback. In plain `next dev` (no Electron) the scheme
+// is not registered, so we fall back to the HTTP loopback.
+export const ACCOUNT_CALLBACK_HOST = "account-callback";
+export function weftCallbackUrl(): string {
+  return `${WEEFT_PROTOCOL}://${ACCOUNT_CALLBACK_HOST}`;
+}
+
+// Where Supabase sends the browser back to. The packaged desktop app uses the weft:// scheme so
+// the URL doesn't depend on the dev port; plain `next dev` uses the loopback HTTP origin instead.
+export const WEEFT_PROTOCOL = "weft";
 export function redirectUrl(origin: string): string {
+  if (process.env.THREADBOARD_SHELL_URL) return weftCallbackUrl();
   return `${origin.replace(/\/+$/, "")}${CALLBACK_PATH}`;
 }
 

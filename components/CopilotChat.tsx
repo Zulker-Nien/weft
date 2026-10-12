@@ -6,15 +6,10 @@ import { isLive } from "@/lib/format";
 import { useBoardEvents } from "@/lib/use-events";
 import { useTitleBarZoom } from "@/lib/use-title-bar-zoom";
 import { COPILOT_ID, type Card, type ThreadItem } from "@/lib/types";
+import CopilotEmpty from "./CopilotEmpty";
 import CrashGuard from "./CrashGuard";
 import Icon, { Spinner } from "./Icon";
 import ThreadView from "./ThreadView";
-
-const SUGGESTIONS = [
-  "What needs my attention?",
-  "Summarize the threads in Review",
-  "Which threads are blocked on me?",
-];
 
 function Status({ card }: { card: Card }) {
   if (card.column === "running") {
@@ -129,24 +124,7 @@ export default function CopilotChat() {
             onSend={send}
             onAnswer={(allow, answers) => void api.answer(COPILOT_ID, allow, answers, card.pending?.id).catch(() => {})}
             placeholder="Ask about your threads, or tell me what to start"
-            empty={
-              <div className="flex flex-col gap-3 pt-6">
-                <p className="text-[13px] leading-relaxed text-muted">
-                  I can check on your threads, start new ones, and reply to them for you.
-                </p>
-                <div className="flex flex-col items-start gap-1.5">
-                  {SUGGESTIONS.map((text) => (
-                    <button
-                      key={text}
-                      onClick={() => void send(text).catch((err: unknown) => setError(String(err)))}
-                      className="rounded-full border border-line-strong px-3 py-1 text-[12.5px] text-ink hover:bg-sunken"
-                    >
-                      {text}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            }
+            empty={<CopilotEmpty onAsk={(text) => void send(text).catch((err: unknown) => setError(String(err)))} />}
           />
           </CrashGuard>
         </div>

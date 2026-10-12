@@ -23,6 +23,7 @@ const { createBrowserPane } = require("./browser-pane.cjs");
 const { createMenus } = require("./menus.cjs");
 const { createPageLinks } = require("./page-links.cjs");
 const { createPanePages } = require("./pane-pages.cjs");
+const { removeShellToken, writeShellToken } = require("./shell-token.cjs");
 const { fixPath } = require("./env.cjs");
 const { startServer } = require("./server.cjs");
 const { createStartupScreen } = require("./startup-screen.cjs");
@@ -30,6 +31,8 @@ const { createStartupTimer } = require("./startup-timer.cjs");
 const { registerTerminal } = require("./terminal.cjs");
 const { themeSource } = require("./theme-source.cjs");
 const { loadWindowState, trackWindowState } = require("./window-state.cjs");
+const { createAccountLink } = require("./account-link.cjs");
+const { createMenuPopup } = require("./main-menu-popup.cjs");
 
 const APP_NAME = "Weft";
 const TAGLINE = "A board for your AI";
@@ -60,6 +63,8 @@ const timer = createStartupTimer({
 // The secrets vault, set up further down; the pane types its values in for threads (fillSecret).
 // With it, the commands and dev servers that run with vault values (electron/secret-run.cjs).
 let vault, secretRun;
+// Small native warning dialog; shared by pageLinks (walk-through buttons) and accountLink (OAuth callback).
+const warnUser = (message, detail) => dialog.showMessageBox(win, { type: "warning", message, detail });
 const pane = createBrowserPane({
   secrets: () => vault, secretRun: () => secretRun,
   getWindow: () => win, getAppView: () => appView,
@@ -75,8 +80,12 @@ const pane = createBrowserPane({
 const pageLinks = createPageLinks({
   getServer: () => server,
   contentsFor: (key) => pane.contentsFor(key),
-  warn: (message, detail) => dialog.showMessageBox(win, { type: "warning", message, detail }),
+  warn: warnUser,
 });
+
+// weft://account-callback links: forward to the board's /api/account/weft-callback so the OAuth
+// code can be exchanged against the PKCE verifier.
+const accountLink = createAccountLink({ getServer: () => server, showMain, warn: warnUser });
 
 // Only one Weft runs at a time; opening it again brings the existing window forward.
 const primary = app.requestSingleInstanceLock();
@@ -144,10 +153,12 @@ async function boot() {
   timer.mark("path");
   await startup.show("Starting the board…");
   controlUrl ??= await pane.startControlServer();
+  writeShellToken(dataDir(), TOKEN);
   try {
     server = await startServer({
       preferredPort: PREFERRED_PORT,
-      env: { THREADBOARD_SHELL_URL: controlUrl, THREADBOARD_SHELL_TOKEN: TOKEN, THREADBOARD_APP_PID: String(process.pid) },
+      // The token goes in a file, not the env, where any process of yours could read it (electron/shell-token.cjs).
+      env: { THREADBOARD_SHELL_URL: controlUrl, THREADBOARD_APP_PID: String(process.pid) },
       onFatal: (message) => startup.fail(message),
       onMark: timer.mark,
     });
@@ -287,6 +298,7 @@ function toggleCopilot() {
 // weft://reply and weft://commit come from a card's own page in the pane (page-links.cjs)
 
 async function handleLink(raw) {
+  if (accountLink.isAccountCallback(raw)) return accountLink.handle(raw);
   if (!server) {
     pendingLinks.push(raw);
     return;
@@ -302,6 +314,10 @@ async function handleLink(raw) {
   showMain();
   if (action === "card") return sendMenu("open-card", url.pathname.replace(/^\/+/, ""));
   if (action !== "new") return;
+  return handleNewThreadLink(url);
+}
+
+async function handleNewThreadLink(url) {
   const prompt = url.searchParams.get("prompt");
   if (!prompt) return sendMenu("new-thread");
   try {
@@ -372,30 +388,7 @@ ipcMain.handle("dialog:openFolder", async () => {
   return result.canceled ? null : result.filePaths[0];
 });
 ipcMain.on("shell:openExternal", (_e, url) => /^https?:\/\//i.test(String(url)) && shell.openExternal(String(url)));
-// The board's right-click menus (lib/card-menu.ts): shown natively so the narrow board never clips them.
-// Resolves to the picked item's id, or null when dismissed.
-ipcMain.handle("menu:popup", (e, items) =>
-  new Promise((resolve) => {
-    let picked = null;
-    const template = (Array.isArray(items) ? items : []).map((item) =>
-      item.type === "separator"
-        ? { type: "separator" }
-        : {
-            label: String(item.label),
-            enabled: item.enabled !== false,
-            ...(typeof item.checked === "boolean" ? { type: "checkbox", checked: item.checked } : {}),
-            // Drawn beside the item, and live while the menu is open (a popup's keys go away with it).
-            ...(item.accelerator ? { accelerator: String(item.accelerator) } : {}),
-            click: () => (picked = String(item.id)),
-          },
-    );
-    // click fires before callback on macOS, but not on every platform; wait a tick for it.
-    Menu.buildFromTemplate(template).popup({
-      window: BrowserWindow.fromWebContents(e.sender) ?? undefined,
-      callback: () => setTimeout(() => resolve(picked), 0),
-    });
-  }),
-);
+createMenuPopup({ ipcMain, Menu, BrowserWindow });
 ipcMain.on("shell:reveal", (_e, folder) => {
   const dir = String(folder);
   if (path.isAbsolute(dir) && fs.existsSync(dir)) shell.openPath(dir);
@@ -465,6 +458,7 @@ app.on("will-quit", () => {
   globalShortcut.unregisterAll();
   killTerminals();
   server?.stop();
+  removeShellToken(dataDir());
 });
 
 app.on("window-all-closed", () => {

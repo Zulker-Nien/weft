@@ -427,6 +427,18 @@ describe("PATCH /cards/:id", () => {
     expect(runner.queueMessages).not.toHaveBeenCalled();
   });
 
+  it("parks a busy card waiting on you, but won't run it again", async () => {
+    const card = addCard({ column: "needs_you", pending: { id: "p1", toolName: "AskUserQuestion", title: "Which?", input: {} } });
+    vi.mocked(runner.isBusy).mockReturnValue(true);
+    const parked = await patch(card.id, { column: "backlog" });
+    const rerun = await patch(card.id, { column: "running" });
+    vi.mocked(runner.isBusy).mockReturnValue(false);
+    expect(parked.status).toBe(200);
+    expect(db.cards.get(card.id)!.column).toBe("backlog");
+    expect(rerun.status).toBe(400);
+    expect(runner.sendMessage).not.toHaveBeenCalled();
+  });
+
   it("switches the permission mode through the runner, mid-turn too", async () => {
     const card = addCard({ permissionMode: "default", column: "running" });
     vi.mocked(runner.isBusy).mockReturnValue(true);

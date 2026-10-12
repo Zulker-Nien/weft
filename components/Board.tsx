@@ -400,7 +400,8 @@ export default function Board() {
     return project && !paths.includes(project) ? [project, ...paths] : paths;
   }, [project, projects]);
 
-  const selected = cards.find((c) => c.id === selectedId) ?? null;
+  // The copilot opens in the same window as any card, though it lives apart from `cards`.
+  const selected = cards.find((c) => c.id === selectedId) ?? (copilot?.id === selectedId ? copilot : null);
   // An open card, or the New thread form, fills a framed window with the browser pane beside it.
   const framed = Boolean(selected) || showNew;
   // The most recent card's stats (and folder/backend), so the footer has a model/folder to show
@@ -862,8 +863,8 @@ export default function Board() {
                         guardName={pilot.title}
                         card={pilot}
                         now={now}
-                        selected={copilotOpen}
-                        onOpen={toggleCopilot}
+                        selected={pilot.id === selectedId}
+                        onOpen={() => select(pilot.id)}
                         onAnswer={(allow) => void api.answer(pilot.id, allow, undefined, pilot.pending?.id).catch(notify)}
                         onStop={() => void api.stop(pilot.id).catch(notify)}
                       />
@@ -944,6 +945,7 @@ export default function Board() {
             onClose={browserOpen ? undefined : () => select(null)}
             onRename={(title) => void api.rename(selected.id, title).catch(notify)}
             onMode={(mode) => void api.setMode(selected.id, mode).catch(notify)}
+            onNewChat={() => void api.resetCopilot().then(() => select(selected.id)).catch(notify)}
             editTitle={renameId === selected.id}
             focusReply={startedId === selected.id}
           />

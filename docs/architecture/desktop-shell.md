@@ -280,3 +280,11 @@ The board's card and column menus are native, so the narrow board never clips th
 `lib/card-menu.test.ts`); `components/use-board-menus.ts` passes them to `threadboard.popupMenu` and runs
 the picked id through the board's own move, archive, open and API calls. In a plain browser tab there is
 no shell, so the browser's own menu shows.
+
+The `menu:popup` IPC handler itself lives in `electron/main-menu-popup.cjs` (`createMenuPopup`).
+It builds a one-off `Menu` from the items the board sends, pops it up on the sender window, and
+resolves to the picked id or `null`. `Menu` and `BrowserWindow` are injected so the test file can
+pass mocks without a real Electron; the `setTimeout` in the popup's callback waits a tick for the
+`click` handler to set `picked`, since the click fires before the callback on macOS but not on every
+platform. `electron/main.cjs` calls `createMenuPopup({ ipcMain, Menu, BrowserWindow })` once at
+startup.

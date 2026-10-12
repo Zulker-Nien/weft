@@ -9,6 +9,13 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 ## [Unreleased]
 
 ### Added
+- ↑ in an empty reply box edits your last message (after any queued one). Enter stops a running turn, rewinds the
+  conversation to before that message, folds the old message and its reply into an "Edited" line you can open, and
+  sends the new text; Esc cancels. Files the replaced turn changed stay as they are. Claude board threads only:
+  picked-up sessions and puku-cli send the edit as a new message.
+- A Backlog counter (☰ 7) beside the uncommitted counter. Click it to start a card that reads every Backlog card
+  against the code and plans them into sprints of cards that can run side by side, on a page with Start this sprint,
+  Move, Merge, Split and Archive buttons; it starts nothing until you say so.
 - ★ star and tags replace the library. ☆ on a card or thread header (or K in its menu) stars it, a starred card is
   never auto-archived, and the rail's ★ shows only starred cards. Tags follow GitHub's label rules and show as up to
   two pills on a card's stage line; click one to filter the board. Library cards became starred cards tagged
@@ -42,7 +49,7 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 - The code quality badge scores Documentation too: a README, an agent guide, architecture docs, a CHANGELOG, source
   files that open with a comment saying what they're for, and no file paths in the docs that no longer exist.
 - The copilot shows as a card at the top of its column (✨ whole board), so you can see when it's running or needs you;
-  click it to open the copilot window, or Allow, Deny and Stop right on the card.
+  click it to open it in the same window as any card (with its own browser pane and New chat), or Allow, Deny and Stop right on the card.
 - The New thread page cycles through the speeder and the five backdrop scenes, a new one each time you open it.
 - Placeholder cards pulse in every column while the board loads, instead of empty columns and "0" counts.
 - ▶ on every idle card with a session sends "continue" into its thread, for a model that gave up too early; a card you
@@ -98,6 +105,13 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 - The Weft account's refresh token is sealed in the Keychain by Electron main instead of a plain `~/.weft/account.json`.
 
 ### Changed
+- The ▲ Vercel, Supabase and BlastCP drawers open on their last status (kept in memory and localStorage across
+  restarts) instead of "Asking Vercel…", refresh it quietly behind, and ask the service at most every 30s on
+  focus. The three hooks share `lib/use-linked-status.ts`.
+- The Weft account sign-in's OAuth redirect target is now `weft://account-callback`, so the URL is stable across
+  Weft restarts (the dev server picks a fresh port every launch); plain `next dev` still uses the loopback HTTP
+  origin. Electron main's `weft://` handler forwards the code to a new `/api/account/weft-callback` route, which
+  exchanges it against the PKCE verifier kept in the session file.
 - Over a scene, columns are clear instead of frosted: the picture shows between the cards, with a faint edge
   keeping each column's shape.
 - A card running `/done` or `/weft:done` (typed, or from a move to Done) sits in Done while it runs, still
@@ -109,6 +123,8 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 - Builder card: the Thrift attribute (cost per shipped card) is gone; seven attributes remain.
 
 ### Fixed
+- A card waiting on you (a question with Answer, or Allow/Deny) can be dragged to Backlog, Review or Done to park
+  it; its question stays open there, and answering runs the turn on. Only running cards and the copilot stay put.
 - A thread can't throw away other cards' uncommitted work: a hook (`lib/git-guard.ts`) turns away `git stash` (but
   `list`/`show`), `git reset --hard`, checking out or restoring paths over the worktree, and `git clean -f`, and says how
   to commit by path, read a clean copy with `git show HEAD:path` or commit through a temp index instead. A scratch clone

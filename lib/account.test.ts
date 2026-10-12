@@ -99,7 +99,6 @@ describe("with a key", () => {
 
   it("keeps the session in Electron main, behind the Keychain, inside the desktop app", async () => {
     vi.stubEnv("THREADBOARD_SHELL_URL", "http://127.0.0.1:9");
-    vi.stubEnv("THREADBOARD_SHELL_TOKEN", undefined);
     const account = await load();
     auth.getSession.mockResolvedValue({ data: { session: null } });
     await account.accountView();
@@ -123,6 +122,28 @@ describe("with a key", () => {
       provider: "google",
       options: { redirectTo: "http://127.0.0.1:3457/api/account/callback", skipBrowserRedirect: true },
     });
+  });
+
+  it("uses the weft:// callback when running inside the desktop app", async () => {
+    vi.stubEnv("THREADBOARD_SHELL_URL", "http://127.0.0.1:9");
+    try {
+      const account = await load();
+      auth.signInWithOAuth.mockResolvedValue({ data: { url: "https://gh/login" }, error: null });
+      await account.startSignIn("github", "http://127.0.0.1:57598");
+      expect(auth.signInWithOAuth).toHaveBeenCalledWith({
+        provider: "github",
+        options: { redirectTo: "weft://account-callback", skipBrowserRedirect: true },
+      });
+      auth.signInWithOtp.mockResolvedValue({ error: null });
+      await account.sendMagicLink("a@b.co", "http://127.0.0.1:57598");
+      expect(auth.signInWithOtp).toHaveBeenCalledWith({
+        email: "a@b.co",
+        options: { emailRedirectTo: "weft://account-callback", shouldCreateUser: true },
+      });
+      expect(account.weftCallbackUrl()).toBe("weft://account-callback");
+    } finally {
+      vi.stubEnv("THREADBOARD_SHELL_URL", "");
+    }
   });
 
   it("refuses unknown providers, errors and a missing page", async () => {

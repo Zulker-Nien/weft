@@ -139,9 +139,9 @@ describe("useDesktopBridge in the desktop app", () => {
     const { rerender } = renderHook(({ cards }) => useDesktopBridge(closed, null, cards), {
       initialProps: { cards: [card("a"), card("b")] },
     });
-    expect(bridge.browser.prune).toHaveBeenLastCalledWith(["a", "b"]);
+    expect(bridge.browser.prune).toHaveBeenLastCalledWith(["a", "b", "copilot"]);
     rerender({ cards: [card("b")] });
-    expect(bridge.browser.prune).toHaveBeenLastCalledWith(["b"]);
+    expect(bridge.browser.prune).toHaveBeenLastCalledWith(["b", "copilot"]);
   });
 
   it("doesn't prune while the board has no cards (still loading)", () => {

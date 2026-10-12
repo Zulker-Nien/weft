@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { BrowserState } from "./client";
-import type { Card } from "./types";
+import { COPILOT_ID, type Card } from "./types";
 import { useTitleBarZoom } from "./use-title-bar-zoom";
 
 const noopSubscribe = () => () => {};
@@ -36,7 +36,7 @@ export function useDesktopBridge(closed: BrowserState, selectedId: string | null
   }, [selectedId]);
 
   useEffect(() => {
-    if (cards.length) window.threadboard?.browser.prune(cards.map((c) => c.id));
+    if (cards.length) window.threadboard?.browser.prune([...cards.map((c) => c.id), COPILOT_ID]);
   }, [cards]);
 
   useEffect(() => {
