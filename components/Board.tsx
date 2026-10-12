@@ -29,7 +29,6 @@ import { resumeActions } from "@/lib/resume-actions";
 import { archivedMessage, neighborAfter } from "@/lib/archive";
 import { useEscape } from "@/lib/use-escape";
 import BrowserPane from "./BrowserPane";
-import CardView from "./CardView";
 import CrashGuard from "./CrashGuard";
 import CommandPalette, { type PaletteItem } from "./CommandPalette";
 import { boardPaletteItems, promptItems } from "./board-palette";
@@ -37,6 +36,8 @@ import { boardShortcuts } from "./board-shortcuts";
 import Icon from "./Icon";
 import { leavesBoard, libraryPinned } from "@/lib/library-view";
 import LibraryRail from "./LibraryRail";
+import ColumnSection from "./ColumnSection";
+import { useSwitchAll } from "./switch-all-button";
 import HeaderBadges from "./HeaderBadges";
 import LoginDialog from "./LoginDialog";
 import NewCardDialog from "./NewCardDialog";
@@ -64,16 +65,6 @@ const CLOSED_BROWSER: BrowserState = {
   zoom: 100,
 };
 
-const EMPTY_HINT: Record<Column, string> = {
-  backlog: "New threads wait here until you start them",
-  running: "Drag a backlog card here to start it",
-  needs_you: "Cards land here when an agent asks for permission",
-  review: "Cards land here when a turn finishes",
-  done: "Drag reviewed threads here",
-};
-
-// Cards shown per column until "Show more"; picking up Claude Code sessions can put hundreds in one.
-const COLUMN_LIMIT = 40;
 // Cards the filter box lists under itself while typing.
 const FILTER_MATCHES = 5;
 
@@ -769,6 +760,14 @@ export default function Board() {
     notify,
   });
 
+  // "Switch all to <other CLI>" on the Running and Needs you columns. Idle cards flip right
+  // away; busy ones come back in `pending` and the modal polls for them.
+  const { switchColumn: switchAll, dialog: switchAllDialog } = useSwitchAll({
+    byColumn,
+    setToast: (msg) => setToast(msg),
+    notify,
+  });
+
   // The header badges' cards: the quality badge's fixes and the pile counter's commit walk-through.
   function improveQuality(cwd: string, prompt: string, title: string) {
     return create({
@@ -892,76 +891,38 @@ export default function Board() {
             if (!(e.target as HTMLElement).closest("[data-card-id], button, a, input, textarea, [contenteditable]")) openNew();
           }}
         >
-          {visibleColumns.map((column) => {
-            const list = byColumn.get(column.id) ?? [];
-            const shown = expandedColumns.includes(column.id) ? list : list.slice(0, COLUMN_LIMIT);
-            return (
-              <section
-                key={column.id}
-                data-column={column.id}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragOver(column.id);
-                }}
-                onDragLeave={() => setDragOver((c) => (c === column.id ? null : c))}
-                onDrop={(e) => drop(column.id, e)}
-                onContextMenu={(e) => void onColumnMenu(column.id, e)}
-                className={`flex w-[264px] min-w-[220px] shrink-0 flex-col rounded-xl border ${dragOver === column.id ? "border-accent bg-accent-soft" : "border-transparent bg-sunken"}`}
-              >
-                <div className="flex items-center justify-between px-3 pb-1.5 pt-2.5">
-                  <h2 className={`text-[12.5px] font-medium ${column.id === "needs_you" && list.length ? "text-warn" : "text-ink"}`}>
-                    {column.label}
-                  </h2>
-                  <span className="flex items-center gap-2 text-[11.5px] text-faint">
-                    {column.id === "done" && archivedCount > 0 && (
-                      <button onClick={() => setShowArchived((v) => !v)} className="hover:text-ink" aria-pressed={showArchived}>
-                        {showArchived ? "Hide" : "Show"} {archivedCount} archived
-                      </button>
-                    )}
-                    {list.length}
-                  </span>
-                </div>
-                <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
-                  {shown.map((card) => (
-                    <CrashGuard key={card.id} what="card" name={card.title}>
-                    <CardView
-                      card={card}
-                      now={now}
-                      selected={card.id === selectedId}
-                      unseen={unseen.has(card.id)}
-                      alsoHere={busyHere(cards, card)}
-                      onOpen={() => openCard(card)}
-                      onAnswer={(allow) => void api.answer(card.id, allow, undefined, card.pending?.id).catch(notify)}
-                      onStop={() => void api.stop(card.id).catch(notify)}
-                      onResume={(how) => resume(card.id, how)}
-                      onContextMenu={(e) => void onCardMenu(card, e)}
-                      onStarMenu={(e) => void onStarMenu(card, e)}
-                    />
-                    </CrashGuard>
-                  ))}
-                  {shown.length < list.length && (
-                    <button
-                      onClick={() => setExpanded({ view, columns: [...expandedColumns, column.id] })}
-                      className="rounded-lg px-2 py-1.5 text-center text-[12px] text-muted hover:bg-card hover:text-ink"
-                    >
-                      Show {list.length - shown.length} more
-                    </button>
-                  )}
-                  {loaded && list.length === 0 && (
-                    <p className="px-2 py-3 text-center text-[11.5px] leading-snug text-faint">{filtering ? "No matching cards" : EMPTY_HINT[column.id]}</p>
-                  )}
-                  {column.id === "backlog" && (
-                    <button
-                      onClick={() => openNew()}
-                      className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12.5px] text-muted hover:bg-card hover:text-ink"
-                    >
-                      <Icon name="plus" size={13} /> Add a thread
-                    </button>
-                  )}
-                </div>
-              </section>
-            );
-          })}
+          {visibleColumns.map((column) => (
+            <ColumnSection
+              key={column.id}
+              column={column}
+              list={byColumn.get(column.id) ?? []}
+              cards={cards}
+              selectedId={selectedId}
+              unseen={unseen}
+              now={now}
+              loaded={loaded}
+              filtering={filtering}
+              showArchived={showArchived}
+              archivedCount={archivedCount}
+              dragOver={dragOver}
+              expandedColumns={expandedColumns}
+              view={view}
+              switchAll={switchAll}
+              setShowArchived={setShowArchived}
+              setExpanded={setExpanded}
+              setDragOver={setDragOver}
+              drop={drop}
+              onColumnMenu={onColumnMenu}
+              onCardMenu={onCardMenu}
+              onStarMenu={onStarMenu}
+              openCard={openCard}
+              openNew={openNew}
+              resume={resume}
+              onAnswer={(card, allow) => void api.answer(card.id, allow, undefined, card.pending?.id).catch(notify)}
+              onStop={(card) => void api.stop(card.id).catch(notify)}
+              notify={notify}
+            />
+          ))}
         </main>
 
         {framed && <div style={NO_DRAG} className="fixed inset-0 z-30 bg-black/40" onClick={() => (showNew ? setShowNew(false) : select(null))} aria-hidden="true" />}
@@ -1033,6 +994,7 @@ export default function Board() {
       <ModifierHint />
       {showPalette && <CommandPalette initialQuery={paletteQuery} items={paletteItems()} findPrompts={findPrompts} currentProject={project ? { path: project, name: folderName(project) } : null} onClose={() => setShowPalette(false)} />}
       {login && <LoginDialog login={login} onClose={() => setLogin(null)} />}
+      {switchAllDialog}
 
       {toast && (
         <div

@@ -1,21 +1,22 @@
-import { execFile, execFileSync, spawn, type ChildProcess } from "node:child_process";
+import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { cliEnv } from "./env";
 import { publish } from "./bus";
-import type { Backend, CliStatus, LoginState, LoginView } from "./types";
+import type { Backend, LoginState, LoginView } from "./types";
 import { globalSingleton } from "./global-singleton";
+import { openLoginInTerminal } from "./login-terminal";
+import { authStatus } from "./login-status";
 
 // Runs `<cli> auth login` in the background when a thread finds its CLI logged out, streams the
 // CLI's output to the board's login pop-up, and falls back to a Terminal window when the CLI
-// needs a real TTY.
+// needs a real TTY (the macOS Terminal path lives in ./login-terminal).
 
 const COMMANDS: Record<Backend, string> = { claude: "claude", puku: "puku-cli" };
 const OUTPUT_BYTES = 8 * 1024;
 // Raw output kept for re-cleaning, so escape codes split across chunks still strip cleanly.
 const RAW_BYTES = 32 * 1024;
 const PUBLISH_MS = 200;
-const STATUS_TIMEOUT_MS = 10_000;
-const POLL_MS = 3_000;
-const TERMINAL_WAIT_MS = 10 * 60_000;
+export const POLL_MS = 3_000;
+export const TERMINAL_WAIT_MS = 10 * 60_000;
 
 interface LoginRun {
   view: LoginView;
@@ -30,11 +31,11 @@ interface LoginRun {
 }
 
 // Kept on globalThis so dev-mode reloads don't lose a login in progress.
-const runs = globalSingleton("__threadboardLogins", () => new Map<Backend, LoginRun>());
+export const runs = globalSingleton("__threadboardLogins", () => new Map<Backend, LoginRun>());
 
 const binaries = new Map<Backend, string>();
 
-function binary(backend: Backend) {
+export function binary(backend: Backend) {
   let path = binaries.get(backend);
   if (!path) {
     const command = COMMANDS[backend];
@@ -52,6 +53,9 @@ function binary(backend: Backend) {
 function message(err: unknown) {
   return err instanceof Error ? err.message : String(err);
 }
+
+// Exported for ./login-status, which reuses these helpers.
+export { message, clean as cleanOutput };
 
 // --- Output ---------------------------------------------------------------------------------
 
@@ -95,12 +99,12 @@ function snapshot(run: LoginRun): LoginView {
   return { ...run.view };
 }
 
-function append(run: LoginRun, chunk: string) {
+export function append(run: LoginRun, chunk: string) {
   run.raw += chunk;
   if (run.raw.length > RAW_BYTES) run.raw = run.raw.slice(-RAW_BYTES);
 }
 
-function isCurrent(run: LoginRun) {
+export function isCurrent(run: LoginRun) {
   return runs.get(run.view.backend) === run;
 }
 
@@ -109,7 +113,7 @@ function stillRunning(run: LoginRun) {
   return isCurrent(run) && run.view.state === "running";
 }
 
-function emit(run: LoginRun) {
+export function emit(run: LoginRun) {
   if (run.publishTimer) {
     clearTimeout(run.publishTimer);
     run.publishTimer = undefined;
@@ -127,7 +131,7 @@ function emitSoon(run: LoginRun) {
 
 // --- Lifecycle ------------------------------------------------------------------------------
 
-function stopPolling(run: LoginRun) {
+export function stopPolling(run: LoginRun) {
   if (run.poll) clearInterval(run.poll);
   run.poll = undefined;
 }
@@ -148,7 +152,7 @@ function retire(run: LoginRun | undefined) {
   return run.onDone.splice(0);
 }
 
-function newRun(backend: Backend, state: LoginState, onDone?: () => void): LoginRun {
+export function newRun(backend: Backend, state: LoginState, onDone?: () => void): LoginRun {
   const inherited = retire(runs.get(backend));
   const run: LoginRun = {
     view: { backend, state, output: "", startedAt: Date.now() },
@@ -166,7 +170,7 @@ function setState(run: LoginRun, state: LoginState) {
   emit(run);
 }
 
-function succeed(run: LoginRun) {
+export function succeed(run: LoginRun) {
   stopPolling(run);
   killChild(run);
   setState(run, "done");
@@ -179,14 +183,14 @@ function succeed(run: LoginRun) {
   }
 }
 
-function failRun(run: LoginRun, note?: string) {
+export function failRun(run: LoginRun, note?: string) {
   stopPolling(run);
   killChild(run);
   if (note) append(run, `\n${note}\n`);
   setState(run, "failed");
 }
 
-function addCallback(run: LoginRun, onDone?: () => void) {
+export function addCallback(run: LoginRun, onDone?: () => void) {
   if (onDone) run.onDone.push(onDone);
   return snapshot(run);
 }
@@ -219,6 +223,12 @@ async function onExit(run: LoginRun, child: ChildProcess, code: number | null, s
 
 export function isNotLoggedInError(text: string): boolean {
   return /not logged in|please run \/login|invalid api key|oauth token has expired|authentication_error/i.test(text);
+}
+
+// Distinct from a transient error or a not-logged-in: when the CLI's last turn hit the
+// plan's rate limit, the card menu offers a one-click switch to the other backend.
+export function isRateLimitError(text: string): boolean {
+  return /rate.?limit|hit your limit|usage limit|limit reached|limit exceeded/i.test(text);
 }
 
 export function startLogin(backend: Backend, onDone?: () => void): LoginView {
@@ -277,112 +287,9 @@ export function cancelLogin(backend: Backend): void {
   if (run.view.state === "running" || run.view.state === "terminal") setState(run, "cancelled");
 }
 
-// AppleScript string literal: backslashes and double quotes need escaping.
-function appleScriptString(text: string) {
-  return `"${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
-}
-
-// POSIX shell single-quoting, for the command Terminal runs.
-function shellQuote(text: string) {
-  return `'${text.replace(/'/g, `'\\''`)}'`;
-}
-
-export function openLoginInTerminal(backend: Backend, onDone?: () => void): LoginView {
-  const existing = runs.get(backend);
-  if (existing && existing.view.state === "terminal") return addCallback(existing, onDone);
-
-  // Keep the output so far, so the pop-up still shows why Terminal opened.
-  const previous = existing?.raw ?? "";
-  const run = newRun(backend, "terminal", onDone);
-  run.raw = previous;
-
-  if (process.platform !== "darwin") {
-    failRun(run, "Logging in through Terminal only works on macOS.");
-    return snapshot(run);
-  }
-
-  let bin: string;
-  try {
-    bin = binary(backend);
-  } catch (err) {
-    failRun(run, message(err));
-    return snapshot(run);
-  }
-
-  const command = `${shellQuote(bin)} auth login`;
-  const script = ["tell application \"Terminal\"", `do script ${appleScriptString(command)}`, "activate", "end tell"];
-  append(run, `\nOpened Terminal to run: ${command}\n`);
-  execFile("/usr/bin/osascript", script.flatMap((line) => ["-e", line]), { timeout: 30_000 }, (err, _stdout, stderr) => {
-    if (!err || !isCurrent(run) || run.view.state !== "terminal") return;
-    failRun(run, `Couldn't open Terminal: ${stderr.trim() || err.message}`);
-  });
-
-  const deadline = Date.now() + TERMINAL_WAIT_MS;
-  run.poll = setInterval(() => {
-    if (!isCurrent(run) || run.view.state !== "terminal") {
-      stopPolling(run);
-      return;
-    }
-    if (Date.now() > deadline) {
-      failRun(run, "Stopped waiting for the Terminal login after 10 minutes.");
-      return;
-    }
-    if (run.polling) return;
-    run.polling = true;
-    void authStatus(backend)
-      .then((status) => {
-        if (status.loggedIn && isCurrent(run) && run.view.state === "terminal") succeed(run);
-      })
-      .finally(() => {
-        run.polling = false;
-      });
-  }, POLL_MS);
-
-  emit(run);
-  return snapshot(run);
-}
+export { openLoginInTerminal };
+export { authStatus };
 
 export function loginRuns(): LoginView[] {
   return [...runs.values()].map(snapshot);
-}
-
-function parseStatus(stdout: string): CliStatus | null {
-  const start = stdout.indexOf("{");
-  const end = stdout.lastIndexOf("}");
-  if (start < 0 || end < start) return null;
-  try {
-    const data = JSON.parse(stdout.slice(start, end + 1)) as Record<string, unknown>;
-    if (typeof data.loggedIn !== "boolean") return null;
-    return typeof data.email === "string" && data.email
-      ? { loggedIn: data.loggedIn, email: data.email }
-      : { loggedIn: data.loggedIn };
-  } catch {
-    return null;
-  }
-}
-
-export async function authStatus(backend: Backend): Promise<CliStatus> {
-  let bin: string;
-  try {
-    bin = binary(backend);
-  } catch (err) {
-    return { loggedIn: false, error: message(err) };
-  }
-  return new Promise((resolve) => {
-    // A logged-out CLI can exit non-zero and still print its status JSON.
-    execFile(
-      bin,
-      ["auth", "status", "--json"],
-      { env: cliEnv(), timeout: STATUS_TIMEOUT_MS, maxBuffer: 1024 * 1024 },
-      (err, stdout: string | undefined, stderr: string | undefined) => {
-        const status = parseStatus(stdout ?? "");
-        if (status) {
-          resolve(status);
-          return;
-        }
-        const detail = clean(stderr ?? "").trim() || (err ? message(err) : "") || "No status in the CLI's output.";
-        resolve({ loggedIn: false, error: detail.slice(0, 500) });
-      },
-    );
-  });
 }

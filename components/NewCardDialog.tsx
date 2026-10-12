@@ -12,6 +12,31 @@ import type { Card } from "@/lib/types";
 import RepoPicker from "./RepoPicker";
 import { useEscape } from "@/lib/use-escape";
 
+// A styled <select> with the chevron icon stacked on the right.
+function SelectField({
+  label,
+  value,
+  onChange,
+  options,
+  title,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { id: string; label: string }[];
+  title?: string;
+}) {
+  return (
+    <label className="relative flex items-center gap-1.5 rounded-md border border-line-strong py-1.5 pl-2.5 pr-1.5 text-[12px] text-ink" title={title}>
+      <span className="sr-only">{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="cursor-pointer appearance-none bg-transparent pr-4 font-medium outline-none">
+        {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+      </select>
+      <Icon name="chevronDown" size={12} className="pointer-events-none absolute right-1.5" />
+    </label>
+  );
+}
+
 const LAST_CWD = "threadboard.cwd";
 const LAST_BACKEND = "threadboard.backend";
 const LAST_MODEL = "weft.model";
@@ -126,6 +151,8 @@ export default function NewCardDialog({
   // Starts in Settings' default mode, unless you pick one before it loads.
   const [permissionMode, setPermissionMode] = useState<PermissionMode>("auto");
   const pickedMode = useRef(false);
+  // Same for the CLI: Settings' default, unless you pick one first.
+  const pickedBackend = useRef(false);
   // Cards get no worktree, so a busy card in this folder would share its working tree.
   const alsoHere = busyInFolder(cards, cwd);
   const [error, setError] = useState<string | null>(null);
@@ -140,6 +167,8 @@ export default function NewCardDialog({
     api.settings().then(
       (s) => {
         if (!pickedMode.current) setPermissionMode(s.defaultPermissionMode);
+        const { defaultBackend } = s;
+        if (!pickedBackend.current && defaultBackend) setBackend(defaultBackend);
       },
       () => {},
     );
@@ -251,49 +280,21 @@ export default function NewCardDialog({
       <div className="flex shrink-0 flex-wrap items-center gap-2 px-5 pt-3">
         <RepoPicker value={cwd} home={home} onChange={chooseFolder} />
 
-        <label className="relative flex items-center gap-1.5 rounded-md border border-line-strong py-1.5 pl-2.5 pr-1.5 text-[12px] text-ink">
-          <span className="sr-only">Model</span>
-          <select
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            className="cursor-pointer appearance-none bg-transparent pr-4 font-medium outline-none"
-          >
-            {MODELS[backend].map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-          <Icon
-            name="chevronDown"
-            size={12}
-            className="pointer-events-none absolute right-1.5"
-          />
-        </label>
+        <SelectField
+          label="Model"
+          value={model}
+          onChange={setModel}
+          options={MODELS[backend]}
+        />
 
         {backend === "claude" && (
-          <label
-            className="relative flex items-center gap-1.5 rounded-md border border-line-strong py-1.5 pl-2.5 pr-1.5 text-[12px] text-ink"
+          <SelectField
+            label="Effort"
+            value={effort}
+            onChange={(v) => setEffort(v as Effort | "")}
+            options={EFFORTS}
             title="How hard the model thinks before answering"
-          >
-            <span className="sr-only">Effort</span>
-            <select
-              value={effort}
-              onChange={(e) => setEffort(e.target.value as Effort | "")}
-              className="cursor-pointer appearance-none bg-transparent pr-4 font-medium outline-none"
-            >
-              {EFFORTS.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.label}
-                </option>
-              ))}
-            </select>
-            <Icon
-              name="chevronDown"
-              size={12}
-              className="pointer-events-none absolute right-1.5"
-            />
-          </label>
+          />
         )}
 
         <ModePicker
@@ -316,6 +317,7 @@ export default function NewCardDialog({
               key={b.id}
               type="button"
               onClick={() => {
+                pickedBackend.current = true;
                 setBackend(b.id);
                 setModel(modelFor(b.id));
               }}

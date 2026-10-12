@@ -11,6 +11,7 @@ export const COPILOT_ID = "copilot";
 
 export type Column = (typeof COLUMNS)[number]["id"];
 export type Backend = "claude" | "puku";
+export const BACKEND_LABELS: Record<Backend, string> = { claude: "Claude Code", puku: "puku-cli" };
 // bypassPermissions is "YOLO": every tool runs without asking.
 export type PermissionMode = "default" | "acceptEdits" | "auto" | "bypassPermissions";
 export const MODES: PermissionMode[] = ["default", "acceptEdits", "auto", "bypassPermissions"];
@@ -138,6 +139,9 @@ export interface Card {
   stats?: CardStats;
   turns?: number;
   error?: string;
+  // Set when the thread's last turn hit the plan's rate limit, so the card menu and banner can
+  // offer a one-click "Run on <other>" escape. Cleared by switchBackend on a successful switch.
+  rateLimitHit?: boolean;
   pending?: PendingPermission | null;
   // The copilot is a thread too, but it lives in its own window instead of on the board.
   role?: "copilot";
@@ -252,6 +256,8 @@ export interface SettingsView {
   keepAliveMinutes: number;
   // The mode the new-thread dialog, the API and the copilot's create_card start a card in.
   defaultPermissionMode: PermissionMode;
+  // What new threads start on; puku-cli is the escape hatch when Claude hits a plan limit.
+  defaultBackend?: Backend;
   automations: Automation[];
   projects: Project[];
 }

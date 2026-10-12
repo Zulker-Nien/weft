@@ -197,6 +197,17 @@ export const api = {
   stop: (id: string) => call("POST", `/api/cards/${id}/stop`),
   // Stops the Claude CLI that has a picked-up session open in another app.
   release: (id: string) => call<{ stopped: number }>("POST", `/api/cards/${id}/release`),
+  // Flips a card's CLI. replay=true re-sends the last user message (the rate-limit escape hatch).
+  switchBackend: (id: string, backend: Backend, replay = false) =>
+    call<{ card: Card }>("POST", `/api/cards/${id}/switch-backend`, { backend, replay }),
+  // Column-level "Switch all to <other>". Busy cards come back in `pending` so the column can
+  // confirm with the user before retrying.
+  switchBackends: (ids: string[], backend: Backend) =>
+    call<{ switched: string[]; failed: { id: string; error: string }[]; pending: string[] }>(
+      "POST",
+      "/api/cards/switch-backend",
+      { ids, backend },
+    ),
   devStatus: (id: string) => call<{ status: DevServerStatus }>("GET", `/api/cards/${id}/dev`),
   devAction: (id: string, action: "start" | "restart" | "stop") =>
     call<{ status: DevServerStatus }>("POST", `/api/cards/${id}/dev`, { action }),
@@ -207,6 +218,7 @@ export const api = {
     threadPrompt?: string;
     keepAliveMinutes?: number;
     defaultPermissionMode?: PermissionMode;
+    defaultBackend?: Backend;
     automations?: Automation[];
   }) =>
     call<SettingsView>("PATCH", "/api/settings", patch),

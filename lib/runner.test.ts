@@ -136,6 +136,7 @@ vi.mock("./settings", () => ({
 }));
 vi.mock("./login", () => ({
   isNotLoggedInError: (text: string) => /not logged in|please run \/login|invalid api key/i.test(text),
+  isRateLimitError: (text: string) => /rate.?limit|hit your limit|usage limit|limit reached|limit exceeded/i.test(text),
   startLogin: (backend: string, onDone?: () => void) => {
     if (h.loginFails) throw new Error("claude isn't on this app's PATH.");
     h.startLogin.push({ backend, onDone });
@@ -1162,8 +1163,7 @@ describe("more edges", () => {
     addCard({ id: "c1" });
     const q = await send("c1");
     const usage = { input_tokens: 2, cache_read_input_tokens: 8, cache_creation: { ephemeral_1h_input_tokens: 2 } };
-    q.emit({ ...assistant(text("a")), message: { content: [text("a")], usage } });
-    q.emit({ ...assistant(text("b")), message: { content: [text("b")], usage: { output_tokens: 3 } } });
+    q.emit({ ...assistant(text("a")), message: { content: [text("a")], usage } }, { ...assistant(text("b")), message: { content: [text("b")], usage: { output_tokens: 3 } } });
     q.emit(success("ok"));
     await flush();
     expect(card("c1").stats?.cache).toMatchObject({ ttl: 3600, hit: 80, tokens: 10 });

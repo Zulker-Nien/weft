@@ -8,7 +8,7 @@ import { makeCard } from "./test-utils";
 import NewCardDialog from "./NewCardDialog";
 
 const api = vi.hoisted(() => ({
-  settings: vi.fn(() => Promise.resolve({ defaultPermissionMode: "default" })),
+  settings: vi.fn(() => Promise.resolve({ defaultPermissionMode: "default", defaultBackend: "claude" })),
   warm: vi.fn(() => Promise.resolve()),
 }));
 vi.mock("@/lib/client", () => ({ api }));

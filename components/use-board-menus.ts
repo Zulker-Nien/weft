@@ -1,7 +1,7 @@
 import { api } from "@/lib/client";
 import { cardMenu, columnMenu, starMenu, resumeCommand, withAccelerators, type CardAction, type ColumnAction } from "@/lib/card-menu";
 import { toAccelerator, useShortcutList } from "@/lib/hotkeys";
-import type { Card, Column, DevServerStatus, LibraryKind, PermissionMode } from "@/lib/types";
+import type { Backend, Card, Column, DevServerStatus, LibraryKind, PermissionMode } from "@/lib/types";
 
 // What the board's right-click menus act through: the same functions its buttons, drag and command palette use.
 export interface BoardMenuDeps {
@@ -68,58 +68,91 @@ export function useBoardMenus(deps: BoardMenuDeps) {
     return true;
   }
 
-  async function runCardAction(card: Card, action: CardAction) {
-    if (await runLibraryAction(card, action)) return;
-    if (action.startsWith("move:")) {
-      deps.move(card.id, action.slice(5) as Column);
-      return;
-    }
-    if (action.startsWith("skill:")) {
-      await api.send(card.id, `/${action.slice(6)}`);
-      return;
-    }
-    if (action.startsWith("mode:")) {
-      await api.setMode(card.id, action.slice(5) as PermissionMode);
-      return;
-    }
-    if (action.startsWith("dev:")) {
-      const { status } = await api.devAction(card.id, action.slice(4) as "start" | "restart" | "stop");
-      deps.toast(devMessage(status));
-      return;
-    }
+  /** Move the card to the column named after the `move:` prefix (e.g. `move:running`). */
+  function runMoveAction(card: Card, action: CardAction) {
+    if (!action.startsWith("move:")) return false;
+    deps.move(card.id, action.slice(5) as Column);
+    return true;
+  }
+
+  /** Run a Weft skill the prefix names (e.g. `skill:done` sends `/done` to the card). */
+  async function runSkillAction(card: Card, action: CardAction) {
+    if (!action.startsWith("skill:")) return false;
+    await api.send(card.id, `/${action.slice(6)}`);
+    return true;
+  }
+
+  /** Switch the card's permission mode to the one named after the `mode:` prefix. */
+  async function runModeAction(card: Card, action: CardAction) {
+    if (!action.startsWith("mode:")) return false;
+    await api.setMode(card.id, action.slice(5) as PermissionMode);
+    return true;
+  }
+
+  /** Start, restart or stop the card's dev server (the verb is the suffix after `dev:`). */
+  async function runDevAction(card: Card, action: CardAction) {
+    if (!action.startsWith("dev:")) return false;
+    const { status } = await api.devAction(card.id, action.slice(4) as "start" | "restart" | "stop");
+    deps.toast(devMessage(status));
+    return true;
+  }
+
+  /**
+   * Exact-string card actions: open, rename, start/stop, new-here, reveal/copy, archive/delete.
+   * Returns true if the action matched one of these cases.
+   */
+  async function runPlainAction(card: Card, action: CardAction) {
     switch (action) {
       case "open":
         deps.openCard(card);
-        return;
+        return true;
       case "rename":
         deps.renameCard(card);
-        return;
+        return true;
       case "start":
         deps.move(card.id, "running");
-        return;
+        return true;
       case "stop":
         await api.stop(card.id);
-        return;
+        return true;
       case "new-here":
         deps.openNew(card.cwd);
-        return;
+        return true;
       case "reveal":
-        return shell?.revealFolder(card.cwd);
+        shell?.revealFolder(card.cwd);
+        return true;
       case "copy-path":
         await navigator.clipboard.writeText(card.cwd);
         deps.toast("Copied the folder path.");
-        return;
+        return true;
       case "copy-resume":
         await navigator.clipboard.writeText(resumeCommand(card));
         deps.toast("Copied. Paste it in a terminal to pick the thread up.");
-        return;
+        return true;
       case "archive":
         deps.toggleArchive(card);
-        return;
+        return true;
       case "delete":
         if (window.confirm(`Delete “${card.title}”? Its CLI transcript stays on disk.`)) deps.remove(card);
-        return;
+        return true;
     }
+    return false;
+  }
+
+  async function runCardAction(card: Card, action: CardAction) {
+    if (await runLibraryAction(card, action)) return;
+    if (runMoveAction(card, action)) return;
+    if (await runSkillAction(card, action)) return;
+    if (await runModeAction(card, action)) return;
+    if (await runDevAction(card, action)) return;
+    if (action.startsWith("switch:")) {
+      const backend = action.slice(7) as Backend;
+      const replay = Boolean(card.rateLimitHit);
+      await api.switchBackend(card.id, backend, replay);
+      deps.toast(`Switched to ${backend === "puku" ? "puku-cli" : "Claude Code"}${replay ? " · replaying last message" : ""}.`);
+      return;
+    }
+    await runPlainAction(card, action);
   }
 
   // Right-clicking a column's empty space; a card's own menu stops the event before it gets here.

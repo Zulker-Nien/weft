@@ -12,9 +12,11 @@ import { publish } from "./bus";
 import { firstLine, shortToolName, summarizeInput, toolAction } from "./format";
 import { cliEnv } from "./env";
 import { glanceAfterTurn, showStarter } from "./glance";
+import { changedLines, gitBranch } from "./git-stats";
 import { isOpenElsewhere } from "./import";
-import { isNotLoggedInError, startLogin } from "./login";
+import { isNotLoggedInError, isRateLimitError, startLogin } from "./login";
 import { editedPath, touchFile } from "./overlap";
+import { hitRateLimit } from "./rate-limit";
 import { defaultPermissionMode, keepAliveMinutes, threadPrompt } from "./settings";
 import { PLUGIN_DIR } from "./skills";
 import { switchSpare } from "./spare-switch";
@@ -24,13 +26,11 @@ import { appendThread, getCard, getThread, replaceThreadItem, updateCard } from 
 import { adoptLocalMedia, toolResult } from "./thread-media";
 import * as turnRules from "./turn";
 import { cacheAfter, columnAfterTurn, eventWindow, modelStats, readQuestions, readResult, turnCost, usageWindow } from "./turn";
-import type { Backend, CacheState, Card, CardStats, Effort, PermissionMode, Question } from "./types";
+import { BACKEND_LABELS, type Backend, type CacheState, type Card, type CardStats, type Effort, type PermissionMode, type Question } from "./types";
 import { globalSingleton } from "./global-singleton";
 
 // Spare CLIs started ahead of time, one per recent project folder, so a new card doesn't wait.
 const MAX_SPARES = 3;
-
-const CLI_NAMES: Record<Backend, string> = { claude: "Claude Code", puku: "puku-cli" };
 
 interface Pending {
   id: string;
@@ -437,7 +437,7 @@ function needLogin(cardId: string, backend: Backend, message: string) {
     column: "needs_you",
     pending: null,
     error: message,
-    lastLine: `Log in to ${CLI_NAMES[backend]} to run this thread`,
+    lastLine: `Log in to ${BACKEND_LABELS[backend]} to run this thread`,
   });
   const waiting = loginWaiters.get(backend) ?? new Set<string>();
   waiting.add(cardId);
@@ -602,7 +602,8 @@ async function drive(session: Session, executable: string | undefined) {
     const cardId = session.cardId;
     if (cardId && !session.abort.signal.aborted) {
       const message = err instanceof Error ? err.message : String(err);
-      if (isNotLoggedInError(message)) needLogin(cardId, session.spec.backend, message);
+      if (isRateLimitError(message)) hitRateLimit(cardId, session.spec.backend, message);
+      else if (isNotLoggedInError(message)) needLogin(cardId, session.spec.backend, message);
       else safeUpdate(cardId, { error: message });
     }
   } finally {
@@ -758,9 +759,10 @@ function handleResult(id: string, session: Session, msg: Extract<SDKMessage, { t
   session.busy = false;
   session.stopping = false;
 
-  if (isError && isNotLoggedInError(summary)) {
+  if (isError && (isNotLoggedInError(summary) || isRateLimitError(summary))) {
     appendThread(id, { kind: "result", text: summary, isError: true, at: Date.now() });
-    needLogin(id, session.spec.backend, summary);
+    if (isRateLimitError(summary)) hitRateLimit(id, session.spec.backend, summary);
+    else needLogin(id, session.spec.backend, summary);
     return;
   }
 
@@ -784,6 +786,11 @@ function handleResult(id: string, session: Session, msg: Extract<SDKMessage, { t
   });
   scheduleIdle(session);
   if (!session.spec.copilot) glanceAfter(id, session, { reply: parsed.summary, isError, stopped });
+  handlePostResult(id, { stopped, isError, status });
+}
+
+// After a result lands: archive the card if its /done ran, or kick off the next queued message.
+function handlePostResult(id: string, { stopped, isError, status }: { stopped: boolean; isError: boolean; status?: BoardStatus }) {
   if (archiveAfter.has(id) && (stopped || isError)) archiveAfter.delete(id);
   else if (archiveAfter.has(id) && !queued.has(id) && status?.column !== "needs_you") {
     archiveAfter.delete(id);
@@ -830,26 +837,6 @@ function turnStats(id: string, session: Session, modelUsage: Record<string, Mode
   };
 }
 
-function gitBranch(cwd: string) {
-  try {
-    return execFileSync("git", ["-C", cwd, "--no-optional-locks", "rev-parse", "--abbrev-ref", "HEAD"], { encoding: "utf8", timeout: 3000 }).trim() || undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function changedLines(cwd: string) {
-  try {
-    const out = execFileSync("git", ["-C", cwd, "--no-optional-locks", "diff", "HEAD", "--numstat"], { encoding: "utf8", timeout: 3000 });
-    let added = 0;
-    let removed = 0;
-    for (const line of out.split("\n")) {
-      const [a, r] = line.split("\t");
-      added += Number(a) || 0;
-      removed += Number(r) || 0;
-    }
-    return { added, removed };
-  } catch {
-    return { added: undefined, removed: undefined };
-  }
-}
+// The per-card and column "switch to other CLI" actions live in lib/backend-switch.ts so the
+// runner can re-export them without dragging the runner's session map into the route modules.
+export { switchBackend } from "./backend-switch";

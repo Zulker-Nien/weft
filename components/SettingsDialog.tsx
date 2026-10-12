@@ -44,6 +44,26 @@ function statusLine(s: CliStatus | undefined): { text: string; dot: string } {
   return { text: "Not logged in", dot: "bg-warn" };
 }
 
+// A section's title and hint, stacked at the top of its content. The same shape wraps every setting here.
+function SectionHeader({
+  titleClass,
+  hintClass,
+  title,
+  hint,
+}: {
+  titleClass: string;
+  hintClass: string;
+  title: string;
+  hint: string;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <h3 className={titleClass}>{title}</h3>
+      <p className={hintClass}>{hint}</p>
+    </div>
+  );
+}
+
 // Click, then press the new combination. Escape cancels; Reset goes back to the default.
 function ShortcutRow({ id, label }: { id: string; label: string }) {
   const [binding, setLocal] = useState(() => currentBinding(id));
@@ -288,10 +308,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
             )}
 
             <section className="flex flex-col gap-2">
-              <div className="flex flex-col gap-0.5">
-                <h3 className={sectionTitle}>Appearance</h3>
-                <p className={sectionHint}>Changes right away. System follows your computer&apos;s setting; a scene puts its picture behind the board.</p>
-              </div>
+              <SectionHeader titleClass={sectionTitle} hintClass={sectionHint} title="Appearance" hint="Changes right away. System follows your computer&apos;s setting; a scene puts its picture behind the board." />
               <AppearancePicker />
             </section>
 
@@ -318,10 +335,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
             <SoundSettings titleClass={sectionTitle} hintClass={sectionHint} />
 
             <section className="flex flex-col gap-2">
-              <div className="flex flex-col gap-0.5">
-                <h3 className={sectionTitle}>Shortcuts</h3>
-                <p className={sectionHint}>Click a shortcut, then press the keys you want. Use at least one of Option, Control, or Command.</p>
-              </div>
+              <SectionHeader titleClass={sectionTitle} hintClass={sectionHint} title="Shortcuts" hint="Click a shortcut, then press the keys you want. Use at least one of Option, Control, or Command." />
               {SHORTCUTS.map((s) => (
                 <ShortcutRow key={s.id} id={s.id} label={s.label} />
               ))}
@@ -330,13 +344,12 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
             {settings !== null && (
               <>
                 <section className="flex flex-col gap-2">
-                  <div className="flex flex-col gap-0.5">
-                    <h3 className={sectionTitle}>Thread instructions</h3>
-                    <p className={sectionHint}>
-                      Added to every thread&apos;s system prompt. The board reads the BOARD STATUS line it asks for,
-                      so keep that line&apos;s format.
-                    </p>
-                  </div>
+                  <SectionHeader
+                    titleClass={sectionTitle}
+                    hintClass={sectionHint}
+                    title="Thread instructions"
+                    hint={`Added to every thread's system prompt. The board reads the BOARD STATUS line it asks for, so keep that line's format.`}
+                  />
                   <textarea
                     rows={14}
                     value={prompt}
@@ -364,10 +377,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
                 </section>
 
                 <section className="flex items-center justify-between gap-4">
-                  <div className="flex flex-col gap-0.5">
-                    <h3 className={sectionTitle}>Default permission mode</h3>
-                    <p className={sectionHint}>What a new thread starts in. You can still change it per thread.</p>
-                  </div>
+                  <SectionHeader titleClass={sectionTitle} hintClass={sectionHint} title="Default permission mode" hint="What a new thread starts in. You can still change it per thread." />
                   <ModePicker
                     value={mode}
                     onChange={(next) => {
@@ -378,10 +388,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
                 </section>
 
                 <section className="flex flex-col gap-2">
-                  <div className="flex flex-col gap-0.5">
-                    <h3 className={sectionTitle}>Keep conversations open</h3>
-                    <p className={sectionHint}>A thread&apos;s CLI stays open between messages so replies start right away.</p>
-                  </div>
+                  <SectionHeader titleClass={sectionTitle} hintClass={sectionHint} title="Keep conversations open" hint={`A thread's CLI stays open between messages so replies start right away.`} />
                   <select
                     value={keepAlive}
                     aria-label="Keep conversations open"

@@ -55,6 +55,24 @@ function Summary({ card }: { card: Card }) {
   );
 }
 
+// "Run on <other CLI>" — the one-click escape from a rate-limit error. Sits under the error line
+// on a rate-limited card; flips the card's backend and replays the last user message.
+function RateLimitSwitch({ card }: { card: Card }) {
+  if (!card.rateLimitHit) return null;
+  const other: Card["backend"] = card.backend === "puku" ? "claude" : "puku";
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        api.switchBackend(card.id, other, true).catch(() => {});
+      }}
+      className="mt-2 rounded-md bg-accent px-2.5 py-1 text-[12px] font-medium text-on-accent hover:opacity-90"
+    >
+      Run on {other === "puku" ? "puku-cli" : "Claude Code"}
+    </button>
+  );
+}
+
 // How far along the card is (the BOARD STATUS stage) and what's left, on one line.
 function Progress({ card }: { card: Card }) {
   const step = stageStep(card.stage);
@@ -153,6 +171,7 @@ export default function CardView({
             {card.title}
           </div>
           <Summary card={card} />
+          <RateLimitSwitch card={card} />
         </div>
         <CardPicture card={card} />
       </div>

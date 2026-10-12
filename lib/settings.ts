@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { publish } from "./bus";
 import { DATA_DIR } from "./store";
-import { MODES, type Automation, type PermissionMode, type Project, type SettingsView } from "./types";
+import { MODES, type Automation, type Backend, type PermissionMode, type Project, type SettingsView } from "./types";
 import { globalSingleton } from "./global-singleton";
 
 // Appended to every board thread's system prompt (not the copilot's). The user can edit it in
@@ -30,6 +30,8 @@ interface Settings {
   keepAliveMinutes?: number;
   // The mode a new thread starts in; unset means Auto.
   defaultPermissionMode?: PermissionMode;
+  // The CLI new threads start on; unset means Claude (preserves the prior default).
+  defaultBackend?: Backend;
   // Unset means the defaults; an empty list means the user removed them all.
   automations?: Automation[];
   projects: Project[];
@@ -45,6 +47,7 @@ function settings(): Settings {
       threadPrompt: saved.threadPrompt,
       keepAliveMinutes: saved.keepAliveMinutes,
       defaultPermissionMode: saved.defaultPermissionMode,
+      defaultBackend: saved.defaultBackend,
       automations: saved.automations,
       projects: saved.projects ?? [],
       dismissedSessions: saved.dismissedSessions ?? [],
@@ -85,6 +88,15 @@ export function defaultPermissionMode(): PermissionMode {
 
 export function setDefaultPermissionMode(mode: PermissionMode) {
   settings().defaultPermissionMode = mode;
+  save();
+}
+
+export function defaultBackend(): Backend {
+  return settings().defaultBackend ?? "claude";
+}
+
+export function setDefaultBackend(backend: Backend) {
+  settings().defaultBackend = backend;
   save();
 }
 
@@ -135,6 +147,7 @@ export function settingsView(): SettingsView {
     defaultThreadPrompt: DEFAULT_THREAD_PROMPT,
     keepAliveMinutes: keepAliveMinutes(),
     defaultPermissionMode: defaultPermissionMode(),
+    defaultBackend: defaultBackend(),
     automations: automations(),
     projects: listProjects(),
   };

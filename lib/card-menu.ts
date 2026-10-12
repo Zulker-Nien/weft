@@ -1,5 +1,5 @@
 import { isLive } from "./format";
-import { LIBRARY_KINDS, MODE_OPTIONS, type Card, type Column, type DevServerStatus, type LibraryKind, type PermissionMode } from "./types";
+import { BACKEND_LABELS, LIBRARY_KINDS, MODE_OPTIONS, type Backend, type Card, type Column, type DevServerStatus, type LibraryKind, type PermissionMode } from "./types";
 
 // The right-click menus on the board, as plain data: the board builds them, the desktop shell
 // shows them natively (electron/main.cjs) and hands back the id of the item picked.
@@ -19,6 +19,7 @@ export type CardAction =
   | "stop"
   | `skill:${string}`
   | `mode:${PermissionMode}`
+  | `switch:${Backend}`
   | "dev:start"
   | "dev:restart"
   | "dev:stop"
@@ -62,6 +63,8 @@ const MENU_KEYS: Record<string, string> = {
   "mode:auto": "U",
   "mode:acceptEdits": "E",
   "mode:default": "M",
+  "switch:claude": "J",
+  "switch:puku": "J",
   "new-here": "N",
   reveal: "F",
   "copy-path": "C",
@@ -94,29 +97,61 @@ export function cardMenu(card: Card, dev?: DevServerStatus | null): MenuItem[] {
 
   if (live) items.push({ id: "stop", label: "Stop Turn" });
   for (const skill of MENU_SKILLS) items.push({ id: `skill:${skill}`, label: `Run /${skill}`, enabled: !live });
-  if (card.review?.dev) {
-    const up = dev?.state === "running" || dev?.state === "starting" || Boolean(dev?.reachable);
-    if (up) items.push({ id: "dev:restart", label: "Restart Dev Server" }, { id: "dev:stop", label: "Stop Dev Server" });
-    else items.push({ id: "dev:start", label: "Start Dev Server" });
-  }
+  devServerItems(card, dev, items);
   items.push(SEPARATOR);
 
-  // Applies mid-turn too. Only Claude Code board threads can skip every prompt (YOLO).
-  for (const m of MODE_OPTIONS) {
-    if (m.id === "bypassPermissions" && card.backend !== "claude") continue;
-    items.push({ id: `mode:${m.id}`, label: `Permissions: ${m.label}`, checked: card.permissionMode === m.id });
-  }
+  permissionsItems(card, items);
   items.push(SEPARATOR);
 
-  items.push({ id: "new-here", label: "New Thread in This Folder" }, { id: "reveal", label: "Reveal Folder in Finder" });
-  items.push({ id: "copy-path", label: "Copy Folder Path" });
-  if (card.sessionId && card.backend === "claude") items.push({ id: "copy-resume", label: "Copy Resume Command" });
+  switchItem(card, live, items);
+  items.push(SEPARATOR);
+
+  fileItems(card, items);
   items.push(SEPARATOR);
 
   items.push(...starItems(card), SEPARATOR);
 
-  items.push({ id: "archive", label: card.archived ? "Unarchive" : "Archive" }, { id: "delete", label: "Delete…" });
+  archiveItems(card, items);
   return withAccelerators(items, MENU_KEYS);
+}
+
+// Dev server start/restart/stop, based on the current state.
+function devServerItems(card: Card, dev: DevServerStatus | null | undefined, items: MenuItem[]): void {
+  if (!card.review?.dev) return;
+  const up = dev?.state === "running" || dev?.state === "starting" || Boolean(dev?.reachable);
+  if (up) items.push({ id: "dev:restart", label: "Restart Dev Server" }, { id: "dev:stop", label: "Stop Dev Server" });
+  else items.push({ id: "dev:start", label: "Start Dev Server" });
+}
+
+// Applies mid-turn too. Only Claude Code board threads can skip every prompt (YOLO).
+function permissionsItems(card: Card, items: MenuItem[]): void {
+  for (const m of MODE_OPTIONS) {
+    if (m.id === "bypassPermissions" && card.backend !== "claude") continue;
+    items.push({ id: `mode:${m.id}`, label: `Permissions: ${m.label}`, checked: card.permissionMode === m.id });
+  }
+}
+
+// The escape hatch for plan limits: one-click flip to the other CLI. Disabled mid-turn because
+// the endpoint refuses; the menu should match.
+function switchItem(card: Card, live: boolean, items: MenuItem[]): void {
+  const otherBackend: Backend = card.backend === "puku" ? "claude" : "puku";
+  items.push({
+    id: `switch:${otherBackend}`,
+    label: `Run on ${BACKEND_LABELS[otherBackend]}${card.rateLimitHit ? " (hit plan limit)" : ""}`,
+    enabled: !live,
+  });
+}
+
+// New thread, reveal in Finder, copy path, copy resume.
+function fileItems(card: Card, items: MenuItem[]): void {
+  items.push({ id: "new-here", label: "New Thread in This Folder" }, { id: "reveal", label: "Reveal Folder in Finder" });
+  items.push({ id: "copy-path", label: "Copy Folder Path" });
+  if (card.sessionId && card.backend === "claude") items.push({ id: "copy-resume", label: "Copy Resume Command" });
+}
+
+// Archive or unarchive, and delete.
+function archiveItems(card: Card, items: MenuItem[]): void {
+  items.push({ id: "archive", label: card.archived ? "Unarchive" : "Archive" }, { id: "delete", label: "Delete…" });
 }
 
 // Starring files the card in the library (lib/library.ts); a starred card is never auto-archived.
