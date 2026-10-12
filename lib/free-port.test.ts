@@ -44,10 +44,21 @@ describe("freePort", () => {
     expect(() => freePort(port)).not.toThrow();
   });
 
-  it("removes the build folder when given one", () => {
-    const rel = path.relative(path.join(__dirname, ".."), fs.mkdtempSync(path.join(os.tmpdir(), "weft-dist-")));
+  const buildFolder = () => path.relative(path.join(__dirname, ".."), fs.mkdtempSync(path.join(os.tmpdir(), "weft-dist-")));
+
+  it("keeps the build folder, and Turbopack's cache, when nothing held the port", async () => {
+    const rel = buildFolder();
+    freePort(await freeTcpPort(), rel);
     expect(fs.existsSync(path.join(__dirname, "..", rel))).toBe(true);
-    freePort(0, rel);
+    fs.rmSync(path.join(__dirname, "..", rel), { recursive: true });
+  });
+
+  it("removes the build folder a stale server wrote", async () => {
+    const rel = buildFolder();
+    const port = await freeTcpPort();
+    const child = await squat(port);
+    freePort(port, rel);
+    await exited(child);
     expect(fs.existsSync(path.join(__dirname, "..", rel))).toBe(false);
   });
 });

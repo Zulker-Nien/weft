@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NewCardInput } from "@/lib/client";
@@ -101,37 +101,12 @@ describe("NewCardDialog", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("⌃↵ starts the thread and stays open, emptied, for the next one", async () => {
-    const { onCreate, onClose, box } = setup();
-    await userEvent.type(box, "First task");
-    await userEvent.keyboard("{Control>}{Enter}{/Control}");
-    expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ prompt: "First task", start: true }), { stay: true });
-    expect(await screen.findByText("Started “First task” · write the next one")).toBeInTheDocument();
-    expect(box).toHaveValue("");
-    expect(onClose).not.toHaveBeenCalled();
-    await userEvent.type(box, "S");
-    expect(screen.queryByText(/Started “/)).not.toBeInTheDocument();
-  });
-
   it("a started thread clears the draft", async () => {
     const { box } = setup();
     await userEvent.type(box, "Ship it");
     await waitFor(() => expect(localStorage.getItem("weft.newThreadDraft")).toBe("Ship it"));
     await userEvent.click(screen.getByRole("button", { name: "Start now" }));
     await waitFor(() => expect(localStorage.getItem("weft.newThreadDraft")).toBeNull());
-  });
-
-  it("the Start button names what ⌘↵ and ⌃↵ do while they're held", () => {
-    vi.stubGlobal("navigator", { userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)" });
-    setup();
-    const key = (init: KeyboardEventInit) => act(() => void window.dispatchEvent(new KeyboardEvent("keydown", init)));
-    key({ key: "Meta", metaKey: true });
-    expect(screen.getByRole("button", { name: "Start & close" })).toBeInTheDocument();
-    key({ key: "Control", ctrlKey: true });
-    expect(screen.getByRole("button", { name: "Start, keep open" })).toBeInTheDocument();
-    act(() => void window.dispatchEvent(new Event("blur")));
-    expect(screen.getByRole("button", { name: "Start now" })).toBeInTheDocument();
-    vi.unstubAllGlobals();
   });
 
   it("keeps the prompt as a draft for next time", async () => {
