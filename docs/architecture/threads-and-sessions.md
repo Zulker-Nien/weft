@@ -1,21 +1,31 @@
 # Threads and sessions
 
-`lib/runner.ts` is the heart of Weft. Each active card has a long-lived CLI subprocess that
-the SDK drives through a streaming `Inbox`. The file covers the per-card session lifecycle,
-the permission and question flow, and the BOARD STATUS handling. Picking up existing Claude
+The runner is the heart of Weft. Each active card has a long-lived CLI subprocess that
+the SDK drives through a streaming `Inbox`. It's five modules, each under 300 lines:
+
+- `lib/runner.ts`: the public API the board and routes call (send, queue, ↑ edit, stop, retry, login, permission mode)
+- `lib/runner-state.ts`: the `Session` and `Inbox` types, the shared maps on `globalThis`, the idle timer, and `hooks`
+- `lib/runner-session.ts`: starting and driving a CLI, warm spares, the `BUILD` fingerprint
+- `lib/runner-turn.ts`: what the CLI sends during a turn, through the result that ends it
+- `lib/runner-ask.ts`: permission requests and answers
+
+The turn loop runs from `sendMessage()` in `runner.ts` through the session and turn modules and back to
+the turn queue (`sendQueued`, `needLogin`). The modules below `runner.ts` reach those through `hooks`
+(in `runner-state.ts`), which `runner.ts` fills in as it loads, so none of them imports it back. Together they cover
+the per-card session lifecycle, the permission and question flow, and the BOARD STATUS handling. Picking up existing Claude
 Code sessions lives in `lib/import.ts` and `lib/transcript.ts` (see the end of this doc).
 
 ## Per-card session lifecycle
 
 ### `Inbox` and `query()`
 
-`Inbox` (`lib/runner.ts`) is an `AsyncIterable<SDKUserMessage>` fed by `push()`. The
+`Inbox` (`lib/runner-state.ts`) is an `AsyncIterable<SDKUserMessage>` fed by `push()`. The
 SDK's `query()` consumes it as the prompt, so a single CLI process keeps running
 between turns and each user message is a new `SDKUserMessage` on the same iterator.
 `close()` ends the input and lets the process exit.
 
 `open()` starts a session, registers it in the `sessions` map (kept on `globalThis`, so
-every API route shares it), and returns the running `Session`. `drive()` (`lib/runner.ts`) calls `query()` with:
+every API route shares it), and returns the running `Session`. `drive()` (`lib/runner-session.ts`) calls `query()` with:
 
 - `cwd`: the card's folder
 - `resume`: the existing `sessionId` (or unset for new cards)
@@ -48,22 +58,22 @@ leaves the card in Review with the reason in `error`.
 
 ### Warm sessions and keep-alive
 
-`scheduleIdle()` (`lib/runner.ts`) starts a timer for `keepAliveMinutes()` minutes
+`scheduleIdle()` (`lib/runner-state.ts`) starts a timer for `keepAliveMinutes()` minutes
 after the last message. Setting `keepAliveMinutes` to `0` (the default) means the
 session stays open until the app quits. Picked-up Claude Code sessions cap at 10 idle
 minutes so Weft doesn't hold a session the Claude app might reopen.
 
-`warmUp(cardId)` (`lib/runner.ts`) opens the CLI without sending anything. It's a
+`warmUp(cardId)` (`lib/runner-session.ts`) opens the CLI without sending anything. It's a
 no-op for picked-up cards and for cards whose `cwd` no longer exists.
 
 `isStale()` marks a session stale when its `ended` flag is set, or when it is idle and its
 `BUILD` fingerprint no longer matches (see below). `currentSession()` closes and replaces a
-stale session on next use, and `closeWhenIdle()` closes one after the keep-alive time.
+stale session on next use, and `closeWhenIdle()` (`lib/runner-state.ts`) closes one after the keep-alive time.
 
 ### Spare CLIs per project
 
-`ensureSpare(cwd, backend)` (`lib/runner.ts`) keeps up to `MAX_SPARES` (3) idle
-CLI processes keyed by `backend|cwd`. `adoptSpare()` (`lib/runner.ts`) hands a
+`ensureSpare(cwd, backend)` (`lib/runner-session.ts`) keeps up to `MAX_SPARES` (3) idle
+CLI processes keyed by `backend|cwd`. `adoptSpare()` (`lib/runner-session.ts`) hands a
 spare to a new card, switches it to the card's permission mode, model and effort
 (`switchSpare()` in `lib/spare-switch.ts`), marks the card `warm: true`, and immediately
 starts a fresh spare for that folder.
@@ -89,9 +99,10 @@ project (or the folder of the first non-copilot card).
 
 ### BUILD fingerprint
 
-`BUILD` (`lib/runner.ts`) is a SHA-1 of `[drive, handle, askUser, settle,
-sendMessage].map(String).join("\n")`. Each API route can load its own copy of
-`runner.ts`, so the fingerprint has to come from the code, not a random value at load
+`BUILD` (`lib/runner-session.ts`) is a SHA-1 of the source of `drive`, `queryOptions`, every turn
+handler (`TURN_CODE` in `runner-turn.ts`), `askUser`, `settle` and the pure rules in `lib/turn.ts`, joined with
+newlines. Each API route can load its own copy of
+the runner modules, so the fingerprint has to come from the code, not a random value at load
 time. Idle sessions whose `build` doesn't match are replaced on next use (`currentSession()`,
 `warmUp()`, `ensureSpare()`), which is how dev-mode code reloads swap out stale CLIs. A busy
 session is never replaced mid-turn.
@@ -186,21 +197,21 @@ A request already waiting on the card still needs an answer after a switch.
 
 When the SDK asks to use a tool, `canUseTool` either auto-allows (browser tools, and
 the copilot's read-only board tools) or hands the request to `askUser()`
-(`lib/runner.ts`). `askUser` records a `permission` thread item, pushes a
+(`lib/runner-ask.ts`). `askUser` records a `permission` thread item, pushes a
 `Pending` onto `session.pending`, and returns a `Promise<PermissionResult>` that
 resolves only when the user answers.
 
-`answerPermission(cardId, allow, answers, pendingId)` (`lib/runner.ts`) is the API
+`answerPermission(cardId, allow, answers, pendingId)` (`lib/runner-ask.ts`, re-exported by `lib/runner.ts`) is the API
 surface. `pendingId` ties the answer to the specific request the user saw; without it
 the oldest pending request is answered. The user picks `allow`/`deny` (or fills in
-`answers` when it's a question); `settle()` (`lib/runner.ts`) replaces the
+`answers` when it's a question); `settle()` (`lib/runner-ask.ts`) replaces the
 permission thread item with the decision, moves the card back to `running` if no more
 requests are queued, and resolves the SDK's `Promise<PermissionResult>` with
 `{ behavior: "allow", updatedInput }` (and the answers) or `{ behavior: "deny" }`.
 
 ### `AskUserQuestion` -> `QuestionForm`
 
-`readQuestions()` (`lib/runner.ts`) sanitizes the SDK's `questions` array
+`readQuestions()` (`lib/turn.ts`) sanitizes the SDK's `questions` array
 (question, header, multiSelect, options with label/description). The card shows them
 through `QuestionForm.tsx`. The user answers with one label (or several for
 `multiSelect`) plus a free-text "other" per question, or skips. Answers become
@@ -224,7 +235,7 @@ BOARD STATUS: column=<needs_you|review|done> | stage=<...> | remaining=<...>
 emphasis and in any letter case. The column is normalized to snake_case and must be
 `needs_you`, `review`, or `done` (anything else is ignored), `remaining=none` becomes
 `undefined`, and the line is stripped from the text shown on the card. `handle()` in
-`lib/runner.ts` updates the card's stage and remaining from each assistant message as the
+`lib/runner-turn.ts` updates the card's stage and remaining from each assistant message as the
 turn progresses, and applies `column` on the `result` message: the status line in the final
 result wins, with the last one seen during the turn as a fallback. A stopped or failed turn
 always lands in `review`. `lastLine` is the first non-empty line of the assistant's text or
@@ -332,7 +343,7 @@ don't appear in the Claude app's session list.
 
 ## Status strip
 
-`components/StatusStrip.tsx` shows a thread's numbers under the reply box (`ReplyBox`): project folder and branch, model, context left, prompt cache warmth, tokens, changed lines, and the plan's 5-hour and weekly quota with reset times. The data is `card.stats` (`CardStats` in `lib/types.ts`), written by `lib/runner.ts`:
+`components/StatusStrip.tsx` shows a thread's numbers under the reply box (`ReplyBox`): project folder and branch, model, context left, prompt cache warmth, tokens, changed lines, and the plan's 5-hour and weekly quota with reset times. The data is `card.stats` (`CardStats` in `lib/types.ts`), written by `lib/runner-turn.ts`:
 
 - After each turn, `turnStats()` fills the model, tokens and context fill from the result's `modelUsage` and the last main-agent request's usage, and `changedLines()` / `gitBranch()` read `git diff HEAD --numstat` and the branch from the folder.
 - **Prompt cache.** `handleAssistant()` runs each main-agent request's usage through `cacheAfter()` (`lib/turn.ts`) into `session.cache` (`CacheState`: request time, lifetime, cache-hit share, size in tokens); `turnStats()` saves it as `stats.cache`. The lifetime is read from what the request wrote (`ephemeral_1h_input_tokens` means an hour, `ephemeral_5m_input_tokens` five minutes). The strip's `Cache` chip counts the minutes left (`cacheMinutesLeft()` in `lib/format.ts`, ticking on `useNow`) and turns to `cache:cold <size>` once it lapses: the next message resends that many tokens at full price instead of about a tenth. The size is also the context fill, so it replaces the old `contextTokens`.
@@ -343,7 +354,7 @@ don't appear in the Claude app's session list.
 
 ## Review tour
 
-A thread that finishes work for review ends its reply with a fenced `weft-review` JSON block (the instruction is `REVIEW_PROMPT` in `lib/review.ts`, appended to every board thread's system prompt in `drive()`). `lib/runner.ts` strips the block from the visible text and saves the parsed plan on `card.review`: `url` (where the app runs), `dev` (the command that starts it), and `steps`.
+A thread that finishes work for review ends its reply with a fenced `weft-review` JSON block (the instruction is `REVIEW_PROMPT` in `lib/review.ts`, appended to every board thread's system prompt in `queryOptions()`, `lib/runner-session.ts`). `lib/runner-turn.ts` strips the block from the visible text and saves the parsed plan on `card.review`: `url` (where the app runs), `dev` (the command that starts it), and `steps`.
 
 While the card is in Review, `components/ReviewPanel.tsx` sits at the bottom of the thread, in place of the reply box (`footer` and `replaceReply` on `ThreadView`). A card with no plan keeps its reply box with a "Build review tour" strip above it. It shows one step at a time with what to look for, "Looks good, next" and previous/next buttons, an **Open browser** button, and a feedback box that sends the note to the thread. A new plan restarts the tour.
 

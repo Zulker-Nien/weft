@@ -12,7 +12,7 @@ Electron shell (electron/*.cjs)
   └── Next.js server (app/* via next dev / next start / standalone)
         ├── app/api/*           REST endpoints, all behind lib/guard.ts
         ├── app/api/events      SSE: lib/bus.ts -> connected boards
-        ├── lib/runner.ts       per-card Inbox -> query() -> CLI subprocess
+        ├── lib/runner*.ts      per-card Inbox -> query() -> CLI subprocess (api in runner.ts)
         ├── lib/store.ts        board.json + threads/<id>.json in ~/.weft
         ├── lib/settings.ts     settings.json + projects
         ├── lib/login.ts        <cli> auth login as a managed subprocess
@@ -29,8 +29,8 @@ Electron shell (electron/*.cjs)
 - `electron/browser-pane.cjs` — native `WebContentsView` pane + a token-protected HTTP
   control server on `127.0.0.1` that `lib/browser-tools.ts` calls.
 - `electron/preload.cjs` — the `window.threadboard` bridge (typed in `lib/client.ts`).
-- `lib/runner.ts` — one CLI process per card, the `Inbox` of `SDKUserMessage`s, warm
-  sessions, spares, permission routing, BOARD STATUS handling, auto-login.
+- `lib/runner.ts` (+ `runner-state`, `runner-session`, `runner-turn`, `runner-ask`) — one CLI process per card,
+  the `Inbox` of `SDKUserMessage`s, warm sessions, spares, permission routing, BOARD STATUS handling, auto-login.
 - `lib/store.ts` — board + thread persistence; legacy `~/.threadboard` is moved to
   `~/.weft` on first start; cards that were `running` at load become `review`.
 - `lib/settings.ts` — `DEFAULT_THREAD_PROMPT`, `keepAliveMinutes`, project list,
@@ -56,7 +56,7 @@ Electron shell (electron/*.cjs)
    forwards.
 4. Replying to a card hits `POST /api/cards/[id]/messages`, which calls
    `sendMessage()` in `lib/runner.ts`. `Inbox.push()` wakes the SDK query loop, which
-   streams `SDKMessage`s back; `handle()` writes thread items and updates the card.
+   streams `SDKMessage`s back; `handle()` (`lib/runner-turn.ts`) writes thread items and updates the card.
 5. Tools that need approval reach the card through `askUser` → `settle` →
    `answerPermission` (the card shows the questions from `AskUserQuestion` in
    `QuestionForm`).
@@ -73,7 +73,7 @@ Electron shell (electron/*.cjs)
 - **Inbox + AsyncIterable.** `Inbox` is a tiny queue that turns `push()` calls into the
   `AsyncIterable<SDKUserMessage>` the SDK's `query()` consumes, so one CLI process
   serves many user messages back-to-back.
-- **BUILD fingerprint.** `runner.ts` derives a SHA-1 of the drive/handle/askUser/settle
+- **BUILD fingerprint.** `runner-session.ts` derives a SHA-1 of the drive, turn-handler, askUser and settle
   functions and replaces idle sessions whose `build` no longer matches, so dev-mode code
   reloads don't leave idle CLIs running old code.
 - **Warm sessions and spares.** `warmUp` keeps a card's CLI open between turns;
