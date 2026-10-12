@@ -184,6 +184,28 @@ leave a stuck splash or a blank window into `fail()`: the board's main frame fai
 replaced by another one such as Fast Refresh's reload) and its renderer dying (any reason but a clean exit).
 Tested against a fake window in `electron/startup-screen.test.ts`.
 
+## Startup timer (`startup-timer.cjs`, `lib/use-startup-check.ts`)
+
+Every launch is timed. `createStartupTimer()` is created at the top of `main.cjs`; `mark(name)` records ms since the
+process started at each phase (`ready` Electron start, `path` login shell PATH, `port` freeing the port, `server`
+server start, `page` board page load), and the board finishes the run with the `board` mark (its first cards are on
+screen) through `startup:ready` (`threadboard.startupReady()` in the preload). `finish()` appends the run to
+`~/.weft/startup.jsonl` (the last 50) and returns a verdict: the total, the median of the last 10 launches in the
+same mode (null until there are 3), the slowest phase, and `slow`. Slow means over 1.5x the usual time and at least
+2s over it. `lib/use-startup-check.ts` shows a toast naming the slowest phase when `slow` is true. List recent
+launches with `node electron/startup-timer.cjs`.
+
+Two things keep a launch short, both measured with this timer:
+- `env.cjs` `fixPath()` applies the PATH saved in `~/.weft/shell-path` at once and asks the login shell (`zsh -ilc`,
+  about a second) in the background for the next launch; with no saved PATH it waits for the shell as before.
+- `free-port.cjs` deletes the build folder only when a stale server held the port, so Turbopack's cache in
+  `.next/dev/cache` survives a normal launch.
+
+Lazy-loading Board's panels was tried and backed out: under the same load the board page was slower (4.5-4.9s against
+3.8s).
+
+Tested in `electron/startup-timer.test.ts`, `electron/env.test.ts` and `lib/use-startup-check.test.ts`.
+
 ## About window (`about.cjs`, `about.html`, `about.js`, `about-preload.cjs`)
 
 Weft ▸ About Weft (the app menu on macOS, the bottom of Help elsewhere) opens the shell's own

@@ -89,6 +89,17 @@ export interface ShellBridge {
   // The secrets vault in Electron main (lib/vault-view.ts). Missing in older shells.
   vault?: VaultBridge;
   onMenu(callback: (action: MenuAction, payload?: string) => void): () => void;
+  // The board's first cards are on screen; resolves to this launch's timing. Missing in older shells.
+  startupReady?(): Promise<StartupResult>;
+}
+
+// One launch's timing from electron/startup-timer.cjs: usual is the median of recent launches (null until
+// there are a few), slowest is the longest phase.
+export interface StartupResult {
+  total: number;
+  usual: number | null;
+  slow: boolean;
+  slowest: { name: string; label: string; ms: number };
 }
 
 declare global {

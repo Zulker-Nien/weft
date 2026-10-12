@@ -22,6 +22,7 @@ import {
 } from "@/lib/board-view";
 import { useBoardEvents } from "@/lib/use-events";
 import { useDesktopBridge } from "@/lib/use-desktop-bridge";
+import { useStartupCheck } from "@/lib/use-startup-check";
 import { useNow } from "@/lib/use-now";
 import { useToast } from "@/lib/use-toast";
 import { resumeActions } from "@/lib/resume-actions";
@@ -186,6 +187,7 @@ export default function Board() {
   const resolvedFolders = useRef(new Set<string>());
   const now = useNow();
   const { desktop, mac, browser, copilotOpen } = useDesktopBridge(CLOSED_BROWSER, selectedId, cards);
+  useStartupCheck(loaded, setToast);
   const onMenu = useRef<(action: MenuAction, payload?: string) => void>(() => {});
 
   useEffect(() => {
