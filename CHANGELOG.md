@@ -9,6 +9,9 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 ## [Unreleased]
 
 ### Added
+- Board view: threads can screenshot, click, hover, type into and read Weft's own board window (`mcp__board_view__*`), so a
+  change to a drawer, dialog or card gets checked in the real app; a fixed set of operations, no arbitrary JS, and revealed
+  secret values read as ‹secret› and are blanked in screenshots.
 - Push on Done: `/weft:done` pushes the branch after a clean commit (`plugin/skills/done/push.sh`), so moving a card to Done
   ships it. On by default; turn it off in Settings. A plain `git push`, never forced: a rejected push leaves the card in Review.
 - ↑ in an empty reply box edits your last message (after any queued one). Enter stops a running turn, rewinds the

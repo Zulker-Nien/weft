@@ -62,7 +62,7 @@ export async function openInPane(url: string, key: string) {
   await shell("/browser/open", { url, key });
 }
 
-function savePng(file: string, base64: string) {
+export function savePng(file: string, base64: string) {
   if (!path.isAbsolute(file)) throw new Error(`save_to must be an absolute path, not ${file}`);
   const out = file.toLowerCase().endsWith(".png") ? file : `${file}.png`;
   fs.mkdirSync(path.dirname(out), { recursive: true });

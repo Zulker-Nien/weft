@@ -7,6 +7,7 @@ const { isSelfUrl } = require("./self-url.cjs");
 const { createPaneSecrets } = require("./pane-secrets.cjs");
 const { secretRunRoutes } = require("./secret-run.cjs");
 const { click, typeText } = require("./pane-actions.cjs");
+const { controlHandler } = require("./control-server.cjs");
 
 // Chrome's zoom steps, as percentages; Zoom In/Out walk them.
 const ZOOM_STEPS = [25, 33, 50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300, 400, 500];
@@ -275,20 +276,6 @@ function createBrowserPane({ getWindow, getAppView, token, onContents, pages, on
 
   const paneSecrets = createPaneSecrets({ secrets, requirePage, typeText });
 
-  function readJson(req) {
-    return new Promise((resolve, reject) => {
-      let body = "";
-      req.on("data", (chunk) => (body += chunk));
-      req.on("end", () => {
-        try {
-          resolve(body ? JSON.parse(body) : {});
-        } catch (err) {
-          reject(err);
-        }
-      });
-    });
-  }
-
   // Resolves to the control server's base URL.
   function startControlServer() {
     const routes = {
@@ -312,20 +299,7 @@ function createBrowserPane({ getWindow, getAppView, token, onContents, pages, on
       // Other parts of main the server talks to, like the account session (electron/account-store.cjs).
       ...moreRoutes,
     };
-    const server = http.createServer(async (req, res) => {
-      const send = (status, body) => {
-        res.writeHead(status, { "content-type": "application/json" });
-        res.end(JSON.stringify(body));
-      };
-      if (req.headers.authorization !== `Bearer ${token}`) return send(401, { error: "Unauthorized" });
-      const handler = routes[`${req.method} ${req.url}`];
-      if (!handler) return send(404, { error: "Not found" });
-      try {
-        send(200, await handler(req.method === "POST" ? await readJson(req) : {}));
-      } catch (err) {
-        send(500, { error: err?.message || String(err) });
-      }
-    });
+    const server = http.createServer(controlHandler({ token, routes }));
     return new Promise((resolve) => {
       server.listen(0, "127.0.0.1", () => resolve(`http://127.0.0.1:${server.address().port}`));
     });

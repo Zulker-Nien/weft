@@ -52,6 +52,16 @@ afterEach(() => {
 });
 
 describe("VaultDrawer", () => {
+  it("marks a revealed value data-secret and reveal and copy data-secret-action, for the board view", async () => {
+    const { b } = setup("/dev/web");
+    b.reveal.mockResolvedValue({ value: "sk-live-1111" });
+    expect(screen.getByRole("button", { name: "Reveal API_KEY" })).toHaveAttribute("data-secret-action", "eye");
+    expect(screen.getByRole("button", { name: "Copy API_KEY" })).toHaveAttribute("data-secret-action", "copy");
+    expect(screen.getByRole("button", { name: "Change API_KEY" })).not.toHaveAttribute("data-secret-action");
+    await userEvent.click(screen.getByRole("button", { name: "Reveal API_KEY" }));
+    expect(await screen.findByText("sk-live-1111")).toHaveAttribute("data-secret");
+  });
+
   it("follows the top bar's project, lets you pick another, and follows the top bar again when it changes", async () => {
     const { b, reload, notify, view } = setup("/dev/web");
     const filter = screen.getByLabelText("Filter by project");

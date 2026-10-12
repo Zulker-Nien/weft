@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { query, type Options } from "@anthropic-ai/claude-agent-sdk";
 import { signAsWeft } from "./attribution";
 import { COPILOT_PROMPT, boardMcpServer, isTrustedTool, threadBoardMcpServer } from "./board-tools";
+import { boardViewMcpServer } from "./board-view-tools";
 import { BROWSER_PROMPT, browserMcpServer } from "./browser-tools";
 import { executableFor } from "./cli-path";
 import { guardedCli, RESTART_PROMPT } from "./env";
@@ -156,7 +157,7 @@ function queryOptions(session: Session, executable: string | undefined): Options
     mcpServers: {
       browser: browserMcpServer(cardId),
       // Threads only: the copilot runs the board, not a project.
-      ...(spec.copilot ? {} : { secrets: secretsMcpServer(cardId, () => spec.cwd) }),
+      ...(spec.copilot ? {} : { secrets: secretsMcpServer(cardId, () => spec.cwd), board_view: boardViewMcpServer() }),
       board: spec.copilot ? boardMcpServer(hooks.boardActions) : threadBoardMcpServer(cardId, hooks.boardActions),
     },
     canUseTool: (toolName, input, opts) => {

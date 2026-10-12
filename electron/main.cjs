@@ -20,6 +20,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { registerAboutBridge } = require("./about.cjs");
 const { createBrowserPane } = require("./browser-pane.cjs");
+const { createBoardView, boardViewRoutes } = require("./board-view.cjs");
 const { createMenus } = require("./menus.cjs");
 const { createPageLinks } = require("./page-links.cjs");
 const { createPanePages } = require("./pane-pages.cjs");
@@ -73,8 +74,12 @@ const pane = createBrowserPane({
   pages: createPanePages(dataDir()),
   // weft:// links clicked inside a pane page, like a walk-through's buttons.
   onLink: (url, from) => pageLinks.handle(url, from) || handleLink(url),
-  // The Weft account's session, sealed by safeStorage; the server reads it here instead of a plain file.
-  routes: require("./account-store.cjs").accountRoutesFor(dataDir()),
+  routes: {
+    // The Weft account's session, sealed by safeStorage; the server reads it here instead of a plain file.
+    ...require("./account-store.cjs").accountRoutesFor(dataDir()),
+    // mcp__board_view__*: threads see and drive the board itself, secrets redacted (electron/board-view.cjs).
+    ...boardViewRoutes(createBoardView({ board: () => appView?.webContents })),
+  },
 });
 // A walk-through page's buttons: replies, and commits that run with no turn.
 const pageLinks = createPageLinks({

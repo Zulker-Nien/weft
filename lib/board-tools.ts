@@ -34,7 +34,8 @@ export const SAFE_BOARD_TOOLS = new Set(["list_cards", "read_thread", "create_ca
 export function isTrustedTool(toolName: string, source?: string) {
   if (source !== "sdk") return false;
   // The secrets tools ask for Touch ID themselves, so a permission prompt first would be a second yes.
-  if (toolName.startsWith("mcp__browser__") || toolName.startsWith("mcp__secrets__")) return true;
+  // The board view runs a fixed set of operations and never hands back a secret (electron/board-view.cjs).
+  if (["mcp__browser__", "mcp__secrets__", "mcp__board_view__"].some((p) => toolName.startsWith(p))) return true;
   return toolName.startsWith("mcp__board__") && SAFE_BOARD_TOOLS.has(toolName.slice("mcp__board__".length));
 }
 

@@ -115,6 +115,7 @@ export function SecretForm({
           autoFocus={editing.fixed}
           placeholder={editing.fixed ? "New value" : "Value"}
           aria-label="Value"
+          data-secret
           spellCheck={false}
           autoComplete="off"
           className={`${field} pr-6 font-mono`}

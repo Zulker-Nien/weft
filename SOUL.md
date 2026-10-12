@@ -109,6 +109,9 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   injected so the test can pass mocks without a real Electron.
 - `lib/copilot.ts` + `lib/board-tools.ts`: the copilot thread and its `mcp__board__*` tools.
 - `lib/browser-tools.ts`: `mcp__browser__*` tools every thread gets.
+- `lib/board-view-tools.ts` + `electron/board-view.cjs` + `electron/control-server.cjs`: `mcp__board_view__*`, a thread's eyes and hands
+  on the board window itself (screenshot, click, hover, type, read; fixed scripts, no arbitrary JS; `data-secret` reads as ‹secret›,
+  `data-secret-action` can't be clicked) through the pane's token-guarded control server (docs/architecture/board-view.md).
 - `lib/import.ts`, `lib/search.ts`: pick up `~/.claude/projects` sessions as cards; search index.
 - `lib/hotkeys.ts` + `lib/shortcut-catalog.ts`: the keyboard shortcut registry and what the `?` sheet lists; tooltips, key badges,
   right-click menus and `ModifierHint` read their keys from it (docs/architecture/keyboard-shortcuts.md).

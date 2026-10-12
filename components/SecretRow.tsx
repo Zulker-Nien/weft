@@ -81,14 +81,26 @@ export function SecretRow({
           </span>
         )}
       </div>
-      {value !== undefined && <div className="mt-0.5 select-text break-all font-mono text-[10.5px] text-ink">{value}</div>}
+      {/* data-secret: the board view (electron/board-view.cjs) reads this as ‹secret› and blanks it in screenshots. */}
+      {value !== undefined && (
+        <div data-secret className="mt-0.5 select-text break-all font-mono text-[10.5px] text-ink">
+          {value}
+        </div>
+      )}
     </div>
   );
 }
 
+// Reveal and copy carry data-secret-action, which the board view won't click (electron/board-view.cjs).
 function HoverButton({ icon, label, title, onClick }: { icon: "pencil" | "eye" | "copy"; label: string; title: string; onClick: () => void }) {
   return (
-    <button onClick={onClick} aria-label={label} title={title} className="rounded p-0.5 text-muted hover:text-ink">
+    <button
+      onClick={onClick}
+      aria-label={label}
+      title={title}
+      data-secret-action={icon === "pencil" ? undefined : icon}
+      className="rounded p-0.5 text-muted hover:text-ink"
+    >
       <Icon name={icon} size={12} />
     </button>
   );

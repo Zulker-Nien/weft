@@ -33,6 +33,9 @@ same time; Next.js allows one dev server per project folder.
 - **Full screen threads**: clicking a card opens its thread and its browser together in one large
   overlay over the board; Esc (or clicking outside) closes it, and so does sending `/done`. A card
   running `/done` sits in Done while it works and is archived when it finishes.
+- **Board view for threads**: a thread can screenshot, click, hover, type into and read Weft's own board window
+  (`mcp__board_view__*`), so a thread changing a drawer or dialog tests it in the real app instead of asking you to click
+  through. Revealed secrets read as ‹secret› and are blanked in its screenshots (docs/architecture/board-view.md).
 - **Browser pane zoom**: the % button in the pane's toolbar zooms the page (Chrome's steps, plus
   50–200% presets); ⌘+ / ⌘− / ⌘0 and ⌘+scroll work on the page too, and a trackpad pinch magnifies.
 - **Themes**: Settings → Appearance (or ⌘K "Theme: …") picks System, Light or Dark, or a scene: Twin Suns,
