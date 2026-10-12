@@ -31,7 +31,8 @@ describe("secretsMcpServer", () => {
     expect(server.name).toBe("secrets");
     expect(server.alwaysLoad).toBe(true);
     expect(st.SECRETS_PROMPT).toContain("mcp__secrets__fill_field");
-    expect(server.tools.map((t) => t.name)).toEqual(["list", "fill_field"]);
+    expect(st.SECRETS_PROMPT).toContain("mcp__secrets__run");
+    expect(server.tools.map((t) => t.name)).toEqual(["list", "fill_field", "run"]);
   });
 
   it("lists names for the card's folder, or another project's", async () => {
@@ -55,6 +56,8 @@ describe("secretsMcpServer", () => {
     });
     expect(r.isError).toBe(false);
     expect(said(r)).toBe("Typed GITHUB_CLIENT_SECRET from the aimhuge/weft vault into #secret.");
+    // The card's stored tool results go through redaction from now on.
+    expect((await import("./secret-run")).usesSecrets("c1")).toBe(true);
   });
 
   it("reports a no, a missing value, a missing field and a shell error", async () => {

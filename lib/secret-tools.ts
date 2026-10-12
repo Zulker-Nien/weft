@@ -2,10 +2,12 @@ import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { attempt, shell, text } from "./browser-tools";
 import { asText } from "./format";
+import { markInUse, RUN_PROMPT, runTool } from "./secret-run";
 
 // The vault for threads (docs/architecture/secrets.md): names only, and values typed into a pane field by
 // Electron main after the user's Touch ID. A value never comes back through these tools.
-export const SECRETS_PROMPT = `When a task needs a secret value the user keeps in Weft's 🔐 vault (an API key, an OAuth client secret, a password): don't ask them to paste it, don't read .env files, and never try to see the value. Call mcp__secrets__list for the names, open the page with the field in the browser pane, and call mcp__secrets__fill_field; the user approves with Touch ID and the value goes straight into the field.`;
+export const SECRETS_PROMPT = `When a task needs a secret value the user keeps in Weft's 🔐 vault (an API key, an OAuth client secret, a password): don't ask them to paste it, don't read .env files, and never try to see the value. Call mcp__secrets__list for the names, open the page with the field in the browser pane, and call mcp__secrets__fill_field; the user approves with Touch ID and the value goes straight into the field.
+${RUN_PROMPT}`;
 
 const ENVIRONMENTS = ["development", "preview", "production"] as const;
 
@@ -47,9 +49,11 @@ export function secretsMcpServer(cardId: () => string | undefined, folder: () =>
             if (r.denied) return text(`The user didn't approve ${name}. Ask before trying again.`, true);
             if (r.missing) return text(`${name} (${environment ?? "development"}) has no value in the ${vault} vault. Ask the user to add it with 🔐 on the left rail.`, true);
             if (!r.found) return text(`No element matches ${selector}`, true);
+            markInUse(cardId());
             return text(`Typed ${name} from the ${vault} vault into ${selector}.`);
           }),
       ),
+      runTool(cardId, folder),
     ],
   });
 }
