@@ -33,6 +33,7 @@ const { registerTerminal } = require("./terminal.cjs");
 const { themeSource } = require("./theme-source.cjs");
 const { loadWindowState, trackWindowState } = require("./window-state.cjs");
 const { createAccountLink } = require("./account-link.cjs");
+const { argvLink } = require("./argv-link.cjs");
 const { createMenuPopup } = require("./main-menu-popup.cjs");
 
 const APP_NAME = "Weft";
@@ -98,7 +99,10 @@ if (!primary) app.quit();
 
 app.on("second-instance", (_event, argv) => {
   showMain();
-  const link = argv.find((arg) => arg.startsWith(`${PROTOCOL}://`));
+  // weft:// links may arrive as a raw arg (the wrapper passes them through) or as `--weft-link=…`
+  // when the wrapper wants to be explicit. macOS's open-url event covers the running case; this
+  // handler covers the second-instance path on every platform.
+  const link = argvLink(argv, PROTOCOL);
   if (link) handleLink(link);
 });
 

@@ -9,11 +9,17 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 ## [Unreleased]
 
 ### Added
+- `!` in a reply box runs a shell command in the card's folder (`lib/shell.ts`), like Claude Code's bash mode: the box
+  turns amber, the thread shows the command and its output, and the output goes to Claude with your next message.
+  Two-minute limit, keys in the output masked, and commands the secret guard refuses (`cat .env`) don't run.
+- Push on Done: `/weft:done` pushes the branch after a clean commit (`plugin/skills/done/push.sh`), so moving a card to Done
+  ships it. On by default; turn it off in Settings. A plain `git push`, never forced: a rejected push leaves the card in Review.
 - Board view: threads can screenshot, click, hover, type into and read Weft's own board window (`mcp__board_view__*`), so a
   change to a drawer, dialog or card gets checked in the real app; a fixed set of operations, no arbitrary JS, and revealed
   secret values read as ‹secret› and are blanked in screenshots.
-- Push on Done: `/weft:done` pushes the branch after a clean commit (`plugin/skills/done/push.sh`), so moving a card to Done
-  ships it. On by default; turn it off in Settings. A plain `git push`, never forced: a rejected push leaves the card in Review.
+- Secrets: the Composer flags a key you type, dictate or drop in, not just one you paste (Remove it / Keep it);
+  threads no longer get secret-named or key-shaped variables from your shell's env; the pre-commit hook scans
+  for keys even without gitleaks; and the control server's token moved from the server's env to a 0600 file.
 - ↑ in an empty reply box edits your last message (after any queued one). Enter stops a running turn, rewinds the
   conversation to before that message, folds the old message and its reply into an "Edited" line you can open, and
   sends the new text; Esc cancels. Files the replaced turn changed stay as they are. Claude board threads only:
@@ -116,7 +122,10 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 - The Weft account sign-in's OAuth redirect target is now `weft://account-callback`, so the URL is stable across
   Weft restarts (the dev server picks a fresh port every launch); plain `next dev` still uses the loopback HTTP
   origin. Electron main's `weft://` handler forwards the code to a new `/api/account/weft-callback` route, which
-  exchanges it against the PKCE verifier kept in the session file.
+  exchanges it against the PKCE verifier kept in the session file. In `npm run desktop` (dev Electron), a wrapper
+  `Weft Dev.app` at `~/Applications/Weft Dev.app` is built by `scripts/dev-protocol.cjs` to declare the scheme in
+  its Info.plist (the dev Electron.app can't), registered with LaunchServices, and forwards the link to the running
+  dev Electron via a `--weft-link=weft://…` argv (parsed by `electron/argv-link.cjs`).
 - Over a scene, columns are clear instead of frosted: the picture shows between the cards, with a faint edge
   keeping each column's shape.
 - A card running `/done` or `/weft:done` (typed, or from a move to Done) sits in Done while it runs, still

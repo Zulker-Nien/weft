@@ -12,13 +12,23 @@ The OAuth and magic-link flows redirect to a stable, port-free URL Weft owns:
 weft://account-callback
 ```
 
-This is a custom URL scheme Weft registers with the OS when packaged (`app.setAsDefaultProtocolClient` in
-`electron/main.cjs`). The dev server's HTTP port changes on every Weft restart, so a `http://127.0.0.1:PORT/...`
-redirect would break after each launch; the `weft://` scheme doesn't carry a port, so the URL is permanent.
+This is a custom URL scheme Weft registers with the OS. The dev server's HTTP port changes on every
+Weft restart, so a `http://127.0.0.1:PORT/...` redirect would break after each launch; the `weft://`
+scheme doesn't carry a port, so the URL is permanent.
+
+In the packaged app, `app.setAsDefaultProtocolClient("weft")` (in `electron/main.cjs`) registers
+the installed Weft.app as the OS handler. In `npm run desktop` the dev Electron (`com.github.Electron`)
+has no `CFBundleURLTypes` declared in its Info.plist, so macOS silently drops `weft://` clicks.
+`scripts/dev-protocol.cjs` builds a thin wrapper app at `~/Applications/Weft Dev.app` with
+`weft://` declared, registers it with LaunchServices, and forwards the link to the running dev
+Electron (the wrapper's launcher execs the real Electron with the project as its folder and the
+URL as a `--weft-link=weft://…` arg; `argvLink` in `electron/argv-link.cjs` parses it back out
+for the `second-instance` handler). `npm run desktop` runs the script before launching Electron,
+and `npm run dev:protocol` runs it standalone.
 
 `lib/account.ts:redirectUrl()` returns the scheme when the build is the desktop app
 (`process.env.THREADBOARD_SHELL_URL` is set), and falls back to the loopback HTTP origin for plain
-`next dev` (where the scheme isn't registered).
+`next dev` (no Electron, no `weft://` handler at all).
 
 ## From link to session
 
