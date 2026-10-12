@@ -38,6 +38,17 @@ beforeEach(() => {
   card = "c1";
 });
 
+describe("BROWSER_PROMPT", () => {
+  it("asks a long task to put its plan in the pane in its first tool calls", () => {
+    expect(bt.BROWSER_PROMPT).toMatch(/long task[^.]*write your plan to a page and open it in one of your first tool calls/);
+  });
+
+  it("tells the thread to carry the plan out in the same turn, not stop at it", () => {
+    expect(bt.BROWSER_PROMPT).toContain("carry the plan out in the same turn");
+    expect(bt.BROWSER_PROMPT).toContain("not a stopping point");
+  });
+});
+
 describe("talking to the shell", () => {
   it("POSTs JSON with the bearer token to the shell's route", async () => {
     reply({ url: "https://a.test" });

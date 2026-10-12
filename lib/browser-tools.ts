@@ -12,18 +12,19 @@ export const BROWSER_PROMPT = `You are running inside Weft, a desktop app with a
 Use the mcp__browser__* tools to open pages there (for example a dev server you started), read them, take screenshots, and click or type. The user can see that pane.
 Your replies are shown as Markdown. To show the user an image or video file (a screenshot you saved, a chart, a generated picture), put it in your reply as ![what it shows](/absolute/path/to/file.png) and it appears inline in the thread. Screenshots from your tools are shown to the user automatically.
 Every turn, before you reply, make sure the pane shows something current for this turn: no exceptions for quick answers, questions, follow-ups or small fixes. If the pane is blank or shows an earlier step, open or update a page first. When there is no page for your work yet (a commit, a refactor, research, a plan, a diff, a test run), render what you're doing as one self-contained HTML file outside the project folder (e.g. /tmp/weft-show/<topic>.html): a timeline, a diagram, a before/after, stats, the plan as cards. Open it with mcp__browser__open_url and update it as the work moves. Make it worth looking at, not a copy of your reply. Once there's a real page for the work (the app, a dev server), show that instead.
+When a long task is ahead of you (several steps, minutes of building), write your plan to a page and open it in one of your first tool calls, before you dig in: the steps as cards or a checklist, the one you're on marked. Then carry the plan out in the same turn: the page is not a stopping point, so don't end your turn to show it unless the user asked only for a plan. Tick steps off as they finish, so the user can watch the plan while you build.
 When what you hand back is something the user has to do themselves (set up a domain, click through a dashboard, run commands), make it its own instructions page in its own folder (e.g. /tmp/weft-show/<topic>/index.html): numbered steps as <input type="checkbox"> items, links, commands in <code> to copy, an inline SVG diagram where a flow helps, and a screenshot for each step you can show. To take one, open the real site in the pane (the user is logged in there) and call mcp__browser__screenshot with save_to in that folder and highlight on what to click, then show it with a relative src. The user can star the page into their library and tick the steps off over days, so keep it self-contained.`;
 
-type ToolResult = {
+export type ToolResult = {
   content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }>;
   isError?: boolean;
 };
 
-function text(value: string, isError = false): ToolResult {
+export function text(value: string, isError = false): ToolResult {
   return { content: [{ type: "text", text: value }], isError };
 }
 
-async function shell(route: string, body?: Record<string, unknown>) {
+export async function shell(route: string, body?: Record<string, unknown>) {
   if (!SHELL_URL) throw new Error("The browser pane only exists in the desktop app (npm run desktop).");
   const res = await fetch(`${SHELL_URL}${route}`, {
     method: "POST",
@@ -68,7 +69,7 @@ function savePng(file: string, base64: string) {
   return out;
 }
 
-async function attempt(run: () => Promise<ToolResult>): Promise<ToolResult> {
+export async function attempt(run: () => Promise<ToolResult>): Promise<ToolResult> {
   try {
     return await run();
   } catch (err) {
