@@ -4,6 +4,7 @@ import { createClient, type User } from "@supabase/supabase-js";
 import { shellStorage } from "./account-storage";
 import { publish } from "./bus";
 import { globalSingleton } from "./global-singleton";
+import { shellToken } from "./shell-token";
 import { DATA_DIR } from "./store";
 import type { AccountProvider, AccountUser, AccountView } from "./types";
 
@@ -53,7 +54,7 @@ function client() {
       auth: {
         flowType: "pkce",
         // In the desktop app Electron main keeps the session sealed in the Keychain (electron/account-store.cjs).
-        storage: process.env.THREADBOARD_SHELL_URL ? shellStorage(process.env.THREADBOARD_SHELL_URL, process.env.THREADBOARD_SHELL_TOKEN ?? "") : fileStorage,
+        storage: process.env.THREADBOARD_SHELL_URL ? shellStorage(process.env.THREADBOARD_SHELL_URL, shellToken()) : fileStorage,
         storageKey: "weft-auth",
         persistSession: true,
         autoRefreshToken: true,
