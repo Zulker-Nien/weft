@@ -37,11 +37,11 @@ If you are an agent editing this repo, you are working on me. Read README.md for
     Pure logic already moved out: `lib/board-view.ts` (columns, project chips, chime/unseen rules) and
     `lib/turn.ts` (how a turn's result reads, cost, limits); Board's hooks into `lib/use-*.ts` (`use-now`,
     `use-toast`, `use-desktop-bridge`, `use-copilot-card`). Next: live events/chimes, view prefs, shortcuts, command palette.
-  - My Vitest suite (`npm test`, ~1,700 tests) covers every line of `lib/` and `app/api/` (98.6% of branches,
+  - My Vitest suite (`npm test`, ~2,600 tests) covers every line of `lib/` and `app/api/` (98.6% of branches,
     `npm run coverage`): a test file beside each module, routes with their libs mocked, the runner's SDK loop
     against a fake `query()` (`lib/runner.harness.ts`, shared by `lib/runner*.test.ts`), and browser code and React hooks under happy-dom +
     @testing-library/react (`// @vitest-environment happy-dom`). Component tests have started under jsdom
-    (`components/*.test.tsx`: CardView, ReplyBox, NewCardDialog; Composer stubbed by `components/composer-mock.tsx`);
+    (`components/*.test.tsx`: CardView, ReplyBox, NewCardDialog, TagsDialog, TagsDrawer; Composer stubbed by `components/composer-mock.tsx`);
     the rest of `components/` and `electron/` are untested and outside the coverage set; add tests with any
     risky change, and keep new lib code at 100%.
 
@@ -172,7 +172,7 @@ in Electron main, revealed or copied only after the user's Touch ID (docs/archit
 ## Known gaps (verified 2026-10-10)
 
 - Coverage counts only `lib/` and `app/api/` (100% lines, 98.6% branches on 2026-10-11). `components/` has
-  behavior tests for CardView, ReplyBox and NewCardDialog only (not Board, ThreadView or the real TipTap Composer);
+  behavior tests for CardView, ReplyBox, NewCardDialog, TagsDialog and TagsDrawer only (not Board, ThreadView or the real TipTap Composer);
   `electron/` has none. Runner's leftover branches are defensive fallbacks. CI (`.github/workflows/ci.yml`) runs lint,
   typecheck and tests, but the repo has no upstream branch yet, so it hasn't run.
 - `7b1db11`, `dfdd9c7` and `0e54c6f` don't build on their own (Board.tsx imported files committed later);
