@@ -4,23 +4,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/client";
 import type { GithubRepo, LocalRepo } from "@/lib/types";
 import Icon, { Spinner, type IconName } from "./Icon";
+import NewProjectForm from "./NewProjectForm";
+import RepoPickerButton, { PickerRow, shortPath } from "./RepoPickerButton";
 
 // Where a new thread runs: a recent project, a git repo on this Mac, a GitHub repo (cloned into
-// ~/dev on the spot), a folder from the Finder, or a pasted path.
+// ~/dev on the spot), a new empty project in ~/dev, a folder from the Finder, or a pasted path.
 
 type Choice =
   | { kind: "local"; repo: LocalRepo }
   | { kind: "github"; repo: GithubRepo }
   | { kind: "path"; path: string }
+  | { kind: "new" }
   | { kind: "browse" };
-
-function shortPath(folder: string, home: string) {
-  return home && (folder === home || folder.startsWith(`${home}/`)) ? `~${folder.slice(home.length)}` : folder;
-}
-
-function baseName(folder: string) {
-  return folder.replace(/\/+$/, "").split("/").pop() || folder;
-}
 
 function matches(query: string, ...fields: (string | undefined)[]) {
   if (!query) return true;
@@ -52,6 +47,7 @@ export default function RepoPicker({
   const [active, setActive] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [naming, setNaming] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLDivElement>(null);
 
@@ -97,7 +93,7 @@ export default function RepoPicker({
     return out;
   }, [q, local, github]);
 
-  const flat = useMemo<Choice[]>(() => [...sections.flatMap((s) => s.choices), { kind: "browse" }], [sections]);
+  const flat = useMemo<Choice[]>(() => [...sections.flatMap((s) => s.choices), { kind: "new" }, { kind: "browse" }], [sections]);
 
   // Keep the highlighted row in view while arrowing through the list.
   useEffect(() => {
@@ -108,12 +104,17 @@ export default function RepoPicker({
     setQuery("");
     setActive(0);
     setError(null);
+    setNaming(false);
     setOpen(true);
   }
 
   async function pick(choice: Choice) {
     setError(null);
     try {
+      if (choice.kind === "new") {
+        setNaming(true);
+        return;
+      }
       if (choice.kind === "local") {
         onChange(choice.repo.path);
         setOpen(false);
@@ -171,36 +172,26 @@ export default function RepoPicker({
 
   return (
     <div ref={root} className="relative min-w-0">
-      <button
-        type="button"
-        onClick={() => (open ? setOpen(false) : show())}
-        aria-expanded={open}
-        aria-haspopup="listbox"
-        title={value}
-        className={`flex max-w-full items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-[12.5px] ${
-          open ? "border-accent bg-accent-soft" : "border-line-strong hover:bg-sunken"
-        }`}
-      >
-        <Icon name={current?.github ? "github" : current?.git ? "branch" : "folder"} size={14} className="text-muted" />
-        <span className="max-w-[200px] truncate font-medium text-ink">{baseName(value)}</span>
-        {current?.branch && (
-          <span className="flex shrink-0 items-center gap-1 rounded bg-sunken px-1.5 py-px font-mono text-[11px] text-muted">
-            <Icon name="branch" size={10} />
-            {current.branch}
-          </span>
-        )}
-        {/* Right-to-left so a long path loses its start, not the folder name. */}
-        <span className="hidden max-w-[240px] truncate font-mono text-[11px] text-faint sm:inline" dir="rtl">
-          <span dir="ltr">{shortPath(value, home)}</span>
-        </span>
-        <Icon name="chevronDown" size={13} className={`text-muted transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
+      <RepoPickerButton value={value} home={home} current={current} open={open} onClick={() => (open ? setOpen(false) : show())} />
 
       {open && (
         <div
-          onKeyDown={onKeyDown}
+          onKeyDown={naming ? undefined : onKeyDown}
           className="absolute bottom-full left-0 z-50 mb-1.5 flex max-h-[min(460px,60vh)] w-[min(480px,calc(100vw-48px))] flex-col rounded-lg border border-line bg-panel shadow-2xl"
         >
+          {naming ? (
+            <NewProjectForm
+              parent={`${home}/dev`}
+              shownParent="~/dev"
+              initialName={q.replace(/\s+/g, "-")}
+              onCreated={(path) => {
+                onChange(path);
+                setOpen(false);
+              }}
+              onBack={() => setNaming(false)}
+            />
+          ) : (
+            <>
           <div className="relative shrink-0 border-b border-line p-1.5">
             <Icon name="search" size={13} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-faint" />
             <input
@@ -306,25 +297,16 @@ export default function RepoPicker({
           </div>
 
           <div className="shrink-0 border-t border-line p-1">
-            {(() => {
-              index++;
-              const on = index === active;
-              const browse = flat.length - 1;
-              return (
-                <button
-                  type="button"
-                  data-active={on}
-                  onMouseEnter={() => setActive(browse)}
-                  onClick={() => void pick({ kind: "browse" })}
-                  className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12.5px] text-ink ${on ? "bg-sunken" : ""}`}
-                >
-                  {busy === "browse" ? <Spinner size={12} /> : <Icon name="folder" size={13} className="text-muted" />}
-                  Browse for a folder…
-                </button>
-              );
-            })()}
+            <PickerRow active={active === flat.length - 2} icon={<Icon name="plus" size={13} className="text-muted" />} onHover={() => setActive(flat.length - 2)} onClick={() => void pick({ kind: "new" })}>
+              New project…
+            </PickerRow>
+            <PickerRow active={active === flat.length - 1} icon={busy === "browse" ? <Spinner size={12} /> : <Icon name="folder" size={13} className="text-muted" />} onHover={() => setActive(flat.length - 1)} onClick={() => void pick({ kind: "browse" })}>
+              Browse for a folder…
+            </PickerRow>
             {error && <p className="px-2.5 pb-1.5 pt-1 text-[12px] text-danger">{error}</p>}
           </div>
+            </>
+          )}
         </div>
       )}
     </div>
