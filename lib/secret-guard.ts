@@ -196,13 +196,18 @@ interface Call {
 
 const hitReason = (hit: string | undefined) => (hit ? reason(hit) : null);
 
+// `-e 's/.env/x/'` is a sed script or grep pattern, not a file; `-f script.sed` is a file.
+const SCRIPT_FLAG = /^(-e|--regexp|--expression)$/;
+const SCRIPT_GIVEN = /^(-e|-f|--regexp|--expression|--file)(=|$)/;
+
 function readerVerdict({ cmd, args, dataDir }: Call): string | null {
-  const patternGiven = args.some((a) => /^(-e|-f|--regexp|--file)(=|$)/.test(a));
-  // The first plain argument, past sed -i's empty '' suffix on macOS.
-  const pattern = PATTERN_FIRST.has(cmd) && !patternGiven ? args.findIndex((a) => a !== "" && !a.startsWith("-")) : -1;
+  if (!PATTERN_FIRST.has(cmd)) return hitReason(secretIn(args, dataDir));
+  const scripts = new Set(args.flatMap((a, j) => (SCRIPT_FLAG.test(a) ? [j + 1] : /^--(regexp|expression)=/.test(a) ? [j] : [])));
+  // Without -e, the first plain argument, past sed -i's empty '' suffix on macOS.
+  if (!args.some((a) => SCRIPT_GIVEN.test(a))) scripts.add(args.findIndex((a) => a !== "" && !a.startsWith("-")));
   return hitReason(
     secretIn(
-      args.filter((_, j) => j !== pattern),
+      args.filter((_, j) => !scripts.has(j)),
       dataDir,
     ),
   );
@@ -222,10 +227,40 @@ function runsOnNamesVerdict(call: Call): string | null {
   return inner.length ? commandVerdict({ ...blankCommand(), words: inner }, call.dataDir, call.depth, call.namesSecret) : null;
 }
 
-function interpreterVerdict({ args, stdin, dataDir }: Call): string | null {
+// Calls that open, load or shell out to what they're given: `open('.env')`, `readFileSync(p)`,
+// `Path('.env').read_text()`, `dotenv_values(...)`, `subprocess.run(['cat', '.env'])`, Ruby and Perl's backticks.
+const OPENS = new RegExp(
+  "\\b(open|fopen|file|read|read_?text|read_?bytes|readlines|readFileSync|readFile|createReadStream|readTextFile(Sync)?|" +
+    "file_get_contents|foreach|Path|join|resolve|config|load_dotenv|dotenv_values|load|system|popen|Popen|run|call|" +
+    "check_output|check_call|getoutput|exec|execSync|execFileSync|spawn|spawnSync|qx)\\s*\\(([^)]*)",
+  "g",
+);
+const BACKTICKS = /`([^`]*)`/g;
+// `p = '.env.local'`: a variable set to the path itself, opened by name later on.
+const ASSIGNED = /=\s*[rbfu]?(['"`])([^'"`\n]*)\1/gi;
+// Flags whose next argument is inline code.
+const CODE_FLAG = /^(-c|-e|-E|-p|-pe|-ne|-r|--eval|--print)$/;
+
+// Inline code reads a .env file when it opens one, not when its text merely mentions one:
+// `s.replace('.env.local', '.env.test')` edits a file, `print(open('.env.local').read())` reads one.
+function codeReads(cmd: string, code: string, dataDir: string): string | undefined {
+  if (cmd === "osascript") return secretIn([code], dataDir);
+  const opened = [...code.matchAll(OPENS)].map((m) => m[3] as string);
+  const shelled = cmd === "ruby" || cmd === "perl" ? [...code.matchAll(BACKTICKS)].map((m) => m[1] as string) : [];
+  const named = opened.length ? [...code.matchAll(ASSIGNED)].map((m) => m[2] as string).find((v) => isSecretFile(v, dataDir)) : undefined;
+  return secretIn([...opened, ...shelled], dataDir) ?? named;
+}
+
+function interpreterVerdict({ cmd, args, stdin, dataDir }: Call): string | null {
   if ([...args, ...stdin].some((a) => ENV_CODE.test(a))) return ENV_DUMP;
   const { files, rest, inline } = envFileArgs(args);
-  return hitReason(secretIn(stdin, dataDir) ?? secretIn(rest, dataDir) ?? (inline ? secretIn(files, dataDir) : undefined));
+  const code = new Set(rest.flatMap((a, j) => (CODE_FLAG.test(a) ? [j + 1] : [])));
+  const inCode = [...stdin, ...rest.filter((_, j) => code.has(j))].map((c) => codeReads(cmd, c, dataDir)).find(Boolean);
+  const named = secretIn(
+    rest.filter((_, j) => !code.has(j)),
+    dataDir,
+  );
+  return hitReason(inCode ?? named ?? (inline ? secretIn(files, dataDir) : undefined));
 }
 
 function copierVerdict({ args, dataDir }: Call): string | null {

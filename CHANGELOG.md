@@ -92,6 +92,8 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
   click, and right-click Star/Unstar and Tags… work (a tag editor until the tag pills land).
 - A thread's big heredoc no longer stalls the board's server in the secret guard: a 1.2 MB script with a few `{a, b}`
   groups took 300+ s (256 copies of itself, every token path-checked) and now takes ~0.2 s (`lib/secret-guard.ts`).
+- The secret guard no longer stops a thread editing code that mentions `.env`: a `sed -e` script or a Python or
+  Node edit whose text names `.env.local` runs; code that opens a `.env` file is still turned away (`lib/secret-guard.ts`).
 - The usage strip shows reset times to the minute ("reset 11:06pm"), not rounded to the hour.
 - A review tour arriving while you type no longer strands your message: it moves into the step's feedback box, focused.
 

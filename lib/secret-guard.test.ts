@@ -77,6 +77,38 @@ describe("bashVerdict", () => {
     "sed -n p .env",
   ])("turns away %s", (cmd) => expect(bashVerdict(cmd, DATA)).toMatch(/can't be read here/));
 
+  // Code that edits a file whose text mentions .env (2026-10-12) isn't a read; code that opens one is.
+  it.each([
+    "grep KEY .env*",
+    "sed -e 's/a/b/' .env.local",
+    "sed --expression='s/a/b/' -n .env",
+    "python3 -c \"print(open('.env.local').read())\"",
+    "python3 -c \"p='.env.local'; print(open(p).read())\"",
+    "python3 -c \"from pathlib import Path; print(Path('.env').read_text())\"",
+    "python3 - <<'PY'\nimport subprocess\nsubprocess.run(['cat', '.env.local'])\nPY",
+    "python3 - <<'PY'\nfrom dotenv import dotenv_values\nprint(dotenv_values('.env.local'))\nPY",
+    "node -e \"const p = require('path').join(__dirname, '.env'); console.log(require('fs').readFileSync(p, 'utf8'))\"",
+    "node -e \"require('child_process').execSync('cat .env', { stdio: 'inherit' })\"",
+    "ruby -e 'puts File.read(\".env\")'",
+    "ruby -e 'puts `cat .env`'",
+    "perl -e 'open(F, \"<.env\"); print <F>'",
+    "osascript -e 'do shell script \"cat .env\"'",
+    "python3 read.py .env.local",
+    "node -e 'console.log(1)' .env.local",
+  ])("turns away the read %s", (cmd) => expect(bashVerdict(cmd, DATA)).toMatch(/can't be read here/));
+
+  it.each([
+    "sed -i '' -e '86s/nudge: { count: 2, file: \".env.local\" } }/nudge: { count: 1, file: \".env.local\" } }/' electron/vault.test.ts",
+    "python3 -c \"p='components/VaultDrawer.test.tsx';s=open(p).read(); s=s.replace('/No .env files here/', '/No env files/'); open(p,'w').write(s)\"",
+    "python3 - <<'PY'\np = 'electron/vault.test.ts'\ns = open(p).read()\ns = s.replace('file: \".env.local\" }', 'file: \".env\" }')\nopen(p, 'w').write(s)\nPY",
+    "python3 - <<'PY'\nold = '''it(\"writes .env.local\", () => {'''\nnew = '''it(\"writes the .env.local file\", () => {'''\np = 'electron/vault.test.ts'\ns = open(p).read().replace(old, new)\nopen(p, 'w').write(s)\nPY",
+    "python3 <<'PY'\nimport re\np = 'lib/x.ts'\nopen(p, 'w').write(re.sub(r'\\.env\\.local', '.env.test', open(p).read()))\nPY",
+    "node -e \"const fs=require('fs');const p='lib/x.ts';fs.writeFileSync(p, fs.readFileSync(p,'utf8').replace('.env.local','.env.test'))\"",
+    "perl -pi -e 's/\\.env\\.local/.env.test/' lib/x.ts",
+    "sed -i '' -e 's/.env.local/.env.test/' -e 's/a/b/' lib/x.ts",
+    "grep -e .env.local -e KEY README.md",
+  ])("lets the edit %s run", (cmd) => expect(bashVerdict(cmd, DATA)).toBeNull());
+
   it.each([
     "printenv", "printenv STRIPE_KEY", "env", "env | grep KEY", "env -0", "set", "export -p", "declare -x", "ls && printenv",
     "/usr/bin/env", "/usr/bin/printenv", "export", "declare", "typeset", "ps eww", "ps auxe", "ps -Eww",

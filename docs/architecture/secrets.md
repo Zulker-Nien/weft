@@ -175,6 +175,9 @@ denied). A file watcher notices hand edits and offers "Import changes", so editi
   - Bash: commands go through a shell parser (`lib/shell-parse.ts`) that follows quotes, escapes, heredocs,
     redirects, `$(…)`, `sh -c`, `eval`, `xargs` and `find -exec`. A command is turned away only when it is the
     one reading the file: `cat .gitignore | grep .env` runs, while `cp .env.local x` and `cat .e*` don't.
+  - Code: `sed -e`/`grep -e` scripts and an interpreter's inline code (`python3 -c`, `node -e`, a heredoc) may
+    mention `.env` freely; code is turned away only when it opens one (`open(…)`, `readFileSync(…)`, `Path(…)`,
+    `subprocess.run(…)`, Ruby/Perl backticks, or a variable set to the path when the code opens something).
   - Dumps: `printenv`, bare `env`/`export`/`set`, `ps e`, `console.log(process.env)`, `print(os.environ)`,
     `echo $SOME_KEY`, and `vercel env pull` to stdout.
 - Paste guard in the Composer: text that looks like a key (`sk_live_`, `ghp_`, high entropy) offers
