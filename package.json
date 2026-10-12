@@ -26,7 +26,7 @@
     "dist": "THREADBOARD_DIST=.next-dist THREADBOARD_STANDALONE=1 next build && node scripts/prepare-standalone.mjs .next-dist && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --dir",
     "dist:release": "THREADBOARD_DIST=.next-dist THREADBOARD_STANDALONE=1 next build && node scripts/prepare-standalone.mjs .next-dist && electron-builder --mac --publish never",
     "coverage": "vitest run --coverage",
-    "postinstall": "chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null || true"
+    "postinstall": "chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null || true; node scripts/patch-next-hmr.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.293",
