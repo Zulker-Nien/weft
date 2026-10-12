@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { keyCaps, keyLabel, toAccelerator, type ShortcutInfo } from "./hotkeys";
-import { filterSections, FIXED_SHORTCUTS, shortcutSections } from "./shortcut-catalog";
+import { filterSections, FIXED_SHORTCUTS, shortcutSections, splitDescription } from "./shortcut-catalog";
 import { bindingSpec } from "./shortcuts";
 
 const registered: ShortcutInfo[] = [
@@ -104,5 +104,29 @@ describe("toAccelerator", () => {
     expect(toAccelerator("Enter")).toBe("Enter");
     expect(toAccelerator("ctrl+alt+ ")).toBe("Ctrl+Alt+Space");
     expect(toAccelerator("ArrowDown")).toBe("Down");
+  });
+});
+
+describe("splitDescription", () => {
+  it("moves a trailing parenthetical into the detail", () => {
+    expect(splitDescription("Stop the running turn (in the reply box)")).toEqual({
+      main: "Stop the running turn",
+      detail: "in the reply box",
+    });
+  });
+
+  it("splits at the first colon", () => {
+    expect(splitDescription("Library: recipes, to-dos and notes")).toEqual({ main: "Library", detail: "recipes, to-dos and notes" });
+  });
+
+  it("prefers the parenthetical when both appear", () => {
+    expect(splitDescription("Send a reply later (Enter again: at the 5-hour reset)")).toEqual({
+      main: "Send a reply later",
+      detail: "Enter again: at the 5-hour reset",
+    });
+  });
+
+  it("leaves a plain description whole", () => {
+    expect(splitDescription("Bold")).toEqual({ main: "Bold" });
   });
 });

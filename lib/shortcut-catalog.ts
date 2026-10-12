@@ -26,11 +26,12 @@ export const FIXED_SHORTCUTS: CatalogEntry[] = [
   { id: "palette-previous", keys: ["ctrl+p"], description: "Previous result in the command palette", group: "General" },
   { id: "reply-send", keys: ["Enter"], description: "Send a reply, or queue it while a turn runs", group: "Thread" },
   { id: "reply-newline", keys: ["shift+Enter"], description: "New line in a reply", group: "Thread" },
-  { id: "reply-edit-queued", keys: ["ArrowUp"], description: "Edit the last queued message (empty reply box)", group: "Thread" },
+  { id: "reply-edit-queued", keys: ["ArrowUp"], description: "Edit your last message, or the last queued one (empty reply box)", group: "Thread" },
   { id: "reply-send-later", keys: ["alt+Enter"], description: "Send a reply later (Enter again: at the 5-hour reset)", group: "Thread" },
   { id: "reply-stop", keys: ["ctrl+c"], description: "Stop the running turn (in the reply box)", group: "Thread" },
   { id: "close-thread", keys: ["Escape"], description: "Close the open thread or dialog", group: "Thread" },
   { id: "new-send", keys: ["mod+Enter"], description: "Start the new thread", group: "Writing" },
+  { id: "new-send-stay", keys: ["ctrl+Enter"], description: "Start the new thread and keep the dialog open for another (macOS)", group: "Writing" },
   { id: "skill", keys: ["/"], description: "Run a skill (type / at the start of a message)", group: "Writing" },
   { id: "bold", keys: ["mod+b"], description: "Bold", group: "Writing" },
   { id: "italic", keys: ["mod+i"], description: "Italic", group: "Writing" },
@@ -113,4 +114,15 @@ export function filterSections(sections: ShortcutSection[], query: string, mac: 
       }),
     }))
     .filter((s) => s.items.length > 0);
+}
+
+// A description split into what the key does and the fine print, so the dialog can dim the fine print:
+// "Stop the running turn (in the reply box)" → "Stop the running turn" + "in the reply box";
+// "Library: recipes, to-dos and notes" → "Library" + "recipes, to-dos and notes".
+export function splitDescription(description: string): { main: string; detail?: string } {
+  const [, main, detail] = description.match(/^(.+?) \((.+)\)$/) ?? [];
+  if (main && detail) return { main, detail };
+  const colon = description.indexOf(": ");
+  if (colon > 0) return { main: description.slice(0, colon), detail: description.slice(colon + 2) };
+  return { main: description };
 }

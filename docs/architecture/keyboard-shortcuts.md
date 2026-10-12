@@ -12,7 +12,7 @@ Discoverability is built on the same registry: tooltips, key badges, native righ
 
 - `lib/hotkeys.ts`: the registry, `useShortcuts`, `useShortcutListener`, `useShortcutList`; `keyCaps`/`keyLabel` for drawing keys, `useShortcutHint` for tooltips ("Copilot (C)"), `toAccelerator` for native menus.
 - `lib/shortcut-catalog.ts`: what the dialog lists. `shortcutSections` merges the registry with the fixed shortcuts handled elsewhere (`FIXED_SHORTCUTS`) and the app menu's keys (`MENU_ALIASES`, desktop only); `filterSections` searches by words or by key ("cmd k", "esc"). Update `FIXED_SHORTCUTS` when a key handled outside the registry changes.
-- `components/ShortcutsDialog.tsx`: the `?` dialog, a searchable two-column list of `shortcutSections`.
+- `components/ShortcutsDialog.tsx`: the `?` dialog, a searchable two-column list of `shortcutSections`, up to 1100px wide; `splitDescription` puts a description's fine print on a dim second line.
 - `components/KeyCaps.tsx`: `Cap` and `KeyCaps`, the one way to draw a key spec as key caps.
 - `components/ModifierHint.tsx`: hold Shift, or ⌘ (Ctrl off macOS) for 0.6s, and a card bottom-left lists the registered shortcuts that use it.
 - `lib/card-menu.ts`: every right-click menu item has a key (`MENU_KEYS`), live only while the menu is open; `electron/main.cjs` sets it as the native item's key equivalent. Items with a board shortcut take the registry's key instead (`components/use-board-menus.ts`), skipping Return, arrows and the other keys the open menu uses itself.
@@ -29,7 +29,7 @@ Discoverability is built on the same registry: tooltips, key badges, native righ
 
 ## Current shortcuts
 
-General: `?` or ⌘/ help, `n` new thread, `/` filter, `,` settings, `c` copilot, `b` browser.
+General: `?` or ⌘/ help, `n` new thread, `/` filter, `,` settings, `c` copilot, `b` browser, Shift+`S` add a secret (opens the 🔐 drawer on its Add form; the ask waits in `lib/use-vault.ts` until the drawer has loaded a vault).
 Board: `j`/`k` or ↓/↑ between cards, `h`/`l` or ←/→ between columns, Home/End first and last card, Enter or `o` open the focused card, `a` jump to a card that needs you, `[`/`]` previous and next project, `s` cycle sort.
 Thread: `r` reply in the open thread, Shift+`A` archive or unarchive it (plain `a` stays "needs you").
 
