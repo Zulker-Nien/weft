@@ -1,5 +1,6 @@
 import type { MenuItem } from "./card-menu";
 import type { MediaKind } from "./media";
+import type { VaultBridge } from "./vault-view";
 import type {
   Automation,
   Backend,
@@ -85,6 +86,8 @@ export interface ShellBridge {
     onData(callback: (id: string, data: string) => void): () => void;
     onExit(callback: (id: string, code: number) => void): () => void;
   };
+  // The secrets vault in Electron main (lib/vault-view.ts). Missing in older shells.
+  vault?: VaultBridge;
   onMenu(callback: (action: MenuAction, payload?: string) => void): () => void;
 }
 
