@@ -9,6 +9,8 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 ## [Unreleased]
 
 ### Added
+- Your loom: the builder card is now your wefter card, "Wefter: name · class", with your GitHub profile (picture, @login,
+  bio, location, company, site, followers, repos) from `gh api user`; the streak reads "Wefting streak, N days straight".
 - `!` in a reply box runs a shell command in the card's folder (`lib/shell.ts`), like Claude Code's bash mode: the box
   turns amber, the thread shows the command and its output, and the output goes to Claude with your next message.
   Two-minute limit, keys in the output masked, and commands the secret guard refuses (`cat .env`) don't run.
@@ -137,6 +139,8 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 - Builder card: the Thrift attribute (cost per shipped card) is gone; seven attributes remain.
 
 ### Fixed
+- The "Couldn't sign in to Weft" dialog shows plain text (it showed `Couldn&#39;t`) and no longer repeats its title in
+  the message (`electron/account-link.cjs`).
 - A card waiting on you (a question with Answer, or Allow/Deny) can be dragged to Backlog, Review or Done to park
   it; its question stays open there, and answering runs the turn on. Only running cards and the copilot stay put.
 - A thread can't throw away other cards' uncommitted work: a hook (`lib/git-guard.ts`) turns away `git stash` (but

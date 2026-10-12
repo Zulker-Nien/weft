@@ -24,13 +24,25 @@ function accountCallbackBody(raw) {
   return body;
 }
 
-// Pulls the visible <h1> and <p> out of the rendered error page so the dialog shows the same
-// message the user would have seen in a browser tab.
+// accountPage() escapes its text as &#NN; (and a few named entities), which a native dialog
+// would show literally ("Couldn&#39;t").
+function decodeEntities(text) {
+  const named = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
+  return text
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/&(amp|lt|gt|quot|apos);/g, (_, n) => named[n]);
+}
+
+// Pulls the visible <h1> and <p> out of the rendered error page. The dialog's title already says
+// "Couldn't sign in to Weft", so the detail is the <p> alone (the <h1> only when there's no <p>).
 async function extractErrorMessage(res) {
   const html = await res.text();
-  const h1 = /<h1>([\s\S]*?)<\/h1>/.exec(html)?.[1]?.replace(/<[^>]+>/g, "").trim() ?? "Sign-in failed";
-  const p = /<p>([\s\S]*?)<\/p>/.exec(html)?.[1]?.replace(/<[^>]+>/g, "").trim() ?? "";
-  return p ? `${h1}: ${p}` : h1;
+  const text = (tag) => {
+    const raw = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`).exec(html)?.[1];
+    return raw == null ? "" : decodeEntities(raw.replace(/<[^>]+>/g, "")).trim();
+  };
+  return text("p") || text("h1") || "Sign-in failed";
 }
 
 // getServer: the board's server ({ url }) once it's up. showMain / warn: focus and notify the user.
@@ -60,4 +72,4 @@ async function handleAccountCallback(raw, { getServer, showMain, warn }) {
   }
 }
 
-module.exports = { createAccountLink, handleAccountCallback, isAccountCallback, accountCallbackBody, ACCOUNT_CALLBACK_HOST };
+module.exports = { createAccountLink, handleAccountCallback, isAccountCallback, accountCallbackBody, extractErrorMessage, ACCOUNT_CALLBACK_HOST };

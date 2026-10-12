@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { accountCallbackBody, isAccountCallback } from "./account-link.cjs";
+import { accountCallbackBody, extractErrorMessage, isAccountCallback } from "./account-link.cjs";
+import { accountPage } from "../lib/account-page";
 
 describe("isAccountCallback", () => {
   it("matches weft://account-callback URLs only", () => {
@@ -34,5 +35,17 @@ describe("accountCallbackBody", () => {
 
   it("returns an empty object for a callback with no query string", () => {
     expect(accountCallbackBody("weft://account-callback")).toEqual({});
+  });
+});
+
+describe("extractErrorMessage", () => {
+  it("gives the dialog the page's detail, decoded and without repeating the title", async () => {
+    const res = accountPage("Couldn't sign in to Weft", "Unable to exchange external code: a49a & <retry>", false);
+    expect(await extractErrorMessage(res)).toBe("Unable to exchange external code: a49a & <retry>");
+  });
+
+  it("falls back to the heading, then a stock line", async () => {
+    expect(await extractErrorMessage(new Response("<h1>It&#39;s down</h1>"))).toBe("It's down");
+    expect(await extractErrorMessage(new Response("<p></p>"))).toBe("Sign-in failed");
   });
 });
