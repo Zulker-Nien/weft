@@ -36,7 +36,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - hotspots: components/Board.tsx (~900 lines), lib/runner.ts (~800), electron/main.cjs (~620).
     Pure logic already moved out: `lib/board-view.ts` (columns, project chips, chime/unseen rules) and
     `lib/turn.ts` (how a turn's result reads, cost, limits); Board's hooks into `lib/use-*.ts` (`use-now`,
-    `use-toast`, `use-desktop-bridge`). Next: live events/chimes, view prefs, shortcuts, command palette.
+    `use-toast`, `use-desktop-bridge`, `use-copilot-card`). Next: live events/chimes, view prefs, shortcuts, command palette.
   - My Vitest suite (`npm test`, ~1,700 tests) covers every line of `lib/` and `app/api/` (98.6% of branches,
     `npm run coverage`): a test file beside each module, routes with their libs mocked, the runner's SDK loop
     against a fake `query()` (`lib/runner.test.ts`), and browser code and React hooks under happy-dom +
@@ -57,6 +57,9 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `electron/terminal.cjs` + `components/TerminalDrawer.tsx`: the terminal drawer (node-pty shell over IPC, xterm.js).
 - `lib/runner.ts`: one Agent SDK `query()` per thread, warm spares, permissions, turn queue;
   puku-cli via `pathToClaudeCodeExecutable`.
+- `lib/env.ts` `guardedCli()`: every thread's CLI env and Bash guards: `lib/secret-guard.ts` (no .env reads),
+  `lib/restart-guard.ts` (no restarting Weft mid-turns), `lib/git-guard.ts` (no `git stash`, `reset --hard`, path
+  checkout/restore or `clean -f` in the shared tree) (docs/architecture/thread-guards.md).
 - `lib/schedule.ts` + `lib/scheduler.ts` + `components/SendLater.tsx`: "Send later" replies; the server sends them at their
   time, by default the next 5-hour reset.
 - `lib/status.ts` + `lib/settings.ts`: the BOARD STATUS protocol (thread prompt and its parser).
@@ -81,6 +84,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `lib/import.ts`, `lib/search.ts`: pick up `~/.claude/projects` sessions as cards; search index.
 - `lib/hotkeys.ts` + `lib/shortcut-catalog.ts`: the keyboard shortcut registry and what the `?` sheet lists; tooltips, key badges,
   right-click menus and `ModifierHint` read their keys from it (docs/architecture/keyboard-shortcuts.md).
+- `lib/new-thread.ts` + `components/submit-keys.ts` + `lib/use-mod-held.ts`: what the New thread dialog offers and remembers (CLIs, models,
+  effort, drafts), and its start keys: ⌘↵ starts and closes, ⌃↵ starts and stays open, and holding either relabels Start.
 - `lib/theme.ts` + `app/api/scenes` + `components/AppearancePicker.tsx` + `electron/theme-source.cjs`: System, Light, Dark or a scene
   (one of Weft's pictures behind the board with its own palette, in `app/globals.css`; docs/architecture/themes.md).
 - `lib/store.ts`: storage in `~/.weft` (board.json, threads/, attachments/).

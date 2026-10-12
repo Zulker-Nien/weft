@@ -45,7 +45,7 @@ export function weftProcess(): WeftProcess {
 }
 
 // One command as it would run, with the folder it would run in.
-interface Step {
+export interface Step {
   name: string;
   args: string[];
   cwd: string;
@@ -54,7 +54,7 @@ interface Step {
 const SHELLS = new Set("sh bash zsh dash ksh fish eval".split(" "));
 const XARGS_VALUED = new Set(["-I", "-n", "-P", "-L", "-d", "-E", "-s", "-a", "-J", "-R"]);
 
-const home = (p: string) => (p === "~" || p.startsWith("~/") ? os.homedir() + p.slice(1) : p);
+export const home = (p: string) => (p === "~" || p.startsWith("~/") ? os.homedir() + p.slice(1) : p);
 
 // The words after a command's options, past the value each valued option takes.
 function afterOptions(args: string[], valued: Set<string>): string[] {
@@ -69,8 +69,8 @@ function step(words: string[], cwd: string): Step {
 }
 
 // Every command a line would run: piped, nested in $( ), inside sh -c or a heredoc fed to bash, and what
-// xargs runs. `cd` carries to the commands after it.
-function steps(command: string, cwd: string, depth = 0): Step[] {
+// xargs runs. `cd` carries to the commands after it. The git guard (lib/git-guard.ts) walks commands this way too.
+export function steps(command: string, cwd: string, depth = 0): Step[] {
   if (depth > 5) return [];
   const { commands, nested } = parseShell(command);
   const out: Step[] = [];

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cliEnv, guardedCli } from "./env";
+import { GIT_GUARD_MATCHER } from "./git-guard";
 import { IMPORT_GUARD_HOOKS } from "./import-check";
 import { SECRET_GUARD_MATCHER } from "./secret-guard";
 
@@ -82,7 +83,7 @@ describe("cliEnv", () => {
 });
 
 describe("guardedCli", () => {
-  it("starts a thread with the stripped env, the secret guard, the restart guard and the import guard", () => {
+  it("starts a thread with the stripped env, the secret guard, the restart guard, the git guard and the import guard", () => {
     vi.stubEnv("THREADBOARD_SHELL_TOKEN", "secret");
     const opts = guardedCli(() => 0);
     expect(opts.env).not.toHaveProperty("THREADBOARD_SHELL_TOKEN");
@@ -90,6 +91,7 @@ describe("guardedCli", () => {
     const pre = opts.hooks?.PreToolUse ?? [];
     expect(pre[0]).toBe(SECRET_GUARD_MATCHER);
     expect(pre[1]?.matcher).toBe("Bash");
+    expect(pre[2]).toBe(GIT_GUARD_MATCHER);
   });
 
   it("counts other cards' turns with the function it's given", async () => {

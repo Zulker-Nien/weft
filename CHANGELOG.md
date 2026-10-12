@@ -84,6 +84,8 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 - The Weft account's refresh token is sealed in the Keychain by Electron main instead of a plain `~/.weft/account.json`.
 
 ### Changed
+- Over a scene, columns are clear instead of frosted: the picture shows between the cards, with a faint edge
+  keeping each column's shape.
 - A card running `/done` or `/weft:done` (typed, or from a move to Done) sits in Done while it runs, still
   spinning, and is archived when it finishes; before, it jumped back to Running until the end.
 - Builder card: Craft now counts the habits your shipped cards' transcripts show: wrapping up with `/done`,
@@ -93,6 +95,10 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 - Builder card: the Thrift attribute (cost per shipped card) is gone; seven attributes remain.
 
 ### Fixed
+- A thread can't throw away other cards' uncommitted work: a hook (`lib/git-guard.ts`) turns away `git stash` (but
+  `list`/`show`), `git reset --hard`, checking out or restoring paths over the worktree, and `git clean -f`, and says how
+  to commit by path, read a clean copy with `git show HEAD:path` or commit through a temp index instead. A scratch clone
+  in the temp folder is left alone.
 - A thread can't restart Weft while other cards' turns run: a hook (`lib/restart-guard.ts`) turns away `kill`, `pkill`,
   `killall` or port-freeing aimed at Weft's own server, app or port, and a second `npm run dev` / `electron .` in
   Weft's folder, saying how many turns it would cut off. Alone on the board it's allowed; your project's dev server always is.

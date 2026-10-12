@@ -1,4 +1,5 @@
 import type { Options } from "@anthropic-ai/claude-agent-sdk";
+import { GIT_GUARD_MATCHER } from "./git-guard";
 import { IMPORT_GUARD_HOOKS } from "./import-check";
 import { restartGuardMatcher } from "./restart-guard";
 import { SECRET_GUARD_MATCHER } from "./secret-guard";
@@ -29,7 +30,8 @@ export { RESTART_PROMPT } from "./restart-guard";
 
 // What a board thread's CLI is started with: that env, the hook that turns away reads of .env files and
 // environment dumps in every permission mode, the one that won't restart Weft while other cards' turns
-// run (otherTurns counts them), and the one that reports an edit breaking an import.
+// run (otherTurns counts them), the one that won't stash, reset --hard or clean away other cards' uncommitted
+// work, and the one that reports an edit breaking an import.
 export function guardedCli(otherTurns: () => number): Pick<Options, "env" | "hooks"> {
-  return { env: cliEnv(), hooks: { PreToolUse: [SECRET_GUARD_MATCHER, restartGuardMatcher(otherTurns)], ...IMPORT_GUARD_HOOKS } };
+  return { env: cliEnv(), hooks: { PreToolUse: [SECRET_GUARD_MATCHER, restartGuardMatcher(otherTurns), GIT_GUARD_MATCHER], ...IMPORT_GUARD_HOOKS } };
 }
