@@ -34,6 +34,14 @@ describe("PileBadge", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/pile?cwd=%2Fdev%2Fapp");
   });
 
+  it("pitches the review on hover, with the count of cards to review", async () => {
+    setup();
+    await userEvent.hover(await screen.findByRole("button", { name: "+12/-4" }));
+    const tip = screen.getByRole("tooltip");
+    expect(tip.textContent).toContain("Uncommitted: 12 new lines of code, -4 removed");
+    expect(tip.textContent).toContain("Review 2 cards");
+  });
+
   it("shows nothing for a clean tree or no folder", async () => {
     fetchMock.mockImplementation(() => respond({ pile: null }));
     const { view } = setup();

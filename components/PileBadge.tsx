@@ -1,10 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { folderName } from "@/lib/format";
 import Tip from "./Tip";
 
 type PileSummary = { root: string; files: number; added: number; removed: number; cards: number };
+
+// One line of numbers, one line of pitch, and the click as a button (the bubble can't take clicks; the badge does).
+function PileTip({ pile }: { pile: PileSummary }) {
+  const { added, removed, cards } = pile;
+  return (
+    <span className="flex flex-col gap-1.5">
+      <span>
+        Uncommitted: <span className="text-ok">{added}</span> new lines of code, <span className="text-danger">-{removed}</span> removed
+      </span>
+      <span className="text-muted">Review your cards and push to production faster with Weft.</span>
+      <span className="self-start rounded bg-accent px-2 py-0.5 font-medium text-on-accent">
+        {cards ? `Review ${cards} card${cards === 1 ? "" : "s"}` : "Commit them"}
+      </span>
+    </span>
+  );
+}
 
 // "+1211/-806" beside the code quality badge: the uncommitted pile in the project in view's repo.
 // Click to start a card that walks through committing it, one Review card at a time (lib/commit-pile.ts).
@@ -58,9 +73,8 @@ export default function PileBadge({
     }
   }
 
-  const tip = `Uncommitted changes in ${folderName(p.root)} vs HEAD: ${p.files} file${p.files === 1 ? "" : "s"}, ${p.added} lines added, ${p.removed} removed${p.cards ? `, from ${p.cards} card${p.cards === 1 ? "" : "s"} in Review` : ""}. Click to start a card that commits them one card at a time.`;
   return (
-    <Tip text={tip}>
+    <Tip text={<PileTip pile={p} />}>
       <button
         onClick={() => void start().catch(onError)}
         disabled={busy}
