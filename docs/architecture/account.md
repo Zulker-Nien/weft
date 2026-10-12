@@ -54,11 +54,35 @@ and `npm run dev:protocol` runs it standalone.
    the same message in a native dialog (it pulls the visible `<h1>`/`<p>` out of the HTML
    response so the dialog matches the browser).
 
+## Where it shows
+
+- `lib/use-account.ts` is the one hook behind both views: it loads `GET /api/account`, polls every 2s for up to
+  5 minutes while a sign-in finishes in the browser, and keeps every instance in step with a `weft:account` window
+  event (the board fires it for the server's `account` event; sign in and sign out fire it too).
+- `components/AccountButton.tsx`: the top bar button, right of Copilot (`CopilotButton.tsx`). Signed out it is the
+  GitHub mark and "Sign in" (starts GitHub); signed in it is just your avatar (`components/Avatar.tsx`), which opens
+  Settings. It renders nothing until the account loads, on a load error, or when accounts aren't configured.
+- `components/AccountSettings.tsx` (Settings → Weft account): GitHub and Google buttons, an email-link form, who you
+  are, and Sign out (this Mac only).
+
+## Database
+
+`supabase/migrations/` (applied to Weft prod through the Supabase MCP; the file versions match the server's):
+
+- `profiles`: one row per user (id → `auth.users`, email, name, avatar), row-level security on, select and update
+  only your own row, and only `name` and `avatar_url` are updatable. `private.handle_new_user()` is a
+  `security definer` trigger on `auth.users` that creates the row; it lives in the unexposed `private` schema.
+  Display fields come from `user_metadata`, which users can edit, so nothing may authorize on them.
+- `lock_rls_auto_enable`: revokes the Data API's access to Supabase's own `public.rls_auto_enable()` event-trigger
+  function (an advisor warning); the trigger still fires.
+
 ## Supabase project setup
 
 For the sign-in flow to complete, the Supabase project's **Authentication → URL Configuration →
-Redirect URLs** allowlist must include `weft://account-callback`. The `Site URL` (used as a fallback)
-should not be relied on; set the allowlist entry explicitly.
+Redirect URLs** allowlist must include `weft://account-callback`, and, to sign in from plain `next dev` (a browser
+tab, no Electron), `http://127.0.0.1:*/api/account/callback` and `http://localhost:*/api/account/callback`. The
+`Site URL` (used as a fallback) should not be relied on; set the allowlist entries explicitly. Email links use the
+same allowlist and need custom SMTP before real users (the built-in mailer sends a few a hour).
 
 The GitHub provider itself is configured under **Authentication → Sign In / Providers → GitHub** with
 the GitHub OAuth app's client ID and secret, and the GitHub OAuth app's **Authorization callback URL**

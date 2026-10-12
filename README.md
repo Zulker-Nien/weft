@@ -359,9 +359,10 @@ Review or Done without you keeps an accent tint and a pulsing dot until you open
 **Sign in** in the top bar (right of Copilot) signs you in with GitHub; once you're in it shows your
 avatar, which opens Settings. Settings → Weft account also offers Google and an email link, and Sign out. The board works the same
 signed out; the account is for cloud features (page sync, share links) as they land. Sign-in opens
-your default browser and comes back to Weft's own local server, so the browser tab just says
-"Signed in to Weft". The session is kept in `~/.weft/account.json`, readable only by you; Sign out
-forgets it on this Mac only. An email link has to be opened on the Mac that asked for it.
+your default browser and comes back to Weft through a `weft://account-callback` link, so the board
+shows you signed in a moment later. The session is kept in `~/.weft/account.json`, readable only by you
+(sealed by the Keychain in the desktop app); Sign out forgets it on this Mac only. An email link has
+to be opened on the Mac that asked for it.
 
 ## Star and tags
 

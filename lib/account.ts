@@ -9,10 +9,10 @@ import { DATA_DIR } from "./store";
 import type { AccountProvider, AccountUser, AccountView } from "./types";
 
 // A Weft account is optional: the board works signed out, and signing in unlocks cloud features
-// (page sync, share links). Sign-in runs in the system browser and comes back to this machine's own
-// server at /api/account/callback (a loopback redirect, so it works in dev and packaged builds alike,
-// with no weft:// registration). PKCE keeps the code verifier in the session file, so the link only
-// works on the machine that started the sign-in.
+// (page sync, share links). Sign-in runs in the system browser and comes back to this machine: as
+// weft://account-callback in the desktop app, or the loopback /api/account/callback in plain `next dev`
+// (see redirectUrl). PKCE keeps the code verifier in the session file, so the link only works on the
+// machine that started the sign-in.
 
 // Weft prod. The publishable key is safe to ship in the app; row-level security guards the data.
 // WEFT_SUPABASE_KEY="" turns accounts off.

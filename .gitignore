@@ -46,3 +46,6 @@ next-env.d.ts
 
 # Local preview config (machine-specific paths)
 /.claude/
+
+# Supabase CLI scratch (created by `supabase` commands, never source)
+supabase/.temp/
