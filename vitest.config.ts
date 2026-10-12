@@ -11,7 +11,7 @@ export default defineConfig({
   resolve: { alias: { "@": path.resolve(__dirname) } },
   test: {
     // Component tests opt into jsdom per file (`// @vitest-environment jsdom`); everything else stays on node.
-    include: ["lib/**/*.test.ts", "app/**/*.test.ts", "components/**/*.test.tsx", "electron/**/*.test.ts"],
+    include: ["lib/**/*.test.ts", "app/**/*.test.ts", "components/**/*.test.tsx", "electron/**/*.test.ts", "scripts/**/*.test.ts"],
     environment: "node",
     env: {
       THREADBOARD_DATA: path.join(sandbox, "data"),

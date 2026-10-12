@@ -46,6 +46,9 @@ same time; Next.js allows one dev server per project folder.
   from Alfred, Raycast, or Shortcuts. (Registered by the packaged app.)
 - The window remembers its size and position, and the app reads your login shell's PATH, so it
   finds `claude` and `puku-cli` even when started from Finder.
+- **Updates**: the packaged app checks GitHub Releases at launch and every few hours, downloads a new version in the
+  background, and the Weft menu offers **Restart to Update** (it asks first if threads are running). Weft → Check for
+  Updates… checks now. What changed is in [CHANGELOG.md](CHANGELOG.md); releasing is in docs/architecture/updates.md.
 - If the server crashes, it restarts on its own; its output is in `~/Library/Logs/Weft/server.log`
   (Help → Open Logs Folder).
 

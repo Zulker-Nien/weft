@@ -52,6 +52,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `electron/browser-pane.cjs`: native browser pane, one page per card; token-guarded control
   server on 127.0.0.1 for agents, IPC for the board (`electron/preload.cjs`); `electron/pane-pages.cjs`
   saves each card's page to `~/.weft/pages/` so it comes back after a restart.
+- `electron/updater.cjs` + `scripts/release-feed.mjs` + `.github/workflows/release.yml`: updates from GitHub Releases (Squirrel.Mac's JSON
+  feed, a download fallback when unsigned) and the tag-triggered signed release; `CHANGELOG.md` holds each version's notes (docs/architecture/updates.md).
 - `electron/terminal.cjs` + `components/TerminalDrawer.tsx`: the terminal drawer (node-pty shell over IPC, xterm.js).
 - `lib/runner.ts`: one Agent SDK `query()` per thread, warm spares, permissions, turn queue;
   puku-cli via `pathToClaudeCodeExecutable`.
@@ -97,7 +99,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - Run me in dev mode (`npm run desktop`, or the `~/Applications/Weft.app` launcher, which opens
   Electron on this folder). Run `npm run dist` only to ship a build to someone else; a local
   packaged `.app` goes stale with every commit.
-- When a feature lands, update README.md and docs/ROADMAP.md in the same change.
+- When a feature lands, update README.md and docs/ROADMAP.md in the same change, and add a line under Unreleased in CHANGELOG.md.
 - Run `npm run lint`, `npm run typecheck` and `npm test` (Vitest; tests sit beside the code as `lib/*.test.ts` and `components/*.test.tsx`, the latter in jsdom with `// @vitest-environment jsdom` and `./test-utils`; API routes in `app/api/routes.test.ts`).
 - Stage every new file a change imports. The pre-commit hook (`.githooks/pre-commit`, set up by
   `npm install`) type-checks the staged files alone and refuses a commit that imports an unstaged

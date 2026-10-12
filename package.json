@@ -23,7 +23,8 @@
     "test": "vitest run",
     "prepare": "git config core.hooksPath .githooks || true",
     "app": "THREADBOARD_DIST=.next-app next build && THREADBOARD_DIST=.next-app THREADBOARD_PROD=1 electron .",
-    "dist": "THREADBOARD_DIST=.next-dist THREADBOARD_STANDALONE=1 next build && node scripts/prepare-standalone.mjs .next-dist && electron-builder --mac --dir",
+    "dist": "THREADBOARD_DIST=.next-dist THREADBOARD_STANDALONE=1 next build && node scripts/prepare-standalone.mjs .next-dist && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --dir",
+    "dist:release": "THREADBOARD_DIST=.next-dist THREADBOARD_STANDALONE=1 next build && node scripts/prepare-standalone.mjs .next-dist && electron-builder --mac --publish never",
     "coverage": "vitest run --coverage",
     "postinstall": "chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null || true"
   },
@@ -114,7 +115,13 @@
     "mac": {
       "target": [
         {
-          "target": "dir",
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
           "arch": [
             "arm64"
           ]
@@ -122,13 +129,15 @@
       ],
       "category": "public.app-category.developer-tools",
       "icon": "build/icon.icns",
-      "identity": null,
-      "hardenedRuntime": false,
+      "hardenedRuntime": true,
       "extendInfo": {
         "NSAppleEventsUsageDescription": "Weft opens Terminal to run a command-line tool's login when it needs a real terminal.",
         "NSMicrophoneUsageDescription": "Weft listens when you press the mic button, to type your prompt for you. The audio is transcribed on this Mac.",
         "LSUIElement": false
-      }
+      },
+      "artifactName": "Weft-${version}-${arch}.${ext}",
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
     }
   }
 }

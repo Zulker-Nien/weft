@@ -273,8 +273,9 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 ## Packaging, updates and distribution
 
 - `P1` **Packaged macOS app** — a build pipeline that bundles the built Next output with Electron, so the app doesn't need the repo or `npm run desktop`.
-- `P1` **Signing and notarization** — sign and notarize the macOS build so it opens without Gatekeeper warnings.
-- `P2` **Auto-update** — check for new releases, download in the background, and show release notes after restart.
+- `P1` **Signing and notarization** — sign and notarize the macOS build so it opens without Gatekeeper warnings. Wired up in `.github/workflows/release.yml` (Developer ID, hardened runtime, notarytool via an App Store Connect key); waiting on the certificate from Alex's individual Apple Developer membership.
+- `Done` **Auto-update** — a packaged Weft checks the latest GitHub release's `update.json` at launch and every 4 hours; a signed build downloads in the background and offers Restart to Update, an unsigned one offers the download (`electron/updater.cjs`, docs/architecture/updates.md). Next: show the release notes after the restart.
+- `Done` **Changelog and tagged releases** — `CHANGELOG.md` (Keep a Changelog); a `vX.Y.Z` tag builds and publishes the release with that version's section as its notes.
 - `P2` **Single-instance lock** — stop a second copy of the app (or `npm run dev`) from using the same data folder at once.
 - `P2` **Window state** — remember window size and position, the open card, and the browser pane's width and visibility across launches.
 - `P2` **Windows and Linux builds** — handle paths, the `/usr/bin/which` lookup, and shell environment differences.

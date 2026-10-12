@@ -1,0 +1,65 @@
+name: Release
+
+# Push a vX.Y.Z tag (after bumping package.json and adding a CHANGELOG.md section) and this builds the Mac
+# app, signs and notarizes it, and publishes a GitHub release with the dmg, the zip and update.json, the feed
+# every installed Weft checks (electron/updater.cjs). docs/architecture/updates.md lists the secrets.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  mac:
+    runs-on: macos-15 # Apple silicon, for the arm64 build and its native modules
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Check the tag matches package.json
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p 'require("./package.json").version')"
+          if [ "$tag" != "$pkg" ]; then echo "Tag v$tag doesn't match package.json $pkg"; exit 1; fi
+          echo "VERSION=$pkg" >> "$GITHUB_ENV"
+
+      - run: npm ci
+      - run: npm test
+      - run: node scripts/release-feed.mjs "$VERSION" dist
+
+      - name: Write the notarization key
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/apple"
+          printf '%s' "$APPLE_API_KEY_P8" > "$RUNNER_TEMP/apple/AuthKey.p8"
+          echo "APPLE_API_KEY=$RUNNER_TEMP/apple/AuthKey.p8" >> "$GITHUB_ENV"
+
+      - name: Build, sign and notarize
+        env:
+          CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: npm run dist:release
+
+      - name: Check the signature and notarization
+        run: |
+          app="$(ls -d dist/mac-arm64/*.app)"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          spctl --assess --type execute --verbose "$app"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "Weft $VERSION" \
+            --notes-file dist/release-notes.md \
+            "dist/Weft-$VERSION-arm64.dmg" \
+            "dist/Weft-$VERSION-arm64.zip" \
+            dist/update.json
