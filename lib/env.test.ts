@@ -38,6 +38,23 @@ describe("cliEnv", () => {
     expect(env.THREADBOARD_DATA).toBe("/tmp/weft");
   });
 
+  // Built from pieces so this file never holds a whole key for a scanner to flag.
+  const STRIPE_SHAPED = ["sk", "live", "51Habcdefghijklmnopqrstuv"].join("_");
+  const ANTHROPIC_SHAPED = ["sk-ant", "api03", "abcdefghijklmnopqrstuvwxyz"].join("-");
+
+  it("strips your own secrets by name or by value, but keeps what the CLIs sign in with", () => {
+    const strip = { STRIPE_SECRET_KEY: "sk", OPENAI_API_KEY: "x", GITHUB_TOKEN: "x", NPM_TOKENS: "x", DB_PASSWORD: "x", AWS_CREDENTIALS: "x",
+      GH_PAT: "x", SENTRY_DSN: "x", DATABASE_URL: "x", SUPABASE_DATABASE_URL: "x", private: "x", MY_SETTING: STRIPE_SHAPED };
+    const keep = { ANTHROPIC_API_KEY: ANTHROPIC_SHAPED, ANTHROPIC_AUTH_TOKEN: "t", PUKU_API_KEY: "p", SSH_AUTH_SOCK: "/tmp/agent",
+      MONKEY: "1", KEYCHAIN_PATH: "/k", PATH: "/usr/bin", TOKENIZER: "1", DATABASE_URL_FILE: "/f", HOME: "/Users/me" };
+    for (const [k, v] of Object.entries({ ...strip, ...keep })) vi.stubEnv(k, v);
+
+    const env = cliEnv();
+
+    for (const k of Object.keys(strip)) expect(env, k).not.toHaveProperty(k);
+    for (const [k, v] of Object.entries(keep)) expect(env[k], k).toBe(v);
+  });
+
   it("keeps unrelated and look-alike variables", () => {
     vi.stubEnv("CLAUDE_CONFIG_DIR", "/tmp/claude");
     vi.stubEnv("CLAUDE_PIDS", "keep");

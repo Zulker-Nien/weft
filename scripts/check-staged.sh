@@ -16,7 +16,13 @@ if command -v gitleaks > /dev/null 2>&1; then
     exit 1
   fi
 else
-  echo "pre-commit: gitleaks isn't installed, so secrets weren't scanned (brew install gitleaks)." >&2
+  # Without gitleaks, Weft's own key shapes (lib/secret-detect.ts, the paste guard's) check each added line.
+  if ! node --no-warnings "$root/scripts/secret-scan.mjs"; then
+    echo "pre-commit: that looks like a secret in the staged changes (shown above, masked)." >&2
+    echo "Move it to .env.local (or Weft's vault). A false alarm? Add a 'gitleaks:allow' comment on that line." >&2
+    exit 1
+  fi
+  echo "pre-commit: scanned for secrets with Weft's key patterns; gitleaks catches more (brew install gitleaks)." >&2
 fi
 
 git -C "$root" checkout-index --all --prefix="$tmp/"

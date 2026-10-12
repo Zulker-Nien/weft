@@ -2,6 +2,7 @@ import type { Options } from "@anthropic-ai/claude-agent-sdk";
 import { GIT_GUARD_MATCHER } from "./git-guard";
 import { IMPORT_GUARD_HOOKS } from "./import-check";
 import { restartGuardMatcher } from "./restart-guard";
+import { findSecret } from "./secret-detect";
 import { SECRET_GUARD_MATCHER } from "./secret-guard";
 
 // The environment for the CLIs Weft starts. When Weft itself was started from inside a Claude Code
@@ -14,11 +15,22 @@ const INHERITED = /^(CLAUDECODE$|CLAUDE_CODE_|CLAUDE_AGENT_SDK_|CLAUDE_PID$|CLAU
 // nothing secret may live in the server's environment unless it's stripped here
 // (docs/architecture/secrets.md).
 const INTERNAL = /^THREADBOARD_SHELL_/;
+// Your own secrets: Weft starts from your login shell's env, so a key exported in ~/.zshrc would reach
+// every thread, where `node -e` can print it past the guard. A name that sounds secret goes, and so does
+// any value that looks like a key (lib/secret-detect.ts), except what the CLIs sign in with. A command
+// that needs one gets it from the vault through mcp__secrets__run.
+const SECRET_NAME = /(^|_)(KEYS?|TOKENS?|SECRETS?|PASSWORD|PASSWD|PASSPHRASE|CREDENTIALS?|PRIVATE|PAT|DSN)(_|$)|(^|_)DATABASE_URL$/i;
+const CLI_SIGN_IN = /^(ANTHROPIC_|PUKU_)/;
+
+function isSecretVar(key: string, value: string | undefined): boolean {
+  if (CLI_SIGN_IN.test(key)) return false;
+  return SECRET_NAME.test(key) || (value !== undefined && findSecret(value) !== null);
+}
 
 export function cliEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
   const insideClaude = Boolean(env.CLAUDECODE || env.CLAUDE_CODE_DESKTOP_APP_VERSION);
-  for (const key of Object.keys(env)) if (INHERITED.test(key) || INTERNAL.test(key)) Reflect.deleteProperty(env, key);
+  for (const [key, value] of Object.entries(env)) if (INHERITED.test(key) || INTERNAL.test(key) || isSecretVar(key, value)) Reflect.deleteProperty(env, key);
   // The Claude app routes its own sessions through a local proxy; that address isn't ours to use.
   if (insideClaude) delete env.ANTHROPIC_BASE_URL;
   env.CLAUDE_CODE_ENTRYPOINT = "sdk-ts";

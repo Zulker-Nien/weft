@@ -29,6 +29,7 @@ describe("findSecret", () => {
     expect(findSecret(j("FOO=bar\nexport STRIPE_SECRET", "_KEY=\"abc123def456ghi\"\n"))).toEqual({
       kind: "a secret (STRIPE_SECRET_KEY)",
       preview: "abc123de…6ghi",
+      value: "abc123def456ghi",
     });
     expect(findSecret(j("DB_PASS", "WORD=hunter2!x"))?.preview).toBe("hu…");
   });
@@ -36,6 +37,12 @@ describe("findSecret", () => {
   it("masks the middle of a key", () => {
     expect(findSecret(j("sk_", "live_", tail))?.preview).toBe("sk_live_…hJkL");
     expect(findSecret(j("-----BEGIN ", "PRIVATE KEY-----"))?.preview).toBe("-----BEGIN … PRIVATE KEY-----");
+  });
+
+  it("gives the text it found, a whole private key block when it ends", () => {
+    expect(findSecret(j("say sk_", "live_", tail, " ok"))?.value).toBe(j("sk_", "live_", tail));
+    const block = j("-----BEGIN RSA ", "PRIVATE KEY-----\nMIIabc\n-----END RSA ", "PRIVATE KEY-----");
+    expect(findSecret(`key:\n${block}\nthanks`)?.value).toBe(block);
   });
 
   it.each([

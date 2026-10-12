@@ -11,7 +11,7 @@ vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
 }));
 
 vi.stubEnv("THREADBOARD_SHELL_URL", "http://127.0.0.1:4567");
-vi.stubEnv("THREADBOARD_SHELL_TOKEN", "tok");
+vi.mock("./shell-token", () => ({ shellToken: () => "tok" }));
 const sr = await import("./secret-run");
 
 const fetchMock = vi.fn();

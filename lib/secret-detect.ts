@@ -1,6 +1,7 @@
-// Pasted text that looks like a secret: an API key, a token, a private key, a database URL with a
+// Text that looks like a secret: an API key, a token, a private key, a database URL with a
 // password, or a .env line. A thread keeps everything you send in its transcripts for good, so the
-// Composer asks before pasting one (docs/architecture/secrets.md). Known key shapes only, plus .env
+// Composer asks before pasting one and flags one typed or dropped in (docs/architecture/secrets.md). The
+// pre-commit hook's fallback scan (scripts/secret-scan.mjs) and the thread env strip (lib/env.ts) use it too. Known key shapes only, plus .env
 // lines with a secret-sounding name, so ordinary text and code don't trip it.
 
 export interface SecretMatch {
@@ -8,10 +9,12 @@ export interface SecretMatch {
   kind: string;
   // The start and end of the value with the middle hidden: "sk_live_51Hx…hJkL".
   preview: string;
+  // The text itself, so the Composer can take it out again.
+  value: string;
 }
 
 const PATTERNS: [string, RegExp][] = [
-  ["a private key", /-----BEGIN [A-Z ]*PRIVATE KEY-----/],
+  ["a private key", /-----BEGIN [A-Z ]*PRIVATE KEY-----(?:[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----)?/],
   ["a Stripe secret key", /\b[sr]k_(live|test)_[0-9a-zA-Z]{16,}/],
   ["a Stripe webhook secret", /\bwhsec_[0-9a-zA-Z]{24,}/],
   ["a GitHub token", /\b(gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,})/],
@@ -36,9 +39,9 @@ function mask(value: string): string {
 export function findSecret(text: string): SecretMatch | null {
   for (const [kind, pattern] of PATTERNS) {
     const hit = pattern.exec(text);
-    if (hit) return { kind, preview: kind === "a private key" ? "-----BEGIN … PRIVATE KEY-----" : mask(hit[0]) };
+    if (hit) return { kind, preview: kind === "a private key" ? "-----BEGIN … PRIVATE KEY-----" : mask(hit[0]), value: hit[0] };
   }
   const [, name, value] = ENV_LINE.exec(text) ?? [];
-  if (name && value && !PLACEHOLDER.test(value)) return { kind: `a secret (${name})`, preview: mask(value) };
+  if (name && value && !PLACEHOLDER.test(value)) return { kind: `a secret (${name})`, preview: mask(value), value };
   return null;
 }

@@ -4,6 +4,7 @@ import { attempt, shell, text } from "./browser-tools";
 import { asText } from "./format";
 import { globalSingleton } from "./global-singleton";
 import { checkCommand, checkNames, packageScript, resolveCwd } from "./secret-command";
+import { shellToken } from "./shell-token";
 
 // Vault values in a command's env, for a thread that never sees them (docs/architecture/secrets.md). This side
 // checks the command and splits it; Electron main asks the user (the exact command, its package.json script,
@@ -145,7 +146,7 @@ export async function devSecrets(cardId: string, command: string, cwd: string): 
         bin: asText(r.node),
         args: [asText(r.runner)],
         env: { ELECTRON_RUN_AS_NODE: "1" },
-        stdin: JSON.stringify({ url: process.env.THREADBOARD_SHELL_URL, token: process.env.THREADBOARD_SHELL_TOKEN, grant: r.grant, argv: checked.argv, env: checked.env }),
+        stdin: JSON.stringify({ url: process.env.THREADBOARD_SHELL_URL, token: shellToken(), grant: r.grant, argv: checked.argv, env: checked.env }),
         names,
       },
     };

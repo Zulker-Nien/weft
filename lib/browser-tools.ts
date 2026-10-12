@@ -4,10 +4,10 @@ import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { asText } from "./format";
 import { SHOW_DIR } from "./show-dir";
+import { shellToken } from "./shell-token";
 
 // The desktop shell (electron/main.cjs) passes these when it starts the Next server.
 const SHELL_URL = process.env.THREADBOARD_SHELL_URL;
-const SHELL_TOKEN = process.env.THREADBOARD_SHELL_TOKEN;
 
 export const BROWSER_PROMPT = `You are running inside Weft, a desktop app with a browser pane beside the user's board.
 Use the mcp__browser__* tools to open pages there (for example a dev server you started), read them, take screenshots, and click or type. The user can see that pane.
@@ -29,7 +29,7 @@ export async function shell(route: string, body?: Record<string, unknown>) {
   if (!SHELL_URL) throw new Error("The browser pane only exists in the desktop app (npm run desktop).");
   const res = await fetch(`${SHELL_URL}${route}`, {
     method: "POST",
-    headers: { authorization: `Bearer ${SHELL_TOKEN}`, "content-type": "application/json" },
+    headers: { authorization: `Bearer ${shellToken()}`, "content-type": "application/json" },
     body: JSON.stringify(body ?? {}),
   });
   const data = (await res.json()) as Record<string, unknown>;

@@ -7,7 +7,7 @@ const signal = new AbortController().signal;
 
 describe("isSecretFile", () => {
   it.each([".env", ".env.local", "apps/web/.env.production.local", "/x/.envrc", ".dev.vars", ".env*", "'.env.local'", "/Users/me/.weft/account.json", "~/.weft/account.json",
-    "/Users/me/.weft/device-key.json", "~/.weft/device-key.json", "~/.weft/vercel-token.json", "~/.weft/supabase-token.json", "/Users/me/.weft/vault/acme-web.json", "~/.weft/vault/", "~/.weft/vault"])(
+    "/Users/me/.weft/device-key.json", "~/.weft/device-key.json", "~/.weft/vercel-token.json", "~/.weft/supabase-token.json", "~/.weft/shell-token", "/Users/me/.weft/shell-token", "/Users/me/.weft/vault/acme-web.json", "~/.weft/vault/", "~/.weft/vault"])(
     "%s holds secrets",
     (file) => expect(isSecretFile(file, DATA)).toBe(true),
   );
