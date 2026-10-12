@@ -12,7 +12,6 @@ const OVERSIZE = {
   "components/Board.tsx": 933,
   "lib/runner.test.ts": 901,
   "app/api/routes.test.ts": 762,
-  "lib/runner.ts": 730,
   "lib/login.test.ts": 576,
   "lib/import.test.ts": 568,
   "components/Composer.tsx": 556,
@@ -39,7 +38,6 @@ const COMPLEX = {
   "lib/format.ts": 37,
   "lib/import.ts": 36,
   "components/CardView.tsx": 32,
-  "lib/runner.ts": 26,
   "components/MediaNode.tsx": 25,
   // Brackets escaped: a glob reads [id] as a character class.
   "app/api/cards/\\[id\\]/route.ts": 24,

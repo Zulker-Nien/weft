@@ -33,7 +33,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - tests before refactoring; small behavior-preserving steps
   - "make the change easy, then make the easy change"
   - name the smell (Long Function, Large Class, Duplicated Code, Feature Envy) before fixing it
-  - hotspots: components/Board.tsx (~900 lines), lib/runner.ts (~800), electron/main.cjs (~620).
+  - hotspots: components/Board.tsx (~900 lines), electron/main.cjs (~620). lib/runner.ts was split in five, each under 300.
     Pure logic already moved out: `lib/board-view.ts` (columns, project chips, chime/unseen rules) and
     `lib/turn.ts` (how a turn's result reads, cost, limits); Board's hooks into `lib/use-*.ts` (`use-now`,
     `use-toast`, `use-desktop-bridge`, `use-copilot-card`). Next: live events/chimes, view prefs, shortcuts, command palette.
@@ -57,7 +57,9 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `electron/updater.cjs` + `scripts/release-feed.mjs` + `.github/workflows/release.yml`: updates from GitHub Releases (Squirrel.Mac's JSON
   feed, a download fallback when unsigned) and the tag-triggered signed release; `CHANGELOG.md` holds each version's notes (docs/architecture/updates.md).
 - `electron/terminal.cjs` + `components/TerminalDrawer.tsx`: the terminal drawer (node-pty shell over IPC, xterm.js).
-- `lib/runner.ts`: one Agent SDK `query()` per thread, warm spares, permissions, turn queue;
+- `lib/runner.ts`: one Agent SDK `query()` per thread, its public API (send, queue, stop, retry, login); behind it
+  `lib/runner-state.ts` (sessions, shared maps, `hooks` back into runner.ts), `lib/runner-session.ts` (start and drive a CLI,
+  warm spares, the BUILD fingerprint), `lib/runner-turn.ts` (what the CLI sends during a turn) and `lib/runner-ask.ts` (permissions);
   puku-cli via `pathToClaudeCodeExecutable` (`lib/cli-path.ts`). `editLastMessage()` is ↑ in the reply box: it rewinds the
   session to before your last message (`lib/edit-last.ts`, `lib/rewind.ts`) and sends the edit.
 - `lib/env.ts` `guardedCli()`: every thread's CLI env and Bash guards: `lib/secret-guard.ts` (no .env reads),
