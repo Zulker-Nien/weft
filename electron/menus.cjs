@@ -4,9 +4,16 @@ const { BaseWindow, Menu, Tray, app, clipboard, nativeImage, shell, webContents 
 const fs = require("node:fs");
 const path = require("node:path");
 const { showAboutWindow } = require("./about.cjs");
+const { createKeepWorking } = require("./keep-working.cjs");
+const { createAppUpdater } = require("./updater.cjs");
 
 function createMenus({ APP_NAME, ASSETS, COPILOT_SHORTCUT, mac, pane, getWin, getAppView, getServer, showMain, sendMenu, showCopilot, toggleCopilot, dataDir }) {
   let tray;
+  let lastWaiting = [];
+  // Keep Working (keep-working.cjs): awake with the lid shut, from the menu bar icon.
+  const keepWorking = mac ? createKeepWorking({ getServer, onChange: () => updateTray() }) : null;
+  // Updates (updater.cjs): its state is an item in the app menu.
+  const updater = createAppUpdater({ getServer, onChange: () => buildMenu() });
 
   function focusedContents() {
     return webContents.getFocusedWebContents() ?? getAppView()?.webContents;
@@ -31,6 +38,7 @@ function createMenus({ APP_NAME, ASSETS, COPILOT_SHORTCUT, mac, pane, getWin, ge
               label: APP_NAME,
               submenu: [
                 aboutItem,
+                updater.menuItem(),
                 { type: "separator" },
                 {
                   label: "Settings…",
@@ -181,11 +189,13 @@ function createMenus({ APP_NAME, ASSETS, COPILOT_SHORTCUT, mac, pane, getWin, ge
     updateTray([]);
   }
 
-  // The menu bar icon shows how many cards need you, and lists them.
-  function updateTray(waiting) {
+  // The menu bar icon shows how many cards need you, and lists them, plus a cup while Keep Working is on.
+  function updateTray(waiting = lastWaiting) {
     if (!tray) return;
+    lastWaiting = waiting;
     const count = waiting.length;
-    tray.setTitle(count > 0 ? ` ${count}` : "");
+    const title = [keepWorking?.title(), count > 0 ? String(count) : ""].filter(Boolean).join("  ");
+    tray.setTitle(title ? ` ${title}` : "");
     tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: count > 0 ? `${count} ${count === 1 ? "card needs" : "cards need"} you` : "Nothing needs you", enabled: false },
@@ -197,6 +207,7 @@ function createMenus({ APP_NAME, ASSETS, COPILOT_SHORTCUT, mac, pane, getWin, ge
           },
         })),
         { type: "separator" },
+        ...(keepWorking ? [keepWorking.menu(), { type: "separator" }] : []),
         { label: `Open ${APP_NAME}`, click: showMain },
         { label: "Copilot", accelerator: COPILOT_SHORTCUT, click: showCopilot },
         {
@@ -240,7 +251,7 @@ function createMenus({ APP_NAME, ASSETS, COPILOT_SHORTCUT, mac, pane, getWin, ge
     );
   }
 
-  return { buildMenu, attachContextMenu, createTray, refreshWaiting, setupDock };
+  return { buildMenu, attachContextMenu, createTray, refreshWaiting, setupDock, keepWorking, updater };
 }
 
 module.exports = { createMenus };
