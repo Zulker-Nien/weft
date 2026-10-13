@@ -52,7 +52,12 @@ and `npm run dev:protocol` runs it standalone.
    `lib/account-page.ts`; that same helper backs the HTTP loopback callback at
    `/api/account/callback`, so both flows show the user the same page. The Electron handler shows
    the same message in a native dialog (it pulls the visible `<h1>`/`<p>` out of the HTML
-   response so the dialog matches the browser).
+   response so the dialog matches the browser). Because the page producer escapes its text as
+   HTML entities and the dialog is a plain-text surface, the Electron handler also has to
+   decode those entities after stripping tags — `extractErrorMessage()` in
+   `electron/account-link.cjs` does both, preferring the `<p>` over the `<h1>` (the dialog
+   title already says "Couldn't sign in to Weft") and falling back to a stock "Sign-in failed"
+   line when neither is present. See `docs/bug-fixes/014-dialog-showed-html-entities.md`.
 
 ## Where it shows
 
