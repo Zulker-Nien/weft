@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchPileReview } from "./pile-review";
+import { fetchPileReview, startPileReview } from "./pile-review";
 
 const reply = (body: unknown) => vi.fn(() => Promise.resolve(new Response(JSON.stringify(body))));
 
@@ -23,5 +23,27 @@ describe("fetchPileReview", () => {
     await expect(fetchPileReview("/a")).rejects.toThrow("boom");
     vi.stubGlobal("fetch", reply({ pile: null }));
     await expect(fetchPileReview("/a")).rejects.toThrow("Nothing uncommitted to walk through.");
+  });
+});
+
+describe("startPileReview", () => {
+  it("starts the walk-through card and opens it", async () => {
+    vi.stubGlobal("fetch", reply({ prompt: "p", title: "t" }));
+    const start = vi.fn(() => Promise.resolve<string | undefined>("card-1"));
+    const open = vi.fn();
+    await startPileReview("/a", start, open);
+    expect(start).toHaveBeenCalledWith("/a", "p", "t");
+    expect(open).toHaveBeenCalledWith("card-1");
+  });
+
+  it("opens nothing when no card came back, or the tree is clean", async () => {
+    vi.stubGlobal("fetch", reply({ prompt: "p" }));
+    const open = vi.fn();
+    await startPileReview("/a", () => Promise.resolve(undefined), open);
+    vi.stubGlobal("fetch", reply({}));
+    const start = vi.fn(() => Promise.resolve<string | undefined>("card-1"));
+    await expect(startPileReview("/a", start, open)).rejects.toThrow("Nothing uncommitted");
+    expect(start).not.toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
   });
 });

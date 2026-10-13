@@ -22,7 +22,7 @@ export default function HeaderBadges({
 }: {
   cwd?: string | null;
   cards: Card[];
-  start: (cwd: string, prompt: string, title: string) => Promise<void>;
+  start: (cwd: string, prompt: string, title: string) => Promise<string | undefined>;
   notify: (err: unknown) => void;
   toast: (text: string) => void;
 }) {

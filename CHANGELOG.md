@@ -10,6 +10,8 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Fixed
 
+- "Review all" on the Review column opens the walk-through card it starts, instead of leaving it to land unseen
+  among the other Review cards.
 - The board stays on one port again: it now prefers 127.0.0.1:1024. The old 1000 is a privileged port macOS won't
   let Weft bind, so every launch fell back to a random port and cards' panes, dev OAuth redirects and saved pages
   pointed at a dead one.

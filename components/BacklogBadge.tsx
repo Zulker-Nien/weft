@@ -18,7 +18,7 @@ export default function BacklogBadge({
 }: {
   cwd?: string | null;
   refresh?: unknown;
-  onStart: (cwd: string, prompt: string, title: string) => Promise<void>;
+  onStart: (cwd: string, prompt: string, title: string) => Promise<string | undefined>;
   onError: (err: unknown) => void;
 }) {
   const [loaded, setLoaded] = useState<{ cwd: string; backlog: BacklogSummary | null } | null>(null);

@@ -21,7 +21,7 @@ afterEach(() => {
 });
 
 function setup(cwd: string | null = "/dev/app") {
-  const onStart = vi.fn<(cwd: string, prompt: string, title: string) => Promise<void>>(() => Promise.resolve());
+  const onStart = vi.fn<(cwd: string, prompt: string, title: string) => Promise<string | undefined>>(() => Promise.resolve("card-1"));
   const onError = vi.fn();
   const view = render(<PileBadge cwd={cwd} onStart={onStart} onError={onError} />);
   return { onStart, onError, view };

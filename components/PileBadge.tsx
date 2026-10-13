@@ -33,7 +33,7 @@ export default function PileBadge({
 }: {
   cwd?: string | null;
   refresh?: unknown;
-  onStart: (cwd: string, prompt: string, title: string) => Promise<void>;
+  onStart: (cwd: string, prompt: string, title: string) => Promise<string | undefined>;
   onError: (err: unknown) => void;
 }) {
   const [loaded, setLoaded] = useState<{ cwd: string; pile: PileSummary | null } | null>(null);

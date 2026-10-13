@@ -10,8 +10,10 @@ that asks the agent to commit that pile one Review card at a time, using only ea
   — lines added and removed in the project in view's repo. Clicking it starts the walk-through card for
   that repo.
 - **"Review all" (`components/ColumnHeader.tsx`).** A button on the Review column's header, shown when
-  the column has cards. Starts the same walk-through card for the project's repo, so the user can launch
-  the tour without hunting for the counter.
+  the column has cards. Starts the same walk-through card for the project's repo and opens it right away
+  (`startPileReview` in `lib/pile-review.ts`, which `Board.tsx` hands `improveQuality` and `select`), so the
+  tour doesn't land unseen among the other Review cards. The badges' `onStart` resolves to the new card's id,
+  so the pile counter and the Backlog planner can open theirs the same way later.
 
 Both call `fetchPileReview(cwd)` from `lib/pile-review.ts` — a small shared helper that GETs `/api/pile`
 with `prompt=1`, returns `{ prompt, title }`, falls back to a default title when the server omits one, and

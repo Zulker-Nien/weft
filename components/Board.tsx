@@ -5,7 +5,7 @@ import { showBacklog, subscribeBoardPrefs } from "@/lib/board-prefs";
 import { api, mergeThread, type BrowserState, type MenuAction, type NewCardInput } from "@/lib/client";
 import { worktreeParent } from "@/lib/format";
 import { busyHere } from "@/lib/overlap";
-import { fetchPileReview } from "@/lib/pile-review";
+import { startPileReview } from "@/lib/pile-review";
 import { planResets } from "@/lib/schedule";
 import { COLUMNS, COPILOT_ID, type BoardEvent, type Card, type Column, type LoginView, type Project, type ThreadItem } from "@/lib/types";
 import { useShortcutHint, useShortcutListener, useShortcuts } from "@/lib/hotkeys";
@@ -710,23 +710,19 @@ export default function Board() {
   });
 
   // The header badges' cards: the quality badge's fixes and the pile counter's commit walk-through.
-  function improveQuality(cwd: string, prompt: string, title: string) {
-    return create({
-      title,
-      prompt,
-      cwd,
-      backend: "claude",
-      start: true,
-    });
+  // Resolves to the new card's id, so a caller can open it.
+  async function improveQuality(cwd: string, prompt: string, title: string): Promise<string | undefined> {
+    const { card } = await api.create({ title, prompt, cwd, backend: "claude", start: true });
+    return card.id;
   }
 
-  // "Review all" on the Review column: the same commit walk-through card the pile counter starts.
+  // "Review all" on the Review column: the same commit walk-through card the pile counter starts, opened
+  // right away (in a busy Review column it got lost among the others).
   async function reviewAll() {
     const cwd = selected?.cwd ?? project ?? latest?.cwd;
     if (!cwd) return;
     try {
-      const { prompt, title } = await fetchPileReview(cwd);
-      await improveQuality(cwd, prompt, title);
+      await startPileReview(cwd, improveQuality, select);
     } catch (err) {
       notify(err);
     }
