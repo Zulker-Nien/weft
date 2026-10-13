@@ -38,6 +38,9 @@ same time; Next.js allows one dev server per project folder.
   through. Revealed secrets read as ‹secret› and are blanked in its screenshots (docs/architecture/board-view.md).
 - **Browser pane zoom**: the % button in the pane's toolbar zooms the page (Chrome's steps, plus
   50–200% presets); ⌘+ / ⌘− / ⌘0 and ⌘+scroll work on the page too, and a trackpad pinch magnifies.
+- **Failed loads say why**: a page that won't load in the browser pane (say a card's dev server stopped) shows Weft's
+  error page instead of a blank white one: the URL, the reason, **Try again**, **Back to the last page**, and an
+  automatic reload when a local dev server comes back (`electron/pane-error.cjs`).
 - **Themes**: Settings → Appearance (or ⌘K "Theme: …") picks System, Light or Dark, or a scene: Twin Suns,
   Canyon, Coast Road, Neon City, Snow Pass or Salt Flats puts that picture behind the board with a palette drawn
   from it and clear columns (`lib/theme.ts`, colors in `app/globals.css`; docs/architecture/themes.md).

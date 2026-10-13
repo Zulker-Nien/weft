@@ -142,6 +142,16 @@ A native `WebContentsView` overlaid on the board. Lazily created on first
   `restoreUrl()` gives the saved copy or the url, or (never recorded) the last
   `mcp__browser__open_url` in `threads/<card>.json`; if that fails to load, `fallbackUrl()` gives
   `~/.weft/glance/<card>.html`. Nothing is restored at startup.
+- `electron/pane-error.cjs` + `pane-error.html`: Chromium paints a failed main-frame load as a blank white page, so a
+  stopped dev server left cards empty. `watchLoadFailures(wc, { back })` (wired where each card's view is made in
+  `browser-pane.cjs`) catches `did-fail-load` and loads `pane-error.html` with everything in its query string:
+  the failed `url`, a `title`/`hint` from `describeFailure()` (connection refused on localhost reads "Nothing is
+  running at host"; also file gone, name not resolved, offline), the `reason`, `wait=1` for a local server and
+  `back`, the card's last good page (`lastGoodPage`). The page offers **Try again** and **Back to the last page**
+  and, with `wait`, polls the server every 2s and reloads when it answers. `ERR_ABORTED` (a load another load
+  replaced) and a failed error page itself are ignored, so it can't loop. `failedUrl()` reads the failed URL back
+  out of an error page: the toolbar shows it and `pages.record()` skips the error page, so it is never a card's
+  saved page. The board's own view gets no `back`.
 
 ## `electron/preload.cjs`
 

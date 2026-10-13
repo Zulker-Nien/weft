@@ -25,6 +25,11 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
   stops new turns from starting and restarts Weft once the running ones end. Messages sent meanwhile wait on their card
   and go out after the restart; the header's **⟳ Restart after N** names what it waits on and cancels on click. The
   updater's "threads are still running" question offers it too, as **Restart When Idle**.
+- **Failed loads say why**: when a page in the browser pane fails to load (a dev server that isn't running, a bad
+  address, no network), the pane shows Weft's own error page (`electron/pane-error.html`) in place of Chromium's
+  blank white one. It names the URL and the reason, offers **Try again** and **Back to the last page**, and for a
+  local dev server reloads by itself once the server answers. The toolbar keeps the failed URL, and the error page is
+  never saved as the card's page.
 
 ### Fixed
 
