@@ -10,6 +10,8 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Added
 
+- `mcp__secrets__set_value`: a thread stores a secret it generated (a signing secret) into one of its 🔐 blanks after Touch ID,
+  blanks only, value never echoed (`electron/vault-routes.cjs`, `POST /secrets/set`; docs/architecture/secrets.md).
 - Vercel drawer: pull plain env variables the 🔐 vault has no value for (never replacing one), and **Live pull from Vercel**,
   a team webhook relayed by the deployed Weft and Supabase that pulls them as they're added (`lib/vercel-hooks.ts`,
   `lib/vercel-relay.ts`; docs/architecture/vercel.md).
@@ -41,6 +43,10 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
   blank white one. It names the URL and the reason, offers **Try again** and **Back to the last page**, and for a
   local dev server reloads by itself once the server answers. The toolbar keeps the failed URL, and the error page is
   never saved as the card's page.
+
+### Changed
+
+- The Running and Needs you columns show **Switch all** only once a thread hit its plan limit (`hitPlanLimit` in `lib/board-view.ts`).
 
 ### Fixed
 

@@ -329,6 +329,9 @@ function createVault({ dataDir, safeStorage, sodium, prompt, clipboard, run = gi
       return (await prompt(reason(label))) ? { ...(await send(values[name])), label } : { denied: true, label };
     },
 
+    // A Touch ID with no unlock cache, for a write a thread asks for (electron/vault-routes.cjs).
+    confirm: (reason) => prompt(reason),
+
     // Values for a command main runs (electron/secret-run.cjs), never sent over IPC. names null means every
     // name with a value in that environment, for a dev server. The caller asks the user first.
     async valuesFor(folder, names, environment) {

@@ -77,12 +77,8 @@ const pane = createBrowserPane({
   routes: {
     // The Weft account's session, sealed by safeStorage; the server reads it here instead of a plain file.
     ...require("./account-store.cjs").accountRoutesFor(dataDir()),
-    // mcp__secrets__add_blank: names into the card's vault with no value yet, for the user to fill in later
-    // (lib/secret-ask.ts). The rail's 🔐 count goes up; nothing opens.
-    "POST /secrets/add-blank": ({ folder, names, environment, hint }) => {
-      if (!vault) throw new Error("The secrets vault isn't ready yet.");
-      return vault.addBlanks(String(folder), Array.isArray(names) ? names.map(String) : [], [String(environment || "development")], { source: "a thread", hint: hint ? String(hint).slice(0, 200) : undefined });
-    },
+    // mcp__secrets__add_blank and set_value: blanks into the card's vault, and a value a thread generated into one.
+    ...require("./vault-routes.cjs").vaultRoutes(() => vault),
     // mcp__secrets__ask_add, and a fill or run that found a key missing: the name goes in as a blank, then the
     // 🔐 drawer opens on its Add form with the name filled in (lib/secret-ask.ts); the board checks the ask
     // (lib/vault-view.ts parseSecretAsk).

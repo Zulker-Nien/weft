@@ -151,11 +151,19 @@ denied). A file watcher notices hand edits and offers "Import changes", so editi
   but isn't blocked on. The thread calls this as soon as it knows the name (with a hint for where to get the
   value), keeps going with what doesn't need the value, and the user fills the blanks in from 🔐 on the rail
   when they're ready — a name already filled in keeps its value. Nothing opens; the value never comes back.
-  Posts `POST /secrets/add-blank` (`electron/main.cjs`); main calls `vault.addBlanks(folder, names, [env], { source, hint })`
+  Posts `POST /secrets/add-blank` (`electron/vault-routes.cjs`); main calls `vault.addBlanks(folder, names, [env], { source, hint })`
   (`electron/vault.cjs`). The drawer's `SecretRow` (`components/SecretRow.tsx`) shows a visible **Fill in** button on
   every blank row with the hint under the name; blanks sort first within each environment, the rail's badge counts
   them, and the plain Add form's button reads **Add blank / Add N blanks** with the same flow. Older shells without
   `addBlank` keep the "type a value" form.
+- `mcp__secrets__set_value(name, value, environment?, project?)` (built): a value the thread generated itself (a
+  32-byte signing secret, a webhook secret it made up) into a name it already put in as a blank. Posts `POST /secrets/set`
+  (`electron/vault-routes.cjs`); its `fillBlank` answers `missing` when the name isn't a blank in
+  that environment ("Call add_blank first") and `filled` when it already has a value, so a thread can't overwrite one the
+  user put in; otherwise it asks Touch ID every time through `vault.confirm` (never the thread unlock cache: it's a write)
+  and stores it through `vault.setValue`, ciphertext in a 0600 file. The answer is `{ ok, label }` and the thread is told "Set NAME in the VAULT vault
+  (env)"; the value is never echoed or logged. It did pass through the thread's context once, as the tool's input, since the
+  thread made it: keys the user gets from a provider stay blanks for them to fill in.
 - `mcp__secrets__run(command, why, names, environment?, cwd?, timeout_seconds?, project?)` (built): a command with vault
   values in its env, for a thread that never sees them. The motivating case: `DATABASE_URL` is in the vault and a thread
   runs `npm run job` or a migration.

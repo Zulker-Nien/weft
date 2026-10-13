@@ -35,7 +35,8 @@ describe("secretsMcpServer", () => {
     expect(st.SECRETS_PROMPT).toContain("mcp__secrets__ask_add");
     expect(st.SECRETS_PROMPT).toContain("mcp__secrets__push_to_vercel");
     expect(st.SECRETS_PROMPT).toContain("mcp__secrets__add_blank");
-    expect(server.tools.map((t) => t.name)).toEqual(["list", "fill_field", "push_to_vercel", "add_blank", "ask_add", "run"]);
+    expect(st.SECRETS_PROMPT).toContain("mcp__secrets__set_value");
+    expect(server.tools.map((t) => t.name)).toEqual(["list", "fill_field", "push_to_vercel", "set_value", "add_blank", "ask_add", "run"]);
   });
 
   it("lists names for the card's folder, or another project's", async () => {
@@ -140,5 +141,45 @@ describe("secretsMcpServer", () => {
     const missing = await run("push_to_vercel", { name: "K" });
     expect(missing.isError).toBe(true);
     expect(said(missing)).toContain("K");
+  });
+
+  describe("set_value", () => {
+    const VALUE = "9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c2b1a0";
+    // Nothing the thread reads back may hold the value it passed in.
+    const clean = (r: Result) => expect(JSON.stringify(r)).not.toContain(VALUE);
+
+    it("sends the value to main and confirms by name only", async () => {
+      reply({ ok: true, label: "aimhuge/weft" });
+      const r = await run("set_value", { name: "PUKU_TRIAL_SIGNING_SECRET", value: VALUE, environment: "production" });
+      expect(sent()).toEqual({
+        url: "http://127.0.0.1:4567/secrets/set",
+        body: { folder: "/proj", name: "PUKU_TRIAL_SIGNING_SECRET", value: VALUE, environment: "production" },
+      });
+      expect(r).toEqual({ content: [{ type: "text", text: "Set PUKU_TRIAL_SIGNING_SECRET in the aimhuge/weft vault (production)." }], isError: false });
+      clean(r);
+
+      fetchMock.mockReset();
+      reply({ ok: true });
+      expect(said(await run("set_value", { name: "K", value: VALUE, project: "/other" }))).toBe("Set K in the this vault (development).");
+      expect(sent().body).toEqual({ folder: "/other", name: "K", value: VALUE, environment: "development" });
+    });
+
+    it("refuses a name that isn't a blank yet, a filled one, a no and an error, never echoing the value", async () => {
+      reply({ missing: true, label: "aimhuge/weft" });
+      const missing = await run("set_value", { name: "PUKU_TRIAL_SIGNING_SECRET", value: VALUE });
+      expect([missing.isError, said(missing)]).toEqual([true, "PUKU_TRIAL_SIGNING_SECRET is not in the vault. Call add_blank first."]);
+      // Unlike fill_field, a missing name doesn't open the Add form: the thread adds the blank itself.
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      reply({ filled: true, label: "aimhuge/weft" });
+      const filled = await run("set_value", { name: "K", value: VALUE });
+      expect([filled.isError, said(filled)]).toEqual([true, "K already has a value in the aimhuge/weft vault (development); set_value only fills blanks. Ask the user to replace it in 🔐 if it should change."]);
+      reply({ denied: true, label: "aimhuge/weft" });
+      const no = await run("set_value", { name: "K", value: VALUE });
+      expect([no.isError, said(no)]).toEqual([true, "The user didn't approve setting K. Ask before trying again."]);
+      reply({ error: "The secrets vault isn't ready yet." }, false);
+      const err = await run("set_value", { name: "K", value: VALUE });
+      expect(said(err)).toBe("The secrets vault isn't ready yet.");
+      for (const r of [missing, filled, no, err]) clean(r);
+    });
   });
 });

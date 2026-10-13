@@ -10,7 +10,8 @@ import { markInUse, RUN_PROMPT, runTool } from "./secret-run";
 export const SECRETS_PROMPT = `When a task needs a secret value the user keeps in Weft's 🔐 vault (an API key, an OAuth client secret, a password): don't ask them to paste it, don't read .env files, and never try to see the value. Call mcp__secrets__list for the names, open the page with the field in the browser pane, and call mcp__secrets__fill_field; the user approves with Touch ID and the value goes straight into the field.
 ${ASK_PROMPT}
 ${RUN_PROMPT}
-To put a vault value on the project's linked Vercel project (an env var a deploy needs), call mcp__secrets__push_to_vercel with its name and environment; the user approves with Touch ID and Weft sends it to Vercel itself. Don't use the Vercel dashboard or \`vercel env add\` for a vault value.`;
+To put a vault value on the project's linked Vercel project (an env var a deploy needs), call mcp__secrets__push_to_vercel with its name and environment; the user approves with Touch ID and Weft sends it to Vercel itself. Don't use the Vercel dashboard or \`vercel env add\` for a vault value.
+When you generate a secret yourself (a random signing secret, a webhook secret you make up), put its name in with mcp__secrets__add_blank, then call mcp__secrets__set_value with the name and the value right after you generate it: the user approves with Touch ID and Weft stores it; don't write it to a file or repeat it. A key the user gets from a provider stays a blank for them to fill in.`;
 
 const ENVIRONMENTS = ["development", "preview", "production"] as const;
 
@@ -75,6 +76,26 @@ export function secretsMcpServer(cardId: () => string | undefined, folder: () =>
             if (r.denied) return text(`The user didn't approve pushing ${name}. Ask before trying again.`, true);
             if (r.missing) return text(missingText([name], env, vault, await askToAdd(p ?? folder(), name, env)), true);
             return text(`Pushed ${name} (${env}) from the ${vault} vault to Vercel project ${asText(r.project, "the linked project")}. It takes effect on the next deploy.`);
+          }),
+      ),
+      tool(
+        "set_value",
+        "Store a value you generated (a random signing secret, say) in the 🔐 vault under a name already there as a blank (mcp__secrets__add_blank first). The user approves with Touch ID; the result never repeats the value. For keys the user gets from a provider, leave the blank for them.",
+        {
+          name: z.string().describe("The blank's name, e.g. PUKU_TRIAL_SIGNING_SECRET"),
+          value: z.string().min(1).describe("The value you generated"),
+          environment: z.enum(ENVIRONMENTS).optional().describe("Which environment it's for; defaults to development"),
+          project,
+        },
+        ({ name, value, environment, project: p }) =>
+          attempt(async () => {
+            const env = environment ?? "development";
+            const r = await shell("/secrets/set", { folder: p ?? folder(), name, value, environment: env });
+            const vault = asText(r.label, "this");
+            if (r.denied) return text(`The user didn't approve setting ${name}. Ask before trying again.`, true);
+            if (r.missing) return text(`${name} is not in the vault. Call add_blank first.`, true);
+            if (r.filled) return text(`${name} already has a value in the ${vault} vault (${env}); set_value only fills blanks. Ask the user to replace it in 🔐 if it should change.`, true);
+            return text(`Set ${name} in the ${vault} vault (${env}).`);
           }),
       ),
       addBlankTool(folder),
