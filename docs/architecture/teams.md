@@ -75,7 +75,11 @@ board ── useTeam() ──▶ /api/account/team (local, guarded) ──Bearer
   GET a `TeamSnapshot`, POST a `TeamOp`. 401 signed out, 404 not a member, 503 not configured.
 - `lib/team-ops.ts`: one core for that API and the server actions, so both enforce the same rules.
 - `app/api/account/team` + `lib/team-remote.ts`: the desktop's forwarder (`WEFT_TEAMS_URL`, default weft.zip).
-- `lib/use-team.ts`: the board hook; `lib/team-types.ts`: the shapes the board may import.
+- `lib/use-team.ts`: the board hook; `lib/team-types.ts`: the shapes the board may import. A refresh keeps showing
+  the loaded team until the new answer lands (only a workspace switch reads "loading"), so a burst of refreshes
+  can't keep a slow load from finishing.
+- `vercel.json` pins weft.zip's functions to `sin1`, next to the Supabase project (ap-southeast-1). From Vercel's
+  default `iad1` each of a team load's ~10 sequential queries crossed the Pacific, and a load took 5 to 7 seconds.
 - `components/team/*` take their actions as a prop (`TeamClientActions`): server actions on weft.zip
   (`components/team/WebTeam.tsx`), the forwarder in the desktop.
 

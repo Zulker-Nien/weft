@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ACCOUNT_EVENT } from "./auth/hooks";
 import type { TeamActionResult, TeamClientActions, TeamOp, TeamSnapshot } from "./team-types";
 
@@ -77,21 +77,24 @@ export function useTeam(org?: string): TeamHook {
   const [reload, setReload] = useState(0);
   const refresh = useCallback(() => setReload((n) => n + 1), []);
 
-  // Each load is keyed by (org, reload). A result only counts for the key it was fetched for, so when the org
-  // changes or a refresh starts, the state reads "loading" straight away and stale data never shows.
-  const key = `${org ?? ""}#${reload}`;
-  const [loaded, setLoaded] = useState<{ key: string; state: TeamHookState } | null>(null);
-  const state: TeamHookState = loaded?.key === key ? loaded.state : { kind: "loading" };
+  // A result counts for the workspace it was fetched for. Switching workspace reads "loading" straight away;
+  // a refresh keeps showing the team it has until the new answer lands, and never throws an answer away, so
+  // a burst of refreshes (sign-in events, actions) can't keep a slow load from ever finishing.
+  const orgKey = org ?? "";
+  const [loaded, setLoaded] = useState<{ org: string; state: TeamHookState } | null>(null);
+  const state: TeamHookState = loaded?.org === orgKey ? loaded.state : { kind: "loading" };
+
+  const current = useRef(orgKey);
+  useEffect(() => {
+    current.current = orgKey;
+  }, [orgKey]);
 
   useEffect(() => {
-    let alive = true;
     void fetchTeam(org).then((next) => {
-      if (alive) setLoaded({ key, state: next.state });
+      // An answer for a workspace you've since switched away from is dropped; any answer for this one is kept.
+      if (current.current === orgKey) setLoaded({ org: orgKey, state: next.state });
     });
-    return () => {
-      alive = false;
-    };
-  }, [org, key]);
+  }, [org, orgKey, reload]);
 
   // The board fires `weft:account` whenever the user signs in or out (lib/auth/hooks.ts). Signing out
   // means the snapshot is no longer ours; signing in means we may now have a fresh one. Either way a
