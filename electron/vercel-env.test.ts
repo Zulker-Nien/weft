@@ -5,7 +5,7 @@ import { createVercelEnv, envRoutes } from "./vercel-env.cjs";
 
 type Env = { id?: string | null; key: string; targets: string[]; type?: string | null };
 
-function make(envs: Env[] = [], values: Record<string, string | null> = {}) {
+function make(envs: Env[] = [], values: Record<string, string | null> = {}, pushable: Record<string, Record<string, string>> = {}) {
   const vault = {
     names: vi.fn(() =>
       Promise.resolve({
@@ -20,6 +20,8 @@ function make(envs: Env[] = [], values: Record<string, string | null> = {}) {
     sendValue: vi.fn((_folder: string, _name: string, _env: string, reason: (label: string) => string, send: (value: string) => Promise<unknown>) =>
       send(`value-for-${reason("aimhuge/weft")}`).then((r) => ({ ...(r as object), label: "aimhuge/weft" })),
     ),
+    valuesFor: vi.fn((_folder: string, _names: null, environment: string) => Promise.resolve({ label: "aimhuge/weft", values: pushable[environment] ?? {} })),
+    confirm: vi.fn(() => Promise.resolve(true)),
     setValue: vi.fn(() => Promise.resolve({ saved: true })),
   };
   const vercel = {
@@ -58,6 +60,50 @@ describe("vercel-env", () => {
     expect(await env.push("/dev/weft", "KEY", "production")).toEqual({ pushed: true, project: "weft", label: "aimhuge/weft" });
     expect(vault.sendValue).toHaveBeenCalledWith("/dev/weft", "KEY", "production", expect.any(Function), expect.any(Function));
     expect(vercel.envSet).toHaveBeenCalledWith("/dev/weft", "KEY", "production", "value-for-push KEY (aimhuge/weft, production) to Vercel project weft");
+  });
+
+  describe("push all", () => {
+    const values = { development: { KEY: "dev-value" }, production: { KEY: "prod-value", OTHER: "other-value" } };
+
+    it("pushes every vault value in every environment after one Touch ID that says how many", async () => {
+      const { env, vault, vercel } = make([], {}, values);
+      expect(await env.pushAll("/dev/weft")).toEqual({
+        label: "aimhuge/weft",
+        project: "weft",
+        sent: [
+          { name: "KEY", environment: "development" },
+          { name: "KEY", environment: "production" },
+          { name: "OTHER", environment: "production" },
+        ],
+        failed: [],
+      });
+      expect(vault.confirm).toHaveBeenCalledTimes(1);
+      expect(vault.confirm).toHaveBeenCalledWith("push 3 secrets (aimhuge/weft) to Vercel project weft");
+      expect(vercel.envSet).toHaveBeenCalledWith("/dev/weft", "OTHER", "production", "other-value");
+    });
+
+    it("carries on past a refusal and names it, including a non-Error throw", async () => {
+      const { env, vercel } = make([], {}, values);
+      vercel.envSet.mockRejectedValueOnce(new Error("Vercel answered 500.")).mockImplementationOnce(() => {
+        throw "boom"; // eslint-disable-line @typescript-eslint/only-throw-error
+      });
+      const r = await env.pushAll("/dev/weft");
+      expect(r.failed).toEqual([
+        { name: "KEY", environment: "development", error: "Vercel answered 500." },
+        { name: "KEY", environment: "production", error: "boom" },
+      ]);
+      expect(r.sent).toEqual([{ name: "OTHER", environment: "production" }]);
+    });
+
+    it("asks nothing with no values, and sends nothing when Touch ID says no", async () => {
+      const empty = make();
+      expect(await empty.env.pushAll("/dev/weft")).toEqual({ label: "aimhuge/weft", project: "weft", sent: [], failed: [] });
+      expect(empty.vault.confirm).not.toHaveBeenCalled();
+      const { env, vault, vercel } = make([], {}, { preview: { KEY: "v" } });
+      vault.confirm.mockResolvedValueOnce(false);
+      expect(await env.pushAll("/dev/weft")).toEqual({ label: "aimhuge/weft", project: "weft", denied: true });
+      expect(vercel.envSet).not.toHaveBeenCalled();
+    });
   });
 
   it("refuses a bad name or environment before asking anyone", async () => {

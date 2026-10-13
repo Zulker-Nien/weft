@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/client";
-import { ENV_SHORT, envLine, pullText, pushText, toPull, toPush, type VercelBridge, type VercelEnvRow, type VercelEnvStatus } from "@/lib/vercel-view";
+import { ENV_SHORT, envLine, pullText, pushAllText, pushText, toPull, toPush, type VercelBridge, type VercelEnvRow, type VercelEnvStatus } from "@/lib/vercel-view";
 
 // A linked project's 🔐 secrets against its Vercel variables (electron/vercel-env.cjs), under its deploy in the ▲
 // drawer. Push sends one vault value to Vercel inside Electron main after Touch ID; Pull brings plain Vercel variables
@@ -47,6 +47,7 @@ export default function VercelEnv({ folder, team, bridge, notify }: { folder: st
 
   const push = bridge.envPush;
   const pull = bridge.envPull;
+  const pushAll = bridge.envPushAll;
   // Opens by itself when there's something to push or pull, until you toggle it.
   const shown = open ?? (toPush(env.rows).length > 0 || toPull(env.rows).length > 0);
 
@@ -83,6 +84,19 @@ export default function VercelEnv({ folder, team, bridge, notify }: { folder: st
     }
   }
 
+  async function sendAll() {
+    if (!pushAll) return;
+    setBusy("all");
+    try {
+      notify(pushAllText(await pushAll(folder)));
+      await load();
+    } catch (err) {
+      notify(err);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function send(row: VercelEnvRow) {
     const key = `${row.environment}\n${row.name}`;
     setBusy(key);
@@ -98,13 +112,7 @@ export default function VercelEnv({ folder, team, bridge, notify }: { folder: st
 
   return (
     <div>
-      <button onClick={() => setOpen(!shown)} className="flex w-full items-center gap-1 text-left hover:text-ink" aria-expanded={shown}>
-        <span aria-hidden>🔐</span>
-        <span className="min-w-0 flex-1 truncate">{envLine(env.rows)}</span>
-        <span aria-hidden className="text-faint">
-          {shown ? "▾" : "▸"}
-        </span>
-      </button>
+      <EnvHeader rows={env.rows} shown={shown} onToggle={() => setOpen(!shown)} busy={busy} onPushAll={pushAll ? () => void sendAll() : undefined} />
       {shown && (
         <ul className="mt-1 space-y-0.5">
           {env.rows.map((r) => (
@@ -127,6 +135,26 @@ export default function VercelEnv({ folder, team, bridge, notify }: { folder: st
             </li>
           )}
         </ul>
+      )}
+    </div>
+  );
+}
+
+// The 🔐 summary line that opens the list, with Push all beside it when the vault has anything to send.
+function EnvHeader({ rows, shown, onToggle, busy, onPushAll }: { rows: VercelEnvRow[]; shown: boolean; onToggle: () => void; busy: string | null; onPushAll?: () => void }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <button onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-1 text-left hover:text-ink" aria-expanded={shown}>
+        <span aria-hidden>🔐</span>
+        <span className="min-w-0 flex-1 truncate">{envLine(rows)}</span>
+        <span aria-hidden className="text-faint">
+          {shown ? "▾" : "▸"}
+        </span>
+      </button>
+      {onPushAll && rows.some((r) => r.inVault) && (
+        <button onClick={onPushAll} disabled={busy !== null} className="shrink-0 rounded border border-line px-1.5 text-[10px] leading-[16px] text-faint hover:text-ink disabled:opacity-40" title="Send every vault value to Vercel, replacing what it has (one Touch ID)">
+          {busy === "all" ? "Pushing…" : "Push all"}
+        </button>
       )}
     </div>
   );

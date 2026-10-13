@@ -1,6 +1,6 @@
 // Vault → Vercel env push (docs/architecture/vercel.md): which of a project's 🔐 secrets its linked Vercel project
 // has, by name and environment, and pushing one across. The value goes from the vault to Vercel's API inside main
-// (vault.sendValue, after a Touch ID that names the secret and the project); the board and threads only ever see
+// (vault.sendValue, after a Touch ID that names the secret and the project; Push all asks once for the lot); the board and threads only ever see
 // names. The drawer's Push button and mcp__secrets__push_to_vercel both land here. The other way, pull() brings
 // down the plain variables the vault has no value for (by hand from the drawer, or on a Vercel webhook relayed by
 // lib/vercel-hooks.ts); sensitive ones never decrypt, so they stay Vercel only.
@@ -36,6 +36,33 @@ function createVercelEnv({ vercel, vault }) {
       if (!ENVIRONMENTS.includes(environment)) throw new Error(`Unknown environment: ${environment}`);
       const { project } = await vercel.envList(folder);
       return vault.sendValue(folder, name, environment, (label) => `push ${name} (${label}, ${environment}) to Vercel project ${project}`, (value) => vercel.envSet(folder, name, environment, value));
+    },
+
+    // Push all: every value the vault holds for this folder, in every environment, behind one Touch ID that says how
+    // many (vault.confirm, no unlock cache). Values stay in main; one Vercel refusal doesn't stop the rest.
+    async pushAll(folder) {
+      const { project } = await vercel.envList(folder);
+      const found = [];
+      let label = "";
+      for (const environment of ENVIRONMENTS) {
+        const r = await vault.valuesFor(folder, null, environment);
+        label = r.label;
+        for (const [name, value] of Object.entries(r.values)) found.push({ name, environment, value });
+      }
+      if (!found.length) return { label, project, sent: [], failed: [] };
+      const n = found.length;
+      if (!(await vault.confirm(`push ${n} ${n === 1 ? "secret" : "secrets"} (${label}) to Vercel project ${project}`))) return { label, project, denied: true };
+      const sent = [];
+      const failed = [];
+      for (const { name, environment, value } of found) {
+        try {
+          await vercel.envSet(folder, name, environment, value);
+          sent.push({ name, environment });
+        } catch (err) {
+          failed.push({ name, environment, error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+      return { label, project, sent, failed };
     },
 
     // Brings down every plain Vercel variable the vault has no value for (absent, or a blank waiting for one), straight

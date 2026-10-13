@@ -89,6 +89,8 @@ export interface VercelBridge {
   // Vault → Vercel (electron/vercel-env.cjs); missing on a main that started before env push was built.
   envStatus?: (folder: string) => Promise<VercelEnvStatus>;
   envPush?: (folder: string, name: string, environment: VercelEnvironment) => Promise<VercelPushResult>;
+  // Every vault value, in every environment, behind one Touch ID (electron/vercel-env.cjs pushAll).
+  envPushAll?: (folder: string) => Promise<VercelPushAllResult>;
   // Vercel → vault: every plain variable the vault has no value for (electron/vercel-env.cjs pull).
   envPull?: (folder: string) => Promise<VercelPullResult>;
 }
@@ -119,6 +121,17 @@ export interface VercelPushResult {
   denied?: boolean;
   missing?: boolean;
   label: string;
+}
+
+type EnvName = { name: string; environment: VercelEnvironment };
+
+export interface VercelPushAllResult {
+  label: string;
+  project: string;
+  denied?: boolean;
+  sent?: EnvName[];
+  // Vercel turned these down; the rest still went.
+  failed?: (EnvName & { error: string })[];
 }
 
 export interface VercelPullResult {
@@ -158,6 +171,15 @@ export function pushText(name: string, environment: VercelEnvironment, r: Vercel
   if (r.denied) return `${name} stayed in the vault: Touch ID wasn't approved`;
   if (r.missing) return `${name} has no ${environment} value in the ${r.label} vault`;
   return `Pushed ${name} to ${r.project ?? "Vercel"} (${environment}). It's live from the next deploy`;
+}
+
+// The toast after Push all.
+export function pushAllText(r: VercelPushAllResult) {
+  if (r.denied) return "Nothing pushed: Touch ID wasn't approved";
+  const sent = r.sent?.length ?? 0;
+  const failed = r.failed ?? [];
+  const got = sent ? `Pushed ${sent} ${sent === 1 ? "secret" : "secrets"} to ${r.project}. Live from the next deploy` : `Nothing pushed to ${r.project}`;
+  return failed.length ? `${got}. Failed: ${failed.map((f) => `${f.name} (${ENV_SHORT[f.environment]}): ${f.error}`).join("; ")}` : got;
 }
 
 export const TOKEN_URL = "https://vercel.com/account/tokens";

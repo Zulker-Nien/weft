@@ -51,13 +51,16 @@ open, on folder change and on window focus, since each load is a few API calls p
 A linked folder's card in the drawer has a 🔐 line ("1 to push · 4 on Vercel") that opens the vault's names against
 the project's variables, one row per name and environment: **Push** (in the vault, not on Vercel), **on Vercel · push
 again** (replaces Vercel's value with the vault's), **Vercel only**, or **no value** (a name the vault has without a
-value). It opens by itself when something is left to push.
+value). It opens by itself when something is left to push. **Push all** beside the 🔐 line sends every value the vault
+holds, in every environment, behind one Touch ID.
 
 - **Names only to the board.** `envList` reads `/v10/projects/<id>/env` without `decrypt`, so no value comes back from
   Vercel either; the comparison is by name and environment (`electron/vercel-env.cjs` `status`).
 - **A push is one Touch ID, every time.** `vault.sendValue` asks with the secret, the vault, the environment and the
   project ("push SUPABASE_SECRET_KEY (aimhuge/weft, production) to Vercel project weft"), even while the drawer is
   unlocked, since it writes somewhere else. The value goes from the vault straight into `envSet`'s request inside main.
+  Push all (`pushAll`, through `vault.valuesFor` and `vault.confirm`) asks once with the count ("push 22 secrets (aimhuge/weft) to Vercel project
+  weft"), then sends each in turn; one Vercel refusal doesn't stop the rest, and the toast names what failed.
 - **Sensitive by default.** Production and Preview values go in as `sensitive` (Vercel never shows them again);
   Development can't be sensitive, so it's `encrypted`. `upsert=true` replaces the value for that name and environment.
   A variable takes effect on the next deploy.

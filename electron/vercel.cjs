@@ -246,6 +246,7 @@ function registerVercel(ipcMain, { vercel, env, isBoard }) {
   if (env) {
     handle("vercel:env-status", (folder) => env.status(String(folder)));
     handle("vercel:env-push", (folder, name, environment) => env.push(String(folder), String(name), String(environment)));
+    handle("vercel:env-push-all", (folder) => env.pushAll(String(folder)));
     handle("vercel:env-pull", (folder) => env.pull(String(folder)));
   }
 }

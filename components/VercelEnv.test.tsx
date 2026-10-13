@@ -2,7 +2,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { VercelBridge, VercelEnvStatus } from "@/lib/vercel-view";
+import type { VercelBridge, VercelEnvStatus, VercelPushAllResult } from "@/lib/vercel-view";
 import "./test-utils";
 
 const api = vi.hoisted(() => ({
@@ -87,6 +87,43 @@ describe("VercelEnv", () => {
     setup({ envStatus: vi.fn(() => Promise.resolve({ ...STATUS, rows: [STATUS.rows[1]!] })) });
     expect(await screen.findByText("All 1 vault secret is on Vercel")).toBeInTheDocument();
     expect(screen.queryByText("GITHUB_CLIENT_ID")).not.toBeInTheDocument();
+  });
+
+  describe("push all", () => {
+    const all = (result: VercelPushAllResult = { label: "aimhuge/weft", project: "weft", sent: [{ name: "A", environment: "production" }, { name: "B", environment: "preview" }], failed: [] }) => ({
+      envPushAll: vi.fn(() => Promise.resolve(result)),
+    });
+
+    it("pushes every vault value behind one call, toasts and reloads", async () => {
+      const over = all();
+      const { bridge, notify } = setup(over);
+      await userEvent.click(await screen.findByRole("button", { name: "Push all" }));
+      await waitFor(() => expect(notify).toHaveBeenCalledWith("Pushed 2 secrets to weft. Live from the next deploy"));
+      expect(over.envPushAll).toHaveBeenCalledWith("/dev/weft");
+      expect(bridge.envStatus).toHaveBeenCalledTimes(2);
+    });
+
+    it("shows Pushing… while it works, then toasts a failure", async () => {
+      let fail: (e: Error) => void = () => undefined;
+      const { notify } = setup({ envPushAll: vi.fn(() => new Promise<never>((_, reject) => (fail = reject))) });
+      await userEvent.click(await screen.findByRole("button", { name: "Push all" }));
+      expect(screen.getByText("Pushing…", { selector: "button[title^='Send every']" })).toBeDisabled();
+      fail(new Error("Vercel answered 500."));
+      await waitFor(() => expect(notify).toHaveBeenCalledWith(new Error("Vercel answered 500.")));
+      expect(await screen.findByRole("button", { name: "Push all" })).toBeEnabled();
+    });
+
+    it("hides with nothing in the vault", async () => {
+      setup({ ...all(), envStatus: vi.fn(() => Promise.resolve({ ...STATUS, rows: [STATUS.rows[2]!] })) });
+      await screen.findByText("No vault values to push yet");
+      expect(screen.queryByRole("button", { name: "Push all" })).not.toBeInTheDocument();
+    });
+
+    it("hides on a main that started before Push all", async () => {
+      setup();
+      await screen.findByText("1 to push · 1 on Vercel");
+      expect(screen.queryByRole("button", { name: "Push all" })).not.toBeInTheDocument();
+    });
   });
 
   describe("pull", () => {

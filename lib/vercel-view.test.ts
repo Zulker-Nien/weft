@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
-import { createdText, deployState, ENV_SHORT, envLine, pushText, toPush, vercelActions, gitLine, matchScore, pickerList, projectNameFor, pullText, shownFolders, startScope, toPull, validProjectName, vercelBridge, vercelTitle, type VercelEnvironment, type VercelEnvRow, type VercelFolder, type VercelProject, type VercelStatus } from "./vercel-view";
+import { createdText, deployState, ENV_SHORT, envLine, pushAllText, pushText, toPush, vercelActions, gitLine, matchScore, pickerList, projectNameFor, pullText, shownFolders, startScope, toPull, validProjectName, vercelBridge, vercelTitle, type VercelEnvironment, type VercelEnvRow, type VercelFolder, type VercelProject, type VercelStatus } from "./vercel-view";
 
 const project = (name: string, over: Partial<VercelProject> = {}): VercelProject => ({ id: name, name, orgId: "team_1", team: "Acme", teamSlug: "acme", git: null, framework: null, updatedAt: 0, ...over });
 const folder = (path: string, repo: string | null = null, over: Partial<VercelFolder> = {}): VercelFolder => ({ folder: path, repo, link: null, error: null, ...over });
@@ -145,6 +145,14 @@ describe("vault → Vercel env", () => {
     expect(pushText("K", "preview", { pushed: true, label: "a/b" })).toBe("Pushed K to Vercel (preview). It's live from the next deploy");
     expect(pushText("K", "production", { denied: true, label: "a/b" })).toBe("K stayed in the vault: Touch ID wasn't approved");
     expect(pushText("K", "development", { missing: true, label: "a/b" })).toBe("K has no development value in the a/b vault");
+  });
+
+  it("words a Push all: how many went, a no, nothing, and what failed", () => {
+    const base = { label: "a/b", project: "weft" };
+    expect(pushAllText({ ...base, sent: [{ name: "A", environment: "production" }] })).toBe("Pushed 1 secret to weft. Live from the next deploy");
+    expect(pushAllText({ ...base, denied: true })).toBe("Nothing pushed: Touch ID wasn't approved");
+    expect(pushAllText({ ...base, sent: [] })).toBe("Nothing pushed to weft");
+    expect(pushAllText({ ...base, failed: [{ name: "B", environment: "preview", error: "Vercel answered 500." }] })).toBe("Nothing pushed to weft. Failed: B (preview): Vercel answered 500.");
   });
 
   it("counts what Pull would bring down", () => {
