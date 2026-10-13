@@ -127,6 +127,10 @@ begin
     coalesce(new.raw_user_meta_data ->> 'full_name', new.raw_user_meta_data ->> 'name', new.raw_user_meta_data ->> 'user_name')
   );
   return new;
+-- A workspace that can't be made (a slug race, say) must never block the sign-up itself.
+exception when others then
+  raise warning 'personal workspace for % not created: %', new.id, sqlerrm;
+  return new;
 end;
 $$;
 
