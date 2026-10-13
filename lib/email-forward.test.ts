@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { forwardMessage, handle, parseAddress, refusal, restMailer, sameSignature, svixSignature, TOLERANCE, type Mail, type Mailer, type Received } from "./email-forward";
+import { forwardMessage, handle, parseAddress, refusal, restMailer, sameSignature, shouldDrop, svixSignature, TOLERANCE, type Mail, type Mailer, type Received } from "./email-forward";
 
 // The forwarder's checks (Svix's signature and timestamp, the event), the mail it builds, and its client on Resend's API.
 
@@ -163,6 +163,48 @@ describe("handle", () => {
     const m = mailer();
     m.send.mockRejectedValueOnce(new Error("Resend 422 on /emails: bad"));
     await expect(handle(post(), forwarding(m))).rejects.toThrow("Resend 422");
+  });
+
+  it("drops DMARC aggregate reports and postmaster notices with a 200 so Resend doesn't retry", async () => {
+    const forMail = (to: string[]) => mailer({ ...MAIL, to });
+    for (const [to, why] of [
+      [["dmarc@weft.zip"], "dmarc@ mail"],
+      [["postmaster@weft.zip"], "postmaster@ mail"],
+      [["abuse@weft.zip"], "abuse@ mail"],
+      [["dmarc-ripe@weft.zip"], "dmarc@ mail"],
+    ] as const) {
+      const m = forMail([...to]);
+      const res = await handle(post(), forwarding(m));
+      expect(res.status, why).toBe(200);
+      expect(await res.text(), why).toBe(`Dropped ${why}`);
+      expect(m.send, why).not.toHaveBeenCalled();
+    }
+  });
+
+  it("drops the whole mail when any recipient is a dropped alias, so a CC'd real local isn't forwarded", async () => {
+    const m = mailer({ ...MAIL, to: ["hello@weft.zip", "dmarc@weft.zip"] });
+    const res = await handle(post(), forwarding(m));
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("Dropped dmarc@ mail");
+    expect(m.send).not.toHaveBeenCalled();
+  });
+});
+
+describe("shouldDrop", () => {
+  const t = (to: string[]) => shouldDrop({ to });
+  it("drops dmarc, postmaster and abuse locals (and their sub-addresses)", () => {
+    expect(t(["dmarc@weft.zip"])).toBe("dmarc@ mail");
+    expect(t(["postmaster@weft.zip"])).toBe("postmaster@ mail");
+    expect(t(["abuse@weft.zip"])).toBe("abuse@ mail");
+    expect(t(["dmarc-ripe@weft.zip"])).toBe("dmarc@ mail");
+    expect(t(["DMARC@weft.zip"])).toBe("dmarc@ mail");
+  });
+  it("leaves real addresses alone", () => {
+    expect(t(["hello@weft.zip"])).toBeNull();
+    expect(t(["test+dmark@weft.zip"])).toBeNull();
+    expect(t(["user@weft.zip", "abuse@weft.zip"])).toBe("abuse@ mail");
+    expect(t([])).toBeNull();
+    expect(t(["not-an-address"])).toBeNull();
   });
 });
 

@@ -32,13 +32,15 @@ mail, and the deployed Weft on Vercel sends it on.
   can't list domains or read received mail, and the forwarder needs the same key on the deployment.
 - The records go on Vercel DNS with `vercel dns add weft.zip <name> <type> <value> [priority]`.
 - The webhook's signing secret goes in the vault as `RESEND_WEBHOOK_SECRET` and to Vercel with
-  `mcp__secrets__push_to_vercel`; `EMAIL_FORWARD_TO` is a plain production env var (`vercel env add`).
+  `mcp__secrets__push_to_vercel`; `EMAIL_FORWARD_TO` is a plain production env var (`vercel env add`), which the ▲
+  drawer's pull (or live pull) brings into the vault.
 
 ## Responses
 
 | Status | When |
 |---|---|
 | 200 `Forwarded as <id>` | sent on |
+| 200 `Dropped <reason>` | a recipient is a dropped alias (`dmarc@`, `postmaster@`, `abuse@`, and their sub-addresses); Resend won't retry and the reason is in Vercel logs |
 | 202 `Ignored <type>` | any other event, or one without an email id |
 | 400 | the body isn't JSON |
 | 401 | missing headers, a stale timestamp, or a bad signature |

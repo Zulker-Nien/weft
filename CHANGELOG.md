@@ -10,6 +10,9 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Fixed
 
+- The email forwarder drops mail to `dmarc@`, `postmaster@` and `abuse@` (and their sub-addresses) instead of
+  forwarding them: a 200 with the reason in Vercel logs, so Resend doesn't retry and your inbox stays clean
+  (`shouldDrop` in `lib/email-forward.ts`).
 - The "Run a command with secrets?" approval names the card asking and shows the thread's reason, so you know
   which thread wants a secret and why before you allow it.
 - At most 8 idle card CLIs stay open; past that the least recently used close and resume on your next message, so

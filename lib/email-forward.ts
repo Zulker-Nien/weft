@@ -131,6 +131,8 @@ export async function handle(req: Request, o: Forwarding): Promise<Response> {
   const id = event.data?.email_id;
   if (event.type !== "email.received" || typeof id !== "string") return text(`Ignored ${event.type || "event"}`, 202);
   const mail = await o.mailer.received(id);
+  const drop = shouldDrop(mail);
+  if (drop) return text(`Dropped ${drop}`, 200);
   // Inline images are already in the HTML (as data URIs), so only the real attachments are fetched and sent on.
   const files = (await o.mailer.attachments(id)).filter((a) => a.content_disposition !== "inline");
   const attachments = await Promise.all(
@@ -138,6 +140,24 @@ export async function handle(req: Request, o: Forwarding): Promise<Response> {
   );
   const sent = await o.mailer.send(forwardMessage(mail, o.to, o.from, attachments));
   return text(`Forwarded as ${sent}`, 200);
+}
+
+// Address local-parts we never forward: DMARC aggregate reports, RFC 5321 §6.6.7 postmaster
+// notices (bounces, NDRs, mail-loop reports), and abuse@ traffic the receiving inbox already
+// handles. Sub-addresses like `dmarc-ripe` match too. Each one is a 200 so Resend doesn't
+// retry; the reason goes to Vercel logs so the drop is auditable.
+const DROPPED_LOCALS = ["dmarc", "postmaster", "abuse"] as const;
+
+export function shouldDrop(mail: Pick<Mail, "to">): string | null {
+  for (const addr of mail.to) {
+    const at = addr.lastIndexOf("@");
+    if (at < 0) continue;
+    const local = addr.slice(0, at).toLowerCase();
+    for (const prefix of DROPPED_LOCALS) {
+      if (local === prefix || local.startsWith(`${prefix}-`)) return `${prefix}@ mail`;
+    }
+  }
+  return null;
 }
 
 // The Mailer on Resend's REST API, with a "Full access" key.
