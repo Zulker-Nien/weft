@@ -15,6 +15,7 @@ const api = vi.hoisted(() => ({
 vi.mock("@/lib/client", () => ({ api }));
 
 const openExternal = vi.fn();
+const browserOpen = vi.fn(() => Promise.resolve());
 const ada = { id: "u1", email: "ada@b.co", name: "Ada", avatar: "https://img/ada.png", provider: "github" };
 
 function setup() {
@@ -25,7 +26,9 @@ function setup() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  window.threadboard = { openExternal } as unknown as typeof window.threadboard;
+  // The pane path and the system-browser path both stub the shell bridge; specific tests
+  // overwrite `window.threadboard` to exercise each branch.
+  window.threadboard = { openExternal, browser: { open: browserOpen } } as unknown as typeof window.threadboard;
 });
 
 describe("AccountButton", () => {
@@ -58,13 +61,63 @@ describe("AccountButton", () => {
     expect(button).toHaveAttribute("title", "GitHub sign-in is off");
   });
 
-  it("shows your avatar once signed in, which opens Settings", async () => {
+  it("shows your avatar once signed in, with Settings and Your team behind it", async () => {
     api.account.mockResolvedValue({ configured: true, user: ada });
     const { onOpenSettings } = setup();
-    const button = await screen.findByRole("button", { name: "Signed in as Ada" });
-    expect(button.querySelector("img")).toHaveAttribute("src", "https://img/ada.png");
-    await userEvent.click(button);
-    expect(onOpenSettings).toHaveBeenCalled();
+    const avatar = await screen.findByRole("button", { name: "Signed in as Ada" });
+    expect(avatar.querySelector("img")).toHaveAttribute("src", "https://img/ada.png");
+    // No menu until the avatar is clicked; opening Settings is a second click.
+    expect(screen.queryByRole("menu")).toBeNull();
+    await userEvent.click(avatar);
+    const settings = await screen.findByRole("menuitem", { name: /Settings/ });
+    const team = screen.getByRole("menuitem", { name: /Your team/ });
+    expect(team).toHaveTextContent("Invite teammates on weft.zip");
+    await userEvent.click(settings);
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens Your team in the pane when in the desktop, falling back to the system browser", async () => {
+    api.account.mockResolvedValue({ configured: true, user: ada });
+    setup();
+    await userEvent.click(await screen.findByRole("button", { name: "Signed in as Ada" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: /Your team/ }));
+    expect(browserOpen).toHaveBeenCalledWith("https://weft.zip/team", "board");
+    expect(openExternal).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the system browser when the pane is missing (older shells)", async () => {
+    api.account.mockResolvedValue({ configured: true, user: ada });
+    (window as unknown as { threadboard: unknown }).threadboard = { openExternal };
+    setup();
+    await userEvent.click(await screen.findByRole("button", { name: "Signed in as Ada" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: /Your team/ }));
+    expect(openExternal).toHaveBeenCalledWith("https://weft.zip/team");
+    expect(browserOpen).not.toHaveBeenCalled();
+  });
+
+  it("doesn't open the team page in the pane when the desktop isn't running at all", async () => {
+    api.account.mockResolvedValue({ configured: true, user: ada });
+    delete (window as unknown as { threadboard?: unknown }).threadboard;
+    setup();
+    await userEvent.click(await screen.findByRole("button", { name: "Signed in as Ada" }));
+    // Outside the desktop, the helper's pane branch is unavailable; window.open takes over.
+    // We just assert the pane path is not taken — jsdom's window.open is a no-op stub here.
+    await userEvent.click(await screen.findByRole("menuitem", { name: /Your team/ }));
+    expect(browserOpen).not.toHaveBeenCalled();
+  });
+
+  it("closes the account menu on Escape and on an outside click", async () => {
+    api.account.mockResolvedValue({ configured: true, user: ada });
+    setup();
+    const avatar = await screen.findByRole("button", { name: "Signed in as Ada" });
+    await userEvent.click(avatar);
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("menu")).toBeNull();
+    await userEvent.click(avatar);
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    await userEvent.click(document.body);
+    expect(screen.queryByRole("menu")).toBeNull();
   });
 
   it("falls back to your email, then an initial", async () => {

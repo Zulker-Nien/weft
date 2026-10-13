@@ -6,6 +6,12 @@
 // button is "Continue with GitHub" and a magic-link row, both optional via
 // props. The package's LoginForm would be a drop-in when the upstream tag ships
 // — pass `providers={["github"]} providerLabels={{ github: "GitHub" }}`.
+//
+// On the deployed weft.zip (`deployed: true`) the buttons become plain links
+// to /auth/sign-in and the magic-link row hides — the cookie session lives on
+// the same origin, so a GET round trip does the whole job without JS. The
+// desktop / `next dev` flow keeps the JS-driven `useAuth().signInWithOAuth`
+// path that opens the system browser.
 import { useState, type SubmitEvent } from "react";
 import { api } from "../client";
 import { useAuth, type AuthProvider } from "./hooks";
@@ -16,6 +22,12 @@ export type LoginFormProps = {
   providers?: AuthProvider[];
   /** Optional magic-link email row. */
   showEmail?: boolean;
+  /**
+   * Render plain links to /auth/sign-in instead of JS-driven buttons. Set by
+   * the /login page when the cookie session is the source of truth (the
+   * deployed weft.zip). Defaults to false to keep the desktop flow unchanged.
+   */
+  deployed?: boolean;
 };
 
 const PRIMARY_LABEL: Record<AuthProvider, string> = {
@@ -43,7 +55,13 @@ function ProviderIcon({ provider }: { provider: AuthProvider }) {
   );
 }
 
-export function LoginForm({ defaultNext = "/app", providers = ["github"], showEmail = false }: LoginFormProps) {
+// Build a /auth/sign-in?provider=…&next=… URL for the deployed-site link path.
+function webSignInHref(provider: AuthProvider, next: string): string {
+  const params = new URLSearchParams({ provider, next });
+  return `/auth/sign-in?${params.toString()}`;
+}
+
+export function LoginForm({ defaultNext = "/app", providers = ["github"], showEmail = false, deployed = false }: LoginFormProps) {
   const { busy, error, waiting, signInWithOAuth } = useAuth({ defaultNext });
   const [email, setEmail] = useState("");
 
@@ -61,6 +79,30 @@ export function LoginForm({ defaultNext = "/app", providers = ["github"], showEm
   const initialParams = typeof window === "undefined" ? new URLSearchParams() : new URLSearchParams(window.location.search);
   const initialReason = initialParams.get("error") === "link" ? initialParams.get("reason") : null;
   const [reason] = useState<string | null>(initialReason);
+
+  // Deployed path: a plain list of GET links, no JS, no waiting spinner.
+  // The /auth/sign-in route is the round trip; the browser follows redirects.
+  if (deployed) {
+    return (
+      <div className="flex flex-col gap-3">
+        {providers.map((id) => (
+          <a
+            key={id}
+            href={webSignInHref(id, defaultNext)}
+            className="flex w-full items-center justify-center gap-2 rounded-md border border-line-strong bg-card px-4 py-2.5 text-[14px] font-semibold text-ink transition hover:bg-sunken"
+          >
+            <ProviderIcon provider={id} />
+            Continue with {PRIMARY_LABEL[id]}
+          </a>
+        ))}
+        {reason && (
+          <p className="text-[12.5px] text-danger" role="alert">
+            The sign-in link didn&apos;t finish ({reason}). Try again.
+          </p>
+        )}
+      </div>
+    );
+  }
 
   if (waiting && !busy) {
     return (

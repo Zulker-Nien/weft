@@ -14,10 +14,8 @@ import type { AccountProvider, AccountUser, AccountView } from "./types";
 // (see redirectUrl). PKCE keeps the code verifier in the session file, so the link only works on the
 // machine that started the sign-in.
 
-// Weft prod. The publishable key is safe to ship in the app; row-level security guards the data.
-// WEFT_SUPABASE_KEY="" turns accounts off.
-export const SUPABASE_URL = process.env.WEFT_SUPABASE_URL || "https://lqjyravglujyizyqypxq.supabase.co";
-export const SUPABASE_KEY = process.env.WEFT_SUPABASE_KEY ?? "sb_publishable_DHNc-IYsRJSJkbN38qZNLQ_G59w6uVe";
+import { SUPABASE_KEY, SUPABASE_URL } from "./supabase-project";
+export { SUPABASE_KEY, SUPABASE_URL };
 export const CALLBACK_PATH = "/api/auth/callback";
 const SESSION_FILE = path.join(DATA_DIR, "account.json");
 

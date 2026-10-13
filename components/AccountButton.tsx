@@ -1,28 +1,82 @@
 "use client";
 
+import { useEffect, useId, useRef, useState } from "react";
 import { useAccount } from "@/lib/use-account";
+import { useEscape } from "@/lib/use-escape";
+import { openTeamPage } from "./board-palette";
 import Avatar from "./Avatar";
 import Icon, { Spinner } from "./Icon";
 
 // The top bar's account control, right of Copilot. Signed out: "Sign in" with GitHub, which finishes in
-// your browser. Signed in: just your avatar, which opens Settings, where Sign out lives. Hidden while
+// your browser. Signed in: just your avatar, which opens a tiny menu (Settings, Your team). Hidden while
 // loading, on errors, and in builds without a Supabase key, so it never costs header room for nothing.
 export default function AccountButton({ onOpenSettings }: { onOpenSettings: () => void }) {
   const { state, busy, waiting, error, signIn } = useAccount();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+  useEscape(menuOpen, () => setMenuOpen(false));
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
+  }, [menuOpen]);
+
   if (state.kind !== "ready" || !state.view.configured) return null;
 
   const user = state.view.user;
   if (user) {
     const who = user.name ?? user.email ?? "your account";
     return (
-      <button
-        onClick={onOpenSettings}
-        title={`Signed in as ${who}`}
-        aria-label={`Signed in as ${who}`}
-        className="rounded-full p-0.5 hover:bg-sunken"
-      >
-        <Avatar user={user} size={24} />
-      </button>
+      <div ref={menuRef} className="relative shrink-0">
+        <button
+          onClick={() => setMenuOpen((o) => !o)}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          aria-controls={menuOpen ? menuId : undefined}
+          title={`Signed in as ${who}`}
+          aria-label={`Signed in as ${who}`}
+          className="rounded-full p-0.5 hover:bg-sunken"
+        >
+          <Avatar user={user} size={24} />
+        </button>
+        {menuOpen && (
+          <div
+            id={menuId}
+            role="menu"
+            className="absolute right-0 top-full z-40 mt-1.5 w-[220px] rounded-lg border border-line bg-panel p-1 shadow-lg"
+          >
+            <button
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false);
+                onOpenSettings();
+              }}
+              className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] text-ink hover:bg-sunken"
+            >
+              <Icon name="sliders" size={14} className="text-muted" />
+              Settings…
+            </button>
+            <button
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false);
+                openTeamPage();
+              }}
+              className="flex w-full flex-col items-start gap-0.5 rounded-md px-2.5 py-1.5 text-left hover:bg-sunken"
+            >
+              <span className="flex w-full items-center gap-2 text-[13px] text-ink">
+                <Icon name="globe" size={14} className="text-muted" />
+                Your team
+              </span>
+              <span className="pl-6 text-[11.5px] leading-snug text-muted">Invite teammates on weft.zip</span>
+            </button>
+          </div>
+        )}
+      </div>
     );
   }
 

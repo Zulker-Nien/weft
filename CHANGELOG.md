@@ -10,6 +10,9 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Added
 
+- Weft teams on weft.zip: every account gets a workspace; owners and admins invite people by email, change roles and remove
+  members at `/<workspace>/team`, and **Your team** in the account menu opens it in the pane (docs/architecture/teams.md).
+- weft.zip sign-in has its own cookie session (`/auth/sign-in`, `/auth/callback`, `/auth/sign-out`), so each visitor is their own account.
 - `mcp__secrets__set_value`: a thread stores a secret it generated (a signing secret) into one of its 🔐 blanks after Touch ID,
   blanks only, value never echoed (`electron/vault-routes.cjs`, `POST /secrets/set`; docs/architecture/secrets.md).
 - Vercel drawer: pull plain env variables the 🔐 vault has no value for (never replacing one), and **Live pull from Vercel**,

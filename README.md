@@ -412,6 +412,13 @@ shows you signed in a moment later. The session is kept in `~/.weft/account.json
 (sealed by the Keychain in the desktop app); Sign out forgets it on this Mac only. An email link has
 to be opened on the Mac that asked for it.
 
+### Teams
+
+Every Weft account has a workspace. **Your team** in the account menu opens `weft.zip/team` in the browser pane
+(sign in with GitHub there once): the roster, roles (owner, admin, member), email invites and pending invites. An
+invite link joins whichever account opens it. Billing and the shared 🔐 vault hang off the same workspace
+(docs/architecture/teams.md).
+
 ## Star and tags
 
 Star the cards worth keeping: hover a card and click its ☆ (or click ☆ at the top of an open thread), press K in its
@@ -663,8 +670,9 @@ shared-link picture is `app/opengraph-image.tsx`. The page is one screen, on pur
 panel and drawers closed).
 
 `weft.zip/login` is a real sign-in page (GitHub only) so a visitor can leave the marketing site with
-a Weft account without the desktop app first. A signed-in visit lands on a small "you're in" card at
-`/app` with the download CTA; signing out or starting over is a single click. The page is
+a Weft account without the desktop app first. It has its own cookie session (`/auth/sign-in`, `/auth/callback`,
+`/auth/sign-out`, refreshed by `proxy.ts`), so each visitor is their own account. A sign-in lands on the team page
+(`/team`); `/app` is a small "you're in" card with the download CTA. The page is
 `app/login/page.tsx`; the form is in `lib/auth/`, a thin wrapper whose public API mirrors
 `@aimhuge/auth`.
 

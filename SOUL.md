@@ -138,6 +138,11 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   `~/.weft/account.json` (Keychain-sealed by `electron/account-store.cjs`), drawn by
   `components/AccountButton.tsx` (top bar) and `components/AccountSettings.tsx`; schema in
   `supabase/migrations/`, MCP server in `.mcp.json`.
+- `lib/teams.ts` + `lib/team-actions.ts` + `lib/web-session.ts` + `lib/web-auth.ts` + `proxy.ts` + `app/auth/*` + `app/team` +
+  `app/[orgSlug]/*` + `app/invite/[token]` + `components/team/*`: Weft teams on weft.zip (workspaces, roles, email invites; every
+  account gets one through `supabase/migrations/20261013170000_teams.sql`), on the visitor's own cookie session. Uses `@aimhuge/teams`
+  (`vendor/*.tgz`) for its helpers only: its `requireOrg` and actions pass a client into `"use cache"`, which Next 16 refuses, so the
+  gate is Weft's own. Never pass the gate's `service` client to a client component (docs/architecture/teams.md, teams-vault.md).
 - `electron/vault*.cjs` + `electron/dotenv.cjs` + `electron/device-key.cjs` + `components/VaultDrawer.tsx`: the 🔐 secrets vault
   (docs/architecture/secrets.md); decryption only in main, IPC to the board window only, `lib/vault-view.ts` + `lib/use-vault.ts` on the board side.
   A thread that needs a key it doesn't have puts the name in as a blank right away with `mcp__secrets__add_blank` (with a hint for where

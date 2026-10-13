@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { makeCard } from "./test-utils";
-import { boardPaletteItems, promptItems, type PaletteActions, type PaletteState } from "./board-palette";
+import { boardPaletteItems, openTeamPage, promptItems, type PaletteActions, type PaletteState } from "./board-palette";
 
 vi.mock("@/lib/theme", () => ({ THEMES: [{ id: "dark", label: "Dark" }], SCENES: [{ id: "canyon", label: "Canyon" }], setTheme: vi.fn() }));
+
+const { openExternal } = vi.hoisted(() => ({ openExternal: vi.fn() }));
+vi.mock("@/lib/auth/desktop", () => ({ openExternal }));
 
 const client = vi.hoisted(() => ({ restartWhenIdle: vi.fn(), cancelRestart: vi.fn() }));
 vi.mock("@/lib/client", async (importOriginal) => {
@@ -12,6 +15,7 @@ vi.mock("@/lib/client", async (importOriginal) => {
 });
 
 beforeEach(() => {
+  vi.clearAllMocks();
   client.restartWhenIdle.mockReset();
   client.cancelRestart.mockReset();
 });
@@ -46,6 +50,7 @@ describe("boardPaletteItems", () => {
   it("lists the board's commands, All projects, and no thread commands with nothing open", () => {
     const items = boardPaletteItems(state(), actions());
     expect(ids(items)).toContain("cmd-new");
+    expect(ids(items)).toContain("cmd-team");
     expect(ids(items)).toContain("cmd-theme-dark");
     expect(ids(items)).toContain("cmd-theme-canyon");
     expect(ids(items)).toContain("cmd-add-secret");
@@ -54,6 +59,14 @@ describe("boardPaletteItems", () => {
     expect(ids(items)).not.toContain("cmd-archive-done");
     expect(ids(items)).not.toContain("cmd-archive-undo");
     expect(ids(items)).not.toContain("cmd-toggle-archived");
+  });
+
+  it("offers Your team, which opens the team page via the shared helper", () => {
+    const byId = new Map(boardPaletteItems(state(), actions()).map((i) => [i.id, i]));
+    const team = byId.get("cmd-team");
+    expect(team?.label).toBe("Your team");
+    expect(team?.keywords).toContain("team");
+    expect(team?.icon).toBe("globe");
   });
 
   it("offers Restart Weft when idle, which arms the restart", () => {
@@ -169,5 +182,27 @@ describe("promptItems", () => {
     expect(items[0]).toMatchObject({ id: "prompt-c1-0", group: "Prompts", snippet: "fix the login", root: "/root" });
     items[0]?.run();
     expect(openCard).toHaveBeenCalledWith(card);
+  });
+});
+
+describe("openTeamPage", () => {
+  it("opens the team page in the pane when the desktop bridge is there", () => {
+    const browserOpen = vi.fn(() => Promise.resolve());
+    (window as unknown as { threadboard: unknown }).threadboard = { browser: { open: browserOpen } };
+    openTeamPage();
+    expect(browserOpen).toHaveBeenCalledWith("https://weft.zip/team", "board");
+    expect(openExternal).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the system browser when the desktop isn't running", () => {
+    delete (window as unknown as { threadboard?: unknown }).threadboard;
+    openTeamPage();
+    expect(openExternal).toHaveBeenCalledWith("https://weft.zip/team");
+  });
+
+  it("falls back to the system browser when the bridge is missing the pane (older shells)", () => {
+    (window as unknown as { threadboard: unknown }).threadboard = {};
+    openTeamPage();
+    expect(openExternal).toHaveBeenCalledWith("https://weft.zip/team");
   });
 });

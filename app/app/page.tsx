@@ -1,7 +1,9 @@
 // The /app page: where a successful sign-in lands on weft.zip. Today the
 // deployed site is the marketing surface, not a product, so this is a small
 // "you're in" card with a download CTA. If the cloud product grows a
-// synced-boards list later, it goes here.
+// synced-boards list later, it goes here. The "Your team" link opens the
+// visitor's workspace; a fresh account has a personal workspace seeded by the
+// /auth/callback's on_auth_user_created_workspace trigger.
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -30,10 +32,13 @@ async function AppBody() {
           sync boards, enable share links, and run the Puku trial on Weft&apos;s key.
         </p>
         <div className="wz-ctas" style={{ marginTop: 16 }}>
-          <a className="wz-btn wz-btnPrimary" href={download.href}>
-            {download.label}
-          </a>
+          <Link className="wz-btn wz-btnPrimary" href="/team">
+            Your team →
+          </Link>
         </div>
+        <p className="wz-note" style={{ marginTop: 14 }}>
+          <a href={download.href}>{download.label}</a>
+        </p>
         <p className="wz-authSub" style={{ marginTop: 24, fontSize: 13 }}>
           <Link href="/">← Back to weft.zip</Link>
         </p>

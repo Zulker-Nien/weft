@@ -3,12 +3,19 @@
 // safeNextPath on the `?next=` param. Today the form is a thin wrapper that
 // renders one "Continue with GitHub" button; the magic-link row is opt-in.
 //
+// On the deployed site the form is a set of plain GET links to /auth/sign-in
+// and the signed-in prompt is a POST form to /auth/sign-out — the cookie
+// session is on the same origin, so a no-JS round trip is the whole job. The
+// desktop / `next dev` flow keeps the JS-driven useAuth() path.
+//
 // Only rendered on the deployed site (Vercel / WEFT_HOME); in the desktop app
 // the board's sign-in dialog is the way in, not this page.
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { LoginForm, SignedInPrompt, readSessionIdentity, safeNextPath } from "@/lib/auth";
 import { isDeployed } from "@/lib/home";
+
+const DEFAULT_NEXT = "/team";
 
 export const metadata: Metadata = {
   title: "Sign in to Weft",
@@ -32,11 +39,11 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 async function LoginBody({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const [{ next }, identity] = await Promise.all([searchParams, readSessionIdentity()]);
-  const safeNext = safeNextPath(next, "/app");
+  const safeNext = safeNextPath(next, DEFAULT_NEXT);
   return (
     <>
-      {identity && <SignedInPrompt identity={identity} next={safeNext} />}
-      <LoginForm defaultNext={safeNext} providers={["github"]} />
+      {identity && <SignedInPrompt identity={identity} next={safeNext} deployed />}
+      <LoginForm defaultNext={safeNext} providers={["github"]} deployed />
     </>
   );
 }

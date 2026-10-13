@@ -1,9 +1,11 @@
 // Server-side auth helpers. Mirror `@aimhuge/auth/server` so we can swap to the
-// package when the upstream tag ships. Today, they read the same `lib/account.ts`
-// PKCE session, so the file-based session in `~/.weft/account.json` (0600) keeps
-// being the one source of truth.
+// package when the upstream tag ships. On the desktop / `next dev` they read
+// the file-based PKCE session in `~/.weft/account.json` (0600); on the deployed
+// weft.zip they read the per-visitor cookie session (lib/web-session.ts), so
+// each web visitor is a real account.
 import { accountClient, accountView, finishSignIn, signOut, toAccountUser } from "../account";
 import { isDeployed } from "../home";
+import { readWebSessionIdentity } from "../web-auth";
 import { safeNextPath } from "./next-path";
 import { identityFromUser, type SessionIdentity } from "./identity";
 
@@ -48,7 +50,14 @@ export function createAuthCallback({ defaultNext, loginPath = "/login" }: { defa
 
 /** Read the signed-in identity for the "already signed in" banner on `/login`. */
 export async function readSessionIdentity(): Promise<SessionIdentity | null> {
-  if (!isDeployed()) return null;
+  if (isDeployed()) {
+    // The deployed site reads the per-visitor cookie session (lib/web-session.ts);
+    // accountClient is the desktop's file-based PKCE session and isn't set up for
+    // a web visitor.
+    const web = await readWebSessionIdentity();
+    if (!web) return null;
+    return { name: web.name, email: web.email, avatarUrl: web.avatar };
+  }
   try {
     const supabase = accountClient();
     const {

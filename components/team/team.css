@@ -1,0 +1,1028 @@
+/* The /[orgSlug]/* page styles (app/[orgSlug]/layout.tsx, app/[orgSlug]/team/page.tsx,
+   app/invite/[token]/page.tsx). Same wz- prefix and palette as
+   components/home/home.css so the workspace shell looks like part of
+   weft.zip rather than a bolt-on. Plain global CSS — next.config.ts routes
+   every .css through the Tailwind loader, which drops module exports, so
+   there's no class hashing to lean on. Variables that the home page sets on
+   .wz-root are inherited; this file adds the layout primitives the team
+   pages need. */
+
+/* Workspace shell: header + main, both inside .wz-root's overflow container. */
+
+.wz-workspace {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.wz-workspaceHeader {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 28px;
+  border-bottom: 1px solid rgb(236 229 216 / 0.1);
+  background: rgb(28 34 50 / 0.5);
+  backdrop-filter: blur(6px);
+}
+
+.wz-workspaceBrand {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 20px;
+  color: var(--thread);
+  letter-spacing: -0.01em;
+}
+
+.wz-workspaceSwitcher {
+  position: relative;
+}
+
+.wz-workspaceSwitcherButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid rgb(236 229 216 / 0.14);
+  background: rgb(15 19 28 / 0.4);
+  color: var(--thread-2);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.wz-workspaceSwitcherButton:hover,
+.wz-workspaceSwitcherButton[aria-expanded="true"] {
+  border-color: rgb(236 229 216 / 0.3);
+  color: var(--thread);
+}
+
+.wz-workspaceSwitcherCaret {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.wz-workspaceSwitcherMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 220px;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid rgb(236 229 216 / 0.14);
+  background: rgb(28 34 50 / 0.95);
+  box-shadow: 0 12px 40px -10px rgb(0 0 0 / 0.6);
+  backdrop-filter: blur(8px);
+  z-index: 20;
+}
+
+.wz-workspaceSwitcherItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--thread);
+  font-size: 14px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.wz-workspaceSwitcherItem:hover,
+.wz-workspaceSwitcherItem[aria-current="true"] {
+  background: rgb(236 229 216 / 0.08);
+  color: var(--clay-2);
+}
+
+.wz-workspaceNav {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.wz-workspaceNavLink {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  color: var(--thread-2);
+  text-decoration: none;
+  transition: color 0.15s, background 0.15s;
+}
+
+.wz-workspaceNavLink:hover {
+  color: var(--thread);
+  background: rgb(236 229 216 / 0.06);
+}
+
+.wz-workspaceNavLink[aria-current="page"] {
+  color: var(--thread);
+  background: rgb(236 229 216 / 0.1);
+}
+
+.wz-workspaceUser {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 4px;
+  border-radius: 999px;
+  border: 1px solid rgb(236 229 216 / 0.14);
+  background: rgb(15 19 28 / 0.4);
+  color: var(--thread-2);
+  font-size: 13px;
+  max-width: 180px;
+}
+
+.wz-workspaceUserAvatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--clay);
+  color: #1a0e07;
+  font-weight: 600;
+  font-size: 11px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.wz-workspaceUserAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.wz-workspaceUserName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wz-workspaceSignOut {
+  border: 1px solid rgb(236 229 216 / 0.14);
+  background: transparent;
+  color: var(--thread-2);
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.wz-workspaceSignOut:hover {
+  border-color: rgb(236 229 216 / 0.3);
+  color: var(--thread);
+}
+
+.wz-workspaceMain {
+  flex: 1;
+  padding: 36px 28px 64px;
+  max-width: 880px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.wz-workspaceLoading {
+  padding: 24px 0;
+  color: var(--thread-3);
+  font-size: 14px;
+}
+
+/* Team page */
+
+.wz-teamPage {
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+
+.wz-teamHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wz-teamTitle {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 36px;
+  letter-spacing: -0.02em;
+  color: var(--thread);
+}
+
+.wz-teamSub {
+  margin: 0;
+  font-size: 15px;
+  color: var(--thread-2);
+}
+
+.wz-teamSection {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.wz-teamSectionTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--thread-3);
+}
+
+.wz-teamFooter {
+  margin-top: 16px;
+  padding-top: 20px;
+  border-top: 1px solid rgb(236 229 216 / 0.1);
+  font-size: 13.5px;
+  color: var(--thread-3);
+  font-style: italic;
+}
+
+/* Roster table */
+
+.wz-roster {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid rgb(236 229 216 / 0.1);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgb(28 34 50 / 0.4);
+}
+
+.wz-roster th,
+.wz-roster td {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 14px;
+  vertical-align: middle;
+}
+
+.wz-roster th {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--thread-3);
+  background: rgb(15 19 28 / 0.5);
+  border-bottom: 1px solid rgb(236 229 216 / 0.1);
+}
+
+.wz-roster tr + tr td {
+  border-top: 1px solid rgb(236 229 216 / 0.06);
+}
+
+.wz-rosterYou {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgb(218 122 76 / 0.15);
+  color: var(--clay-2);
+  border-radius: 4px;
+}
+
+.wz-rosterName {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wz-rosterNamePrimary {
+  color: var(--thread);
+  font-weight: 500;
+}
+
+.wz-rosterNameSecondary {
+  color: var(--thread-3);
+  font-size: 12.5px;
+}
+
+.wz-rosterDash {
+  color: var(--thread-3);
+}
+
+.wz-rosterDate {
+  color: var(--thread-2);
+  white-space: nowrap;
+}
+
+.wz-rosterSelect {
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid rgb(236 229 216 / 0.14);
+  background: rgb(15 19 28 / 0.5);
+  color: var(--thread);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.wz-rosterSelect:focus-visible {
+  outline: 2px solid var(--clay);
+  outline-offset: 1px;
+}
+
+.wz-rosterButton {
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid rgb(236 229 216 / 0.14);
+  background: transparent;
+  color: var(--thread-2);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.wz-rosterButton:hover:not(:disabled) {
+  border-color: rgb(218 122 76 / 0.6);
+  color: var(--clay-2);
+}
+
+.wz-rosterButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.wz-rosterButtonDanger:hover:not(:disabled) {
+  border-color: rgb(220 100 100 / 0.6);
+  color: rgb(255 180 180);
+}
+
+.wz-rosterMessage {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--thread-2);
+}
+
+.wz-rosterMessageError {
+  color: rgb(255 180 180);
+}
+
+.wz-rosterMessageOk {
+  color: rgb(150 220 180);
+}
+
+/* Invite form */
+
+.wz-inviteForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgb(236 229 216 / 0.1);
+  border-radius: 12px;
+  background: rgb(28 34 50 / 0.4);
+}
+
+.wz-inviteRow {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.wz-inviteField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.wz-inviteField label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--thread-3);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.wz-inviteInput {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgb(236 229 216 / 0.14);
+  background: rgb(15 19 28 / 0.5);
+  color: var(--thread);
+  font-size: 14px;
+  width: 100%;
+}
+
+.wz-inviteInput:focus-visible {
+  outline: 2px solid var(--clay);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.wz-inviteSelect {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgb(236 229 216 / 0.14);
+  background: rgb(15 19 28 / 0.5);
+  color: var(--thread);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.wz-inviteSelect:focus-visible {
+  outline: 2px solid var(--clay);
+  outline-offset: 1px;
+}
+
+.wz-inviteRoleDescription {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--thread-3);
+  min-height: 1.4em;
+}
+
+.wz-inviteSubmit {
+  align-self: flex-start;
+  padding: 9px 18px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--clay);
+  color: #1a0e07;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.2s;
+}
+
+.wz-inviteSubmit:hover:not(:disabled) {
+  background: var(--clay-2);
+  transform: translateY(-1px);
+}
+
+.wz-inviteSubmit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.wz-inviteMessage {
+  font-size: 13px;
+}
+
+.wz-inviteMessageError {
+  color: rgb(255 180 180);
+}
+
+.wz-inviteMessageOk {
+  color: rgb(150 220 180);
+}
+
+.wz-inviteFieldError {
+  color: rgb(255 180 180);
+  font-size: 12.5px;
+  margin-top: 2px;
+}
+
+/* Pending invites */
+
+.wz-pendingList {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgb(236 229 216 / 0.1);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgb(28 34 50 / 0.4);
+}
+
+.wz-pendingRow {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+}
+
+.wz-pendingRow + .wz-pendingRow {
+  border-top: 1px solid rgb(236 229 216 / 0.06);
+}
+
+.wz-pendingEmail {
+  color: var(--thread);
+  font-size: 14px;
+}
+
+.wz-pendingRole {
+  font-size: 12.5px;
+  color: var(--thread-2);
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgb(236 229 216 / 0.06);
+}
+
+.wz-pendingExpiry {
+  font-size: 12px;
+  color: var(--thread-3);
+}
+
+.wz-pendingRevoke {
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid rgb(236 229 216 / 0.14);
+  background: transparent;
+  color: var(--thread-2);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.wz-pendingRevoke:hover:not(:disabled) {
+  border-color: rgb(220 100 100 / 0.6);
+  color: rgb(255 180 180);
+}
+
+.wz-pendingRevoke:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Leave button section */
+
+.wz-leaveButton {
+  padding: 9px 18px;
+  border-radius: 8px;
+  border: 1px solid rgb(220 100 100 / 0.4);
+  background: transparent;
+  color: rgb(255 180 180);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.wz-leaveButton:hover:not(:disabled) {
+  background: rgb(220 100 100 / 0.1);
+}
+
+.wz-leaveButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.wz-leaveMessage {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.wz-leaveMessageError {
+  color: rgb(255 180 180);
+}
+
+/* Join form on /invite/[token] */
+
+.wz-joinForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.wz-joinSubmit {
+  align-self: flex-start;
+  padding: 11px 22px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--clay);
+  color: #1a0e07;
+  font-size: 14.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.2s;
+}
+
+.wz-joinSubmit:hover:not(:disabled) {
+  background: var(--clay-2);
+  transform: translateY(-1px);
+}
+
+.wz-joinSubmit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.wz-joinMessage {
+  font-size: 13px;
+  color: rgb(255 180 180);
+}
+
+.wz-joinWelcome {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: rgb(150 220 180);
+}
+
+@media (max-width: 720px) {
+  .wz-workspaceHeader {
+    flex-wrap: wrap;
+    padding: 14px 18px;
+    gap: 10px;
+  }
+
+  .wz-workspaceNav {
+    order: 4;
+    width: 100%;
+    margin-left: 0;
+    overflow-x: auto;
+  }
+
+  .wz-workspaceMain {
+    padding: 24px 18px 48px;
+  }
+
+  .wz-teamTitle {
+    font-size: 30px;
+  }
+
+  .wz-roster th:nth-child(3),
+  .wz-roster td:nth-child(3) {
+    display: none;
+  }
+
+  .wz-inviteRow {
+    flex-direction: column;
+  }
+
+  .wz-pendingRow {
+    grid-template-columns: 1fr auto;
+  }
+
+  .wz-pendingExpiry,
+  .wz-pendingRole {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wz-inviteSubmit,
+  .wz-joinSubmit {
+    transition: none;
+  }
+}
+
+/* billing */
+
+.wz-billingPage {
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+
+.wz-billingHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wz-billingTitle {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 36px;
+  letter-spacing: -0.02em;
+  color: var(--thread);
+}
+
+.wz-billingSub {
+  margin: 0;
+  font-size: 15px;
+  color: var(--thread-2);
+}
+
+.wz-billingSection {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.wz-billingSectionTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--thread-3);
+}
+
+.wz-billingNotice {
+  padding: 14px 18px;
+  border-radius: 10px;
+  background: rgb(218 122 76 / 0.1);
+  border: 1px solid rgb(218 122 76 / 0.3);
+  color: var(--clay-2);
+  font-size: 14px;
+}
+
+.wz-billingNoticeMuted {
+  background: rgb(236 229 216 / 0.04);
+  border-color: rgb(236 229 216 / 0.12);
+  color: var(--thread-2);
+}
+
+.wz-billingPlanCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px 22px;
+  border: 1px solid rgb(236 229 216 / 0.1);
+  border-radius: 12px;
+  background: rgb(28 34 50 / 0.4);
+}
+
+.wz-billingPlanHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.wz-billingPlanName {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 22px;
+  color: var(--thread);
+}
+
+.wz-billingPlanStatus {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgb(150 220 180 / 0.15);
+  color: rgb(150 220 180);
+}
+
+.wz-billingPlanStatus-active,
+.wz-billingPlanStatus-trialing {
+  background: rgb(150 220 180 / 0.15);
+  color: rgb(150 220 180);
+}
+
+.wz-billingPlanStatus-past_due,
+.wz-billingPlanStatus-canceled,
+.wz-billingPlanStatus-incomplete {
+  background: rgb(255 180 180 / 0.15);
+  color: rgb(255 180 180);
+}
+
+.wz-billingPlanMeta {
+  font-size: 14px;
+  color: var(--thread-2);
+}
+
+.wz-billingCancelNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgb(255 180 180 / 0.06);
+  border: 1px solid rgb(255 180 180 / 0.2);
+  font-size: 13.5px;
+  color: rgb(255 180 180);
+  margin-top: 4px;
+}
+
+.wz-billingUsage {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px 22px;
+  border: 1px solid rgb(236 229 216 / 0.1);
+  border-radius: 12px;
+  background: rgb(28 34 50 / 0.4);
+}
+
+.wz-billingUsageText {
+  font-size: 15px;
+  color: var(--thread);
+}
+
+.wz-billingUsageMeta {
+  font-size: 13px;
+  color: var(--thread-3);
+}
+
+.wz-billingUsageBar {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgb(236 229 216 / 0.08);
+  overflow: hidden;
+}
+
+.wz-billingUsageBarFill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, var(--clay), var(--clay-2));
+  border-radius: 999px;
+  transition: width 0.3s ease-out;
+}
+
+.wz-billingUsageMuted {
+  font-style: italic;
+}
+
+.wz-billingProCard {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px 26px;
+  border: 1px solid rgb(218 122 76 / 0.3);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgb(218 122 76 / 0.05), rgb(28 34 50 / 0.4));
+}
+
+.wz-billingProBlurb {
+  font-size: 15px;
+  color: var(--thread-2);
+}
+
+.wz-billingProPrice {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.wz-billingProPriceRow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid rgb(236 229 216 / 0.12);
+  border-radius: 10px;
+  background: rgb(15 19 28 / 0.4);
+}
+
+.wz-billingProPriceLabel {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--thread-3);
+}
+
+.wz-billingProPriceValue {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 26px;
+  letter-spacing: -0.01em;
+  color: var(--thread);
+}
+
+.wz-billingProPriceCadence {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--thread-3);
+  margin-left: 4px;
+}
+
+.wz-billingProPriceSavings {
+  font-size: 12px;
+  color: rgb(150 220 180);
+  font-weight: 500;
+}
+
+.wz-billingProActions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.wz-billingButton {
+  padding: 9px 18px;
+  border-radius: 999px;
+  border: 1px solid rgb(236 229 216 / 0.18);
+  background: rgb(15 19 28 / 0.4);
+  color: var(--thread);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.wz-billingButton:hover:not(:disabled) {
+  border-color: rgb(236 229 216 / 0.3);
+  color: var(--clay-2);
+}
+
+.wz-billingButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.wz-billingButtonPrimary {
+  border: 0;
+  background: var(--clay);
+  color: #1a0e07;
+  font-weight: 600;
+}
+
+.wz-billingButtonPrimary:hover:not(:disabled) {
+  background: var(--clay-2);
+  color: #1a0e07;
+}
+
+.wz-billingButtonGhost {
+  background: transparent;
+  border-color: rgb(150 220 180 / 0.4);
+  color: rgb(150 220 180);
+}
+
+.wz-billingButtonGhost:hover:not(:disabled) {
+  border-color: rgb(150 220 180 / 0.7);
+  color: rgb(180 230 200);
+}
+
+.wz-billingButtonDanger {
+  background: transparent;
+  border-color: rgb(220 100 100 / 0.4);
+  color: rgb(255 180 180);
+}
+
+.wz-billingButtonDanger:hover:not(:disabled) {
+  border-color: rgb(220 100 100 / 0.7);
+  color: rgb(255 200 200);
+}
+
+.wz-billingInvoiceTable {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid rgb(236 229 216 / 0.1);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgb(28 34 50 / 0.4);
+}
+
+.wz-billingInvoiceTable th,
+.wz-billingInvoiceTable td {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 14px;
+  vertical-align: middle;
+}
+
+.wz-billingInvoiceTable th {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--thread-3);
+  background: rgb(15 19 28 / 0.5);
+  border-bottom: 1px solid rgb(236 229 216 / 0.1);
+}
+
+.wz-billingInvoiceRow + .wz-billingInvoiceRow td {
+  border-top: 1px solid rgb(236 229 216 / 0.06);
+}
+
+.wz-billingInvoiceStatus {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgb(236 229 216 / 0.08);
+  color: var(--thread-2);
+}
+
+.wz-billingInvoiceStatus-paid {
+  background: rgb(150 220 180 / 0.15);
+  color: rgb(150 220 180);
+}
+
+.wz-billingInvoiceStatus-open {
+  background: rgb(218 122 76 / 0.15);
+  color: var(--clay-2);
+}
+
+.wz-billingInvoiceStatus-void,
+.wz-billingInvoiceStatus-uncollectible {
+  background: rgb(255 180 180 / 0.15);
+  color: rgb(255 180 180);
+}
+
+@media (max-width: 720px) {
+  .wz-billingProPrice {
+    grid-template-columns: 1fr;
+  }
+
+  .wz-billingCancelNotice {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

@@ -1,4 +1,5 @@
-import { api } from "@/lib/client";
+import { api, type ShellBridge } from "@/lib/client";
+import { openExternal } from "@/lib/auth/desktop";
 import { activeAt, recentMoves, SORTERS, type ProjectSummary, type SortKey } from "@/lib/board-view";
 import { timeAgo } from "@/lib/format";
 import { SCENES, setTheme, THEMES } from "@/lib/theme";
@@ -71,6 +72,21 @@ function restartItem(s: PaletteState, a: PaletteActions): PaletteItem {
   return command("restart", "Restart Weft when idle", "reload", run, undefined, "relaunch reload quit update wait finish");
 }
 
+// Your team on weft.zip (lib/teams.ts): the pane owns the web session cookie, so opening it in the pane
+// keeps the sign-in round trip local; outside the desktop, openExternal opens a new tab in the system browser.
+// weft.zip spelled out here: importing SITE from lib/home pulls its server-only "use cache" code into the board.
+export function openTeamPage() {
+  const url = "https://weft.zip/team";
+  if (typeof window === "undefined") return;
+  // Partial: a shell from before the pane has no browser bridge, so this falls back to the system browser.
+  const pane: Partial<ShellBridge["browser"]> | undefined = window.threadboard?.browser;
+  if (pane?.open) {
+    void pane.open(url, "board").catch(() => openExternal(url));
+    return;
+  }
+  openExternal(url);
+}
+
 function commandItems(s: PaletteState, a: PaletteActions): PaletteItem[] {
   const { doneToArchive, lastArchived, archivedCount, selected } = s;
   const commands: PaletteItem[] = [
@@ -83,6 +99,7 @@ function commandItems(s: PaletteState, a: PaletteActions): PaletteItem[] {
     command("help", "Show keyboard shortcuts", "zap", a.openHelp, "?", "hotkeys keys"),
     command("add-secret", "Add a secret", "lock", a.addSecret, "shift+s", "vault env key token password"),
     command("needs-you", "Jump to a card that needs you", "alert", a.jumpToNeedsYou, "a", "waiting"),
+    command("team", "Your team", "globe", openTeamPage, undefined, "team members invite workspace weft.zip"),
     ...importIssuesItem(s, a),
     restartItem(s, a),
     ...(doneToArchive.length

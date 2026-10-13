@@ -2,15 +2,16 @@
 
 // The "already signed in" banner above the form on /login. Mirrors
 // `@aimhuge/auth/client`'s `SignedInPrompt` (avatar, name, Continue, Switch
-// account). The package's signOutAndRedirect is a server action; we wire the
-// Switch button to a client-side `useAuth().signOut()` because the board's
-// /api/account/signout is a JSON endpoint (lib/client.ts) and the form lives
-// in a deployed-server context where a server action would do the same job.
+// account). The package's signOutAndRedirect is a server action; on the desktop
+// we wire the Switch button to a client-side `useAuth().signOut()` because the
+// board's /api/account/signout is a JSON endpoint (lib/client.ts). On the
+// deployed weft.zip (`deployed: true`) a plain POST form to /auth/sign-out
+// does the same job without any JS.
 import { useState } from "react";
 import { useAuth } from "./hooks";
 import type { SessionIdentity } from "./identity";
 
-export function SignedInPrompt({ identity, next }: { identity: SessionIdentity; next: string }) {
+export function SignedInPrompt({ identity, next, deployed = false }: { identity: SessionIdentity; next: string; deployed?: boolean }) {
   const { busy, signOut } = useAuth({ defaultNext: next });
   const [switching, setSwitching] = useState(false);
   const { name, email, avatarUrl } = identity;
@@ -55,20 +56,33 @@ export function SignedInPrompt({ identity, next }: { identity: SessionIdentity; 
         >
           Continue
         </a>
-        <button
-          type="button"
-          disabled={busy !== null || switching}
-          onClick={() => {
-            void (async () => {
-              setSwitching(true);
-              await signOut();
-              setSwitching(false);
-            })();
-          }}
-          className="rounded-md border border-line-strong px-3.5 py-2 text-[13px] font-semibold text-muted hover:text-ink disabled:opacity-50"
-        >
-          {switching || busy === "signout" ? "Signing out…" : "Switch"}
-        </button>
+        {deployed ? (
+          // Plain POST form so the visitor's cookie session can be cleared by
+          // the same-origin /auth/sign-out route without any JS.
+          <form method="post" action="/auth/sign-out">
+            <button
+              type="submit"
+              className="rounded-md border border-line-strong px-3.5 py-2 text-[13px] font-semibold text-muted hover:text-ink"
+            >
+              Sign out
+            </button>
+          </form>
+        ) : (
+          <button
+            type="button"
+            disabled={busy !== null || switching}
+            onClick={() => {
+              void (async () => {
+                setSwitching(true);
+                await signOut();
+                setSwitching(false);
+              })();
+            }}
+            className="rounded-md border border-line-strong px-3.5 py-2 text-[13px] font-semibold text-muted hover:text-ink disabled:opacity-50"
+          >
+            {switching || busy === "signout" ? "Signing out…" : "Switch"}
+          </button>
+        )}
       </div>
     </div>
   );
