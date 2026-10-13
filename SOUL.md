@@ -213,7 +213,7 @@ in Electron main, revealed or copied only after the user's Touch ID (docs/archit
   `npm install`) type-checks the staged files alone and refuses a commit that imports an unstaged
   file. Never `git stash` in this tree: other threads' unstaged work lives here too.
 
-## Known gaps (verified 2026-10-12)
+## Known gaps (verified 2026-10-13)
 
 - Coverage counts only `lib/` and `app/api/` (100% lines, 98.6% branches on 2026-10-11). `components/` has
   behavior tests for CardView, ReplyBox, NewCardDialog, TagsDialog, TagsDrawer, ThreadPanel and ColumnHeader only
