@@ -73,20 +73,21 @@ function describeRun(command: string, r: RunReply): { said: string; failed: bool
   return { said: `${command} ${how} after ${secs} (secrets from the ${vault} vault shown as ‹NAME›):\n${output}`, failed: Boolean(r.timedOut || r.signal || r.exitCode !== 0) };
 }
 
-/** mcp__secrets__run. folder is the card's project, read when the tool runs. */
-export function runTool(cardId: () => string | undefined, folder: () => string) {
+/** mcp__secrets__run. folder is the card's project and title its name for the approval, read when the tool runs. */
+export function runTool(cardId: () => string | undefined, folder: () => string, title: () => string | undefined = () => undefined) {
   return tool(
     "run",
     "Run one command with secrets from the 🔐 vault in its environment, e.g. `npm run migrate` with DATABASE_URL. The user approves the exact command and names with Touch ID. Runs as one program with no shell (no pipes, redirects, && or $VAR expansion). Returns the exit code and output, with each secret's value shown as ‹NAME›.",
     {
       command: z.string().describe("The command, e.g. npm run job:sync or npx prisma migrate deploy"),
+      why: z.string().describe("One short sentence the user reads in the approval: why this needs these secrets, e.g. \"Send a test email to check forwarding\""),
       names: z.array(z.string()).describe("Secret names to put in its env, e.g. [\"DATABASE_URL\"]"),
       environment: z.enum(ENVIRONMENTS).optional().describe("Which values to use; defaults to development"),
       cwd: z.string().optional().describe("Folder to run in, inside the project; defaults to the project folder"),
       timeout_seconds: z.number().optional().describe(`Stop it after this long; defaults to ${DEFAULT_TIMEOUT_S}, at most ${MAX_TIMEOUT_S}`),
       project: z.string().optional().describe("Absolute path of the project whose vault to use; defaults to this thread's folder"),
     },
-    ({ command, names, environment, cwd, timeout_seconds, project }) =>
+    ({ command, why, names, environment, cwd, timeout_seconds, project }) =>
       attempt(async () => {
         const root = project ?? folder();
         const wanted = checkNames(names);
@@ -96,6 +97,8 @@ export function runTool(cardId: () => string | undefined, folder: () => string) 
         const key = cardId();
         const r = (await shell("/secrets/run", {
           key,
+          thread: title(),
+          why: asText(why).trim() || undefined,
           folder: root,
           cwd: dir,
           command: command.trim(),
@@ -133,7 +136,7 @@ export interface DevLaunch {
  * this command (asking the user the first time), and electron/secret-env.cjs claims it and runs the command.
  * undefined starts it the plain way, with a note for its log when there's something to say.
  */
-export async function devSecrets(cardId: string, command: string, cwd: string): Promise<{ launch?: DevLaunch; note?: string }> {
+export async function devSecrets(cardId: string, command: string, cwd: string, thread?: string): Promise<{ launch?: DevLaunch; note?: string }> {
   if (!process.env.THREADBOARD_SHELL_URL) return {};
   let checked;
   try {
@@ -142,7 +145,7 @@ export async function devSecrets(cardId: string, command: string, cwd: string): 
     return { note: `Started without vault secrets: ${(err as Error).message}` };
   }
   try {
-    const r = await shell("/secrets/dev-grant", { key: cardId, folder: cwd, cwd, command: command.trim(), argv: checked.argv, env: checked.env, script: packageScript(checked.argv, cwd) });
+    const r = await shell("/secrets/dev-grant", { key: cardId, thread, folder: cwd, cwd, command: command.trim(), argv: checked.argv, env: checked.env, script: packageScript(checked.argv, cwd) });
     const names = Array.isArray(r.names) ? (r.names as string[]) : [];
     if (r.denied) return { note: "Started without vault secrets: not approved." };
     if (!names.length || typeof r.grant !== "string") return {};

@@ -147,6 +147,17 @@ describe("helpers", () => {
     });
   });
 
+  it("names the asking card and says why, in the message, the detail, Touch ID and the window", () => {
+    const run = describeRun({ kind: "run", command: "node send.js", cwd: "/p", names: ["K"], environment: "development", label: "o/r", thread: "Email forwarding", why: "Send a test email" });
+    expect(run.message).toBe('"Email forwarding" wants to run a command with secrets from o/r.');
+    expect(run.detail.startsWith("Why: Send a test email\n\nCommand: node send.js")).toBe(true);
+    expect(run.reason).toBe('run "node send.js" with K (o/r) for "Email forwarding"');
+    expect(run.view).toMatchObject({ thread: "Email forwarding", why: "Send a test email" });
+    expect(describeRun({ kind: "dev", command: "npm run dev", cwd: "/p", names: ["K"], environment: "development", label: "o/r", thread: "Site" }).message).toBe(
+      "Start \"Site\"'s dev server with o/r's development secrets?",
+    );
+  });
+
   it("asks with a dialog, then Touch ID where there is one", async () => {
     const dialog = { showMessageBox: vi.fn() };
     const win = {};

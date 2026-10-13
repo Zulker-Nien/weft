@@ -156,7 +156,7 @@ denied). A file watcher notices hand edits and offers "Import changes", so editi
   every blank row with the hint under the name; blanks sort first within each environment, the rail's badge counts
   them, and the plain Add form's button reads **Add blank / Add N blanks** with the same flow. Older shells without
   `addBlank` keep the "type a value" form.
-- `mcp__secrets__run(command, names, environment?, cwd?, timeout_seconds?, project?)` (built): a command with vault
+- `mcp__secrets__run(command, why, names, environment?, cwd?, timeout_seconds?, project?)` (built): a command with vault
   values in its env, for a thread that never sees them. The motivating case: `DATABASE_URL` is in the vault and a thread
   runs `npm run job` or a migration.
   - The Next server (`lib/secret-run.ts`) checks the command (`lib/secret-command.ts`) and splits it into argv; it never
@@ -167,7 +167,9 @@ denied). A file watcher notices hand edits and offers "Import changes", so editi
   - For `npm run X` (and `pnpm`, `yarn`, `bun run`) it reads `package.json` so the approval shows what really runs,
     with `preX` and `postX`.
   - Electron main (`electron/secret-run.cjs`) gets the values (`vault.valuesFor`, main only, never over IPC) and asks:
-    a dialog with the command, the folder, the script and the names (Cancel / Allow once / Always allow), then Touch ID.
+    a dialog (`electron/approval-window.cjs`) naming the asking card by its title, the thread's own one-line `why`, the
+    command, the folder, the script and the names (Cancel / Allow once / Always allow), then Touch ID. The title and
+    `why` are only shown, never part of a remembered rule; a dev server's approval names its card too.
     *Always allow* is a rule in the data folder's `vault/run-rules.json` (`electron/run-rules.cjs`), sealed with
     safeStorage so a thread can't write one. It pins the vault, environment, folder, exact command and a hash of the
     script, and covers those names or fewer, so a thread editing the script makes it ask again.

@@ -10,6 +10,8 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Fixed
 
+- The "Run a command with secrets?" approval names the card asking and shows the thread's reason, so you know
+  which thread wants a secret and why before you allow it.
 - At most 8 idle card CLIs stay open; past that the least recently used close and resume on your next message, so
   a long day no longer leaves dozens of CLIs (and their MCP servers) slowing the Mac and the board.
 - A pasted file whose bytes are sent shows "Saving…", and fails after a minute without a reply instead of

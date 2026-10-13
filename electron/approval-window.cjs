@@ -38,15 +38,17 @@ const ICONS = {
 };
 
 /**
- * @param {{ kind?: string, command: string, cwd: string, script?: string, names: string[], environment: string, label: string }} view
+ * @param {{ kind?: string, command: string, cwd: string, script?: string, names: string[], environment: string, label: string, thread?: string, why?: string }} view
  * @param {{ touchId?: boolean, nonce?: string, home?: string }} [opts]
  */
 function approvalHtml(view, { touchId = false, nonce = "n", home } = {}) {
   const dev = view.kind === "dev";
   const title = dev ? "Start the dev server with secrets?" : "Run a command with secrets?";
+  const who = view.thread ? `<b class="thread">${escape(view.thread)}</b>` : "";
   const lead = dev
-    ? `This card's dev server gets <b>${escape(view.label)}</b>'s ${escape(view.environment)} values in its env.`
-    : `A thread wants to run this with values from the <b>${escape(view.label)}</b> vault.`;
+    ? `${who ? `${who}'s` : "This card's"} dev server gets <b>${escape(view.label)}</b>'s ${escape(view.environment)} values in its env.`
+    : `${who || "A thread"} wants to run this with values from the <b>${escape(view.label)}</b> vault.`;
+  const why = view.why ? `<div class="why"><div class="label">Why</div><p>${escape(view.why)}</p></div>` : "";
   const env = ["production", "preview", "development"].includes(view.environment) ? view.environment : "other";
   const runs = scriptLines(view.script)
     .map((s) => `<div class="row"><span class="tag">${s.name ? escape(s.name) : "runs"}</span><code>${escape(s.body)}</code></div>`)
@@ -72,6 +74,9 @@ header { display:flex; gap:12px; padding:18px 20px 14px; -webkit-app-region:drag
 h1 { font-size:15px; font-weight:600; letter-spacing:-.01em; }
 .lead { color:var(--muted); margin-top:2px; }
 .lead b { color:var(--ink); font-weight:600; }
+.lead .thread { display:inline-block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:bottom; }
+.why p { border-left:3px solid color-mix(in srgb, var(--accent) 55%, transparent); padding:2px 0 2px 10px; -webkit-user-select:text; user-select:text; overflow-wrap:anywhere; }
+.why .label { margin-bottom:4px; }
 main { padding:0 20px 16px; display:grid; gap:12px; }
 .cmd { background:var(--sunken); border:1px solid var(--line); border-radius:10px; padding:10px 12px; display:grid; gap:6px; -webkit-user-select:text; user-select:text; }
 .cmd .main { font:12.5px/1.45 ui-monospace, "SF Mono", Menlo, monospace; word-break:break-all; }
@@ -101,7 +106,7 @@ button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
 <body><div class="card" role="alertdialog" aria-labelledby="t">
 <header><div class="badge">${ICONS.lock}</div><div><h1 id="t">${escape(title)}</h1><p class="lead">${lead}</p></div></header>
 <main>
-<div class="cmd"><div class="main">${escape(view.command)}</div>${runs}<div class="row"><span class="tag">in</span><code>${escape(tilde(view.cwd, home))}</code></div></div>
+${why}<div class="cmd"><div class="main">${escape(view.command)}</div>${runs}<div class="row"><span class="tag">in</span><code>${escape(tilde(view.cwd, home))}</code></div></div>
 <div><div class="label">Secrets <span class="env ${env}">${escape(view.environment)}</span></div><div class="chips">${chips}</div></div>
 <p class="note">${ICONS.eye}<span>The thread never sees these values; its output shows ${sample} in their place.</span></p>
 </main>

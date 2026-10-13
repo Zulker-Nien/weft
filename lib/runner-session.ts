@@ -181,7 +181,7 @@ function queryOptions(session: Session, executable: string | undefined): Options
     mcpServers: {
       browser: browserMcpServer(cardId),
       // Threads only: the copilot runs the board, not a project.
-      ...(spec.copilot ? {} : { secrets: secretsMcpServer(cardId, () => spec.cwd), board_view: boardViewMcpServer() }),
+      ...(spec.copilot ? {} : { secrets: secretsMcpServer(cardId, () => spec.cwd, () => getCard(cardId() ?? "")?.title), board_view: boardViewMcpServer() }),
       board: spec.copilot ? boardMcpServer(hooks.boardActions) : threadBoardMcpServer(cardId, hooks.boardActions),
     },
     canUseTool: (toolName, input, opts) => {

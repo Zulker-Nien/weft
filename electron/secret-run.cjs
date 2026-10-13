@@ -22,11 +22,16 @@ function baseEnv(env) {
   return Object.fromEntries(Object.entries(env).filter(([k]) => !INTERNAL.test(k)));
 }
 
-function describe({ kind, command, cwd, script, names, environment, label }) {
-  const message = kind === "dev" ? `Start this card's dev server with ${label}'s ${environment} secrets?` : `A thread wants to run a command with secrets from ${label}.`;
-  const detail = [`Command: ${command}`, `In: ${cwd}`, script ? `Runs:\n${script}` : null, `Secrets (${environment}): ${names.join(", ")}`, "The thread won't see the values; they're shown as ‹NAME› in its output."].filter(Boolean).join("\n\n");
-  const reason = `run "${command}" with ${names.join(", ")} (${label})`;
-  return { message, detail, reason, view: { kind, command, cwd, script, names, environment, label } };
+// thread is the asking card's title and why the thread's own reason, both shown so the user knows who asks and for what.
+/** @param {{ kind: string, command: string, cwd: string, script?: string, names: string[], environment: string, label: string, thread?: string, why?: string }} request */
+function describe({ kind, command, cwd, script, names, environment, label, thread, why }) {
+  const message =
+    kind === "dev"
+      ? `Start ${thread ? `"${thread}"'s` : "this card's"} dev server with ${label}'s ${environment} secrets?`
+      : `${thread ? `"${thread}"` : "A thread"} wants to run a command with secrets from ${label}.`;
+  const detail = [why ? `Why: ${why}` : null, `Command: ${command}`, `In: ${cwd}`, script ? `Runs:\n${script}` : null, `Secrets (${environment}): ${names.join(", ")}`, "The thread won't see the values; they're shown as ‹NAME› in its output."].filter(Boolean).join("\n\n");
+  const reason = `run "${command}" with ${names.join(", ")} (${label})${thread ? ` for "${thread}"` : ""}`;
+  return { message, detail, reason, view: { kind, command, cwd, script, names, environment, label, thread, why } };
 }
 
 /**
@@ -52,9 +57,10 @@ function createSecretRun({ vault, ask, rules, spawn, env = process.env, now = Da
   }
 
   // A remembered rule, or the user's yes ("always" adds a rule).
-  async function approve(request, names, label) {
+  // asker ({ thread, why }) is only shown, never part of the rule.
+  async function approve(request, names, label, asker = {}) {
     if (rules.allows(request, names)) return true;
-    const choice = await ask(describe({ ...request, names, label }));
+    const choice = await ask(describe({ ...request, ...asker, names, label }));
     if (!choice) return false;
     if (choice === "always") rules.remember(request, names);
     return true;
@@ -125,10 +131,10 @@ function createSecretRun({ vault, ask, rules, spawn, env = process.env, now = Da
     redact,
 
     /** @returns {Promise<RunReply>} */
-    async run({ key, folder, cwd, command, argv, env: extra = {}, names, environment = "development", script, timeoutMs = 120_000 }) {
+    async run({ key, thread = undefined, why = undefined, folder, cwd, command, argv, env: extra = {}, names, environment = "development", script, timeoutMs = 120_000 }) {
       const { id, label, values, missing } = await vault.valuesFor(folder, names, environment);
       if (missing.length) return { missing, label };
-      if (!(await approve({ id, environment, cwd, command, script, kind: "run" }, names, label))) return { denied: true, label };
+      if (!(await approve({ id, environment, cwd, command, script, kind: "run" }, names, label, { thread, why }))) return { denied: true, label };
       remember(key, values);
       const result = await execute({ argv, cwd, env: extra, values, timeoutMs });
       return reply(result, Object.entries(values).map(([name, value]) => ({ name, value })), label);
@@ -137,15 +143,15 @@ function createSecretRun({ vault, ask, rules, spawn, env = process.env, now = Da
     // A one-time grant of the folder's development values for a dev server's command, or no names when the
     // vault has none (the server starts the plain way).
     /**
-     * @param {{ key?: string, folder: string, cwd: string, command: string, script?: string }} request
+     * @param {{ key?: string, thread?: string, folder: string, cwd: string, command: string, script?: string }} request
      * @returns {Promise<DevGrant>}
      */
-    async devGrant({ key, folder, cwd, command, script }) {
+    async devGrant({ key, thread, folder, cwd, command, script }) {
       const environment = "development";
       const { id, label, values } = await vault.valuesFor(folder, null, environment);
       const names = Object.keys(values);
       if (!names.length) return { names };
-      if (!(await approve({ id, environment, cwd, command, script, kind: "dev" }, names, label))) return { denied: true, names, label };
+      if (!(await approve({ id, environment, cwd, command, script, kind: "dev" }, names, label, { thread }))) return { denied: true, names, label };
       remember(key, values);
       const grant = randomId();
       grants.set(grant, { values, until: now() + GRANT_MS });

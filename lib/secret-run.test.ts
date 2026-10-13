@@ -54,6 +54,13 @@ describe("runTool", () => {
     expect(sr.usesSecrets(card!)).toBe(true);
   });
 
+  it("sends the card's title and the thread's reason for the approval", async () => {
+    const titled = sr.runTool(() => card, () => proj, () => "Email forwarding") as unknown as { handler: Handler };
+    reply({ exitCode: 0, output: "" });
+    await titled.handler({ command: "node x.js", why: "  Send a test email ", names: ["K"] });
+    expect(sent().body).toMatchObject({ thread: "Email forwarding", why: "Send a test email" });
+  });
+
   it("passes environment, cwd, project and a clamped timeout", async () => {
     const other = fs.mkdtempSync(path.join(os.tmpdir(), "weft-run-"));
     fs.mkdirSync(path.join(other, "sub"));

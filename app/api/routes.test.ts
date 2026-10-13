@@ -609,7 +609,7 @@ describe("/cards/:id/dev", () => {
   it("start runs the dev command in the card's folder", async () => {
     const card = addCard({ review, cwd: "/proj" });
     expect((await post(card.id, { action: "start" })).status).toBe(200);
-    expect(dev.startDev).toHaveBeenCalledWith(card.id, "npm run dev", "/proj");
+    expect(dev.startDev).toHaveBeenCalledWith(card.id, "npm run dev", "/proj", "T");
   });
 
   it("start skips the command when the url already answers", async () => {

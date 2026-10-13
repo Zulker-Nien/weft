@@ -52,10 +52,10 @@ export function stopDev(cardId: string) {
 
 // With a vault for the folder, the server gets its development values in its env (lib/secret-run.ts), never
 // this server's or a thread's; the user approves the command the first time.
-export async function startDev(cardId: string, command: string, cwd: string) {
+export async function startDev(cardId: string, command: string, cwd: string, title?: string) {
   const existing = runs.get(cardId);
   if (existing && !existing.exited && existing.command === command) return;
-  const { launch, note } = await devSecrets(cardId, command, cwd);
+  const { launch, note } = await devSecrets(cardId, command, cwd, title);
   stopDev(cardId);
   // cliEnv() drops the pane's control-server token, which a dev server has no use for.
   const env = { ...cliEnv(), ...launch?.env };

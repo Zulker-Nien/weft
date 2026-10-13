@@ -131,7 +131,7 @@ describe("startDev", () => {
   it("spawns the command in a detached shell in the card's folder", async () => {
     await dev.startDev("a", "npm run dev", "/app");
     expect(spawn).toHaveBeenCalledWith("npm run dev", { cwd: "/app", env: { PATH: "/bin" }, shell: true, detached: true, stdio: ["ignore", "pipe", "pipe"] });
-    expect(devSecrets).toHaveBeenCalledWith("a", "npm run dev", "/app");
+    expect(devSecrets).toHaveBeenCalledWith("a", "npm run dev", "/app", undefined);
   });
 
   it("starts through the secrets launcher when the vault has values, writing its request to stdin", async () => {

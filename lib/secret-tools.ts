@@ -22,8 +22,8 @@ function describeList(label: string, secrets: Listed[]) {
   return `Secrets in the ${label} vault (names only):\n${lines.join("\n")}`;
 }
 
-// A fresh server per query, like the browser's. folder is the card's project, read when a tool runs.
-export function secretsMcpServer(cardId: () => string | undefined, folder: () => string) {
+// A fresh server per query, like the browser's. folder is the card's project and title its name, read when a tool runs.
+export function secretsMcpServer(cardId: () => string | undefined, folder: () => string, title: () => string | undefined = () => undefined) {
   const project = z.string().optional().describe("Absolute path of the project whose vault to use; defaults to this thread's folder");
   return createSdkMcpServer({
     name: "secrets",
@@ -79,7 +79,7 @@ export function secretsMcpServer(cardId: () => string | undefined, folder: () =>
       ),
       addBlankTool(folder),
       askAddTool(folder),
-      runTool(cardId, folder),
+      runTool(cardId, folder, title),
     ],
   });
 }
