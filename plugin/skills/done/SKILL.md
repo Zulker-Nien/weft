@@ -41,10 +41,13 @@ Run the agents below on the Puku gateway through the `puku-agent` skill: free, n
 and their file reads stay out of your context. Fall back to the Agent tool (`model: "haiku"`) only
 when `~/.claude/skills/puku-agent` is missing or the batch fails on credentials.
 
-1. Write one prompt file per agent in your scratchpad (not the repo). Each holds the session file
-   list, a paragraph on WHAT changed and WHY (the agents can't see this conversation), and its
-   instructions below.
-2. Write `tasks.json` beside them (absolute `prompt_file` paths):
+1. Make this run's scratch folder: `${CLAUDE_SKILL_DIR}/scratch.sh new` prints `<dir>`, a fresh
+   `~/.weft/done/run-XXXXXX/` with an empty `out/`. Every file below goes there, never in the project
+   (not the skill folder, not `.done-batch/` or `.scratch/`): repo scratch files show up in the commit
+   pile, and wrap-ups running at once would overwrite each other's notes.
+2. Write one prompt file per agent in `<dir>`. Each holds the session file list, a paragraph on WHAT
+   changed and WHY (the agents can't see this conversation), and its instructions below.
+3. Write `<dir>/tasks.json` beside them (absolute `prompt_file` paths):
    ```json
    [
      {"id": "docs",  "model": "opus-4.8", "tools": "write", "prompt_file": "<dir>/docs.md"},
@@ -52,9 +55,9 @@ when `~/.claude/skills/puku-agent` is missing or the batch fails on credentials.
      {"id": "tests", "model": "opus-4.8", "tools": "bash",  "prompt_file": "<dir>/tests.md"}
    ]
    ```
-3. From the repo root, in the background:
+4. From the repo root, in the background:
    `node ~/.claude/skills/puku-agent/puku-agent.mjs --batch <dir>/tasks.json --out <dir>/out --workdir . --quiet`
-4. When it finishes, read `<dir>/out/summary.json` and each `<dir>/out/<id>.md`.
+5. When it finishes, read `<dir>/out/summary.json` and each `<dir>/out/<id>.md`.
 
 ### docs agent
 
@@ -123,6 +126,10 @@ can create one.
 
 ## Phase 5: Report (you)
 
+Write the report page outside the project too (e.g. `~/.weft/show/`), then remove this run's scratch
+folder: `${CLAUDE_SKILL_DIR}/scratch.sh clean <dir>` (it only deletes a `~/.weft/done/run-*` folder; a
+run that dies before this is pruned by the next `new` after a day).
+
 Show it in the browser pane as one HTML page, and say it in a few lines: the commit (hash, files,
 +/- from `${CLAUDE_SKILL_DIR}/session-stats.sh <session files>`), pushed or not and why, tests passed/failed, docs touched,
 SOUL.md change, and the scout's top three with their fixes.
@@ -132,4 +139,5 @@ SOUL.md change, and the scout's top three with their fixes.
 - Never `--no-verify`, `--amend`, force push, a bare `git commit`, `git reset` or `git stash`;
   other sessions share this index and tree.
 - Fix lint only in session files; no codebase-wide cleanup. The scout reports, it doesn't fix.
+- Never write scratch files (prompts, tasks.json, reports, scripts) inside the project; use `<dir>`.
 - Never commit `.env`, secrets or credentials. Push only through `push.sh`, which honors the setting.

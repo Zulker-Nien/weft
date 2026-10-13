@@ -52,3 +52,13 @@ supabase/.temp/
 
 # node, pnpm, puku and claude wrappers staged for the packaged app (scripts/bundle-toolchain.mjs)
 /.toolchain-dist/
+
+# /weft:done scratch that older wrap-ups left in the tree; runs now use ~/.weft/done/run-* (plugin/skills/done/scratch.sh)
+/.done-batch/
+/.scratch/
+/plugin/skills/done/out/
+/plugin/skills/done/scratch/
+/plugin/skills/done/docs.md
+/plugin/skills/done/scout.md
+/plugin/skills/done/tests.md
+/plugin/skills/done/tasks.json

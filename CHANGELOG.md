@@ -50,6 +50,10 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Fixed
 
+- **`/weft:done` no longer leaves scratch files in the project**: each wrap-up's prompts, `tasks.json` and batch
+  output go to its own `~/.weft/done/run-XXXXXX/` (`plugin/skills/done/scratch.sh`), removed at the end and pruned
+  after a day, so they stay out of the commit pile and wrap-ups running at once can't overwrite each other's notes.
+  The old in-repo paths (`.done-batch/`, `.scratch/`, `plugin/skills/done/{out,scratch}/`…) are gitignored.
 - **No more "This thread is already running"**: a message that reaches a busy thread from its page (Tell me what
   to change, a failed commit's note) waits on the card as "after this turn" in the reply queue and goes as the turn
   ends. "Commit and run /done" on a busy card runs /done once its turn is over instead of failing.
