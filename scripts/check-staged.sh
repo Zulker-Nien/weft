@@ -29,15 +29,18 @@ git -C "$root" checkout-index --all --prefix="$tmp/"
 ln -s "$root/node_modules" "$tmp/node_modules"
 cd "$tmp" || exit 1
 
+# Start from the tree's incremental cache, so tsc re-checks only what changed and what depends on it
+# instead of the whole repo cold. It takes turns with every other card's typecheck (one-at-a-time.mjs).
+cp "$root/tsconfig.tsbuildinfo" "$tmp/" 2> /dev/null || true
 npx --no-install next typegen > /dev/null 2>&1
-if ! npx --no-install tsc --noEmit > "$tmp/tsc.log" 2>&1; then
+if ! node "$root/scripts/one-at-a-time.mjs" typecheck npx --no-install tsc --noEmit > "$tmp/tsc.log" 2>&1; then
   echo "pre-commit: the staged files don't type-check on their own:" >&2
   grep "error TS" "$tmp/tsc.log" | head -20 >&2
   echo "Usually a file it imports isn't staged: check 'git status' for untracked files." >&2
   exit 1
 fi
 
-# Lint the staged versions of the changed files, with the same rules as `npm run lint`.
+# Lint the staged versions of the changed files, with the same rules as `pnpm lint`.
 git -C "$root" diff --cached --name-only --diff-filter=ACMR -z -- '*.ts' '*.tsx' '*.mts' '*.cjs' '*.mjs' > "$tmp/.staged"
 if [ -s "$tmp/.staged" ]; then
   if ! xargs -0 npx --no-install eslint --max-warnings 0 --no-warn-ignored < "$tmp/.staged" > "$tmp/eslint.log" 2>&1; then
