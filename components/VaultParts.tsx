@@ -21,8 +21,9 @@ import Icon from "./Icon";
 // The pieces of the 🔐 drawer (components/VaultDrawer.tsx): the form that types a secret in, the project
 // filter, and the .env import's preview. A secret's row is components/SecretRow.tsx.
 
-// A secret being added to one or more environments (fixed false), or given a new value (fixed true: name
-// and its one environment stay).
+// A secret being added to one or more environments (fixed false), or given a new value (fixed true: the
+// name stays, from is the environment it was opened in; ticking others saves it there too, unticking from
+// moves it out; blank says it has no value yet, so it can move without one).
 export interface Editing {
   vault: string;
   folder: string;
@@ -30,6 +31,8 @@ export interface Editing {
   environments: VaultEnvironment[];
   value: string;
   fixed: boolean;
+  from?: VaultEnvironment;
+  blank?: boolean;
 }
 
 // The three environments as toggles, in any combination. only limits which can be ticked: removing a
@@ -67,9 +70,11 @@ export function EnvironmentPicker({
 }
 
 // A blank needs only a name; the form will save an empty value as a blank. canBlank keeps older shells
-// (without addBlank) from offering the path.
+// (without addBlank) from offering the path. A blank being changed can go blank too, once its
+// environments change (moving it needs no value).
 function isBlank(editing: Editing, name: string, badName: boolean, canBlank: boolean): boolean {
-  return canBlank && !editing.fixed && editing.value === "" && name !== "" && !badName;
+  const moved = editing.environments.length !== 1 || editing.environments[0] !== editing.from;
+  return canBlank && (!editing.fixed || (Boolean(editing.blank) && moved)) && editing.value === "" && name !== "" && !badName;
 }
 
 // The form is ready when the name is valid, at least one env is ticked, and either the value is typed
@@ -78,7 +83,7 @@ function isReady(name: string, editing: Editing, blank: boolean, busy: boolean):
   return validName(name) && editing.environments.length > 0 && (editing.value !== "" || blank) && !busy;
 }
 
-// Typing a secret in: its name, the environments it goes into (as many as you tick; fixed when changing
+// Typing a secret in: its name, the environments it goes into (as many as you tick, also when changing
 // one), and the value, hidden unless you show it. A name already filled in (a thread asked for it) puts the
 // cursor in the value. Enter saves, Escape cancels (the drawer listens for it). canBlank turns the Add
 // button into Add blank / Add N blanks when the value is empty (the shell's addBlanks puts it in with
@@ -127,7 +132,7 @@ export function SecretForm({
         className={`${field} font-mono ${badName ? "border-warn" : ""}`}
       />
       {badName && <p className="-mt-1 text-[10.5px] leading-snug text-warn">Letters, digits and _, not starting with a digit.</p>}
-      <EnvironmentPicker value={editing.environments} disabled={editing.fixed} onChange={(environments) => onChange({ ...editing, environments })} />
+      <EnvironmentPicker value={editing.environments} onChange={(environments) => onChange({ ...editing, environments })} />
       <div className="relative">
         <input
           type={show ? "text" : "password"}
@@ -153,7 +158,7 @@ export function SecretForm({
       </div>
       <div className="flex gap-1.5">
         <button type="submit" disabled={!ready} className={`flex-1 rounded-md px-2 py-1 text-[12px] font-medium text-on-accent disabled:opacity-50 ${blank ? "bg-warn" : "bg-accent"}`}>
-          {saveLabel({ fixed: editing.fixed, value: editing.value, environments: editing.environments }, canBlank)}
+          {saveLabel(editing, canBlank)}
         </button>
         <button type="button" onClick={onCancel} className="rounded-md px-2 py-1 text-[12px] text-muted hover:bg-card hover:text-ink">
           Cancel

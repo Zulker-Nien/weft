@@ -279,12 +279,15 @@ describe("VaultDrawer", () => {
     const { b } = setup("/dev/web");
     await userEvent.click(screen.getByRole("button", { name: "Change API_KEY" }));
     expect(screen.getByLabelText("Name")).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Production" })).toBeDisabled();
+    // Its environments stay open to change; only its own is ticked.
+    expect(screen.getByRole("button", { name: "Production" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Development" })).toHaveAttribute("aria-pressed", "true");
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByLabelText("Value")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Change API_KEY" }));
     await userEvent.type(screen.getByLabelText("Value"), "new-value{Enter}");
     expect(b.set).toHaveBeenCalledWith("/dev/web", "API_KEY", "development", "new-value");
+    expect(b.remove).not.toHaveBeenCalled();
   });
 
   it("copies a secret to another project from its right-click menu", async () => {

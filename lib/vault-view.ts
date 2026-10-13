@@ -146,8 +146,13 @@ export function groupSecrets(secrets: VaultSecret[]) {
 }
 
 // The Add form's button. With no value typed (and a shell that can add blanks), it adds the name as a blank.
-export function saveLabel(editing: { fixed: boolean; value: string; environments: unknown[] }, canBlank: boolean) {
-  if (editing.fixed) return "Save";
+export function saveLabel(editing: { fixed: boolean; value: string; environments: VaultEnvironment[]; from?: VaultEnvironment }, canBlank: boolean) {
+  if (editing.fixed) {
+    const [only] = editing.environments;
+    if (editing.environments.length > 1) return `Save to ${editing.environments.length} environments`;
+    if (only && only !== editing.from) return `Move to ${ENVIRONMENTS.find((e) => e.id === only)?.label}`;
+    return "Save";
+  }
   const blank = canBlank && editing.value === "";
   const many = editing.environments.length > 1;
   if (blank) return many ? `Add ${editing.environments.length} blanks` : "Add blank";

@@ -65,7 +65,7 @@ export function SecretRow({
                 <HoverButton
                   icon="pencil"
                   label={`Change ${s.name}`}
-                  title="Change its value"
+                  title="Change its value or environments"
                   onClick={() => onAct("edit")}
                 />
                 <HoverButton

@@ -132,7 +132,7 @@ export default function VaultDrawer({
       return;
     }
     if (action === "edit") {
-      setEditing({ vault: v.id, folder: v.folder, name: s.name, environments: [s.environment], value: "", fixed: true });
+      setEditing({ vault: v.id, folder: v.folder, name: s.name, environments: [s.environment], value: "", fixed: true, from: s.environment, blank: s.missing });
       return;
     }
     if (action.startsWith("copy-to:"))
@@ -198,13 +198,10 @@ export default function VaultDrawer({
   const save = (e: Editing) =>
     change(async () => {
       const name = e.name.trim();
-      if (!e.fixed && e.value === "" && vault.addBlank) {
-        // Add as a blank: the shell's addBlank puts it in, no value yet, in each ticked environment. The
-        // user fills it in from 🔐 on the rail.
-        for (const env of e.environments) await vault.addBlank(e.folder, name, env);
-      } else {
-        for (const env of e.environments) await vault.set(e.folder, name, env, e.value);
-      }
+      // No value: a blank in each ticked environment, filled in later from 🔐. Unticking its own moves it out.
+      for (const env of e.environments)
+        await (e.value === "" && vault.addBlank ? vault.addBlank(e.folder, name, env) : vault.set(e.folder, name, env, e.value));
+      if (e.fixed && e.from && !e.environments.includes(e.from)) await vault.remove(e.vault, name, e.from);
       setEditing(null);
     });
   const canBlank = Boolean(vault.addBlank);
@@ -281,7 +278,7 @@ function VaultSection({
   onAct: (s: VaultSecret, action: RowAction) => void;
   onMenu: (s: VaultSecret, e: React.MouseEvent) => void;
 }) {
-  const changing = (s: VaultSecret) => editing?.fixed && editing.name === s.name && editing.environments[0] === s.environment;
+  const changing = (s: VaultSecret) => editing?.fixed && editing.name === s.name && editing.from === s.environment;
   return (
     <section className="mt-2">
       <div className="flex items-center gap-1 px-1.5">

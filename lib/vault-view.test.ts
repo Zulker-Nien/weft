@@ -92,7 +92,11 @@ describe("vault view", () => {
   });
 
   it("names the Add button (blank, value, many environments)", () => {
-    expect(saveLabel({ fixed: true, value: "x", environments: ["development"] }, true)).toBe("Save");
+    expect(saveLabel({ fixed: true, value: "x", environments: ["development"], from: "development" }, true)).toBe("Save");
+    // Changing a secret: its own environment saves, another moves it, several save to each.
+    expect(saveLabel({ fixed: true, value: "x", environments: ["production"], from: "production" }, true)).toBe("Save");
+    expect(saveLabel({ fixed: true, value: "x", environments: ["development"], from: "production" }, true)).toBe("Move to Development");
+    expect(saveLabel({ fixed: true, value: "x", environments: ["development", "production"], from: "production" }, true)).toBe("Save to 2 environments");
     expect(saveLabel({ fixed: false, value: "", environments: ["development"] }, true)).toBe("Add blank");
     expect(saveLabel({ fixed: false, value: "", environments: ["development", "preview", "production"] }, true)).toBe("Add 3 blanks");
     expect(saveLabel({ fixed: false, value: "x", environments: ["development"] }, true)).toBe("Add to vault");
