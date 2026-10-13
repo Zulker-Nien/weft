@@ -62,7 +62,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `lib/runner.ts`: one Agent SDK `query()` per thread, its public API (send, queue, stop, retry, login); behind it
   `lib/runner-state.ts` (sessions, shared maps, `hooks` back into runner.ts), `lib/runner-session.ts` (start and drive a CLI,
   warm spares, the BUILD fingerprint), `lib/runner-turn.ts` (what the CLI sends during a turn) and `lib/runner-ask.ts` (permissions);
-  puku-cli via `pathToClaudeCodeExecutable` (`lib/cli-path.ts`). `editLastMessage()` is ↑ in the reply box: it rewinds the
+  puku-cli via `pathToClaudeCodeExecutable` (`lib/cli-path.ts`). The init's model plus the effort (the card's, else `effortLevel` from the CLI's settings, `lib/cli-defaults.ts`)
+  land in `stats.runsOn`, which the header's CLI chip shows (`BackendBadge`). `editLastMessage()` is ↑ in the reply box: it rewinds the
   session to before your last message (`lib/edit-last.ts`, `lib/rewind.ts`) and sends the edit.
 - `lib/env.ts` `guardedCli()`: every thread's CLI env and Bash guards: `lib/secret-guard.ts` (no .env reads),
   `lib/restart-guard.ts` (no restarting Weft mid-turns), `lib/git-guard.ts` (no `git stash`, `reset --hard`, path
