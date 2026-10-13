@@ -96,6 +96,26 @@ describe("stepUrl", () => {
     expect(stepUrl(plan, { title: "t", path: "/Users/me/a#b.html" })).toBe("file:///Users/me/a%23b.html");
   });
 
+  it("keeps an anchor or query on a local file as part of the url", () => {
+    const show = "/Users/me/.weft/show/tour.html";
+    expect(stepUrl(plan, { title: "t", path: show })).toBe(`file://${show}`);
+    expect(stepUrl(plan, { title: "t", path: `${show}#built` })).toBe(`file://${show}#built`);
+    expect(stepUrl(plan, { title: "t", path: `${show}?x=1#built` })).toBe(`file://${show}?x=1#built`);
+    expect(stepUrl(plan, { title: "t", path: "/tmp/report.pdf#page=2" })).toBe("file:///tmp/report.pdf#page=2");
+    expect(stepUrl(plan, { title: "t", path: "/Users/me/SOUL.md#conventions" })).toBe("file:///Users/me/SOUL.md#conventions");
+  });
+
+  it("encodes a literal # or ? that is part of the filename", () => {
+    expect(stepUrl(plan, { title: "t", path: "/Users/me/a#b.html" })).toBe("file:///Users/me/a%23b.html");
+    expect(stepUrl(plan, { title: "t", path: "/Users/me/a#b.html#sec" })).toBe("file:///Users/me/a%23b.html#sec");
+    expect(stepUrl(plan, { title: "t", path: "/Users/me/what?.txt" })).toBe("file:///Users/me/what%3F.txt");
+    expect(stepUrl(plan, { title: "t", path: "/Users/me/notes#1" })).toBe("file:///Users/me/notes%231");
+  });
+
+  it("leaves an app route with an anchor on the plan url", () => {
+    expect(stepUrl(plan, { title: "t", path: "/settings#billing" })).toBe("http://localhost:3000/settings#billing");
+  });
+
   it("keeps an app route that looks like a path as a route", () => {
     expect(stepUrl(plan, { title: "t", path: "/users/42" })).toBe("http://localhost:3000/users/42");
   });

@@ -14,7 +14,7 @@ export const REVIEW_PROMPT = `When you finish work for the user to review (BOARD
 \`\`\`
 - url: where the running app is, when the work is a web product (start the dev server first if it isn't running); leave it out otherwise.
 - dev: the shell command that starts that app from the project folder (e.g. "npm run dev"). Weft uses it to start the server for the user and keep it running while they review. Run the /weft:preview skill first to check the app is up and renders.
-- steps: one per feature or change you built, in the order to check them. "path" (or a full "url", or an absolute file path such as a PDF or HTML file) is the page for that step. Never point a step at source code: when a change has no page (a prompt, a refactor, config), render it as a readable HTML page and point the step there.
+- steps: one per feature or change you built, in the order to check them. "path" (or a full "url", or an absolute file path such as a PDF or HTML file) is the page for that step; a local page may carry a #anchor or ?query (e.g. "/Users/me/.weft/show/tour.html#login"), so several steps can point at sections of one page. Never point a step at source code: when a change has no page (a prompt, a refactor, config), render it as a readable HTML page and point the step there.
 - Before you send the reply, open the first step's page in the browser pane (mcp__browser__open_url) so the pane already shows it the moment the tour opens. Do this for every tour, including steps that are a file path rather than a web page.
 - The user steps through these in the browser pane and sends feedback on each one. Keep each "look" to one short, checkable sentence (under 20 words): the review panel is small. Background, caveats and how-to go on the step's page, not in "look".`;
 
@@ -68,9 +68,8 @@ function mentionedPage(text?: string): string | undefined {
 export function stepUrl(plan: ReviewPlan, step: ReviewStep): string | undefined {
   const target = step.path ?? mentionedPage(step.look);
   if (target && /^https?:\/\//i.test(target)) return target;
-  if (target && target.startsWith("/") && /\.(pdf|html?|png|jpe?g|gif|svg|webp|mp4|mov)$/i.test(target)) return fileUrl(target);
-  // A path under a filesystem root (/Users/me/repo/SOUL.md) is a file of any type, never an app route.
-  if (target && LOCAL_ROOT.test(target)) return fileUrl(target);
+  const local = target?.startsWith("/") ? localFileUrl(target) : undefined;
+  if (local) return local;
   if (!plan.url) return undefined;
   if (!step.path) return plan.url;
   try {
@@ -81,6 +80,25 @@ export function stepUrl(plan: ReviewPlan, step: ReviewStep): string | undefined 
 }
 
 const LOCAL_ROOT = /^\/(Users|home|private|tmp|var|Volumes|opt)\//;
+const MEDIA = /\.(pdf|html?|png|jpe?g|gif|svg|webp|mp4|mov)$/i;
+
+// A path under a filesystem root (/Users/me/repo/SOUL.md) is a file of any type, never an app route;
+// elsewhere only media and pages count as files.
+function isFile(p: string): boolean {
+  return MEDIA.test(p) || (LOCAL_ROOT.test(p) && /\.[a-z0-9]+$/i.test(p));
+}
+
+// A local file, keeping a trailing ?query and #anchor (page.html#built) as URL parts. The whole target
+// wins when it names a file itself (/Users/me/a#b.html), so a literal # or ? in a filename stays encoded;
+// otherwise the first ? or # after which the path still names a file starts the suffix.
+function localFileUrl(target: string): string | undefined {
+  if (isFile(target)) return fileUrl(target);
+  for (const { index } of target.matchAll(/[?#]/g)) {
+    const head = target.slice(0, index);
+    if (isFile(head)) return fileUrl(head) + target.slice(index);
+  }
+  return LOCAL_ROOT.test(target) ? fileUrl(target) : undefined;
+}
 
 function fileUrl(p: string): string {
   return `file://${encodeURI(p).replace(/[?#]/g, encodeURIComponent)}`;
