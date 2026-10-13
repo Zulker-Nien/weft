@@ -41,7 +41,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
     `npm run coverage`): a test file beside each module, routes with their libs mocked, the runner's SDK loop
     against a fake `query()` (`lib/runner.harness.ts`, shared by `lib/runner*.test.ts`), and browser code and React hooks under happy-dom +
     @testing-library/react (`// @vitest-environment happy-dom`). Component tests have started under jsdom
-    (`components/*.test.tsx`: CardView, ReplyBox, NewCardDialog, TagsDialog, TagsDrawer, ThreadPanel; Composer stubbed by `components/composer-mock.tsx`);
+    (`components/*.test.tsx`: CardView, ReplyBox, NewCardDialog, TagsDialog, TagsDrawer, ThreadPanel, ColumnHeader; Composer stubbed by `components/composer-mock.tsx`);
     `electron/main-menu-popup.test.ts` is the first test in `electron/`. The rest of `components/` and `electron/`
     are untested and outside the coverage set; add tests with any risky change, and keep new lib code at 100%.
 
@@ -102,6 +102,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `lib/commit-pile.ts` + `app/api/pile` + `components/PileBadge.tsx`: the header's "+N/-N" uncommitted counter and the card it
   starts to commit that pile one Review card at a time; its page's Commit buttons are `weft://commit` links
   (`electron/page-links.cjs`) that `lib/pile-commit.ts` runs with no turn (commit by path, push, move to Done).
+  The Review column's "Review all" button starts the same card through the shared `lib/pile-review.ts`
+  helper.
 - `lib/sprint-plan.ts` + `app/api/sprint` + `components/BacklogBadge.tsx`: the "☰ N" Backlog counter beside it and the card it starts,
   a read-only planner that sizes each Backlog card, flags duplicates and finished ones, and groups the rest into sprints of cards
   touching different files (no worktrees, so overlap is the constraint); starts a sprint's cards only on your OK.
@@ -213,7 +215,8 @@ in Electron main, revealed or copied only after the user's Touch ID (docs/archit
 ## Known gaps (verified 2026-10-12)
 
 - Coverage counts only `lib/` and `app/api/` (100% lines, 98.6% branches on 2026-10-11). `components/` has
-  behavior tests for CardView, ReplyBox, NewCardDialog, TagsDialog, TagsDrawer and ThreadPanel only (not Board, ThreadView or the real TipTap Composer);
+  behavior tests for CardView, ReplyBox, NewCardDialog, TagsDialog, TagsDrawer, ThreadPanel and ColumnHeader only
+  (not Board, ThreadView or the real TipTap Composer);
   `electron/` has one (`electron/main-menu-popup.test.ts`). Runner's leftover branches are defensive fallbacks.
   CI (`.github/workflows/ci.yml`) runs lint, typecheck and tests, but the repo has no upstream branch yet, so it hasn't run.
 - `lib/account.ts` declares `WEEFT_PROTOCOL` on line 101 and uses it on line 96 (forward reference). `ACCOUNT_CALLBACK_HOST`
