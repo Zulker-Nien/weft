@@ -78,6 +78,30 @@ spare to a new card, switches it to the card's permission mode, model and effort
 (`switchSpare()` in `lib/spare-switch.ts`), marks the card `warm: true`, and immediately
 starts a fresh spare for that folder.
 
+### Switching a card's CLI
+
+A card's CLI is set at creation, but three affordances let you change it after the fact:
+
+- **The thread header's `BackendPicker`** (`components/BackendPicker.tsx`) wraps the model chip
+  in a button. Click it, pick the other CLI, the next turn runs there. Disabled while a turn is
+  live (`lib/format.ts:isLive` — running or a permission request pending), with a tooltip that
+  says so. The copilot (`role: "copilot"`) is locked to Claude Code, so it keeps the static
+  `BackendBadge`. The picker calls `api.switchBackend(id, other, false)` — no replay; that's the
+  rate-limit banner's job (it always replays).
+- **Right-click → "Run on puku-cli" / "Run on Claude Code"** in `lib/card-menu.ts`. The bulk
+  equivalent is the **"Switch all"** link at the top of a column (`components/switch-all-button.tsx`),
+  which only reaches cards in the *Running* column.
+- **The rate-limit banner** on a card that hit a plan limit (`CardView.RateLimitSwitch`): a one-click
+  "Run on puku-cli" / "Run on Claude Code" button that flips the backend *and* replays the last
+  user message.
+
+All three paths land in `switchBackend()` (`lib/backend-switch.ts`), which ends the session, clears
+`sessionId` and `rateLimitHit`, normalizes the per-CLI incompatibilities (puku has no YOLO, no
+`xhigh` effort) through `effortFor()` (`lib/new-thread.ts`), and optionally replays. The next
+turn's CLI flags are then derived from `specFor(card)` (`lib/runner-state.ts`), which also
+normalizes through `effortFor` — so a card already in a bad state recovers without the user
+flipping it. See `docs/bug-fixes/012-fable-xhigh-effort-crashes-puku.md`.
+
 ### Commit and PR attribution
 
 A board thread signs its commits "Co-Authored-By: <model> on Weft" and its PRs "Generated with
