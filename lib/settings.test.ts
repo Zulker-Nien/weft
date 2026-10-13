@@ -85,6 +85,22 @@ describe("settings", () => {
     expect(fs.readFileSync(path.join(dir, "settings.json"), "utf8")).toContain('"pushOnDone": false');
   });
 
+  it("subagents default to letting the model choose, which is stored as unset", async () => {
+    let s = await load();
+    expect(s.subagentModel()).toBe("choose");
+    expect(s.settingsView().subagentModel).toBe("choose");
+    s.setSubagentModel("sonnet");
+    s = await load();
+    expect(s.subagentModel()).toBe("sonnet");
+    s.setSubagentModel("choose");
+    expect(fs.readFileSync(path.join(dir, "settings.json"), "utf8")).not.toContain("subagentModel");
+  });
+
+  it("an unknown saved subagent model reads as choose", async () => {
+    fs.writeFileSync(path.join(dir, "settings.json"), JSON.stringify({ subagentModel: "gpt" }));
+    expect((await load()).subagentModel()).toBe("choose");
+  });
+
   it("an empty automations list is kept, not replaced by the defaults", async () => {
     const s = await load();
     s.setAutomations([]);

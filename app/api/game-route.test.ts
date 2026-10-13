@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
-// /api/game: hands ?cwd= and &full=1 to lib/game-server and reports its failures.
+// /api/game: hands ?cwd= and &full=1 to lib/game-server, adds the GitHub profile and reports its failures.
 
 vi.mock("next/server", () => ({ connection: async () => {} }));
 vi.mock("@/lib/game-server", () => ({ gameState: vi.fn(() => ({ xp: 5 })) }));
+vi.mock("@/lib/github-profile", () => ({
+  githubProfile: vi.fn(() => Promise.resolve({ login: "ada" })),
+  cachedGithubProfile: vi.fn(() => null),
+}));
 
 const server = await import("@/lib/game-server");
 const route = await import("./game/route");
@@ -13,9 +17,10 @@ const READ = { host: "localhost:3457" };
 describe("GET /api/game", () => {
   it("returns the game for the project in view", async () => {
     const res = await route.GET(new Request("http://localhost:3457/api/game?cwd=/dev/app&full=1", { headers: READ }));
-    expect(await res.json()).toEqual({ game: { xp: 5 } });
+    expect(await res.json()).toEqual({ game: { xp: 5, github: { login: "ada" } } });
     expect(server.gameState).toHaveBeenLastCalledWith({ cwd: "/dev/app", full: true });
-    await route.GET(new Request("http://localhost:3457/api/game", { headers: READ }));
+    const light = await route.GET(new Request("http://localhost:3457/api/game", { headers: READ }));
+    expect(await light.json()).toEqual({ game: { xp: 5, github: null } });
     expect(server.gameState).toHaveBeenLastCalledWith({ cwd: null, full: false });
   });
 

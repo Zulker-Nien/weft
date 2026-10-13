@@ -66,7 +66,7 @@ function commandItems(s: PaletteState, a: PaletteActions): PaletteItem[] {
   const commands: PaletteItem[] = [
     command("new", "New thread", "plus", a.openNew, "n"),
     command("filter", "Filter cards", "search", a.focusFilter, "/"),
-    command("copilot", "Toggle the copilot", "sparkles", a.toggleCopilot, "c"),
+    command("copilot", "Open or close the copilot", "sparkles", a.toggleCopilot, "c"),
     command("browser", "Toggle the browser", "globe", a.toggleBrowser, "b"),
     command("terminal", "Toggle the terminal", "terminal", a.toggleTerminal, "t", "shell console command line"),
     command("settings", "Open settings", "sliders", a.openSettings, ","),

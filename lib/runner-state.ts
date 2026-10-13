@@ -6,6 +6,7 @@ import type { BoardStatus } from "./status";
 import { getCard, updateCard } from "./store";
 import type { Backend, CacheState, Card, Effort, PermissionMode, Question } from "./types";
 import { globalSingleton } from "./global-singleton";
+import { effortFor } from "./new-thread";
 
 // What every part of the runner shares: a thread's CLI session, the maps that hold them, and the small
 // helpers around them. lib/runner.ts is the front door; lib/runner-session.ts opens and drives sessions,
@@ -96,6 +97,8 @@ export interface Session {
   cache?: CacheState;
   // The CLI's session id from its init, kept while a spare so the card that adopts it can resume.
   sessionId?: string;
+  // The model its init named, kept the same way so the adopting card's header can show it.
+  model?: string;
   // Set once the drive loop has finished; the CLI is gone.
   ended?: boolean;
   done: Promise<void>;
@@ -141,13 +144,16 @@ export function errorText(err: unknown) {
   return err instanceof Error ? err.message : String(err);
 }
 
+// The card's stored effort may be one the backend can't take (e.g. xhigh on puku), so we normalize
+// through effortFor at the point we build the spec the CLI actually runs with. A card left over
+// from before switchBackend's xhigh guard is caught here on the next turn.
 export function specFor(card: Card): Spec {
   return {
     cwd: card.cwd,
     backend: card.backend,
     permissionMode: card.permissionMode,
     model: card.model,
-    effort: card.effort,
+    effort: effortFor(card.backend, card.effort),
     sessionId: card.sessionId,
     copilot: card.role === "copilot",
   };

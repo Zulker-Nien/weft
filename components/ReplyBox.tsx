@@ -3,20 +3,14 @@
 import { useEffect, useEffectEvent, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { api } from "@/lib/client";
 import { readDraft, replyDraftKey, writeDraft } from "@/lib/drafts";
-import { alsoHereLine } from "@/lib/overlap";
+import { bangCommand, isBang } from "@/lib/bang";
 import { sendLaterOptions, type PlanResets } from "@/lib/schedule";
-import { FIXED_SHORTCUTS } from "@/lib/shortcut-catalog";
 import { useNow } from "@/lib/use-now";
-import type { Backend, Card, ScheduledMessage } from "@/lib/types";
+import type { Backend, ScheduledMessage } from "@/lib/types";
 import Composer, { type ComposerHandle } from "./Composer";
-import Icon, { Spinner } from "./Icon";
-import KeyCaps from "./KeyCaps";
+import ReplyButtons from "./ReplyButtons";
 import { EditingNote, ReplyQueue } from "./ReplyQueue";
 import SendLater from "./SendLater";
-import Tip from "./Tip";
-
-// The key that stops a running turn from the reply box, as the shortcuts sheet lists it.
-const STOP_KEY = FIXED_SHORTCUTS.find((s) => s.id === "reply-stop")?.keys[0] ?? "ctrl+c";
 
 // While a turn runs, the box says the next message waits; idle, it shows the thread's suggested next message.
 function replyPlaceholder(live: boolean, suggestion: string | undefined, fallback: string) {
@@ -25,26 +19,25 @@ function replyPlaceholder(live: boolean, suggestion: string | undefined, fallbac
 }
 
 // A thread's reply box: the same composer as a new thread (Markdown, pasted images and videos,
-// dictation), sized for a reply. Enter sends; Shift+Enter starts a new line.
+// dictation), sized for a reply. Enter sends; Shift+Enter starts a new line. A message starting with "!"
+// is a shell command instead (onShell): it runs in the card's folder, even mid-turn, and the box turns amber.
 export default function ReplyBox({
   cardId,
   cwd,
   live,
   placeholder,
   suggestion,
-  alsoHere = [],
   sendLater,
   status,
   autoFocus,
   editLast,
   onEditing,
   onSend,
+  onShell,
   onStop,
 }: {
   cardId: string;
   cwd: string;
-  // Other busy cards in this folder: they share the working tree (lib/overlap.ts).
-  alsoHere?: Card[];
   // A turn is running or waiting on a permission answer, so a reply can't go yet.
   live: boolean;
   placeholder: string;
@@ -67,6 +60,8 @@ export default function ReplyBox({
   // Tells the thread when an edit starts or ends, so it can mark the message and the reply it replaces.
   onEditing?: (editing: boolean) => void;
   onSend: (text: string) => Promise<void>;
+  // Runs a "!" command (board threads; the copilot leaves it out, so "!" there is just text).
+  onShell?: (command: string) => Promise<void>;
   onStop: () => Promise<void>;
 }) {
   const [initial] = useState(() => readDraft(replyDraftKey(cardId)));
@@ -79,6 +74,8 @@ export default function ReplyBox({
   const [laterOpen, setLaterOpen] = useState(false);
   // ↑ pulled your last sent message back into the box; Enter replaces it, Escape lets it be.
   const [editing, setEditingState] = useState(false);
+  // The box starts with "!": Enter runs it as a shell command.
+  const [shell, setShell] = useState(() => Boolean(onShell) && isBang(initial));
   const now = useNow();
   const composer = useRef<ComposerHandle>(null);
   const draftTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -93,6 +90,7 @@ export default function ReplyBox({
   // Also clears a shown error: you are typing again, or the message just went out.
   function saveDraft(markdown: string, now = false) {
     setError(null);
+    setShell(Boolean(onShell) && isBang(markdown));
     clearTimeout(draftTimer.current);
     unsaved.current = { cardId, markdown };
     const write = () => {
@@ -185,8 +183,28 @@ export default function ReplyBox({
     api.unschedule(cardId, messageId).catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
   }
 
+  // Runs the "!" command in the box; it doesn't wait for a running turn.
+  async function runShell() {
+    const command = bangCommand(composer.current?.readText() ?? "") ?? "";
+    if (!command || !onShell) {
+      setError("Write a command after the !.");
+      return;
+    }
+    setSending(true);
+    try {
+      await onShell(command);
+      saveDraft("", true);
+      composer.current?.clear();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSending(false);
+    }
+  }
+
   async function submit(now = false) {
     if (sending) return;
+    if (shell && !editing) return runShell();
     const text = readBox();
     if (text === null) return;
     if (editing) return sendEdit(text);
@@ -318,15 +336,6 @@ export default function ReplyBox({
         }
       }}
     >
-      {alsoHere.length > 0 && (
-        <p
-          className="mb-1.5 flex min-w-0 items-center gap-1.5 text-[11.5px] text-warn"
-          title={`These threads share this folder's working tree:\n${alsoHere.map((c) => c.title).join("\n")}`}
-        >
-          <Icon name="alert" size={12} className="shrink-0" />
-          <span className="truncate">{alsoHereLine(alsoHere)}</span>
-        </p>
-      )}
       <ReplyQueue
         scheduled={scheduled}
         queue={queue}
@@ -350,6 +359,7 @@ export default function ReplyBox({
         onSubmit={() => void submit()}
         onChange={saveDraft}
         sizeClass="min-h-[44px] max-h-[40vh]"
+        className={shell ? "border-warn! focus-within:border-warn!" : ""}
         actions={
           <>
             {sendLater && (
@@ -362,49 +372,13 @@ export default function ReplyBox({
                 disabled={sending}
               />
             )}
-            {live && (
-              <Tip
-                text={
-                  <span className="flex items-center gap-1.5">
-                    Stop this turn <KeyCaps spec={STOP_KEY} small />
-                  </span>
-                }
-              >
-                <button
-                  type="button"
-                  onClick={() =>
-                    void onStop().catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
-                  }
-                  aria-label="Stop the current turn"
-                  className="ml-1 flex shrink-0 items-center gap-1 rounded-md border border-line-strong px-2 py-1 text-[12px] text-ink hover:bg-sunken"
-                >
-                  <Icon name="stop" size={12} /> Stop
-                </button>
-              </Tip>
-            )}
-            {live && (
-              <Tip text="Stop the current turn and send this now" className="inline-flex">
-                <button
-                  type="button"
-                  onClick={() => void submit(true)}
-                  disabled={sending}
-                  className="ml-1 shrink-0 rounded-md border border-line-strong px-2 py-1 text-[12px] text-ink hover:bg-sunken disabled:opacity-40"
-                >
-                  Send now
-                </button>
-              </Tip>
-            )}
-            <Tip text={live ? "Queue until the turn finishes (Enter)" : "Send (Enter)"} className="inline-flex">
-              <button
-                type="button"
-                onClick={() => void submit()}
-                disabled={sending}
-                aria-label="Send"
-                className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent text-on-accent hover:opacity-90 disabled:opacity-40"
-              >
-                {sending ? <Spinner size={13} /> : <Icon name="send" size={15} />}
-              </button>
-            </Tip>
+            <ReplyButtons
+              live={live}
+              sending={sending}
+              shell={shell}
+              onStop={() => void onStop().catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))}
+              onSend={(now) => void submit(now)}
+            />
           </>
         }
       />

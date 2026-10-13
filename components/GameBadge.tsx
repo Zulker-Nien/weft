@@ -79,7 +79,7 @@ export default function GameBadge({
       <span>
         Today: {game.today.cards} started, {game.today.done} shipped, {game.today.xp} XP
       </span>
-      <span className="text-muted">Click for your builder card, badges and projects.</span>
+      <span className="text-muted">Click for your wefter card, badges and projects.</span>
     </span>
   );
   return (

@@ -20,7 +20,7 @@ const OVERSIZE = {
   "lib/board-view.test.ts": 506,
   "components/SettingsDialog.tsx": 471,
   "lib/use-dictation.test.ts": 425,
-  "electron/main.cjs": 394,
+  "electron/main.cjs": 399,
   "lib/import.ts": 391,
   "lib/library.ts": 391,
   "components/ReplyBox.tsx": 357,
@@ -104,6 +104,8 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "coverage/**",
+    // The toolchain staged for the packaged app (scripts/bundle-toolchain.mjs): third-party code.
+    ".toolchain-dist/**",
   ]),
 ]);
 

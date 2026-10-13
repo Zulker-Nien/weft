@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import { useState } from "react";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { EditorView } from "@tiptap/pm/view";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import "./test-utils";
-import SecretPasteBar, { useSecretPaste, type SecretPasteGuard } from "./SecretPaste";
+import SecretPasteBar, { removeFromEditor, useSecretPaste, type SecretPasteGuard } from "./SecretPaste";
 import Composer from "./Composer";
 
 vi.mock("@/lib/client", () => ({ api: { skills: vi.fn(() => Promise.resolve({ skills: [] })) } }));
@@ -195,5 +195,79 @@ describe("Composer's paste guard (Markdown view)", () => {
     await pasteInto(box, "Fix the login page");
     expect(box).toHaveValue("Fix the login page");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
+
+describe("Composer's typed-secret check (Markdown view)", () => {
+  async function typedIn(text: string) {
+    const onChange = vi.fn<(markdown: string) => void>();
+    render(<Composer variant="reply" placeholder="Reply" sizeClass="" onSubmit={() => {}} onChange={onChange} />);
+    const toggle = screen.getByRole("button", { name: "Edit as Markdown" });
+    await waitFor(() => expect(toggle).toBeEnabled());
+    await userEvent.click(toggle);
+    const box = await screen.findByRole("textbox", { name: "Markdown" });
+    // Typed, dictated or dropped: it arrives as a change, not a paste.
+    fireEvent.change(box, { target: { value: text } });
+    return { box, onChange };
+  }
+
+  it("flags a key that arrives without a paste, and Remove it takes just the key out", async () => {
+    const { box, onChange } = await typedIn(`use ${STRIPE_KEY} for billing`);
+    expect(await screen.findByRole("alert")).toHaveTextContent("a Stripe secret key");
+    await userEvent.click(screen.getByRole("button", { name: "Remove it" }));
+    expect(box).toHaveValue("use  for billing");
+    expect(onChange).toHaveBeenLastCalledWith("use  for billing");
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+  });
+
+  it("Keep it lets that key stay, but a different one is flagged again", async () => {
+    const { box } = await typedIn(STRIPE_KEY);
+    await userEvent.click(await screen.findByRole("button", { name: "Keep it" }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(box).toHaveValue(STRIPE_KEY);
+    fireEvent.change(box, { target: { value: `${STRIPE_KEY} ${GITHUB_TOKEN}` } });
+    expect(await screen.findByRole("alert")).toHaveTextContent("a GitHub token");
+  });
+
+  it("says nothing about ordinary text", async () => {
+    await typedIn("Fix the login page, the key is in the vault");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
+
+describe("removeFromEditor", () => {
+  function fakeEditor(texts: string[]) {
+    const run = vi.fn();
+    const deleteRange = vi.fn(() => ({ run }));
+    const editor = {
+      state: {
+        doc: {
+          descendants: (fn: (node: { isText: boolean; text?: string }, pos: number) => boolean) => {
+            let pos = 1;
+            for (const text of texts) {
+              if (!fn({ isText: false }, pos - 1)) return;
+              if (!fn({ isText: true, text }, pos)) return;
+              pos += text.length + 2;
+            }
+          },
+        },
+      },
+      chain: () => ({ focus: () => ({ deleteRange }) }),
+    };
+    return { editor: editor as never, deleteRange, run };
+  }
+
+  it("deletes the first run of text holding the value", () => {
+    const { editor, deleteRange, run } = fakeEditor(["hello", `key ${STRIPE_KEY} here`, STRIPE_KEY]);
+    removeFromEditor(editor, STRIPE_KEY);
+    expect(deleteRange).toHaveBeenCalledWith({ from: 8 + 4, to: 8 + 4 + STRIPE_KEY.length });
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("does nothing when the value isn't in one run of text, or there's no editor", () => {
+    const { editor, deleteRange } = fakeEditor(["sk_live_", "split"]);
+    removeFromEditor(editor, STRIPE_KEY);
+    removeFromEditor(null, STRIPE_KEY);
+    expect(deleteRange).not.toHaveBeenCalled();
   });
 });

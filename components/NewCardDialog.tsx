@@ -46,7 +46,7 @@ export default function NewCardDialog({
   // Folder of the most recently active card outside home, used when nothing else is remembered.
   recentCwd?: string;
   onClose: () => void;
-  // stay: started with ⌃↵, so the dialog stays open for the next thread and the board doesn't jump to it.
+  // stay: started with ⌃↵, so the dialog stays open for the next thread.
   onCreate: (input: NewCardInput, opts?: { stay?: boolean }) => Promise<void>;
 }) {
   const [initial] = useState(() => remembered(DRAFT) ?? "");

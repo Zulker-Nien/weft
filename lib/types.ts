@@ -1,3 +1,5 @@
+import type { SubagentModel } from "./subagents";
+
 export const COLUMNS = [
   { id: "backlog", label: "Backlog" },
   { id: "running", label: "Running" },
@@ -69,7 +71,10 @@ export interface CacheState {
 
 // What the thread panel's status strip shows (see components/StatusStrip.tsx).
 export interface CardStats {
+  // The model that cost the most last turn (a subagent's, sometimes).
   model?: string;
+  // The thread's own model and effort, from its CLI's init (the header's chip; lib/cli-defaults.ts).
+  runsOn?: { model: string; effort?: Effort };
   // The folder's git branch, when it is a repo.
   branch?: string;
   // Share of the model's context window the last turn filled, 0-100.
@@ -162,6 +167,9 @@ export interface Card {
   // Files the thread has edited (Edit, Write, MultiEdit, NotebookEdit), most recent first, capped
   // (lib/overlap.ts), for the warning when busy cards in one folder edit the same files.
   touchedFiles?: string[];
+  // Top-level symbols (or whole files) the thread edited and hasn't committed, most recent first, capped:
+  // "/abs/Board.tsx#CommandPalette", "/abs/a.css#*" (lib/claims.ts). Dropped at Done, archive and commit.
+  claims?: string[];
   // Set on cards picked up from existing Claude Code sessions (see lib/import.ts).
   source?: "claude-code";
   // When the session last changed (its last message), and when its transcript was last read into the thread.
@@ -238,7 +246,19 @@ export type ThreadItem =
     }
   | { kind: "result"; text: string; costUsd?: number; isError: boolean; at: number }
   // A message you edited with ↑, and the turn it started, folded away when the edit went out.
-  | { kind: "edited"; items: ThreadItem[]; at: number };
+  | { kind: "edited"; items: ThreadItem[]; at: number }
+  // A "!" command you ran from the reply box (lib/shell.ts). ms is set once it ends; sent once its
+  // output went to Claude with your next message.
+  | {
+      kind: "shell";
+      command: string;
+      at: number;
+      output?: string;
+      exitCode?: number | null;
+      ms?: number;
+      timedOut?: boolean;
+      sent?: boolean;
+    };
 
 export interface Project {
   path: string;
@@ -286,6 +306,8 @@ export interface SettingsView {
   automations: Automation[];
   // /weft:done runs `git push` after a clean commit (plugin/skills/done/push.sh).
   pushOnDone: boolean;
+  // What board threads' subagents run on; "choose" lets each thread pick (lib/subagents.ts).
+  subagentModel: SubagentModel;
   projects: Project[];
 }
 
@@ -300,6 +322,15 @@ export interface LoginView {
   // The last https URL the CLI printed, if any (the login page).
   url?: string;
   startedAt: number;
+  // Why Weft's Puku trial didn't cover this login (lib/puku-trial.ts), for the pop-up to say.
+  trial?: LoginTrial;
+}
+
+// signed-out: no Weft account to give a trial token to; unavailable: the trial server said no;
+// failed: a thread on a fresh trial token still couldn't sign in.
+export interface LoginTrial {
+  reason: "signed-out" | "unavailable" | "failed";
+  message: string;
 }
 
 export interface CliStatus {

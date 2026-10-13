@@ -2,7 +2,8 @@
 
 import { useEffect, useEffectEvent, useRef, useState, type SubmitEvent } from "react";
 import { api } from "@/lib/client";
-import type { Backend, LoginView } from "@/lib/types";
+import type { Backend, LoginTrial, LoginView } from "@/lib/types";
+import { useAccount } from "@/lib/use-account";
 import Icon, { Spinner } from "./Icon";
 import Modal from "./Modal";
 
@@ -41,6 +42,31 @@ function Output({ text }: { text: string }) {
     >
       {text.trim() || "No output yet."}
     </pre>
+  );
+}
+
+// Why Weft's Puku trial didn't cover this login (lib/puku-trial.ts). Signed out of Weft, it offers Weft sign-in:
+// once you're in, the server gets a trial token and runs the thread again, and this pop-up closes.
+function TrialNote({ trial }: { trial: LoginTrial }) {
+  const { busy, waiting, error, signIn } = useAccount();
+  if (trial.reason !== "signed-out") {
+    return (
+      <p className="rounded-md border border-line bg-sunken px-3 py-2 text-[12.5px] text-muted">
+        {trial.message} Log in to Puku below to keep going.
+      </p>
+    );
+  }
+  return (
+    <div className="flex items-center gap-3 rounded-md border border-line bg-sunken px-3 py-2">
+      <p className="flex-1 text-[12.5px] text-ink">
+        Try Puku free: sign in to your Weft account and this thread runs on Weft&apos;s Puku trial, no Puku account needed.
+        Or log in to Puku below.
+        {error && <span className="block text-danger">{error}</span>}
+      </p>
+      <button onClick={() => void signIn("github")} disabled={busy !== null || waiting !== null} className={primary}>
+        {waiting ? <Spinner size={13} /> : <Icon name="github" size={14} />} {waiting ? "Signing in…" : "Sign in to Weft"}
+      </button>
+    </div>
   );
 }
 
@@ -98,6 +124,7 @@ export default function LoginDialog({ login, onClose }: { login: LoginView; onCl
     <Modal title={`Log in to ${name}`} onClose={onClose} keepOnBackdrop className="w-full max-w-[520px]">
 
         <div className="flex flex-col gap-4 px-5 py-4">
+          {login.trial && login.state !== "done" && <TrialNote trial={login.trial} />}
           {login.state === "running" && (
             <>
               <div className="flex items-start gap-2.5 text-[13px] text-ink">

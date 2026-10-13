@@ -407,7 +407,7 @@ describe("threadBoardMcpServer", () => {
     const input = nth(created, 0, "created card").input;
     // No parent cwd and no folder override: createBoardCard gets folder="", which resolveFolder
     // maps to "." (the process cwd, which is the project root — an existing dir).
-    expect(input).toMatchObject({ prompt: "Hello", permissionMode: "default", parentId: undefined });
+    expect(input).toMatchObject({ prompt: "Hello", permissionMode: "auto", parentId: undefined });
     expect(typeof input.cwd).toBe("string");
     expect(input.cwd).not.toBe("");
   });

@@ -3,7 +3,7 @@
 import { isMac } from "@/lib/hotkeys";
 import { useCountdown } from "@/lib/use-countdown";
 import { useModHeld } from "@/lib/use-mod-held";
-import { masked, type VaultSecret } from "@/lib/vault-view";
+import { blankTitle, masked, type VaultSecret } from "@/lib/vault-view";
 import CountdownButton, { CONFIRM_WAIT_MS } from "./CountdownButton";
 import Icon from "./Icon";
 import { Tag } from "./VaultParts";
@@ -33,10 +33,10 @@ export function SecretRow({
   return (
     <div onContextMenu={onMenu} onMouseLeave={disarm} className="group rounded px-1.5 py-1 hover:bg-sunken">
       <div className="flex items-center gap-1.5 text-[11.5px]">
-        <span className="min-w-0 flex-1 truncate font-mono text-ink" title={s.source ? `${s.name} · from ${s.source}` : s.name}>
+        <span className="min-w-0 flex-1 truncate font-mono text-ink" title={s.missing ? blankTitle(s) : s.source ? `${s.name} · from ${s.source}` : s.name}>
           {s.name}
         </span>
-        {s.missing ? <Tag tone="warn">missing</Tag> : <span className="font-mono text-[10.5px] text-faint group-hover:hidden">{masked(s)}</span>}
+        {s.missing ? <Tag tone="warn">blank</Tag> : <span className="font-mono text-[10.5px] text-faint group-hover:hidden">{masked(s)}</span>}
         {left !== null ? (
           <CountdownButton
             left={left}
@@ -50,15 +50,24 @@ export function SecretRow({
             className="px-1.5 text-[10.5px]"
           />
         ) : (
-          <span className="hidden gap-0.5 group-hover:flex">
-            <HoverButton
-              icon="pencil"
-              label={`${s.missing ? "Set" : "Change"} ${s.name}`}
-              title={s.missing ? "Set its value" : "Change its value"}
-              onClick={() => onAct("edit")}
-            />
-            {!s.missing && (
-              <>
+          <span className="flex gap-0.5">
+            {s.missing ? (
+              <button
+                onClick={() => onAct("edit")}
+                aria-label={`Fill in ${s.name}`}
+                title={`Fill in ${s.name}${s.hint ? `: ${s.hint}` : ""}`}
+                className="rounded bg-warn/15 px-1.5 py-0.5 text-[10.5px] font-medium text-warn hover:bg-warn/25"
+              >
+                Fill in
+              </button>
+            ) : (
+              <span className="hidden gap-0.5 group-hover:flex">
+                <HoverButton
+                  icon="pencil"
+                  label={`Change ${s.name}`}
+                  title="Change its value"
+                  onClick={() => onAct("edit")}
+                />
                 <HoverButton
                   icon="eye"
                   label={value ? `Hide ${s.name}` : `Reveal ${s.name}`}
@@ -71,7 +80,7 @@ export function SecretRow({
                   title="Copy (Touch ID); clears from the clipboard after a minute"
                   onClick={() => onAct("copy")}
                 />
-              </>
+              </span>
             )}
             {spread ? (
               <TrashButton name={s.name} title="Remove from one or more of its environments…" onArm={() => onAct("choose-remove")} />
@@ -81,6 +90,7 @@ export function SecretRow({
           </span>
         )}
       </div>
+      {s.missing && s.hint && <p className="mt-0.5 truncate text-[10.5px] leading-snug text-faint" title={s.hint}>{s.hint}</p>}
       {/* data-secret: the board view (electron/board-view.cjs) reads this as ‹secret› and blanks it in screenshots. */}
       {value !== undefined && (
         <div data-secret className="mt-0.5 select-text break-all font-mono text-[10.5px] text-ink">

@@ -13,7 +13,7 @@ import { mediaMarkdown } from "@/lib/media";
 import { currentBinding, formatBinding, matches } from "@/lib/shortcuts";
 import { useDictation } from "@/lib/use-dictation";
 import Icon, { Spinner, type IconName } from "./Icon";
-import SecretPasteBar, { useSecretPaste } from "./SecretPaste";
+import { removeFromEditor, SecretBars, useComposerSecrets } from "./SecretPaste";
 import { Media, insertFiles, pendingMedia } from "./MediaNode";
 import Tip from "./Tip";
 import { submitFor, submitKeys } from "./submit-keys";
@@ -25,6 +25,7 @@ export interface ComposerHandle {
   focus(): void;
   // The prompt as Markdown, or throws if an upload is still running or failed.
   read(): string;
+  readText(): string; // plain text as typed, for a "!" shell command that Markdown would escape
   clear(): void;
   // Replace the content with Markdown and focus the end.
   write(markdown: string): void;
@@ -45,7 +46,8 @@ interface SlashQuery {
 
 function slashAtCursor(e: Editor): SlashQuery | null {
   const { selection } = e.state;
-  if (!selection.empty || e.isActive("codeBlock")) return null;
+  // In a code block or a "!" shell command, a "/" is a path, not a skill.
+  if (!selection.empty || e.isActive("codeBlock") || /^\s*!/.test(e.state.doc.textContent)) return null;
   const { $from } = selection;
   const match = SLASH.exec($from.parent.textBetween(0, $from.parentOffset, undefined, "\ufffc"));
   const query = match?.[2];
@@ -262,7 +264,7 @@ const Composer = forwardRef<
   const [source, setSource] = useState<string | null>(null);
   const [showFormat, setShowFormat] = useState(variant === "dialog");
   const [dragging, setDragging] = useState(false);
-  const secretPaste = useSecretPaste();
+  const secrets = useComposerSecrets();
   const fileInput = useRef<HTMLInputElement>(null);
   const sourceBox = useRef<HTMLTextAreaElement>(null);
   // The editor, for the paste and drop handlers, which are set up before it exists.
@@ -302,7 +304,7 @@ const Composer = forwardRef<
         const files = [...(event.clipboardData?.files ?? [])];
         const text = event.clipboardData?.getData("text/plain") ?? "";
         const html = event.clipboardData?.getData("text/html") ?? "";
-        if (secretPaste.hold(text)) return true;
+        if (secrets.paste.hold(text)) return true;
         // Copying a picture gives the file plus a scrap of HTML or alt text; copying from a
         // spreadsheet gives a picture of the cells plus the text, and the text is what's wanted.
         if (files.length && (!text.trim() || (html.includes("<img") && text.length < 300))) {
@@ -327,7 +329,10 @@ const Composer = forwardRef<
         return true;
       },
     },
-    onUpdate: ({ editor: e }) => onChangeRef.current?.(e.getMarkdown()),
+    onUpdate: ({ editor: e }) => {
+      onChangeRef.current?.(e.getMarkdown());
+      secrets.setPlain(e.getText({ blockSeparator: "\n" }));
+    },
   });
   useEffect(() => {
     editorRef.current = editor;
@@ -394,13 +399,19 @@ const Composer = forwardRef<
       .run();
   });
 
+  // The Markdown view's text changed: by typing, an insert, or Remove it.
+  function editSource(next: string) {
+    setSource(next);
+    secrets.setPlain(next);
+    onChangeRef.current?.(next);
+  }
+
   function insertIntoSource(text: string) {
     const box = sourceBox.current;
     const current = source ?? "";
     const at = box ? box.selectionStart : current.length;
     const next = current.slice(0, at) + text + current.slice(box ? box.selectionEnd : at);
-    setSource(next);
-    onChangeRef.current?.(next);
+    editSource(next);
     requestAnimationFrame(() => {
       box?.focus();
       box?.setSelectionRange(at + text.length, at + text.length);
@@ -441,6 +452,7 @@ const Composer = forwardRef<
       if (failed) throw new Error("An attachment didn't upload. Remove it and paste it again.");
       return editor.getMarkdown().trim();
     },
+    readText: () => (source !== null ? source : (editor?.getText({ blockSeparator: "\n" }) ?? "")).trim(),
     clear: () => {
       if (source !== null) setSource("");
       editor?.commands.clearContent(true);
@@ -511,12 +523,9 @@ const Composer = forwardRef<
         <textarea
           ref={sourceBox}
           value={source}
-          onChange={(e) => {
-            setSource(e.target.value);
-            onChangeRef.current?.(e.target.value);
-          }}
+          onChange={(e) => editSource(e.target.value)}
           onPaste={(e) => {
-            if (secretPaste.hold(e.clipboardData.getData("text/plain"))) {
+            if (secrets.paste.hold(e.clipboardData.getData("text/plain"))) {
               e.preventDefault();
               return;
             }
@@ -540,7 +549,11 @@ const Composer = forwardRef<
         <EditorContent editor={editor} className="min-h-0 flex-1 overflow-hidden" />
       )}
 
-      <SecretPasteBar guard={secretPaste} onPaste={(text) => (source === null ? secretPaste.pasteInto(editor?.view, text) : insertIntoSource(text))} />
+      <SecretBars
+        guard={secrets}
+        onInsert={(text) => (source === null ? secrets.paste.pasteInto(editor?.view, text) : insertIntoSource(text))}
+        onRemove={(value) => (source === null ? removeFromEditor(editor, value) : editSource(source.replace(value, "")))}
+      />
 
       {dragging && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg text-[13px] font-medium text-accent">

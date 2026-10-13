@@ -11,10 +11,14 @@ import { useSupabase } from "@/lib/use-supabase";
 import { supabaseTitle } from "@/lib/supabase-view";
 import { useBlastcp } from "@/lib/use-blastcp";
 import { blastcpTitle } from "@/lib/blastcp-view";
+import { useCloudflare } from "@/lib/use-cloudflare";
+import { cloudflareTitle } from "@/lib/cloudflare-view";
 import { useGithub } from "@/lib/use-github";
 import { githubTitle } from "@/lib/github-view";
 import BlastcpDrawer from "./BlastcpDrawer";
 import BlastcpLogo from "./BlastcpLogo";
+import CloudflareDrawer from "./CloudflareDrawer";
+import CloudflareLogo from "./CloudflareLogo";
 import GithubDrawer from "./GithubDrawer";
 import GithubLogo from "./GithubLogo";
 import RailIconButton from "./RailIconButton";
@@ -32,10 +36,10 @@ import type { TagCatalog } from "./use-tag-catalog";
 // 🏷 opens the drawer of every tag (components/TagsDrawer.tsx; a tag there filters the board). The drawer
 // slides over the board, or, pinned, pushes it over. Below a divider, 🔐 opens the same drawer on the secrets
 // vault of the board's project(s), and ▲ on their Vercel links, Supabase's bolt on their Supabase projects,
-// BlastCP's rocket on the BlastCP property each one posts as, and GitHub's mark on the gh sign-in and each
-// one's issue sync.
+// Cloudflare's cloud on their Workers and Pages projects, BlastCP's rocket on the BlastCP property each one posts as,
+// and GitHub's mark on the gh sign-in and each one's issue sync.
 // The drawers under the divider, each with its icon, title and label.
-const TOOLS = { vault: ["🔐", "Secrets", "Secrets vault"], vercel: ["▲", "Vercel", "Vercel"], supabase: [<SupabaseLogo key="supabase" />, "Supabase", "Supabase"], blastcp: [<BlastcpLogo key="blastcp" />, "BlastCP", "BlastCP"], github: [<GithubLogo key="github" />, "GitHub", "GitHub"] } as const;
+const TOOLS = { vault: ["🔐", "Secrets", "Secrets vault"], vercel: ["▲", "Vercel", "Vercel"], supabase: [<SupabaseLogo key="supabase" />, "Supabase", "Supabase"], cloudflare: [<CloudflareLogo key="cloudflare" />, "Cloudflare", "Cloudflare"], blastcp: [<BlastcpLogo key="blastcp" />, "BlastCP", "BlastCP"], github: [<GithubLogo key="github" />, "GitHub", "GitHub"] } as const;
 type Tool = keyof typeof TOOLS;
 const isTool = (panel: RailPanel | null): panel is Tool => panel !== null && panel in TOOLS;
 
@@ -51,6 +55,7 @@ export default function SideRail({
   onTagCard,
   catalog,
   onOpenUrl,
+  onOpenCard,
   notify,
 }: {
   // Which drawer is open, if any.
@@ -71,6 +76,8 @@ export default function SideRail({
   catalog: TagCatalog;
   // Shows a page (a deploy) in the board's browser pane.
   onOpenUrl: (url: string) => void;
+  // Opens a card's thread (the Supabase drawer's link from a migration to the card that wrote it).
+  onOpenCard: (card: Card) => void;
   notify: (err: unknown) => void;
 }) {
   const [pinned, setPinned] = useState(() => typeof window !== "undefined" && railPinned());
@@ -80,6 +87,7 @@ export default function SideRail({
   const vaultBadge = railBadge(filterVaults(vault.overview?.vaults ?? [], project));
   const vercel = useVercel(folders, open === "vercel");
   const supabase = useSupabase(folders, open === "supabase");
+  const cloudflare = useCloudflare(folders, open === "cloudflare");
   const blastcp = useBlastcp(folders, open === "blastcp");
   const github = useGithub(folders, open === "github");
   const starred = starredCount(cards);
@@ -138,7 +146,8 @@ export default function SideRail({
   const toolBodies: Record<Tool, React.ReactNode> = {
     vault: <VaultDrawer {...vault} project={project} notify={notify} />,
     vercel: <VercelDrawer {...vercel} project={project} onOpenUrl={onOpenUrl} notify={notify} />,
-    supabase: <SupabaseDrawer {...supabase} project={project} onOpenUrl={onOpenUrl} notify={notify} />,
+    supabase: <SupabaseDrawer {...supabase} project={project} cards={cards} onOpenCard={onOpenCard} onOpenUrl={onOpenUrl} notify={notify} />,
+    cloudflare: <CloudflareDrawer {...cloudflare} project={project} onOpenUrl={onOpenUrl} notify={notify} />,
     blastcp: <BlastcpDrawer {...blastcp} project={project} onOpenUrl={onOpenUrl} notify={notify} />,
     github: <GithubDrawer {...github} project={project} onOpenUrl={onOpenUrl} notify={notify} />,
   };
@@ -160,6 +169,7 @@ export default function SideRail({
         <VaultButton open={open === "vault"} badge={vaultBadge} onClick={() => onOpen(open === "vault" ? null : "vault")} />
         <RailIconButton icon="▲" label="Vercel" open={open === "vercel"} title={vercelTitle(vercel.status, project)} onClick={toggle("vercel")} />
         <RailIconButton icon={<SupabaseLogo />} label="Supabase" open={open === "supabase"} title={supabaseTitle(supabase.status, project)} onClick={toggle("supabase")} />
+        <RailIconButton icon={<CloudflareLogo />} label="Cloudflare" open={open === "cloudflare"} title={cloudflareTitle(cloudflare.status, project)} onClick={toggle("cloudflare")} />
         <RailIconButton icon={<BlastcpLogo />} label="BlastCP" open={open === "blastcp"} title={blastcpTitle(blastcp.status, project)} onClick={toggle("blastcp")} />
         <RailIconButton icon={<GithubLogo />} label="GitHub" open={open === "github"} title={githubTitle(github.status, project)} onClick={toggle("github")} />
       </nav>

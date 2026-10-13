@@ -71,3 +71,58 @@ export function downloadLink(release: Release | null): { label: string; href: st
     note: "The first release is on its way. Until then, clone it and run npm run desktop.",
   };
 }
+
+// The home page component's props (lib/home.ts has no opinions; the call site decides). `unknown` keeps the helper
+// generic without us pretending the home is parametric.
+type HomeComponent = (props: unknown) => unknown;
+
+// The shape `loadHome` returns when the import fails — what the route's fallback renders and what the build error
+// bar shows. Kept tiny on purpose: one message, one optional file (parsed out of Next's "X:Y" hint when we have it).
+export interface HomeLoadError {
+  message: string;
+  file: string | null;
+}
+
+// The result of one load attempt: the component on success, an error on failure. Routes decide what to render.
+export type HomeLoadResult = { Home: HomeComponent } | { error: HomeLoadError };
+
+// Lazy-loads @/components/home/Home so a parse error in it (a stray `}`, an unresolved sub-import) cannot 500 the
+// route that imports this helper. Cached after the first successful load so re-renders don't re-import; the cache
+// resets on each cold start of the dev server, which is exactly when Fast Refresh would clear its own module cache
+// anyway. The optional `importer` is for tests; production callers can ignore it.
+//
+// This is the parse-error companion to lib/route-import-guard.ts: that one refuses the *edit* that would add an
+// unresolved import; this one narrows the runtime blast radius when the file does exist but won't parse. See
+// docs/bug-fixes/010-...md and 011-...md.
+let cached: HomeComponent | null = null;
+export async function loadHome(importer: () => Promise<{ default: HomeComponent }> = defaultImporter): Promise<HomeLoadResult> {
+  if (cached) return { Home: cached };
+  try {
+    const mod = await importer();
+    if (typeof mod.default !== "function") {
+      return { error: { message: "components/home/Home has no default export", file: null } };
+    }
+    cached = mod.default;
+    return { Home: cached };
+  } catch (err) {
+    // Next's dev overlay says "Unexpected token. Did you mean `{'}'}` or `&rbrace;`?" with no file; the file is in
+    // the import trace just above. We surface a short, file-bearing message the fallback can show alongside the
+    // build error bar.
+    const raw = err instanceof Error ? err.message : String(err);
+    const file = raw.match(/\.\/([^\s()]+\.[a-z]+)/)?.[1] ?? null;
+    return { error: { message: raw.split("\n")[0] || "Failed to load components/home/Home", file } };
+  }
+}
+
+async function defaultImporter(): Promise<{ default: HomeComponent }> {
+  // The `@/` alias is resolved by Next at build time; the import is dynamic so a parse error in the target only
+  // surfaces when this runs, not when app/page.tsx loads.
+  const mod = await import("@/components/home/Home");
+  return mod;
+}
+
+// Test-only: clear the in-process cache so the next loadHome() call re-imports. The cache is module-scoped so
+// tests in the same file would otherwise see the first call's result forever.
+export function _resetLoadHomeCacheForTests(): void {
+  cached = null;
+}

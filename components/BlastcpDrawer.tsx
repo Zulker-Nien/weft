@@ -3,25 +3,24 @@
 import { useState } from "react";
 import {
   countsLine,
+  createProperty,
   expiryNote,
   needsRestart,
   platformName,
-  propertyOptions,
   queueOf,
   shownFolders,
-  SITE,
   untilText,
   type BlastcpBridge,
   type BlastcpFolder,
   type BlastcpPost,
   type BlastcpStatus,
   type BlastcpWorkspace,
-  type PropertyOption,
 } from "@/lib/blastcp-view";
 import { folderName, timeAgo } from "@/lib/format";
 import { useNow } from "@/lib/use-now";
 import { BlastcpConnect, BlastcpRestart, SMALL } from "./BlastcpConnect";
 import BlastcpLogo from "./BlastcpLogo";
+import BlastcpPicker from "./BlastcpPicker";
 import { Note } from "./VaultParts";
 
 // The posts a property shows coming up.
@@ -115,7 +114,7 @@ export default function BlastcpDrawer({
         {shown.length === 0 && <Note>Add a project to the board to link it to a BlastCP property.</Note>}
         {shown.map((f) =>
           picking === f.folder ? (
-            <Picker
+            <BlastcpPicker
               key={f.folder}
               folder={f.folder}
               workspaces={workspaces}
@@ -125,6 +124,15 @@ export default function BlastcpDrawer({
                   const { name } = await blastcp.link(f.folder, o.org, o.slug, o.name);
                   setPicking(null);
                   notify(`${folderName(f.folder)} now posts as ${name} on BlastCP`);
+                })
+              }
+              onCreate={(org, name) =>
+                change(async () => {
+                  const made = await createProperty(blastcp, f.folder, org, name);
+                  setPicking(null);
+                  // The next pick lists the new property too.
+                  setWorkspaces(null);
+                  notify(`Made ${made.name} on BlastCP; ${folderName(f.folder)} now posts as it`);
                 })
               }
               onCancel={() => setPicking(null)}
@@ -219,78 +227,5 @@ function PostRow({ post, when, onOpenUrl }: { post: BlastcpPost; when: string; o
       <span className="shrink-0 rounded bg-sunken px-1 text-[10px] leading-[15px]">{platformName(post.platform)}</span>
       <span className="min-w-0 flex-1 truncate text-ink">{post.title ?? "Untitled"}</span>
     </button>
-  );
-}
-
-// Links a folder to one property in one of your workspaces.
-function Picker({
-  folder,
-  workspaces,
-  busy,
-  onPick,
-  onCancel,
-  onOpenUrl,
-}: {
-  folder: string;
-  workspaces: BlastcpWorkspace[] | null;
-  busy: boolean;
-  onPick: (o: PropertyOption) => Promise<void>;
-  onCancel: () => void;
-  onOpenUrl: (url: string) => void;
-}) {
-  const [search, setSearch] = useState("");
-  const rows = workspaces ? propertyOptions(workspaces, folder, search) : [];
-  const many = new Set(rows.map((r) => r.org)).size > 1;
-  return (
-    <section className="mt-2 rounded-lg border border-accent/40 bg-card px-2 py-2" aria-label={`Link ${folderName(folder)}`}>
-      <div className="flex items-center gap-1 px-0.5">
-        <h3 className="min-w-0 flex-1 truncate text-[12px] font-semibold text-ink">Link {folderName(folder)} to…</h3>
-        <button onClick={onCancel} className={SMALL}>
-          Cancel
-        </button>
-      </div>
-      <input
-        autoFocus
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") onCancel();
-        }}
-        placeholder="Search properties"
-        aria-label="Search BlastCP properties"
-        className="mt-1.5 w-full rounded-md border border-line-strong bg-panel px-2 py-1 text-[12px] text-ink"
-      />
-      {!workspaces && <Note>Loading your BlastCP properties…</Note>}
-      {workspaces && rows.length === 0 && (
-        <Note>
-          {search ? (
-            "No property matches."
-          ) : (
-            <>
-              No properties yet.{" "}
-              <button onClick={() => onOpenUrl(SITE)} className="text-accent underline">
-                Make one on BlastCP
-              </button>
-            </>
-          )}
-        </Note>
-      )}
-      <ul className="mt-1 max-h-[320px] overflow-y-auto">
-        {rows.map((o) => (
-          <li key={`${o.org}/${o.slug}`}>
-            <button onClick={() => void onPick(o)} disabled={busy} className="w-full rounded px-1.5 py-1 text-left hover:bg-sunken disabled:opacity-40">
-              <span className="flex items-center gap-1.5">
-                <span className="min-w-0 flex-1 truncate text-[12px] text-ink">{o.name}</span>
-                {o.score >= 2 && <span className="shrink-0 rounded bg-accent-soft px-1 text-[10px] leading-[15px] text-accent">best fit</span>}
-              </span>
-              <span className="block truncate text-[10.5px] text-faint">
-                {o.slug}
-                {many ? ` · ${o.orgName}` : ""}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </section>
   );
 }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { blastcpBridge, blastcpTitle, needsRestart, restartWeft, countsLine, expiryNote, platformName, propertyOptions, queueOf, shownFolders, untilText, type BlastcpFolder, type BlastcpPost, type BlastcpStatus } from "./blastcp-view";
+import { blastcpBridge, blastcpTitle, createProperty, newPropertyName, needsRestart, restartWeft, countsLine, expiryNote, platformName, propertyOptions, queueOf, shownFolders, untilText, type BlastcpBridge, type BlastcpFolder, type BlastcpPost, type BlastcpStatus } from "./blastcp-view";
 
 const NOW = Date.UTC(2026, 9, 12, 12);
 const H = 3_600_000;
@@ -121,6 +121,31 @@ describe("propertyOptions", () => {
     expect(propertyOptions(workspaces, "/dev/weft", "blog").map((o) => o.slug)).toEqual(["blog"]);
     expect(propertyOptions(workspaces, "/dev/weft", " WEFT APP ").map((o) => o.slug)).toEqual(["weft-app"]);
     expect(propertyOptions(workspaces, "/").every((o) => o.score === 0)).toBe(true);
+  });
+});
+
+describe("newPropertyName", () => {
+  it("takes the search, else the folder's name in words", () => {
+    expect(newPropertyName("/dev/weft", "  Weft Blog ")).toBe("Weft Blog");
+    expect(newPropertyName("/dev/lisls-coloring_book")).toBe("Lisls Coloring Book");
+    expect(newPropertyName("/dev/--")).toBe("");
+  });
+});
+
+describe("createProperty", () => {
+  const made = { linked: true as const, name: "Weft" };
+  const bridgeWith = (create: unknown) => ({ createProperty: create }) as unknown as BlastcpBridge;
+
+  it("creates and links through the bridge", async () => {
+    const create = vi.fn(() => Promise.resolve(made));
+    expect(await createProperty(bridgeWith(create), "/dev/weft", "alex", "Weft")).toBe(made);
+    expect(create).toHaveBeenCalledWith("/dev/weft", "alex", "Weft");
+  });
+
+  it("asks for a restart when the window or main predates it, and passes other errors on", async () => {
+    await expect(createProperty(bridgeWith(undefined), "/a", "o", "N")).rejects.toThrow("Restart Weft");
+    await expect(createProperty(bridgeWith(() => Promise.reject(new Error("No handler registered for 'blastcp:create-property'"))), "/a", "o", "N")).rejects.toThrow("Restart Weft");
+    await expect(createProperty(bridgeWith(() => Promise.reject(new Error("taken"))), "/a", "o", "N")).rejects.toThrow("taken");
   });
 });
 

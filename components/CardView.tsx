@@ -3,13 +3,15 @@
 import { useState } from "react";
 import { api } from "@/lib/client";
 import { folderName, isLive, STAGES, stageStep, timeAgo } from "@/lib/format";
+import { modelLabel, runningOn } from "@/lib/new-thread";
 import { isBusy } from "@/lib/overlap";
 import { formatAt } from "@/lib/schedule";
-import type { Card } from "@/lib/types";
+import { type Card } from "@/lib/types";
 import { ContinueButton, RestartButton, type ResumeHow } from "./CardResume";
 import CardPicture from "./CardPicture";
 import Icon, { Spinner } from "./Icon";
 import StarButton from "./StarButton";
+import Tip from "./Tip";
 import CardMarks from "./CardMarks";
 
 // The footer's left side: CLI dot, folder (or "whole board" for the copilot), overlap, age, turns, scheduled
@@ -67,13 +69,22 @@ function FooterMeta({ card, now, alsoHere, marks }: { card: Card; now: number; a
   );
 }
 
-export function BackendBadge({ backend }: { backend: Card["backend"] }) {
-  return backend === "puku" ? (
-    <span className="rounded px-1.5 py-px text-[11px] font-medium bg-puku-soft text-puku">puku</span>
-  ) : (
-    <span className="rounded px-1.5 py-px text-[11px] font-medium bg-claude-soft text-claude">claude</span>
-  );
+// The CLI's chip, coloured by CLI; given a card, it names the model and effort the thread runs on instead.
+export function BackendBadge({ backend, card }: { backend: Card["backend"]; card?: Card }) {
+  const { model, effort } = card ? runningOn(card) : {};
+  const label = model ? [modelLabel(model), effort].filter(Boolean).join(" · ") : backend;
+  const tone = backend === "puku" ? "bg-puku-soft text-puku" : "bg-claude-soft text-claude";
+  const badge = <span className={`shrink-0 whitespace-nowrap rounded px-1.5 py-px text-[11px] font-medium ${tone}`}>{label}</span>;
+  if (!model) return badge;
+  const cli = backend === "puku" ? "puku-cli" : "Claude Code";
+  const how = card?.effort ? "" : " (the CLI's default)";
+  return <Tip text={`${cli} · ${model}${effort ? ` · ${effort} effort${how}` : ""}`}>{badge}</Tip>;
 }
+
+// A clickable version for the thread header. Click the chip, pick the other CLI, and the next turn
+// runs there. No replay by default — that's the rate-limit banner's job (and it always replays).
+// Lives in components/BackendPicker.tsx; re-exported here so existing import sites keep working.
+export { default as BackendPicker } from "./BackendPicker";
 
 // The card's column colour, shared by the summary icon and the stage bar.
 const TONE: Record<Card["column"], { text: string; bar: string }> = {

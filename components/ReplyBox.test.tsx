@@ -3,7 +3,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ScheduledMessage } from "@/lib/types";
-import { makeCard } from "./test-utils";
+import "./test-utils";
 import ReplyBox from "./ReplyBox";
 
 const api = vi.hoisted(() => ({
@@ -84,12 +84,7 @@ describe("ReplyBox", () => {
     expect(setup().box).not.toHaveFocus();
   });
 
-  it("warns when other threads are running in this folder", () => {
-    setup({ alsoHere: [makeCard({ id: "c2", title: "Refactor auth", column: "running" })] });
-    expect(screen.getByText("Also running here: Refactor auth")).toBeInTheDocument();
-  });
-
-  it("has no warning when nothing else runs here", () => {
+  it("draws no busy-folder line: claims warn at the clash instead", () => {
     setup();
     expect(screen.queryByText(/Also running here/)).not.toBeInTheDocument();
   });

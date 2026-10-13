@@ -175,6 +175,8 @@ export function updateCard(id: string, patch: Partial<Card>): Card {
   const now = Date.now();
   const moved = patch.column !== undefined && patch.column !== card.column;
   Object.assign(card, patch, { updatedAt: now }, moved ? { columnAt: now } : {});
+  // A card's symbol claims (lib/claims.ts) end with its work: at Done, or when it's archived.
+  if (card.column === "done" || card.archived) delete card.claims;
   saveBoard();
   publish({ type: "card", card });
   return card;

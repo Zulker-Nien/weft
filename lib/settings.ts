@@ -4,6 +4,7 @@ import { publish } from "./bus";
 import { DATA_DIR } from "./store";
 import { MODES, type Automation, type Backend, type PermissionMode, type Project, type SettingsView } from "./types";
 import { globalSingleton } from "./global-singleton";
+import { isSubagentModel, type SubagentModel } from "./subagents";
 
 // Appended to every board thread's system prompt (not the copilot's). The user can edit it in
 // Settings; lib/status.ts parses the BOARD STATUS line it asks for, so keep that format.
@@ -36,6 +37,8 @@ interface Settings {
   automations?: Automation[];
   // Whether /weft:done pushes after it commits cleanly; unset means on. Its push.sh reads this file.
   pushOnDone?: boolean;
+  // The model board threads' subagents run on; unset means the thread picks per subagent (lib/subagents.ts).
+  subagentModel?: SubagentModel;
   projects: Project[];
   // Claude Code sessions whose cards were deleted, so syncing doesn't bring them back.
   dismissedSessions?: string[];
@@ -54,6 +57,7 @@ function settings(): Settings {
       defaultBackend: saved.defaultBackend,
       automations: saved.automations,
       pushOnDone: saved.pushOnDone,
+      subagentModel: saved.subagentModel,
       projects: saved.projects ?? [],
       dismissedSessions: saved.dismissedSessions ?? [],
       issueFolders: saved.issueFolders ?? [],
@@ -124,6 +128,17 @@ export function setPushOnDone(on: boolean) {
   save();
 }
 
+export function subagentModel(): SubagentModel {
+  const saved = settings().subagentModel;
+  return isSubagentModel(saved) ? saved : "choose";
+}
+
+// "choose" is the default, so it's stored as unset.
+export function setSubagentModel(model: SubagentModel) {
+  settings().subagentModel = model === "choose" ? undefined : model;
+  save();
+}
+
 export function dismissedSessions(): string[] {
   return settings().dismissedSessions ?? [];
 }
@@ -177,6 +192,7 @@ export function settingsView(): SettingsView {
     defaultBackend: defaultBackend(),
     automations: automations(),
     pushOnDone: pushOnDone(),
+    subagentModel: subagentModel(),
     projects: listProjects(),
   };
 }

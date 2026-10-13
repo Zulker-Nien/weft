@@ -1,7 +1,7 @@
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { cliEnv } from "./env";
 import { publish } from "./bus";
-import type { Backend, LoginState, LoginView } from "./types";
+import type { Backend, LoginState, LoginTrial, LoginView } from "./types";
 import { globalSingleton } from "./global-singleton";
 import { openLoginInTerminal } from "./login-terminal";
 import { authStatus } from "./login-status";
@@ -271,6 +271,14 @@ export function startLogin(backend: Backend, onDone?: () => void): LoginView {
 
   emit(run);
   return snapshot(run);
+}
+
+// Notes on the login in progress why Weft's Puku trial didn't cover it, so the pop-up can offer Weft sign-in.
+export function noteTrial(backend: Backend, trial: LoginTrial): void {
+  const run = runs.get(backend);
+  if (!run) return;
+  run.view.trial = trial;
+  emit(run);
 }
 
 export function sendLoginInput(backend: Backend, text: string): void {

@@ -1,4 +1,5 @@
 import { folderName } from "./format";
+import type { Card } from "./types";
 
 // What the Supabase drawer shows, from what Electron main's Supabase side (electron/supabase.cjs) sends. The
 // token never reaches the board: main keeps it in the Keychain and makes every call.
@@ -48,12 +49,27 @@ export interface SupabaseProject {
   createdAt: number;
 }
 
+export interface SupabaseOrg {
+  slug: string;
+  name: string;
+}
+
+// What the New project form sends; main makes the database password.
+export interface NewSupabaseProject {
+  name: string;
+  org: string;
+  region: string;
+}
+
 // window.threadboard.supabase, from electron/preload.cjs.
 export interface SupabaseBridge {
   status(folders: string[]): Promise<SupabaseStatus>;
   setToken(token: string): Promise<{ orgs: string[] }>;
   forgetToken(): Promise<{ signedIn: false }>;
   projects(): Promise<SupabaseProject[]>;
+  orgs(): Promise<SupabaseOrg[]>;
+  // secret: the vault name the database password went under.
+  create(folder: string, project: NewSupabaseProject): Promise<{ ref: string; name: string; secret: string }>;
   link(folder: string, ref: string): Promise<{ linked: true; name: string }>;
   unlink(folder: string): Promise<{ linked: false }>;
   restore(ref: string): Promise<{ restoring: true }>;
@@ -61,6 +77,45 @@ export interface SupabaseBridge {
 
 export const TOKEN_URL = "https://supabase.com/dashboard/account/tokens";
 export const NEW_PROJECT_URL = "https://supabase.com/dashboard/new";
+
+// The regions a new project can go in, by the place a person would pick.
+export const REGIONS: { code: string; label: string }[] = [
+  { code: "us-east-1", label: "East US (N. Virginia)" },
+  { code: "us-east-2", label: "East US (Ohio)" },
+  { code: "us-west-1", label: "West US (N. California)" },
+  { code: "us-west-2", label: "West US (Oregon)" },
+  { code: "ca-central-1", label: "Canada (Central)" },
+  { code: "sa-east-1", label: "South America (São Paulo)" },
+  { code: "eu-west-1", label: "West EU (Ireland)" },
+  { code: "eu-west-2", label: "West EU (London)" },
+  { code: "eu-west-3", label: "West EU (Paris)" },
+  { code: "eu-central-1", label: "Central EU (Frankfurt)" },
+  { code: "eu-central-2", label: "Central EU (Zurich)" },
+  { code: "eu-north-1", label: "North EU (Stockholm)" },
+  { code: "ap-south-1", label: "South Asia (Mumbai)" },
+  { code: "ap-southeast-1", label: "Southeast Asia (Singapore)" },
+  { code: "ap-southeast-2", label: "Oceania (Sydney)" },
+  { code: "ap-northeast-1", label: "Northeast Asia (Tokyo)" },
+  { code: "ap-northeast-2", label: "Northeast Asia (Seoul)" },
+  { code: "ap-east-1", label: "East Asia (Hong Kong)" },
+];
+
+// A new project's region: where most of your projects already are (ties to the newest), else East US.
+export function defaultRegion(projects: Pick<SupabaseProject, "region" | "createdAt">[]) {
+  const counts = new Map<string, number>();
+  for (const p of [...projects].sort((a, b) => b.createdAt - a.createdAt)) {
+    if (p.region && REGIONS.some((r) => r.code === p.region)) counts.set(p.region, (counts.get(p.region) ?? 0) + 1);
+  }
+  let best = "us-east-1";
+  let most = 0;
+  for (const [code, n] of counts) if (n > most) [best, most] = [code, n];
+  return best;
+}
+
+// A new project's name: the repo's, else the folder's.
+export function defaultProjectName(folder: Pick<SupabaseFolder, "folder" | "repo">) {
+  return folder.repo?.split("/")[1] || folderName(folder.folder);
+}
 
 export function supabaseBridge(): SupabaseBridge | null {
   return (typeof window !== "undefined" && window.threadboard?.supabase) || null;
@@ -112,14 +167,26 @@ export function projectState(status: string) {
   return STATES[status] ?? { label: status.charAt(0) + status.slice(1).toLowerCase().replace(/_/g, " "), tone: "muted" as const };
 }
 
-// The line about the folder's migrations: none, all applied, or how many Supabase hasn't run yet.
-export function migrationLine(f: Pick<SupabaseFolder, "migrations">, link: Pick<SupabaseLink, "pending">): { text: string; warn: boolean } | null {
+// The line about the folder's migrations: none, all applied, or how many Supabase hasn't run yet, with the first two
+// names apart from the text so the drawer can link each to the card that wrote it (migrationOwner).
+export function migrationLine(
+  f: Pick<SupabaseFolder, "migrations">,
+  link: Pick<SupabaseLink, "pending">,
+): { text: string; warn: boolean; names: string[]; more: boolean } | null {
   if (!f.migrations) return null;
   const all = `${f.migrations} migration${f.migrations === 1 ? "" : "s"}`;
-  if (!link.pending) return { text: all, warn: false };
-  if (!link.pending.length) return { text: `${all}, all applied`, warn: false };
+  if (!link.pending) return { text: all, warn: false, names: [], more: false };
+  if (!link.pending.length) return { text: `${all}, all applied`, warn: false, names: [], more: false };
   const n = link.pending.length;
-  return { text: `${n} of ${all} not applied: ${link.pending.slice(0, 2).join(", ")}${n > 2 ? ", …" : ""}`, warn: true };
+  return { text: `${n} of ${all} not applied`, warn: true, names: link.pending.slice(0, 2), more: n > 2 };
+}
+
+// The card that wrote a migration: the latest one whose edited files (Card.touchedFiles) hold the folder's
+// supabase/migrations/<version>_<name>.sql.
+export function migrationOwner<C extends Pick<Card, "touchedFiles" | "updatedAt">>(cards: C[], folder: string, name: string): C | undefined {
+  const dir = `${folder.replace(/\/+$/, "")}/supabase/migrations/`;
+  const wrote = (p: string) => p.startsWith(dir) && /^\d+_(.+)\.sql$/.exec(p.slice(dir.length))?.[1] === name;
+  return cards.filter((c) => c.touchedFiles?.some(wrote)).sort((a, b) => b.updatedAt - a.updatedAt)[0];
 }
 
 // The linked card's row of supabase.com shortcuts into the project's dashboard, short enough for one line.

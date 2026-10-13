@@ -1,6 +1,6 @@
 # Supabase
 
-Status: linking built 2026-10-12 (pick an existing project; new ones are made on supabase.com). Migrations push,
+Status: linking built 2026-10-12, and making a project in place the same day. Migrations push,
 types, keys into the 🔐 vault and agent tools are next.
 
 Supabase's green bolt on the left rail (under ▲, in `components/LibraryRail.tsx`) opens a drawer that links each
@@ -28,8 +28,14 @@ up linked in the drawer.
   is **Link CLI…**, which writes the CLI's file as well.
 - **Link…** lists every project the token reaches; `pickerList` in `lib/supabase-view.ts` puts best fits first (the
   repo's or folder's name 2, a name containing it 1), then newest. Supabase projects have no git link to match on.
-- **+ New project on supabase.com ↗** opens the dashboard: making a project through the API needs a database
-  password and a region, which belong in a form there (or later, in the vault).
+- **+ New project** (`components/SupabaseNewProject.tsx`) makes one in place: a name (the repo's, else the folder's,
+  `defaultProjectName`), the organization when the token reaches more than one, and a region (where most of your
+  projects are, else East US, `defaultRegion`). Main (`create`) makes a 32-character database password, sends
+  `POST /v1/projects` with `region_selection`, links the folder, and keeps the password in the folder's 🔐 vault as
+  `SUPABASE_DB_PASSWORD` (development), the variable the Supabase CLI reads. A vault already holding one (another
+  project's) gets `SUPABASE_DB_PASSWORD_<NAME>` instead. The password never reaches the board; if the vault can't keep
+  it, the project is still made and linked and the error says to reset it in the dashboard. The project is "Starting"
+  for a minute or two. **supabase.com ↗** in the form still opens the dashboard's own New project page.
 - **Unlink** removes `supabase/.temp/project-ref` only; the Supabase project is untouched.
 
 ## What the drawer shows
@@ -37,7 +43,8 @@ up linked in the drawer.
 For a linked folder: project and org, its state (Healthy, Paused, Restoring…; `projectState`), region, the API URL
 (click to open the project's dashboard in the browser pane), the folder's migrations against the ones Supabase has
 applied (`GET /v1/projects/:ref/database/migrations`, matched by the version before `_` in
-`supabase/migrations/<version>_<name>.sql`; "2 of 5 migrations not applied: …" in amber), and links into the
+`supabase/migrations/<version>_<name>.sql`; "2 of 5 migrations not applied: …" in amber; each name links to the card that wrote its file, the latest card whose
+`touchedFiles` hold it, `migrationOwner`), and links into the
 dashboard on one line: Auth, Logs, Keys, Usage and Dash (`supabaseActions`). A paused project (free
 projects pause after a week) gets **Restore** (`POST /v1/projects/:ref/restore`).
 
@@ -47,11 +54,12 @@ Restart Weft (`needsRestart`).
 
 ## Files
 
-- `electron/supabase.cjs`: `createSupabase` (status, token, projects, link, unlink, restore), the folder's side
+- `electron/supabase.cjs`: `createSupabase` (status, token, projects, orgs, create, link, unlink, restore), the folder's side
   (`readLink`, `writeLink`, `localMigrations`) and `registerSupabase`, whose IPC handlers answer the board window only.
 - `electron/preload.cjs`: `window.threadboard.supabase`.
 - `lib/supabase-view.ts`: types, the bridge, matching, labels, links. `lib/use-supabase.ts`: loading, over `lib/use-linked-status.ts` (the cache).
-- `components/SupabaseDrawer.tsx` (token form, linked folders), `components/SupabasePicker.tsx` (Link…),
+- `components/SupabaseDrawer.tsx` (token form, linked folders), `components/SupabaseLinked.tsx` (a linked project), `components/SupabasePicker.tsx` (Link…),
+  `components/SupabaseNewProject.tsx` (its New project form), `components/supabase-ui.ts` (shared button style),
   `components/SupabaseLogo.tsx`.
 
 ## Next
@@ -61,5 +69,4 @@ Restart Weft (`needsRestart`).
 2. **Keys into the vault**: copy the project's URL and publishable key into the 🔐 vault as
    `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and the service role key behind Touch ID.
 3. **MCP for threads**: offer to add the Supabase MCP server for the linked project to `.mcp.json`.
-4. **Create in place**: name, org, region, with a generated database password kept in the vault.
-5. **Usage and advisors**: security and performance advisors, and a badge when a project is paused or unhealthy.
+4. **Usage and advisors**: security and performance advisors, and a badge when a project is paused or unhealthy.

@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { makeCard } from "./test-utils";
-import CardView from "./CardView";
+import CardView, { BackendBadge } from "./CardView";
+import BackendPicker from "./BackendPicker";
 
-const api = vi.hoisted(() => ({ login: vi.fn(() => Promise.resolve()) }));
+const api = vi.hoisted(() => ({
+  login: vi.fn(() => Promise.resolve()),
+  switchBackend: vi.fn(() => Promise.resolve()),
+}));
 vi.mock("@/lib/client", () => ({ api }));
 
 const pending = { id: "p1", toolName: "Bash", title: "Run npm test", input: {} };
@@ -212,5 +216,60 @@ describe("CardView tags and issue", () => {
     renderCard();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
     expect(screen.queryByText(/^\+\d+$/)).not.toBeInTheDocument();
+  });
+});
+
+describe("BackendBadge", () => {
+  afterEach(cleanup);
+
+  it("says the CLI until it knows the model", () => {
+    render(<BackendBadge backend="puku" />);
+    expect(screen.getByText("puku")).toBeInTheDocument();
+  });
+
+  it("names the model and effort the CLI reported, or the card's own picks", () => {
+    const runsOn = { model: "claude-opus-5-5", effort: "xhigh" as const };
+    render(<BackendBadge backend="claude" card={makeCard({ stats: { runsOn } })} />);
+    expect(screen.getByText("Opus 5.5 · xhigh")).toBeInTheDocument();
+    cleanup();
+    render(<BackendBadge backend="claude" card={makeCard({ model: "claude-fable-5-1", effort: "max", stats: { runsOn } })} />);
+    expect(screen.getByText("Fable 5.1 · max")).toBeInTheDocument();
+    cleanup();
+    render(<BackendBadge backend="puku" card={makeCard({ backend: "puku", stats: { runsOn: { model: "puku-ai-2.8" } } })} />);
+    expect(screen.getByText("Puku AI 2.8")).toBeInTheDocument();
+  });
+});
+
+describe("BackendPicker", () => {
+  afterEach(cleanup);
+
+  it("opens a menu of both CLIs, marks the current one, and calls switchBackend with the other", async () => {
+    render(<BackendPicker card={makeCard({ backend: "claude" })} />);
+    const trigger = screen.getByRole("button", { name: /Switch CLI/ });
+    await userEvent.click(trigger);
+    expect(screen.getByRole("button", { name: "Claude Code" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "puku-cli" })).toHaveAttribute("aria-pressed", "false");
+    await userEvent.click(screen.getByRole("button", { name: "puku-cli" }));
+    expect(api.switchBackend).toHaveBeenCalledWith("c1", "puku", false);
+  });
+
+  it("is a no-op when the chosen CLI is the same as the card's", async () => {
+    render(<BackendPicker card={makeCard({ backend: "puku" })} />);
+    await userEvent.click(screen.getByRole("button", { name: /Switch CLI/ }));
+    await userEvent.click(screen.getByRole("button", { name: "puku-cli" }));
+    expect(api.switchBackend).not.toHaveBeenCalled();
+  });
+
+  it("disables both rows while the thread is live", async () => {
+    render(<BackendPicker card={makeCard({ backend: "claude", column: "running" })} />);
+    await userEvent.click(screen.getByRole("button", { name: /Switch CLI/ }));
+    expect(screen.getByRole("button", { name: "Claude Code" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "puku-cli" })).toBeDisabled();
+  });
+
+  it("the copilot doesn't get a switcher — just the static badge", () => {
+    render(<BackendPicker card={makeCard({ id: "copilot", backend: "claude", role: "copilot" })} />);
+    expect(screen.queryByRole("button", { name: /Switch CLI/ })).not.toBeInTheDocument();
+    expect(screen.getByText("claude")).toBeInTheDocument();
   });
 });

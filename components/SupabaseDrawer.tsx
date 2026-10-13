@@ -2,25 +2,22 @@
 
 import { useState } from "react";
 import { folderName } from "@/lib/format";
+import type { Card } from "@/lib/types";
 import {
-  migrationLine,
   needsRestart,
-  projectState,
   shownFolders,
   signedInLine,
-  supabaseActions,
   TOKEN_URL,
   type SupabaseBridge,
   type SupabaseFolder,
-  type SupabaseLink,
+  type SupabaseOrg,
   type SupabaseProject,
   type SupabaseStatus,
 } from "@/lib/supabase-view";
-import SupabaseLogo from "./SupabaseLogo";
-import SupabasePicker, { external, SMALL } from "./SupabasePicker";
+import SupabaseLinked from "./SupabaseLinked";
+import SupabasePicker from "./SupabasePicker";
+import { external, SMALL } from "./supabase-ui";
 import { Note } from "./VaultParts";
-
-const TONE = { ok: "bg-ok-soft text-ok", warn: "bg-warn-soft text-warn", bad: "bg-danger-soft text-danger", muted: "bg-sunken text-muted" } as const;
 
 // The Supabase drawer's body (docs/architecture/supabase.md): your Supabase access token, kept by Electron main
 // in the Keychain, and each board project's link to a Supabase project, written as supabase/.temp/project-ref
@@ -31,6 +28,8 @@ export default function SupabaseDrawer({
   error,
   reload,
   project,
+  cards,
+  onOpenCard,
   onOpenUrl,
   notify,
 }: {
@@ -39,6 +38,9 @@ export default function SupabaseDrawer({
   error: string | null;
   reload: () => Promise<void>;
   project: string | null;
+  // The board's cards, to link an unapplied migration to the card that wrote it, and opening one.
+  cards: Card[];
+  onOpenCard: (card: Card) => void;
   // Shows a page in the board's browser pane.
   onOpenUrl: (url: string) => void;
   notify: (err: unknown) => void;
@@ -46,6 +48,7 @@ export default function SupabaseDrawer({
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState<string | null>(null);
   const [projects, setProjects] = useState<SupabaseProject[] | null>(null);
+  const [orgs, setOrgs] = useState<SupabaseOrg[] | null>(null);
 
   const shell = typeof window !== "undefined" ? window.threadboard : undefined;
   if (needsRestart(Boolean(shell), bridge, error)) return <Restart />;
@@ -76,6 +79,7 @@ export default function SupabaseDrawer({
           change(async () => {
             const { orgs } = await supabase.setToken(token);
             setProjects(null);
+            setOrgs(null);
             notify(`Signed in to Supabase${orgs.length ? ` (${orgs.join(", ")})` : ""}`);
           })
         }
@@ -85,9 +89,12 @@ export default function SupabaseDrawer({
 
   async function startPicking(folder: string) {
     setPicking(folder);
-    if (projects) return;
+    if (projects && orgs) return;
     try {
-      setProjects(await supabase.projects());
+      // No orgs (a Weft started before New project, or Supabase failing) leaves Link… working and New project saying why.
+      const [list, known] = await Promise.all([supabase.projects(), supabase.orgs().catch(() => [])]);
+      setProjects(list);
+      setOrgs(known);
     } catch (err) {
       setPicking(null);
       notify(err);
@@ -113,12 +120,21 @@ export default function SupabaseDrawer({
               key={f.folder}
               folder={f}
               projects={projects}
+              orgs={orgs}
               busy={busy}
               onPick={(p) =>
                 change(async () => {
                   const { name } = await supabase.link(f.folder, p.ref);
                   setPicking(null);
                   notify(`Linked ${folderName(f.folder)} to ${name} on Supabase`);
+                })
+              }
+              onCreate={(p) =>
+                change(async () => {
+                  const { name, secret } = await supabase.create(f.folder, p);
+                  setPicking(null);
+                  setProjects(null);
+                  notify(`Made ${name} on Supabase and linked ${folderName(f.folder)}; its database password is in the 🔐 vault as ${secret}. It takes a minute or two to start.`);
                 })
               }
               onCancel={() => setPicking(null)}
@@ -137,6 +153,8 @@ export default function SupabaseDrawer({
                 })
               }
               onOpenUrl={onOpenUrl}
+              cards={cards}
+              onOpenCard={onOpenCard}
             />
           ),
         )}
@@ -223,6 +241,8 @@ function FolderSection({
   onUnlink,
   onRestore,
   onOpenUrl,
+  cards,
+  onOpenCard,
 }: {
   folder: SupabaseFolder;
   busy: boolean;
@@ -230,6 +250,8 @@ function FolderSection({
   onUnlink: () => void;
   onRestore: (ref: string) => void;
   onOpenUrl: (url: string) => void;
+  cards: Card[];
+  onOpenCard: (card: Card) => void;
 }) {
   const link = f.link;
   return (
@@ -258,46 +280,7 @@ function FolderSection({
           {link.name ?? link.ref}: {f.error}
         </p>
       )}
-      {link && !f.error && <Linked folder={f} link={link} busy={busy} onRestore={onRestore} onOpenUrl={onOpenUrl} />}
+      {link && !f.error && <SupabaseLinked folder={f} link={link} busy={busy} onRestore={onRestore} onOpenUrl={onOpenUrl} cards={cards} onOpenCard={onOpenCard} />}
     </section>
-  );
-}
-
-function Linked({ folder, link, busy, onRestore, onOpenUrl }: { folder: SupabaseFolder; link: SupabaseLink; busy: boolean; onRestore: (ref: string) => void; onOpenUrl: (url: string) => void }) {
-  const state = link.status ? projectState(link.status) : null;
-  const migrations = migrationLine(folder, link);
-  return (
-    <div className="mt-1 space-y-1 text-[11px] text-muted">
-      <div className="flex items-center gap-1.5">
-        <SupabaseLogo size={12} />
-        <span className="truncate text-[12px] text-ink">{link.name ?? link.ref}</span>
-        {link.org && <span className="truncate text-faint">{link.org}</span>}
-      </div>
-      {state && (
-        <div className="flex items-center gap-1.5">
-          <span className={`rounded px-1 text-[10px] leading-[15px] ${TONE[state.tone]}`}>{state.label}</span>
-          {link.region && <span className="text-faint">{link.region}</span>}
-          {link.status === "INACTIVE" && (
-            <button onClick={() => onRestore(link.ref)} disabled={busy} className="ml-auto text-accent hover:underline disabled:opacity-40" title="Wake the paused project">
-              Restore
-            </button>
-          )}
-        </div>
-      )}
-      {link.url && (
-        <button onClick={() => onOpenUrl(`https://supabase.com/dashboard/project/${link.ref}`)} className="block max-w-full truncate text-left text-accent hover:underline" title="The project's API URL; opens its dashboard in the browser pane">
-          {link.url.replace(/^https:\/\//, "")}
-        </button>
-      )}
-      {migrations && <p className={migrations.warn ? "text-warn" : ""}>{migrations.text}</p>}
-      {link.source === "mcp" && <p className="text-faint">Linked in .mcp.json</p>}
-      <div className="flex flex-wrap gap-x-2.5 gap-y-0.5">
-        {supabaseActions(link.ref).map((a) => (
-          <button key={a.label} onClick={() => external(a.url)} className="text-faint hover:text-ink" title={a.url}>
-            {a.label} ↗
-          </button>
-        ))}
-      </div>
-    </div>
   );
 }

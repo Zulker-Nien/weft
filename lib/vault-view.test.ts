@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  askedVault,
+  parseSecretAsk,
+  blankTitle,
   canManage,
   manageOffer,
   takeOver,
@@ -18,6 +21,7 @@ import {
   picksOf,
   railBadge,
   railTitle,
+  saveLabel,
   secretMenu,
   secretKey,
   trackedWarning,
@@ -76,26 +80,44 @@ describe("vault view", () => {
     expect(environmentsOf(secrets, "C")).toEqual([]);
   });
 
-  it("groups secrets by environment in order, sorted by name", () => {
+  it("groups secrets by environment in order, with blanks first within each", () => {
     const groups = groupSecrets([secret("Z", "production"), secret("B", "development"), secret("A", "development")]);
-    expect(groups.map((g) => [g.id, g.label, g.secrets.map((s) => s.name)])).toEqual([
-      ["development", "Development", ["A", "B"]],
+    expect(groups.map((g) => `${g.id},${g.label},${g.secrets.map((s) => s.name).join("|")}`)).toContain("development,Development,A|B");
+    const withBlanks = groupSecrets([secret("Z", "production"), secret("B", "development", { missing: true }), secret("A", "development"), secret("M", "development", { missing: true })]);
+    expect(withBlanks.map((g) => [g.id, g.label, g.secrets.map((s) => s.name)])).toEqual([
+      ["development", "Development", ["B", "M", "A"]],
       ["production", "Production", ["Z"]],
     ]);
     expect(secretKey(secret("A", "preview"))).toBe("preview\nA");
   });
 
+  it("names the Add button (blank, value, many environments)", () => {
+    expect(saveLabel({ fixed: true, value: "x", environments: ["development"] }, true)).toBe("Save");
+    expect(saveLabel({ fixed: false, value: "", environments: ["development"] }, true)).toBe("Add blank");
+    expect(saveLabel({ fixed: false, value: "", environments: ["development", "preview", "production"] }, true)).toBe("Add 3 blanks");
+    expect(saveLabel({ fixed: false, value: "x", environments: ["development"] }, true)).toBe("Add to vault");
+    expect(saveLabel({ fixed: false, value: "x", environments: ["development", "production"] }, true)).toBe("Add to 2 environments");
+    // An older shell without addBlank can't save an empty value.
+    expect(saveLabel({ fixed: false, value: "", environments: ["development"] }, false)).toBe("Add to vault");
+  });
+
+  it("writes a blank's tooltip from who added it and where to get its value", () => {
+    expect(blankTitle({ name: "K" })).toBe("K has no value yet.\nClick Fill in to paste it.");
+    expect(blankTitle({ name: "K", source: "a thread" })).toBe("K has no value yet (added by a thread).\nClick Fill in to paste it.");
+    expect(blankTitle({ name: "K", source: ".env.example", hint: "Stripe dashboard → API keys" })).toBe("K has no value yet (added by .env.example).\nStripe dashboard → API keys\nClick Fill in to paste it.");
+  });
+
   it("masks values and marks missing ones", () => {
     expect(masked(secret("A", "development"))).toBe("••••abcd");
     expect(masked({ tail: "" })).toBe("••••");
-    expect(masked(secret("A", "development", { missing: true }))).toBe("missing");
+    expect(masked(secret("A", "development", { missing: true }))).toBe("blank");
   });
 
   it("counts missing names and nudges for files to import", () => {
     expect(railBadge([])).toEqual({ missing: 0, nudge: false });
     const badge = railBadge([vault({ secrets: [secret("A", "development", { missing: true }), secret("B", "development")] }), vault({ nudge: { count: 2, file: ".env.local" } })]);
     expect(badge).toEqual({ missing: 1, nudge: true });
-    expect(railTitle(badge)).toBe("Secrets: this project's vault · 1 missing · .env.local has values to import");
+    expect(railTitle(badge)).toBe("Secrets: this project's vault · 1 blank to fill in · .env.local has values to import");
     expect(railTitle({ missing: 0, nudge: false })).toBe("Secrets: this project's vault");
     expect(nudgeText({ count: 14, file: ".env.local" })).toBe("Found 14 secrets in .env.local: move them into the vault?");
     expect(nudgeText({ count: 1, file: "apps/web/.env.local" })).toBe("Found 1 secret in apps/web/.env.local: move it into the vault?");
@@ -154,7 +176,7 @@ describe("vault view", () => {
 
   it("offers reveal and copy only for secrets with a value, and a copy to each other project", () => {
     const ids = (items: ReturnType<typeof secretMenu>) => items.map((i) => ("id" in i ? i.id : i.type));
-    expect(secretMenu({ missing: true })).toEqual([{ id: "edit", label: "Set Value…" }, { type: "separator" }, { id: "remove", label: "Remove from Vault…" }]);
+    expect(secretMenu({ missing: true })).toEqual([{ id: "edit", label: "Fill In Value…" }, { type: "separator" }, { id: "remove", label: "Remove from Vault…" }]);
     expect(ids(secretMenu({ missing: false }))).toEqual(["reveal", "copy", "edit", "separator", "remove"]);
     const menu = secretMenu({ missing: false }, [{ folder: "/b", label: "o/b" }, { folder: "/c", label: "c" }]);
     expect(ids(menu)).toEqual(["reveal", "copy", "edit", "separator", "copy-to:/b", "copy-to:/c", "separator", "remove"]);
@@ -189,6 +211,23 @@ describe("vault view", () => {
       { folder: "/b", label: "alpha" },
       { folder: "/a", label: "zed" },
     ]);
+  });
+
+  it("reads a thread's ask for a secret, and opens it in the asked folder's vault", () => {
+    expect(parseSecretAsk(JSON.stringify({ folder: "/a", name: "SUPABASE_SECRET_KEY", environment: "preview" }))).toEqual({
+      folder: "/a",
+      name: "SUPABASE_SECRET_KEY",
+      environment: "preview",
+    });
+    expect(parseSecretAsk(JSON.stringify({ folder: "/a", name: "K", environment: "staging" }))?.environment).toBe("development");
+    for (const bad of [undefined, "", "{nope", "null", JSON.stringify({ folder: "/a", name: "1BAD" }), JSON.stringify({ name: "K" })]) expect(parseSecretAsk(bad)).toBeUndefined();
+
+    const a = vault({ id: "a", folder: "/a", folders: ["/a"] });
+    const b = vault({ id: "b", folder: "/b", folders: ["/b"] });
+    expect(askedVault([a, b], [a], "/b")).toBe(b);
+    expect(askedVault([a, b], [a], "/nope")).toBe(a);
+    expect(askedVault([a, b], [b])).toBe(b);
+    expect(askedVault([a, b], [])).toBeUndefined();
   });
 
   it("says whether a copy added or replaced", () => {

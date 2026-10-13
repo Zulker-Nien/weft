@@ -191,12 +191,36 @@ describe("createBlastcp", () => {
   });
 });
 
+describe("createProperty", () => {
+  it("makes the property on BlastCP and links the folder to it", async () => {
+    const dir = tmp();
+    signedIn(dir);
+    const { fetch, calls } = fakeMcp({ create_property: text(JSON.stringify({ org: "alex", property: { slug: "weft-blog", name: "Weft Blog" }, url: "x" })) });
+    const blastcp = createBlastcp({ dataDir: dir, safeStorage, fetch });
+    expect(await blastcp.createProperty("/dev/weft", "alex", "  Weft Blog ")).toEqual({ linked: true, name: "Weft Blog" });
+    expect(calls[0]).toMatchObject({ tool: "create_property", args: { org_slug: "alex", name: "Weft Blog" } });
+    expect(JSON.parse(fs.readFileSync(path.join(dir, LINKS_FILE), "utf8"))).toEqual({ "/dev/weft": { org: "alex", property: "weft-blog", name: "Weft Blog" } });
+  });
+
+  it("falls back to the asked workspace, passes BlastCP's refusal on, and checks folder and name first", async () => {
+    const dir = tmp();
+    signedIn(dir);
+    const made = createBlastcp({ dataDir: dir, safeStorage, fetch: fakeMcp({ create_property: text(JSON.stringify({ property: { slug: "p", name: "P" } })) }).fetch });
+    expect(await made.createProperty("/a", "side", "P")).toEqual({ linked: true, name: "P" });
+    expect((JSON.parse(fs.readFileSync(path.join(dir, LINKS_FILE), "utf8")) as Record<string, unknown>)["/a"]).toEqual({ org: "side", property: "p", name: "P" });
+    const taken = createBlastcp({ dataDir: dir, safeStorage, fetch: fakeMcp({ create_property: text('Workspace "alex" already has "p".', true) }).fetch });
+    await expect(taken.createProperty("/a", "alex", "P")).rejects.toThrow("already has");
+    await expect(taken.createProperty("relative", "o", "N")).rejects.toThrow("Pick a project folder first.");
+    await expect(taken.createProperty("/a", "o", "  ")).rejects.toThrow("Name the property first.");
+  });
+});
+
 describe("registerBlastcp", () => {
   it("answers the board window only, and cleans what it's given", async () => {
     const handlers: Record<string, (event: { sender: unknown }, ...args: unknown[]) => Promise<unknown>> = {};
     const ipcMain = { handle: (ch: string, fn: (typeof handlers)[string]) => (handlers[ch] = fn) };
     const board = {};
-    const blastcp = { status: vi.fn(), connect: vi.fn(), forget: vi.fn(), workspaces: vi.fn(), link: vi.fn(), unlink: vi.fn() };
+    const blastcp = { status: vi.fn(), connect: vi.fn(), forget: vi.fn(), workspaces: vi.fn(), link: vi.fn(), createProperty: vi.fn(), unlink: vi.fn() };
     registerBlastcp(ipcMain, { blastcp, isBoard: (s: unknown) => s === board });
     await expect(handlers["blastcp:status"]!({ sender: {} }, [])).rejects.toThrow("board window");
     const ev = { sender: board };
@@ -207,7 +231,9 @@ describe("registerBlastcp", () => {
     await handlers["blastcp:forget"]!(ev);
     await handlers["blastcp:workspaces"]!(ev);
     await handlers["blastcp:link"]!(ev, "/a", "o", "p", undefined);
+    await handlers["blastcp:create-property"]!(ev, "/a", "o", undefined);
     await handlers["blastcp:unlink"]!(ev, "/a");
+    expect(blastcp.createProperty).toHaveBeenCalledWith("/a", "o", "");
     expect(blastcp.link).toHaveBeenCalledWith("/a", "o", "p", "");
     expect(blastcp.unlink).toHaveBeenCalledWith("/a");
     expect([blastcp.connect, blastcp.forget, blastcp.workspaces].every((f) => f.mock.calls.length === 1)).toBe(true);

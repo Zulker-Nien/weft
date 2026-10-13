@@ -5,7 +5,7 @@ import { folderName, isLive } from "@/lib/format";
 import { useShortcutHint } from "@/lib/hotkeys";
 import type { PlanResets } from "@/lib/schedule";
 import type { Card, PermissionMode, ThreadItem } from "@/lib/types";
-import { BackendBadge } from "./CardView";
+import { BackendPicker } from "./CardView";
 import CrashGuard from "./CrashGuard";
 import { guarded } from "./guarded";
 import Icon from "./Icon";
@@ -36,8 +36,6 @@ export default function ThreadPanel({
   onMode,
   onNewChat,
   editTitle = false,
-  focusReply,
-  alsoHere,
   resets,
 }: {
   card: Card;
@@ -61,10 +59,6 @@ export default function ThreadPanel({
   onNewChat?: () => void;
   // Opens with the title already being edited (Rename… in the card's right-click menu).
   editTitle?: boolean;
-  // Opens with the reply box focused (a card just started from New thread).
-  focusReply?: boolean;
-  // Other busy cards in this folder (lib/overlap.ts busyHere).
-  alsoHere?: Card[];
   // The plan's next 5-hour and weekly resets, the reply box's default Send later times.
   resets: PlanResets;
 }) {
@@ -127,9 +121,7 @@ export default function ThreadPanel({
         streaming={streaming}
         onSend={onSend}
         onAnswer={onAnswer}
-        alsoHere={alsoHere}
         {...threadExtras(card, pilot, items, onSend, resets)}
-        focusReply={focusReply}
       />
     </aside>
   );
@@ -187,7 +179,7 @@ function HeaderMeta({ card, pilot, onMode, onTags }: {
 }) {
   return (
     <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted">
-      <BackendBadge backend={card.backend} />
+      <BackendPicker card={card} />
       <CrashGuard inline what="mode picker"><ModePicker small value={card.permissionMode} onChange={onMode} yolo={card.backend === "claude" && !pilot} /></CrashGuard>
       <span className="min-w-[3rem] truncate" title={card.cwd}>{pilot ? "✨ whole board" : folderName(card.cwd)}</span>
       {card.sessionId && (

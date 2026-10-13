@@ -12,6 +12,7 @@ import AutomationSettings from "./AutomationSettings";
 import Icon, { Spinner } from "./Icon";
 import Modal from "./Modal";
 import ModePicker from "./ModePicker";
+import SubagentPicker from "./SubagentPicker";
 import SwitchRow from "./SwitchRow";
 
 const KEEP_ALIVE: { minutes: number; label: string }[] = [
@@ -399,6 +400,8 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
                     <option value="claude">Claude Code</option> <option value="puku">puku-cli</option>
                   </select>
                 </section>
+
+                <SubagentPicker value={settings.subagentModel} />
 
                 <section className="flex flex-col gap-2">
                   <SectionHeader titleClass={sectionTitle} hintClass={sectionHint} title="Keep conversations open" hint={`A thread's CLI stays open between messages so replies start right away.`} />

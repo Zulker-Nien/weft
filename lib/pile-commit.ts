@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import path from "node:path";
 import { promisify } from "node:util";
 import { messagesForMove } from "./automations";
+import { releaseClaims } from "./claim-guard";
 import { readPile, repoRoot } from "./commit-pile";
 import { archiveWhenIdle, isBusy, queueMessages, sendUserMessage } from "./runner";
 import { appendThread, getCard, updateCard } from "./store";
@@ -103,6 +104,8 @@ async function attempt(cardId: string, req: CommitRequest, script: string): Prom
   } catch (err) {
     return { ...result, failed: "commit", error: output(err) };
   }
+  // Those files' changes are in, so no card's claim on them stands (lib/claims.ts).
+  releaseClaims(req.paths.map((p) => path.join(root, p)));
   result.hash = (await run("git", ["-C", root, "rev-parse", "--short", "HEAD"])).stdout.trim();
   if (req.push) {
     try {

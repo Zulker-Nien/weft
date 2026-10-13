@@ -7,6 +7,7 @@ import {
   importGroups,
   importLabel,
   pickKey,
+  saveLabel,
   STATUS_LABEL,
   toggleEnvironment,
   trackedWarning,
@@ -65,17 +66,34 @@ export function EnvironmentPicker({
   );
 }
 
+// A blank needs only a name; the form will save an empty value as a blank. canBlank keeps older shells
+// (without addBlank) from offering the path.
+function isBlank(editing: Editing, name: string, badName: boolean, canBlank: boolean): boolean {
+  return canBlank && !editing.fixed && editing.value === "" && name !== "" && !badName;
+}
+
+// The form is ready when the name is valid, at least one env is ticked, and either the value is typed
+// in or the blank path is open. Not while a save is in flight.
+function isReady(name: string, editing: Editing, blank: boolean, busy: boolean): boolean {
+  return validName(name) && editing.environments.length > 0 && (editing.value !== "" || blank) && !busy;
+}
+
 // Typing a secret in: its name, the environments it goes into (as many as you tick; fixed when changing
-// one), and the value, hidden unless you show it. Enter saves, Escape cancels (the drawer listens for it).
+// one), and the value, hidden unless you show it. A name already filled in (a thread asked for it) puts the
+// cursor in the value. Enter saves, Escape cancels (the drawer listens for it). canBlank turns the Add
+// button into Add blank / Add N blanks when the value is empty (the shell's addBlanks puts it in with
+// no value yet, for the user to fill in later from 🔐).
 export function SecretForm({
   editing,
   busy,
+  canBlank,
   onChange,
   onSave,
   onCancel,
 }: {
   editing: Editing;
   busy: boolean;
+  canBlank: boolean;
   onChange: (next: Editing) => void;
   onSave: () => void;
   onCancel: () => void;
@@ -83,7 +101,10 @@ export function SecretForm({
   const [show, setShow] = useState(false);
   const name = editing.name.trim();
   const badName = name !== "" && !validName(name);
-  const ready = validName(name) && editing.environments.length > 0 && editing.value !== "" && !busy;
+  // A blank needs only a name; a real value still needs the value typed in. The button label
+  // (saveLabel, lib/vault-view.ts) names whichever path is open; the form goes ahead either way.
+  const blank = isBlank(editing, name, badName, canBlank);
+  const ready = isReady(name, editing, blank, busy);
   const field = "w-full rounded-md border border-line-strong bg-card px-2 py-1 text-[12px] text-ink outline-none focus:border-accent disabled:opacity-60";
   return (
     <form
@@ -97,7 +118,7 @@ export function SecretForm({
         value={editing.name}
         onChange={(e) => onChange({ ...editing, name: e.target.value })}
         disabled={editing.fixed}
-        autoFocus={!editing.fixed}
+        autoFocus={!editing.fixed && editing.name === ""}
         placeholder="NAME"
         aria-label="Name"
         title={editing.name}
@@ -112,7 +133,7 @@ export function SecretForm({
           type={show ? "text" : "password"}
           value={editing.value}
           onChange={(e) => onChange({ ...editing, value: e.target.value })}
-          autoFocus={editing.fixed}
+          autoFocus={editing.fixed || editing.name !== ""}
           placeholder={editing.fixed ? "New value" : "Value"}
           aria-label="Value"
           data-secret
@@ -131,8 +152,8 @@ export function SecretForm({
         </button>
       </div>
       <div className="flex gap-1.5">
-        <button type="submit" disabled={!ready} className="flex-1 rounded-md bg-accent px-2 py-1 text-[12px] font-medium text-on-accent disabled:opacity-50">
-          {editing.fixed ? "Save" : editing.environments.length > 1 ? `Add to ${editing.environments.length} environments` : "Add to vault"}
+        <button type="submit" disabled={!ready} className={`flex-1 rounded-md px-2 py-1 text-[12px] font-medium text-on-accent disabled:opacity-50 ${blank ? "bg-warn" : "bg-accent"}`}>
+          {saveLabel({ fixed: editing.fixed, value: editing.value, environments: editing.environments }, canBlank)}
         </button>
         <button type="button" onClick={onCancel} className="rounded-md px-2 py-1 text-[12px] text-muted hover:bg-card hover:text-ink">
           Cancel

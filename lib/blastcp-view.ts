@@ -57,6 +57,8 @@ export interface BlastcpBridge {
   forget(): Promise<{ signedIn: false }>;
   workspaces(): Promise<BlastcpWorkspace[]>;
   link(folder: string, org: string, property: string, name: string): Promise<{ linked: true; name: string }>;
+  // Makes a property in a workspace and links the folder to it.
+  createProperty(folder: string, org: string, name: string): Promise<{ linked: true; name: string }>;
   unlink(folder: string): Promise<{ linked: false }>;
 }
 
@@ -161,6 +163,29 @@ export function propertyOptions(workspaces: BlastcpWorkspace[], folder: string, 
     .flatMap((w) => w.properties.map((p) => ({ org: w.slug, orgName: w.name, slug: p.slug, name: p.name, score: fit(p.name, p.slug, folder) })))
     .filter((o) => !q || [o.name, o.slug, o.orgName].some((s) => s.toLowerCase().includes(q)))
     .sort((a, b) => b.score - a.score);
+}
+
+// A new property's starting name: what you searched for, else the folder's name in words ("my-app" → "My App").
+export function newPropertyName(folder: string, search = "") {
+  const typed = search.trim();
+  if (typed) return typed;
+  return folderName(folder)
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+// Creates a property and links the folder to it. A board window from before this landed has no
+// createProperty, and a main from before it has no handler: both need one restart.
+export async function createProperty(bridge: BlastcpBridge, folder: string, org: string, name: string) {
+  const restart = new Error("Restart Weft to create BlastCP properties from here.");
+  if (typeof bridge.createProperty !== "function") throw restart;
+  try {
+    return await bridge.createProperty(folder, org, name);
+  } catch (err) {
+    throw needsRestart(String(err)) ? restart : err;
+  }
 }
 
 // The rail icon's hover text.

@@ -5,6 +5,7 @@ import { keyLabel } from "@/lib/hotkeys";
 import { useEscape } from "@/lib/use-escape";
 import { onSecretAsk, useIdle } from "@/lib/use-vault";
 import {
+  askedVault,
   copiedText,
   defaultPicks,
   environmentsOf,
@@ -74,13 +75,18 @@ export default function VaultDrawer({
   };
   useIdle(unlocked || revealed.size > 0 || Boolean(editing?.value), lock);
   useEscape(Boolean(editing), () => setEditing(null));
-  // ⇧S (lib/use-vault.ts): the Add form opens on the first vault shown, once there is one.
+  // ⇧S (lib/use-vault.ts): the Add form opens on the first vault shown, once there is one. A thread's ask
+  // opens it in its project's vault, shown by the filter, with the name and environment filled in.
   useEffect(
     () =>
-      onSecretAsk(() => {
-        const first = overview && filterVaults(overview.vaults, vaultFilter(project, pick))[0];
-        if (first) setEditing(newSecret(first));
-        return Boolean(first);
+      onSecretAsk((ask) => {
+        if (!overview) return false;
+        const shown = filterVaults(overview.vaults, vaultFilter(project, pick));
+        const v = askedVault(overview.vaults, shown, ask?.folder);
+        if (!v) return false;
+        if (!shown.includes(v)) setPick({ top: project, folder: v.folder });
+        setEditing({ ...newSecret(v), ...(ask && { name: ask.name, environments: [ask.environment] }) });
+        return true;
       }),
     [overview, project, pick],
   );
@@ -191,11 +197,19 @@ export default function VaultDrawer({
 
   const save = (e: Editing) =>
     change(async () => {
-      for (const env of e.environments) await vault.set(e.folder, e.name.trim(), env, e.value);
+      const name = e.name.trim();
+      if (!e.fixed && e.value === "" && vault.addBlank) {
+        // Add as a blank: the shell's addBlank puts it in, no value yet, in each ticked environment. The
+        // user fills it in from 🔐 on the rail.
+        for (const env of e.environments) await vault.addBlank(e.folder, name, env);
+      } else {
+        for (const env of e.environments) await vault.set(e.folder, name, env, e.value);
+      }
       setEditing(null);
     });
+  const canBlank = Boolean(vault.addBlank);
   const form = editing && (
-    <SecretForm editing={editing} busy={busy} onChange={setEditing} onSave={() => void save(editing)} onCancel={() => setEditing(null)} />
+    <SecretForm editing={editing} busy={busy} canBlank={canBlank} onChange={setEditing} onSave={() => { void save(editing); }} onCancel={() => { setEditing(null); }} />
   );
 
   const remove = (r: typeof removing) =>

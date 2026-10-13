@@ -32,15 +32,17 @@ describe("secretsMcpServer", () => {
     expect(server.alwaysLoad).toBe(true);
     expect(st.SECRETS_PROMPT).toContain("mcp__secrets__fill_field");
     expect(st.SECRETS_PROMPT).toContain("mcp__secrets__run");
+    expect(st.SECRETS_PROMPT).toContain("mcp__secrets__ask_add");
     expect(st.SECRETS_PROMPT).toContain("mcp__secrets__push_to_vercel");
-    expect(server.tools.map((t) => t.name)).toEqual(["list", "fill_field", "push_to_vercel", "run"]);
+    expect(st.SECRETS_PROMPT).toContain("mcp__secrets__add_blank");
+    expect(server.tools.map((t) => t.name)).toEqual(["list", "fill_field", "push_to_vercel", "add_blank", "ask_add", "run"]);
   });
 
   it("lists names for the card's folder, or another project's", async () => {
     reply({ label: "aimhuge/weft", secrets: [{ name: "GITHUB_CLIENT_ID", environment: "development", missing: false }, { name: "GITHUB_CLIENT_SECRET", environment: "production", missing: true }] });
     const r = await run("list");
     expect(sent()).toEqual({ url: "http://127.0.0.1:4567/secrets/list", body: { folder: "/proj" } });
-    expect(said(r)).toBe("Secrets in the aimhuge/weft vault (names only):\n- GITHUB_CLIENT_ID (development)\n- GITHUB_CLIENT_SECRET (production): missing, no value yet");
+    expect(said(r)).toBe("Secrets in the aimhuge/weft vault (names only):\n- GITHUB_CLIENT_ID (development)\n- GITHUB_CLIENT_SECRET (production): blank, no value yet");
 
     fetchMock.mockReset();
     reply({ label: "other" });
@@ -64,17 +66,38 @@ describe("secretsMcpServer", () => {
   it("reports a no, a missing value, a missing field and a shell error", async () => {
     reply({ denied: true });
     expect(said(await run("fill_field", { name: "K", selector: "#k" }))).toBe("The user didn't approve K. Ask before trying again.");
+    // A missing value opens the 🔐 Add form with the name filled in; if the board can't, the thread is told where to add it.
     reply({ missing: true, label: "x" });
+    reply({ opened: true });
     expect(said(await run("fill_field", { name: "K", selector: "#k", environment: "production", project: "/x" }))).toBe(
-      "K (production) has no value in the x vault. Ask the user to add it with 🔐 on the left rail.",
+      "K has no value in the x vault (production). Weft opened the 🔐 Add form with K filled in: ask the user to paste its value there and click Add to vault, then try again.",
     );
+    const [url, init] = fetchMock.mock.calls[2] as [string, RequestInit];
+    expect([url, JSON.parse(init.body as string)]).toEqual(["http://127.0.0.1:4567/secrets/ask-add", { folder: "/x", name: "K", environment: "production" }]);
     reply({ missing: true });
-    expect(said(await run("fill_field", { name: "K", selector: "#k" }))).toContain("in the this vault");
+    reply({ error: "no board" }, false);
+    expect(said(await run("fill_field", { name: "K", selector: "#k" }))).toBe(
+      "K has no value in the this vault (development). Ask the user to add it with 🔐 on the left rail.",
+    );
     reply({ found: false, label: "x" });
     const none = await run("fill_field", { name: "K", selector: "#k" });
     expect([none.isError, said(none)]).toEqual([true, "No element matches #k"]);
     reply({ error: "Secrets only go into https pages" }, false);
     expect(said(await run("fill_field", { name: "K", selector: "#k" }))).toBe("Secrets only go into https pages");
+  });
+
+  it("opens the 🔐 Add form for a key the task needs", async () => {
+    reply({ opened: true });
+    const r = await run("ask_add", { name: "SUPABASE_SECRET_KEY" });
+    expect(sent()).toEqual({ url: "http://127.0.0.1:4567/secrets/ask-add", body: { folder: "/proj", name: "SUPABASE_SECRET_KEY", environment: "development" } });
+    expect([r.isError, said(r)]).toEqual([
+      false,
+      "Opened the 🔐 Add form with SUPABASE_SECRET_KEY (development) filled in. Ask the user to paste its value there and click Add to vault; mcp__secrets__list shows it once it's in.",
+    ]);
+    fetchMock.mockReset();
+    reply({ opened: true });
+    await run("ask_add", { name: "K", environment: "production", project: "/other" });
+    expect(sent().body).toEqual({ folder: "/other", name: "K", environment: "production" });
   });
 
   it("pushes a vault value to Vercel without the value, production by default", async () => {
@@ -94,7 +117,9 @@ describe("secretsMcpServer", () => {
     const no = await run("push_to_vercel", { name: "K" });
     expect([no.isError, said(no)]).toEqual([true, "The user didn't approve pushing K. Ask before trying again."]);
     reply({ missing: true, label: "aimhuge/weft" });
+    reply({ opened: true });
     const missing = await run("push_to_vercel", { name: "K" });
-    expect([missing.isError, said(missing)]).toEqual([true, "K (production) has no value in the aimhuge/weft vault. Ask the user to add it with 🔐 on the left rail."]);
+    expect(missing.isError).toBe(true);
+    expect(said(missing)).toContain("K");
   });
 });

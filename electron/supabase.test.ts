@@ -15,9 +15,9 @@ const REF = "abcdefghijklmnopqrst";
 
 // A fake api.supabase.com: routes by path, answers 404 otherwise. Records each call.
 function fakeFetch(routes: Record<string, unknown>) {
-  const calls: { url: URL; auth: string | undefined; method: string }[] = [];
-  const fetch = vi.fn((url: URL, init: { headers: Record<string, string>; method: string }) => {
-    calls.push({ url, auth: init.headers.Authorization, method: init.method });
+  const calls: { url: URL; auth: string | undefined; method: string; body?: string; type?: string }[] = [];
+  const fetch = vi.fn((url: URL, init: { headers: Record<string, string>; method: string; body?: string }) => {
+    calls.push({ url, auth: init.headers.Authorization, method: init.method, body: init.body, type: init.headers["Content-Type"] });
     const route = routes[url.pathname] as { status?: number; body: unknown } | undefined;
     const answer = route === undefined ? { status: 404, body: { message: "Not found" } } : route;
     const status = answer.status ?? 200;
@@ -36,10 +36,11 @@ const API: Record<string, unknown> = {
   [`/v1/projects/${REF}/restore`]: ok({}),
 };
 
-function make(routes = API, remote: string | null = "git@github.com:me/web.git") {
+function make(routes = API, remote: string | null = "git@github.com:me/web.git", vault: unknown = null) {
   const dataDir = tmp("weft-data-");
   const { fetch, calls } = fakeFetch(routes);
-  const supabase = createSupabase({ dataDir, safeStorage, fetch: fetch as unknown as typeof globalThis.fetch, remote: () => Promise.resolve(remote) });
+  const randomBytes = (n: number) => Buffer.alloc(n, 7);
+  const supabase = createSupabase({ dataDir, safeStorage, vault: vault as null, randomBytes, fetch: fetch as unknown as typeof globalThis.fetch, remote: () => Promise.resolve(remote) });
   return { supabase, dataDir, calls };
 }
 
@@ -200,6 +201,73 @@ describe("createSupabase", () => {
   });
 });
 
+// A fake vault (electron/vault.cjs): the names a folder's vault holds, and what was set.
+function fakeVault(names: { name: string; environment: string; missing: boolean }[] = []) {
+  return { names: vi.fn(() => Promise.resolve({ label: "me/web", secrets: names })), setValue: vi.fn(() => Promise.resolve({ saved: true })) };
+}
+const PASSWORD = Buffer.alloc(24, 7).toString("base64url");
+
+describe("making a project", () => {
+  const CREATED = { ...API, "/v1/organizations": ok([{ id: "acme", slug: "acme", name: "Acme" }]), "/v1/projects": ok({ id: REF, ref: REF, name: "shop" }) };
+
+  it("lists the organizations it can go in", async () => {
+    const { supabase } = make(CREATED);
+    await supabase.setToken("sbp_1");
+    expect(await supabase.orgs()).toEqual([{ slug: "acme", name: "Acme" }]);
+  });
+
+  it("makes it with a password it keeps in the vault, and links the folder", async () => {
+    const vault = fakeVault([{ name: "SUPABASE_DB_PASSWORD", environment: "production", missing: false }, { name: "SUPABASE_DB_PASSWORD", environment: "development", missing: true }]);
+    const { supabase, calls } = make(CREATED, null, vault);
+    await supabase.setToken("sbp_1");
+    const folder = project();
+    expect(await supabase.create(folder, { name: " shop ", org: "acme", region: "ap-southeast-1" })).toEqual({ ref: REF, name: "shop", secret: "SUPABASE_DB_PASSWORD" });
+    const post = calls.at(-1)!;
+    expect(post).toMatchObject({ method: "POST", type: "application/json" });
+    expect(post.url.pathname).toBe("/v1/projects");
+    expect(JSON.parse(post.body!)).toEqual({ name: "shop", organization_slug: "acme", db_pass: PASSWORD, region_selection: { type: "specific", code: "ap-southeast-1" } });
+    expect(vault.setValue).toHaveBeenCalledWith(folder, "SUPABASE_DB_PASSWORD", "development", PASSWORD);
+    expect(readLink(folder)).toEqual({ ref: REF, source: "cli" });
+    expect(calls.filter((c) => c.method === "GET").every((c) => c.body === undefined && c.type === undefined)).toBe(true);
+  });
+
+  it("keeps another project's password, naming the new one after its project", async () => {
+    const taken = [{ name: "SUPABASE_DB_PASSWORD", environment: "development", missing: false }];
+    const vault = fakeVault(taken);
+    const { supabase } = make({ ...CREATED, "/v1/projects": ok({ id: REF }) }, null, vault);
+    await supabase.setToken("sbp_1");
+    expect(await supabase.create(project(), { name: "my shop!", org: "acme", region: "us-east-1" })).toMatchObject({ name: "my shop!", secret: "SUPABASE_DB_PASSWORD_MY_SHOP" });
+    expect((await supabase.create(project(), { name: "日本", org: "acme", region: "us-east-1" })).secret).toBe("SUPABASE_DB_PASSWORD_NEW");
+  });
+
+  it("refuses a bad request before calling Supabase", async () => {
+    const { supabase, calls } = make(CREATED, null, fakeVault());
+    const folder = project();
+    const good = { name: "shop", org: "acme", region: "us-east-1" };
+    await expect(supabase.create(path.join(folder, "nope"), good)).rejects.toThrow("isn't a folder");
+    await expect(supabase.create(folder, { ...good, name: "  " })).rejects.toThrow("Name the project.");
+    await expect(supabase.create(folder, { ...good, org: "" })).rejects.toThrow("Pick an organization.");
+    await expect(supabase.create(folder, { ...good, region: "moon" })).rejects.toThrow("moon isn't a Supabase region.");
+    await expect(make(CREATED).supabase.create(folder, good)).rejects.toThrow("vault isn't running");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("still links a project whose password the vault couldn't keep, and says so", async () => {
+    const vault = fakeVault();
+    vault.setValue.mockRejectedValueOnce(new Error("locked"));
+    const { supabase } = make(CREATED, null, vault);
+    await supabase.setToken("sbp_1");
+    const folder = project();
+    await expect(supabase.create(folder, { name: "shop", org: "acme", region: "us-east-1" })).rejects.toThrow("Made shop on Supabase, but the vault couldn't keep its database password (locked)");
+    expect(readLink(folder)).toEqual({ ref: REF, source: "cli" });
+    const odd = make({ ...CREATED, "/v1/projects": ok({ id: "short" }) }, null, fakeVault());
+    await odd.supabase.setToken("sbp_1");
+    const other = project();
+    expect((await odd.supabase.create(other, { name: "x", org: "acme", region: "us-east-1" })).ref).toBe("short");
+    expect(readLink(other)).toBeNull();
+  });
+});
+
 describe("registerSupabase", () => {
   it("answers the board window only, cleaning what it's sent", async () => {
     const handlers = new Map<string, (event: { sender: unknown }, ...args: unknown[]) => Promise<unknown>>();
@@ -209,6 +277,8 @@ describe("registerSupabase", () => {
       setToken: vi.fn(),
       forgetToken: vi.fn(),
       projects: vi.fn(),
+      orgs: vi.fn(),
+      create: vi.fn(),
       link: vi.fn(),
       unlink: vi.fn(),
       restore: vi.fn(),
@@ -225,6 +295,12 @@ describe("registerSupabase", () => {
     expect(supabase.setToken).toHaveBeenCalledWith("");
     await call("supabase:forget-token");
     await call("supabase:projects");
+    await call("supabase:orgs");
+    expect(supabase.orgs).toHaveBeenCalled();
+    await call("supabase:create", "/a", { name: "shop", org: "acme", region: "us-east-1" });
+    expect(supabase.create).toHaveBeenCalledWith("/a", { name: "shop", org: "acme", region: "us-east-1" });
+    await call("supabase:create", "/a", null);
+    expect(supabase.create).toHaveBeenLastCalledWith("/a", { name: "", org: "", region: "" });
     await call("supabase:link", "/a", REF);
     expect(supabase.link).toHaveBeenCalledWith("/a", REF);
     await call("supabase:unlink", "/a");

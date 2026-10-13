@@ -6,7 +6,7 @@ import { api, mergeThread, type BrowserState, type MenuAction, type NewCardInput
 import { worktreeParent } from "@/lib/format";
 import { busyHere } from "@/lib/overlap";
 import { planResets } from "@/lib/schedule";
-import { COLUMNS, type BoardEvent, type Card, type Column, type LoginView, type Project, type ThreadItem } from "@/lib/types";
+import { COLUMNS, COPILOT_ID, type BoardEvent, type Card, type Column, type LoginView, type Project, type ThreadItem } from "@/lib/types";
 import { useShortcutHint, useShortcutListener, useShortcuts } from "@/lib/hotkeys";
 import { playChime, preloadChimes } from "@/lib/chimes";
 import {
@@ -37,6 +37,7 @@ import type { PaletteItem } from "./CommandPalette";
 import { boardPaletteItems, promptItems } from "./board-palette";
 import { boardShortcuts } from "./board-shortcuts";
 import { addSecret } from "@/lib/use-vault";
+import { parseSecretAsk } from "@/lib/vault-view";
 import Icon from "./Icon";
 import ColumnHeader from "./ColumnHeader";
 import { filterCards, isFiltering, railPinned, addTag, toggleTag, type RailFilter, type RailPanel } from "@/lib/rail-view";
@@ -138,8 +139,6 @@ export default function Board() {
   const [railFilter, setRailFilter] = useState<RailFilter>({});
   // The card opened from Rename…, so its title opens ready to edit.
   const [renameId, setRenameId] = useState<string | null>(null);
-  // The card just started from New thread, so its reply box opens focused and the keyboard stays in the board.
-  const [startedId, setStartedId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<Column | null>(null);
   const [webBrowserOpen, setWebBrowserOpen] = useState(false);
   const [browserWidth, setBrowserWidth] = useState(560);
@@ -176,7 +175,7 @@ export default function Board() {
   // Folders the server has already resolved into roots.
   const resolvedFolders = useRef(new Set<string>());
   const now = useNow();
-  const { desktop, mac, browser, copilotOpen } = useDesktopBridge(CLOSED_BROWSER, selectedId, cards);
+  const { desktop, mac, browser } = useDesktopBridge(CLOSED_BROWSER, selectedId, cards);
   useStartupCheck(loaded, setToast);
   const onMenu = useRef<(action: MenuAction, payload?: string) => void>(() => {});
 
@@ -221,7 +220,6 @@ export default function Board() {
       selectedRef.current = id;
       setSelectedId(id);
       setRenameId(null);
-      setStartedId(null);
       if (id) setUnseen((prev) => (prev.has(id) ? without(prev, id) : prev));
       setThread([]);
       setStreaming("");
@@ -365,6 +363,10 @@ export default function Board() {
           break;
         case "terminal":
           toggleTerminal();
+          break;
+        // A thread asked for a key the vault doesn't have: the 🔐 Add form with its name filled in.
+        case "add-secret":
+          addSecret(setLibraryOpen, parseSecretAsk(payload));
           break;
       }
     };
@@ -652,10 +654,12 @@ export default function Board() {
     setTerminalOpen((open) => !open);
   }
 
-  // The desktop app gives the copilot its own window; in a browser tab it opens as a pop-up.
+  // The ✨ button, c and the palette open the copilot as a card, like a click on its card in the column;
+  // only the global hotkey (⌃⌥Space) still opens its own window, for when the board is hidden.
   function toggleCopilot() {
-    if (window.threadboard) window.threadboard.copilot.toggle();
-    else window.open("/copilot", "threadboard-copilot", "popup,width=420,height=680");
+    if (selectedRef.current === COPILOT_ID) select(null);
+    else if (copilot) openCard(copilot);
+    else select(COPILOT_ID);
   }
 
   // Moves a card for you, remembering it so the move doesn't chime.
@@ -715,13 +719,10 @@ export default function Board() {
     });
   }
 
-  // A started card opens right away, so its browser shows the splash-style starter page (lib/glance.ts).
-  async function create(input: NewCardInput, opts?: { stay?: boolean }) {
-    const { card } = await api.create(input);
-    // Started with ⌃↵: the dialog stays open for the next thread, so don't open this one.
-    if (!input.start || opts?.stay) return;
-    select(card.id);
-    setStartedId(card.id);
+  // A new card lands in its column without opening, so after ⌘↵ the keyboard is back on the board
+  // (opening it moved focus where Escape couldn't reach).
+  async function create(input: NewCardInput) {
+    await api.create(input);
   }
 
   return (
@@ -740,7 +741,7 @@ export default function Board() {
         </span>
         <HeaderBadges cwd={selected?.cwd ?? project ?? latest?.cwd} cards={cards} start={improveQuality} notify={notify} toast={setToast} />
         <div className="flex-1" />
-        <CopilotButton open={copilotOpen} needsYou={copilotNeedsYou} title={hint("copilot", "Copilot")} onClick={toggleCopilot} />
+        <CopilotButton open={selectedId === COPILOT_ID} needsYou={copilotNeedsYou} title={hint("copilot", "Copilot")} onClick={toggleCopilot} />
         <button
           onClick={toggleBrowser}
           title={hint("browser", "Browser")}
@@ -816,6 +817,7 @@ export default function Board() {
           onTagCard={tagCard}
           catalog={tagCatalog}
           onOpenUrl={showPage}
+          onOpenCard={openCard}
           notify={notify}
         />
         <main
@@ -864,7 +866,7 @@ export default function Board() {
                         card={pilot}
                         now={now}
                         selected={pilot.id === selectedId}
-                        onOpen={() => select(pilot.id)}
+                        onOpen={toggleCopilot}
                         onAnswer={(allow) => void api.answer(pilot.id, allow, undefined, pilot.pending?.id).catch(notify)}
                         onStop={() => void api.stop(pilot.id).catch(notify)}
                       />
@@ -921,7 +923,6 @@ export default function Board() {
             card={selected}
             onStar={() => toggleStar(selected)}
             onTags={() => editTags(selected)}
-            alsoHere={busyHere(cards, selected)}
             resets={planResets(cards)}
             items={thread}
             streaming={streaming}
@@ -947,7 +948,6 @@ export default function Board() {
             onMode={(mode) => void api.setMode(selected.id, mode).catch(notify)}
             onNewChat={() => void api.resetCopilot().then(() => select(selected.id)).catch(notify)}
             editTitle={renameId === selected.id}
-            focusReply={startedId === selected.id}
           />
         )}
 

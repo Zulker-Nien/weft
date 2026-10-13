@@ -15,14 +15,15 @@ vi.mock("./store", () => ({
   updateCard: vi.fn((id: string, patch: Partial<Card>) => Object.assign(db.cards.get(id)!, patch)),
   clearThread: vi.fn(),
 }));
-vi.mock("./runner", () => ({ sendUserMessage: vi.fn(), endSession: vi.fn(async () => {}), warmUp: vi.fn(), ensureSpare: vi.fn() }));
+vi.mock("./runner", () => ({ sendUserMessage: vi.fn(), endSession: vi.fn(async () => {}), warmUp: vi.fn(), ensureSpare: vi.fn(), retryPukuWithTrial: vi.fn(async () => {}) }));
+vi.mock("./puku-trial", () => ({ startPukuTrial: vi.fn((onSignIn: () => void) => onSignIn()) }));
 vi.mock("./import", () => ({ startSessionSync: vi.fn() }));
 vi.mock("./search", () => ({ startSearchIndex: vi.fn() }));
 vi.mock("./scheduler", () => ({ startScheduler: vi.fn() }));
 vi.mock("./resume", () => ({ resumeInterrupted: vi.fn() }));
 vi.mock("./github-issues", () => ({ startIssueSync: vi.fn() }));
 vi.mock("./github-hooks", () => ({ startHookListener: vi.fn() }));
-vi.mock("./settings", () => ({ listProjects: vi.fn(() => db.projects) }));
+vi.mock("./settings", () => ({ listProjects: vi.fn(() => db.projects), defaultPermissionMode: () => "auto" }));
 
 const store = await import("./store");
 const runner = await import("./runner");
@@ -53,7 +54,7 @@ describe("ensureCopilot", () => {
   it("creates the copilot card in the home folder the first time", () => {
     const c = ensureCopilot();
     expect(store.createCard).toHaveBeenCalledWith(
-      { title: "Copilot", prompt: "", cwd: os.homedir(), backend: "claude", permissionMode: "default", role: "copilot" },
+      { title: "Copilot", prompt: "", cwd: os.homedir(), backend: "claude", permissionMode: "auto", role: "copilot" },
       COPILOT_ID,
     );
     expect(c.id).toBe(COPILOT_ID);
@@ -128,6 +129,8 @@ describe("prewarm", () => {
     for (const fn of [startSessionSync, startSearchIndex, startScheduler, resumeInterrupted, startIssueSync]) expect(fn).toHaveBeenCalledOnce();
     expect(db.cards.get(COPILOT_ID)?.role).toBe("copilot");
     expect(runner.warmUp).toHaveBeenCalledExactlyOnceWith(COPILOT_ID);
+    // The Puku trial's sign-in callback retries puku threads waiting on a login.
+    expect(runner.retryPukuWithTrial).toHaveBeenCalledOnce();
   });
 
   it("opens a spare in the most recent project", () => {

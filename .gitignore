@@ -49,3 +49,6 @@ next-env.d.ts
 
 # Supabase CLI scratch (created by `supabase` commands, never source)
 supabase/.temp/
+
+# node, pnpm, puku and claude wrappers staged for the packaged app (scripts/bundle-toolchain.mjs)
+/.toolchain-dist/

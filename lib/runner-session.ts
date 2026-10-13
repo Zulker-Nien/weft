@@ -5,7 +5,9 @@ import { signAsWeft } from "./attribution";
 import { COPILOT_PROMPT, boardMcpServer, isTrustedTool, threadBoardMcpServer } from "./board-tools";
 import { boardViewMcpServer } from "./board-view-tools";
 import { BROWSER_PROMPT, browserMcpServer } from "./browser-tools";
+import { runsOn } from "./cli-defaults";
 import { executableFor } from "./cli-path";
+import { claimQuestion } from "./claim-guard";
 import { guardedCli, RESTART_PROMPT } from "./env";
 import { isNotLoggedInError, isRateLimitError } from "./login";
 import { hitRateLimit } from "./rate-limit";
@@ -14,9 +16,11 @@ import { askUser, settle } from "./runner-ask";
 import { close, hooks, Inbox, queued, safeUpdate, scheduleIdle, sessions, spares, specFor, type Session, type Spec } from "./runner-state";
 import { TURN_CODE, handle } from "./runner-turn";
 import { SECRETS_PROMPT, secretsMcpServer } from "./secret-tools";
-import { defaultPermissionMode, threadPrompt } from "./settings";
+import { defaultPermissionMode, subagentModel, threadPrompt } from "./settings";
+import { trialOptions } from "./puku-trial";
 import { PLUGIN_DIR } from "./skills";
 import { switchSpare } from "./spare-switch";
+import { subagentEnv, subagentPrompt } from "./subagents";
 import { getCard, updateCard } from "./store";
 import * as turnRules from "./turn";
 import type { Backend, Card } from "./types";
@@ -32,11 +36,18 @@ const MAX_SPARES = 3;
 // the code (not random) because each API route can load its own copy of these modules. The pure turn
 // rules in turn.ts count too: a session started before they changed would still run the old ones.
 const BUILD = createHash("sha1")
-  .update([drive, queryOptions, ...TURN_CODE, askUser, settle, ...Object.values(turnRules)].map(String).join("\n"))
+  .update([drive, queryOptions, threadEnv, ...TURN_CODE, askUser, settle, ...Object.values(turnRules)].map(String).join("\n"))
   .digest("hex");
 
+// The code fingerprint plus the settings a CLI only reads when it starts (the thread prompt, the subagent
+// model), so changing one in Settings replaces idle sessions too.
+function currentBuild() {
+  const started = createHash("sha1").update(`${threadPrompt()}\n${subagentModel()}`).digest("hex").slice(0, 12);
+  return `${BUILD}:${started}`;
+}
+
 function isStale(session: Session) {
-  return session.ended || (session.build !== BUILD && !session.busy);
+  return session.ended || (session.build !== currentBuild() && !session.busy);
 }
 
 // The card's open session, unless it's a stale one (which is closed here).
@@ -57,7 +68,7 @@ function spareKey(backend: Backend, cwd: string) {
 export function open(spec: Spec, cardId: string | null): Session {
   const executable = executableFor(spec.backend);
   const session: Session = {
-    build: BUILD,
+    build: currentBuild(),
     cardId,
     spec,
     inbox: new Inbox(),
@@ -120,22 +131,35 @@ export function adoptSpare(card: Card): Session | undefined {
   sessions.set(card.id, spare);
   switchSpare(spare.query, spare.spec, card);
   // The spare's init came before it had a card; without its id a CLI that dies mid-turn can't resume.
-  safeUpdate(card.id, { warm: true, ...(spare.sessionId ? { sessionId: spare.sessionId } : {}) });
+  // Its model is the CLI's default unless the switch above gave it the card's.
+  const ran = runsOn(card.model ?? spare.model, card);
+  safeUpdate(card.id, { warm: true, ...(spare.sessionId ? { sessionId: spare.sessionId } : {}), ...(ran ? { stats: { ...card.stats, runsOn: ran } } : {}) });
   scheduleIdle(spare);
   setTimeout(() => ensureSpare(card.cwd, card.backend), 0);
   return spare;
+}
+
+// The copilot runs the board, not code, so subagent settings are for threads only.
+function threadEnv(spec: Spec, env: Options["env"], subagents: ReturnType<typeof subagentModel>) {
+  return spec.copilot ? env : { ...env, ...subagentEnv(subagents, spec.backend) };
 }
 
 // What a session's CLI is started with: its spec, Weft's prompts, tools and skills, and the permission hook.
 function queryOptions(session: Session, executable: string | undefined): Options {
   const { spec } = session;
   const cardId = () => session.cardId ?? undefined;
+  const guarded = guardedCli(() => [...sessions.values()].filter((s) => s.busy && s !== session).length, cardId);
+  const subagents = subagentModel();
+  // A puku thread with no Puku login of its own runs on Weft's Puku trial while you're signed in to Weft.
+  const trial = spec.backend === "puku" ? trialOptions() : null;
   return {
     cwd: spec.cwd,
     resume: spec.sessionId,
     forkSession: spec.sessionId ? spec.forkSession : undefined,
     resumeSessionAt: spec.sessionId ? spec.resumeAt : undefined,
-    ...guardedCli(() => [...sessions.values()].filter((s) => s.busy && s !== session).length),
+    ...guarded,
+    env: { ...threadEnv(spec, guarded.env, subagents), ...trial?.env },
+    settings: trial?.settings,
     abortController: session.abort,
     includePartialMessages: true,
     permissionMode: spec.permissionMode,
@@ -152,7 +176,7 @@ function queryOptions(session: Session, executable: string | undefined): Options
     systemPrompt: {
       type: "preset",
       preset: "claude_code",
-      append: spec.copilot ? `${BROWSER_PROMPT}\n\n${COPILOT_PROMPT}` : `${BROWSER_PROMPT}\n\n${SECRETS_PROMPT}\n\n${RESTART_PROMPT}\n\n${threadPrompt()}\n\n${REVIEW_PROMPT}`,
+      append: spec.copilot ? `${BROWSER_PROMPT}\n\n${COPILOT_PROMPT}` : `${BROWSER_PROMPT}\n\n${SECRETS_PROMPT}\n\n${RESTART_PROMPT}\n\n${subagentPrompt(subagents, spec.backend)}\n\n${threadPrompt()}\n\n${REVIEW_PROMPT}`,
     },
     mcpServers: {
       browser: browserMcpServer(cardId),
@@ -165,7 +189,8 @@ function queryOptions(session: Session, executable: string | undefined): Options
         return Promise.resolve({ behavior: "allow", updatedInput: input });
       }
       if (!session.cardId) return Promise.resolve({ behavior: "deny", message: "No card is attached yet." });
-      return askUser(session.cardId, session, toolName, input, opts.signal, opts.title);
+      // A symbol-claim clash (lib/claim-guard.ts) asks in its own words.
+      return askUser(session.cardId, session, toolName, input, opts.signal, claimQuestion(opts.toolUseID) ?? opts.title);
     },
     stderr: (data) => console.error(`[thread ${(session.cardId ?? "spare").slice(0, 8)}] ${data.trimEnd()}`),
   };
@@ -179,7 +204,7 @@ async function drive(session: Session, executable: string | undefined) {
     if (session.cardId) safeUpdate(session.cardId, { warm: true });
     for await (const msg of session.query) {
       const cardId = session.cardId;
-      if (msg.type === "system" && msg.subtype === "init") session.sessionId = msg.session_id;
+      if (msg.type === "system" && msg.subtype === "init") [session.sessionId, session.model] = [msg.session_id, msg.model];
       if (msg.type === "system" && msg.subtype === "init") signAsWeft(session.query, session.spec, session.spec.model ?? msg.model);
       // A spare's startup messages belong to no card yet.
       if (!cardId) continue;

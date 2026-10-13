@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  defaultProjectName,
+  defaultRegion,
   matchScore,
   migrationLine,
+  migrationOwner,
   needsRestart,
   pickerList,
   projectState,
@@ -63,10 +66,23 @@ describe("supabase-view", () => {
 
   it("says how the folder's migrations stand", () => {
     expect(migrationLine({ migrations: 0 }, { pending: null })).toBeNull();
-    expect(migrationLine({ migrations: 1 }, { pending: null })).toEqual({ text: "1 migration", warn: false });
-    expect(migrationLine({ migrations: 2 }, { pending: [] })).toEqual({ text: "2 migrations, all applied", warn: false });
-    expect(migrationLine({ migrations: 4 }, { pending: ["a"] })).toEqual({ text: "1 of 4 migrations not applied: a", warn: true });
-    expect(migrationLine({ migrations: 4 }, { pending: ["a", "b", "c"] })).toEqual({ text: "3 of 4 migrations not applied: a, b, …", warn: true });
+    expect(migrationLine({ migrations: 1 }, { pending: null })).toEqual({ text: "1 migration", warn: false, names: [], more: false });
+    expect(migrationLine({ migrations: 2 }, { pending: [] })).toEqual({ text: "2 migrations, all applied", warn: false, names: [], more: false });
+    expect(migrationLine({ migrations: 4 }, { pending: ["a"] })).toEqual({ text: "1 of 4 migrations not applied", warn: true, names: ["a"], more: false });
+    expect(migrationLine({ migrations: 4 }, { pending: ["a", "b", "c"] })).toEqual({ text: "3 of 4 migrations not applied", warn: true, names: ["a", "b"], more: true });
+  });
+
+  it("finds the latest card that wrote a migration", () => {
+    const card = (id: string, updatedAt: number, touchedFiles?: string[]) => ({ id, title: id, updatedAt, touchedFiles });
+    const cards = [
+      card("old", 1, ["/dev/web/supabase/migrations/20261011_add_profiles.sql"]),
+      card("new", 5, ["/dev/web/lib/a.ts", "/dev/web/supabase/migrations/20261011_add_profiles.sql"]),
+      card("other-folder", 9, ["/dev/api/supabase/migrations/20261011_add_profiles.sql"]),
+      card("similar", 9, ["/dev/web/supabase/migrations/20261011_add_profiles_index.sql", "/dev/web/supabase/migrations/add_profiles.sql"]),
+      card("none", 9),
+    ];
+    expect(migrationOwner(cards, "/dev/web/", "add_profiles")?.id).toBe("new");
+    expect(migrationOwner(cards, "/dev/web", "add_notes")).toBeUndefined();
   });
 
   it("links into the project's dashboard", () => {
@@ -94,5 +110,19 @@ describe("supabase-view", () => {
     const status = { signedIn: true, orgs: [], error: null, folders: [folder("/dev/a"), folder("/dev/b", { link: { ref: "r", source: "cli" as const, name: "bee" } }), folder("/dev/c", { link: { ref: "rc", source: "mcp" as const, name: null } })] };
     expect(supabaseTitle(status, "/dev/a")).toBe("Supabase: not linked yet");
     expect(supabaseTitle(status, null)).toBe("Supabase: bee, rc");
+  });
+});
+
+describe("a new project's defaults", () => {
+  it("names it after the repo, else the folder", () => {
+    expect(defaultProjectName(folder("/dev/web", { repo: "me/shop-app" }))).toBe("shop-app");
+    expect(defaultProjectName(folder("/dev/web"))).toBe("web");
+  });
+
+  it("puts it where most of your projects are, ties to the newest, else East US", () => {
+    expect(defaultRegion([])).toBe("us-east-1");
+    expect(defaultRegion([proj("a", 1, { region: null }), proj("b", 2, { region: "mars-1" })])).toBe("us-east-1");
+    expect(defaultRegion([proj("a", 1, { region: "eu-west-1" }), proj("b", 2, { region: "ap-southeast-1" })])).toBe("ap-southeast-1");
+    expect(defaultRegion([proj("a", 3, { region: "ap-southeast-1" }), proj("b", 1, { region: "eu-west-1" }), proj("c", 2, { region: "eu-west-1" })])).toBe("eu-west-1");
   });
 });

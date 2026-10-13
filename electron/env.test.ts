@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { fixPath } from "./env.cjs";
+import { appendToolchain, fixPath } from "./env.cjs";
 
 let dir: string;
 let cacheFile: string;
@@ -59,5 +59,40 @@ describe("fixPath", () => {
     fs.writeFileSync(path.join(dir, "file"), "");
     await fixPath({ cacheFile: blocked, readShell: () => Promise.resolve("/x/bin") });
     expect(process.env.PATH).toMatch(/^\/x\/bin:/);
+  });
+});
+
+describe("appendToolchain", () => {
+  it("puts Weft's own tools after everything already on PATH", () => {
+    expect(appendToolchain("/App/toolchain/bin", { exists: () => true })).toBe(true);
+    expect(process.env.PATH).toBe("/usr/bin:/bin:/App/toolchain/bin");
+  });
+
+  it("moves an existing entry to the end instead of adding it twice", () => {
+    process.env.PATH = "/App/toolchain/bin:/usr/bin";
+    appendToolchain("/App/toolchain/bin", { exists: () => true });
+    expect(process.env.PATH).toBe("/usr/bin:/App/toolchain/bin");
+  });
+
+  it("leaves PATH alone when the folder isn't there (dev, or a build without the toolchain)", () => {
+    expect(appendToolchain("/App/toolchain/bin", { exists: () => false })).toBe(false);
+    expect(appendToolchain("")).toBe(false);
+    expect(process.env.PATH).toBe("/usr/bin:/bin");
+  });
+
+  it("stays behind the shell's PATH when fixPath refreshes it later", async () => {
+    fs.writeFileSync(cacheFile, "/old/bin\n");
+    const shell = slowShell("/opt/homebrew/bin");
+    await fixPath({ cacheFile, readShell: shell.readShell });
+    appendToolchain("/App/toolchain/bin", { exists: () => true });
+    shell.reply();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(process.env.PATH).toBe("/opt/homebrew/bin:/old/bin:/usr/bin:/bin:/App/toolchain/bin");
+  });
+
+  it("starts PATH from nothing when it was empty", () => {
+    delete process.env.PATH;
+    appendToolchain("/App/toolchain/bin", { exists: () => true });
+    expect(process.env.PATH).toBe("/App/toolchain/bin");
   });
 });

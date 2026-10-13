@@ -10,6 +10,7 @@ import {
 } from "./game";
 import { attributes, classFor, stackSkills, type Attribute, type Skill } from "./game-attributes";
 import { badges, coverageClimbed, isRefactor, type Badge } from "./game-badges";
+import type { GithubProfile } from "./github-profile";
 import { globalSingleton } from "./global-singleton";
 import type { ProjectReport } from "./project-badges";
 import { sessionFiles } from "./import";
@@ -38,6 +39,8 @@ export interface GameState {
   // The root of the project in view, when it was measured.
   inView: string | null;
   leagues: readonly string[];
+  // Your GitHub profile, added by /api/game when gh is signed in.
+  github?: GithubProfile | null;
 }
 
 export const REPORT_TTL = 10 * 60 * 1000;

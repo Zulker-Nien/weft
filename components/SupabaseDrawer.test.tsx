@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseBridge, SupabaseFolder, SupabaseStatus } from "@/lib/supabase-view";
+import type { Card } from "@/lib/types";
 import "./test-utils";
 import SupabaseDrawer from "./SupabaseDrawer";
 
@@ -27,22 +28,28 @@ function bridge(): { [K in keyof SupabaseBridge]: ReturnType<typeof vi.fn> } {
         { ref: "rnotes", name: "notes", org: "Me", region: null, status: "ACTIVE_HEALTHY", createdAt: 1 },
       ]),
     ),
+    orgs: vi.fn(() => Promise.resolve([{ slug: "acme", name: "Acme" }])),
+    create: vi.fn(() => Promise.resolve({ ref: REF, name: "notes", secret: "SUPABASE_DB_PASSWORD" })),
     link: vi.fn(() => Promise.resolve({ linked: true, name: "notes" })),
     unlink: vi.fn(() => Promise.resolve({ linked: false })),
     restore: vi.fn(() => Promise.resolve({ restoring: true })),
   };
 }
 
-function setup(status: SupabaseStatus | null, project: string | null = null, error: string | null = null) {
+// A <p> whose whole text (across its links) is this.
+const para = (text: string) => screen.getByText((_, el) => el?.tagName === "P" && el.textContent === text);
+
+function setup(status: SupabaseStatus | null, project: string | null = null, error: string | null = null, cards: Card[] = []) {
   const b = bridge();
   const reload = vi.fn(() => Promise.resolve());
   const notify = vi.fn();
   const onOpenUrl = vi.fn();
+  const onOpenCard = vi.fn();
   const openExternal = vi.fn();
   const splashAction = vi.fn();
   (window as unknown as { threadboard: unknown }).threadboard = { openExternal, splashAction };
-  render(<SupabaseDrawer bridge={b as unknown as SupabaseBridge} status={status} error={error} reload={reload} project={project} onOpenUrl={onOpenUrl} notify={notify} />);
-  return { b, reload, notify, onOpenUrl, openExternal, splashAction };
+  render(<SupabaseDrawer bridge={b as unknown as SupabaseBridge} status={status} error={error} reload={reload} project={project} cards={cards} onOpenCard={onOpenCard} onOpenUrl={onOpenUrl} notify={notify} />);
+  return { b, reload, notify, onOpenUrl, onOpenCard, openExternal, splashAction };
 }
 
 afterEach(() => {
@@ -51,12 +58,12 @@ afterEach(() => {
 
 describe("SupabaseDrawer", () => {
   it("explains itself outside the desktop app, while loading, and on an error", () => {
-    const { rerender } = render(<SupabaseDrawer bridge={null} status={null} error={null} reload={vi.fn()} project={null} onOpenUrl={vi.fn()} notify={vi.fn()} />);
+    const { rerender } = render(<SupabaseDrawer bridge={null} status={null} error={null} reload={vi.fn()} project={null} cards={[]} onOpenCard={vi.fn()} onOpenUrl={vi.fn()} notify={vi.fn()} />);
     expect(screen.getByText(/desktop app/)).toBeInTheDocument();
     const b = bridge() as unknown as SupabaseBridge;
-    rerender(<SupabaseDrawer bridge={b} status={null} error={null} reload={vi.fn()} project={null} onOpenUrl={vi.fn()} notify={vi.fn()} />);
+    rerender(<SupabaseDrawer bridge={b} status={null} error={null} reload={vi.fn()} project={null} cards={[]} onOpenCard={vi.fn()} onOpenUrl={vi.fn()} notify={vi.fn()} />);
     expect(screen.getByText("Asking Supabase…")).toBeInTheDocument();
-    rerender(<SupabaseDrawer bridge={b} status={null} error="offline" reload={vi.fn()} project={null} onOpenUrl={vi.fn()} notify={vi.fn()} />);
+    rerender(<SupabaseDrawer bridge={b} status={null} error="offline" reload={vi.fn()} project={null} cards={[]} onOpenCard={vi.fn()} onOpenUrl={vi.fn()} notify={vi.fn()} />);
     expect(screen.getByText("offline")).toBeInTheDocument();
   });
 
@@ -98,6 +105,18 @@ describe("SupabaseDrawer", () => {
     await waitFor(() => expect(notify).toHaveBeenCalledWith(new Error("nope")));
   });
 
+  it("links an unapplied migration to the card that wrote it", async () => {
+    const owner = { id: "c1", title: "Profiles table", touchedFiles: ["/dev/web/supabase/migrations/20261011_add_profiles.sql"], updatedAt: 2 } as Card;
+    const pending = ["add_profiles", "add_notes", "add_tags"];
+    const { onOpenCard } = setup(signedIn([{ ...LINKED, link: { ...LINKED.link!, pending } }]), "/dev/web", null, [owner]);
+    expect(para("3 of 3 migrations not applied: add_profiles, add_notes, …")).toHaveClass("text-warn");
+    expect(screen.queryByRole("button", { name: "add_notes" })).not.toBeInTheDocument();
+    const link = screen.getByRole("button", { name: "add_profiles" });
+    expect(link).toHaveAttribute("title", "Open the card that wrote it: Profiles table");
+    await userEvent.click(link);
+    expect(onOpenCard).toHaveBeenCalledWith(owner);
+  });
+
   it("shows a linked project: its state, API URL, migrations and dashboard links", async () => {
     const { b, onOpenUrl, openExternal } = setup(signedIn([LINKED, folder("/dev/notes")]), "/dev/web");
     expect(screen.getByText("Signed in · Acme")).toBeInTheDocument();
@@ -105,7 +124,8 @@ describe("SupabaseDrawer", () => {
     expect(screen.getByText("Healthy")).toBeInTheDocument();
     expect(screen.getByText("us-east-1")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Restore" })).not.toBeInTheDocument();
-    expect(screen.getByText("1 of 3 migrations not applied: add_profiles")).toHaveClass("text-warn");
+    expect(para("1 of 3 migrations not applied: add_profiles")).toHaveClass("text-warn");
+    expect(screen.queryByRole("button", { name: "add_profiles" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: `${REF}.supabase.co` }));
     expect(onOpenUrl).toHaveBeenCalledWith(`https://supabase.com/dashboard/project/${REF}`);
     await userEvent.click(screen.getByRole("button", { name: "Usage ↗" }));
@@ -142,8 +162,10 @@ describe("SupabaseDrawer", () => {
     await waitFor(() => expect(within(screen.getByRole("list")).getAllByText(/^(notes|old-thing)$/).map((e) => e.textContent)).toEqual(["notes", "old-thing"]));
     expect(screen.getByText("best fit")).toBeInTheDocument();
     expect(screen.getByText("Acme · eu-west-1 · paused")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /New project on supabase.com/ }));
+    await userEvent.click(screen.getByRole("button", { name: "New project" }));
+    await userEvent.click(screen.getByRole("button", { name: "supabase.com ↗" }));
     expect(openExternal).toHaveBeenCalledWith("https://supabase.com/dashboard/new");
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
     await userEvent.type(screen.getByLabelText("Search Supabase projects"), "zzz");
     expect(screen.getByText("No project matches.")).toBeInTheDocument();
     await userEvent.clear(screen.getByLabelText("Search Supabase projects"));
@@ -157,6 +179,45 @@ describe("SupabaseDrawer", () => {
     await userEvent.click(screen.getAllByRole("button", { name: "Link…" })[1]!);
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(b.projects).toHaveBeenCalledTimes(1);
+  });
+
+  it("makes a new project in place: name from the folder, your usual region, the org you pick", async () => {
+    const { b, notify } = setup(signedIn([folder("/dev/shop", { repo: "me/shop-app" })]));
+    b.orgs.mockResolvedValueOnce([
+      { slug: "acme", name: "Acme" },
+      { slug: "me", name: "Me" },
+    ]);
+    await userEvent.click(screen.getByRole("button", { name: "Link…" }));
+    await screen.findByText("old-thing");
+    await userEvent.click(screen.getByRole("button", { name: "New project" }));
+    expect(screen.queryByLabelText("Search Supabase projects")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("New project name")).toHaveValue("shop-app");
+    expect(screen.getByLabelText("Region")).toHaveValue("eu-west-1");
+    await userEvent.selectOptions(screen.getByLabelText("Organization"), "me");
+    await userEvent.selectOptions(screen.getByLabelText("Region"), "ap-southeast-1");
+    await userEvent.clear(screen.getByLabelText("New project name"));
+    expect(screen.getByRole("button", { name: "Create & link" })).toBeDisabled();
+    await userEvent.type(screen.getByLabelText("New project name"), " shop {Enter}");
+    await waitFor(() => expect(notify).toHaveBeenCalledWith(expect.stringContaining("Made notes on Supabase and linked shop; its database password is in the 🔐 vault as SUPABASE_DB_PASSWORD")));
+    expect(b.create).toHaveBeenCalledWith("/dev/shop", { name: "shop", org: "me", region: "ap-southeast-1" });
+    expect(screen.queryByLabelText("New project name")).not.toBeInTheDocument();
+    // A made project lists itself next time: the list loads again.
+    await userEvent.click(screen.getByRole("button", { name: "Link…" }));
+    await userEvent.click(await screen.findByRole("button", { name: "New project" }));
+    expect(screen.queryByLabelText("Organization")).not.toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("New project name"), "{Escape}");
+    expect(screen.getByLabelText("Search Supabase projects")).toBeInTheDocument();
+    expect(b.projects).toHaveBeenCalledTimes(2);
+  });
+
+  it("still links when the organizations can't be listed, and says why New project can't make one", async () => {
+    const { b } = setup(signedIn([folder("/dev/shop")]));
+    b.orgs.mockRejectedValueOnce(new Error("No handler registered for 'supabase:orgs'"));
+    await userEvent.click(screen.getByRole("button", { name: "Link…" }));
+    expect(await screen.findByText("old-thing")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "New project" }));
+    expect(screen.getByText(/couldn.t list your Supabase organizations/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create & link" })).toBeDisabled();
   });
 
   it("says when the token reaches no projects, and closes the picker when the list fails", async () => {

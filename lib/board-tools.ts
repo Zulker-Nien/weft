@@ -76,6 +76,8 @@ function threadText(items: ThreadItem[]) {
           return `PERMISSION ${item.title}: ${item.decision ?? "waiting"}`;
         case "result":
           return item.isError ? `TURN ENDED: ${item.text}` : "TURN FINISHED";
+        case "shell":
+          return `USER RAN: ! ${item.command}${item.exitCode ? ` (exit ${item.exitCode})` : ""}`;
       }
     })
     .join("\n\n");
@@ -222,7 +224,7 @@ export function threadBoardMcpServer(
               title,
               folder: folder ?? parent?.cwd ?? "",
               // Same trust level as the thread that asked.
-              permissionMode: parent?.permissionMode ?? "default",
+              permissionMode: parent?.permissionMode ?? defaultPermissionMode(),
               parentId: parent?.id,
               tags,
             });

@@ -57,6 +57,7 @@ vi.mock("@/lib/settings", () => ({
   defaultPermissionMode: vi.fn(() => "auto"),
   setAutomations: vi.fn(),
   setPushOnDone: vi.fn(),
+  setSubagentModel: vi.fn(),
   settingsView: vi.fn(() => ({ threadPrompt: "tp", keepAliveMinutes: 5, automations: [] })),
 }));
 
@@ -331,9 +332,11 @@ describe("POST /cards", () => {
     );
   });
 
-  it("keeps the model for puku but ignores effort", async () => {
+  it("keeps the model and a valid effort for puku; drops xhigh to high (puku-cli only takes low/medium/high/max)", async () => {
     await cardsRoute.POST(req("/cards", { method: "POST", body: { prompt: "p", cwd: tmp, backend: "puku", model: "opus-4.8", effort: "high" } }));
-    expect(store.createCard).toHaveBeenLastCalledWith(expect.objectContaining({ backend: "puku", model: "opus-4.8", effort: undefined }));
+    expect(store.createCard).toHaveBeenLastCalledWith(expect.objectContaining({ backend: "puku", model: "opus-4.8", effort: "high" }));
+    await cardsRoute.POST(req("/cards", { method: "POST", body: { prompt: "p", cwd: tmp, backend: "puku", model: "opus-4.8", effort: "xhigh" } }));
+    expect(store.createCard).toHaveBeenLastCalledWith(expect.objectContaining({ backend: "puku", effort: "high" }));
   });
 
   it("rejects a missing prompt, a missing folder and bad JSON with 400", async () => {
@@ -687,6 +690,7 @@ describe("/settings", () => {
     const res = await patch({
       threadPrompt: "be brief",
       pushOnDone: false,
+      subagentModel: "haiku",
       keepAliveMinutes: 10,
       defaultPermissionMode: "acceptEdits",
       automations: [
@@ -699,6 +703,7 @@ describe("/settings", () => {
     expect(settings.setKeepAliveMinutes).toHaveBeenCalledWith(10);
     expect(settings.setDefaultPermissionMode).toHaveBeenCalledWith("acceptEdits");
     expect(settings.setPushOnDone).toHaveBeenCalledWith(false);
+    expect(settings.setSubagentModel).toHaveBeenCalledWith("haiku");
     const [rules] = vi.mocked(settings.setAutomations).mock.calls[0]!;
     expect(rules[0]).toEqual({ id: "a1", on: "done", skill: "weft:done" });
     expect(rules[1]).toMatchObject({ on: "prompt-matches", skill: "deploy", pattern: "ship it" });
@@ -712,6 +717,7 @@ describe("/settings", () => {
       { keepAliveMinutes: "10" },
       { defaultPermissionMode: "yolo" },
       { pushOnDone: "no" },
+      { subagentModel: "gpt-5" },
       { automations: "nope" },
       { automations: [{ on: "sometimes", skill: "x" }] },
       { automations: [{ on: "done", skill: "bad skill!" }] },
@@ -727,6 +733,7 @@ describe("/settings", () => {
     expect(settings.setDefaultPermissionMode).not.toHaveBeenCalled();
     expect(settings.setAutomations).not.toHaveBeenCalled();
     expect(settings.setPushOnDone).not.toHaveBeenCalled();
+    expect(settings.setSubagentModel).not.toHaveBeenCalled();
   });
 });
 

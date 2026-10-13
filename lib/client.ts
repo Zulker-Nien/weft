@@ -5,7 +5,9 @@ import type { VaultBridge } from "./vault-view";
 import type { VercelBridge } from "./vercel-view";
 import type { SupabaseBridge } from "./supabase-view";
 import type { BlastcpBridge } from "./blastcp-view";
+import type { CloudflareBridge } from "./cloudflare-view";
 import type { GithubStatus } from "./github-view";
+import type { SubagentModel } from "./subagents";
 import type {
   AccountProvider,
   AccountView,
@@ -39,7 +41,7 @@ export interface BrowserState {
 
 // What the app menu, dock, tray, global shortcuts and weft:// links ask a window to do.
 // open-card carries an id.
-export type MenuAction = "new-thread" | "settings" | "open-card" | "find" | "terminal";
+export type MenuAction = "new-thread" | "settings" | "open-card" | "find" | "terminal" | "add-secret";
 
 // Exposed by electron/preload.cjs; absent when the board runs in a normal browser tab.
 export interface ShellBridge {
@@ -98,6 +100,8 @@ export interface ShellBridge {
   supabase?: SupabaseBridge;
   // BlastCP in Electron main (lib/blastcp-view.ts). Missing in older shells.
   blastcp?: BlastcpBridge;
+  // Cloudflare in Electron main (lib/cloudflare-view.ts). Missing in older shells.
+  cloudflare?: CloudflareBridge;
   onMenu(callback: (action: MenuAction, payload?: string) => void): () => void;
   // The board's first cards are on screen; resolves to this launch's timing. Missing in older shells.
   startupReady?(): Promise<StartupResult>;
@@ -220,6 +224,8 @@ export const api = {
   answer: (id: string, allow: boolean, answers?: Record<string, string>, pendingId?: string) =>
     call("POST", `/api/cards/${id}/permission`, { allow, answers, pendingId }),
   stop: (id: string) => call("POST", `/api/cards/${id}/stop`),
+  // "!" in the reply box: runs a shell command in the card's folder (lib/shell.ts).
+  shell: (id: string, command: string) => call<{ ok: true }>("POST", `/api/cards/${id}/shell`, { command }),
   // Stops the Claude CLI that has a picked-up session open in another app.
   release: (id: string) => call<{ stopped: number }>("POST", `/api/cards/${id}/release`),
   // Flips a card's CLI. replay=true re-sends the last user message (the rate-limit escape hatch).
@@ -246,6 +252,7 @@ export const api = {
     defaultBackend?: Backend;
     automations?: Automation[];
     pushOnDone?: boolean;
+    subagentModel?: SubagentModel;
   }) =>
     call<SettingsView>("PATCH", "/api/settings", patch),
   addProject: (path: string) => call<{ path: string; projects: Project[] }>("POST", "/api/projects", { path }),

@@ -102,6 +102,26 @@ describe("switchBackend", () => {
     expect(store.cards.get(card.id)!.permissionMode).toBe("auto");
   });
 
+  it("drops xhigh effort on a switch to puku (puku-cli only takes low/medium/high/max)", async () => {
+    const card = addCard({ backend: "claude", effort: "xhigh" });
+    await switchBackend(card.id, "puku");
+    expect(store.cards.get(card.id)!.effort).toBe("high");
+  });
+
+  it("keeps max on a switch to puku (puku-cli accepts max)", async () => {
+    const card = addCard({ backend: "claude", effort: "max" });
+    await switchBackend(card.id, "puku");
+    expect(store.cards.get(card.id)!.effort).toBe("max");
+  });
+
+  it("keeps the same effort on a switch to claude, including a value puku wouldn't take", async () => {
+    // Simulates a card that was already on puku with effort dropped to high; switching back to
+    // claude must not invent xhigh. (The picker is symmetric; xhigh stays xhigh if it was.)
+    const card = addCard({ backend: "puku", effort: "high" });
+    await switchBackend(card.id, "claude");
+    expect(store.cards.get(card.id)!.effort).toBe("high");
+  });
+
   it("keeps YOLO when switching between claude backends (claude→claude is a no-op, puku→claude is the only direction it stays)", async () => {
     const card = addCard({ backend: "puku", permissionMode: "auto" });
     await switchBackend(card.id, "claude");

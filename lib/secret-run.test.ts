@@ -81,10 +81,21 @@ describe("runTool", () => {
     reply({ denied: true, label: "o/r" });
     const r = await run.handler({ command: "npm run job", names: ["K"] });
     expect([r.isError, said(r)]).toEqual([true, "The user didn't approve running npm run job with secrets. Ask before trying again."]);
+    // Missing names open the 🔐 Add form on the first; if the board can't, the thread is told where to add them.
     reply({ missing: ["A"], label: "o/r" });
-    expect(said(await run.handler({ command: "npm run job", names: ["A"] }))).toBe("A has no value in the o/r vault. Ask the user to add it with 🔐 on the left rail.");
+    reply({ opened: true });
+    expect(said(await run.handler({ command: "npm run job", names: ["A"], environment: "preview" }))).toBe(
+      "A has no value in the o/r vault (preview). Weft opened the 🔐 Add form with A filled in: ask the user to paste its value there and click Add to vault, then try again.",
+    );
+    expect(sent(2)).toEqual({ url: "http://127.0.0.1:4567/secrets/ask-add", body: { folder: proj, name: "A", environment: "preview" } });
     reply({ missing: ["A", "B"] });
-    expect(said(await run.handler({ command: "npm run job", names: ["A", "B"] }))).toBe("A, B have no value in the this vault. Ask the user to add them with 🔐 on the left rail.");
+    reply({ opened: true });
+    expect(said(await run.handler({ command: "npm run job", names: ["A", "B"] }))).toMatch(/with A filled in: .* After that, call mcp__secrets__ask_add for B\.$/);
+    reply({ missing: ["A", "B"] });
+    reply({ error: "no board" }, false);
+    expect(said(await run.handler({ command: "npm run job", names: ["A", "B"] }))).toBe(
+      "A, B have no value in the this vault (development). Ask the user to add them with 🔐 on the left rail.",
+    );
     expect(sr.usesSecrets(card!)).toBe(false);
   });
 

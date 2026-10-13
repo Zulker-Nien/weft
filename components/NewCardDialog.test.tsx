@@ -73,15 +73,15 @@ describe("NewCardDialog", () => {
     await waitFor(() => expect(localStorage.getItem("threadboard.cwd")).toBe("/repo/api"));
   });
 
-  // Model choices per CLI are being reworked, so this only pins the CLI and effort (Claude-only).
-  it("the CLI toggle picks puku-cli, which takes no effort", async () => {
+  // The dialog normalizes the picked effort through effortFor: puku drops xhigh, keeps low/medium/high/max.
+// (effortFor is unit-tested in lib/new-thread.test.ts; this just pins the wiring through the dialog.)
+  it("the CLI toggle passes the picked effort through effortFor, so puku keeps high", async () => {
     const { onCreate, box } = setup();
-    const puku = screen.getByRole("button", { name: "puku-cli" });
-    await userEvent.click(puku);
-    expect(puku).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(screen.getByRole("button", { name: "puku-cli" }));
     await userEvent.type(box, "Hi");
     await userEvent.click(screen.getByRole("button", { name: "Start now" }));
-    expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ backend: "puku", effort: undefined }));
+    // The dialog's default effort is "high" (lastEffort), which puku accepts.
+    expect(onCreate).toHaveBeenLastCalledWith(expect.objectContaining({ backend: "puku", effort: "high" }));
   });
 
   it("starts in Settings' default permission mode", async () => {

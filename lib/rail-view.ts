@@ -5,8 +5,8 @@ import type { Card } from "./types";
 // tools under it open their drawers. Pure, so it's testable and safe in the browser.
 
 // What the rail's drawer can show: every tag (components/TagsDrawer.tsx), the secrets vault
-// (components/VaultDrawer.tsx), Vercel, Supabase, BlastCP or GitHub. ★ has no drawer: it filters the board.
-export type RailPanel = "tags" | "vault" | "vercel" | "supabase" | "blastcp" | "github";
+// (components/VaultDrawer.tsx), Vercel, Supabase, Cloudflare, BlastCP or GitHub. ★ has no drawer: it filters the board.
+export type RailPanel = "tags" | "vault" | "vercel" | "supabase" | "cloudflare" | "blastcp" | "github";
 
 // The board narrowed to starred cards, a tag, or both. Empty shows everything.
 export interface RailFilter {

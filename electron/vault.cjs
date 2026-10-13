@@ -260,6 +260,22 @@ function createVault({ dataDir, safeStorage, sodium, prompt, clipboard, run = gi
       return { saved: true };
     },
 
+    // Puts names in the vault with no value yet (blanks), for the user to fill in later: a thread's
+    // mcp__secrets__add_blank, or the Add form with no value. A name that has a value keeps it.
+    async addBlanks(folder, names, environments, { source, hint } = {}) {
+      const bad = names.find((n) => !NAME.test(n));
+      if (bad !== undefined) throw new Error(`${bad || "A blank name"} isn't a variable name: use letters, digits and _, not starting with a digit.`);
+      if (!names.length) throw new Error("Name at least one secret.");
+      const { id, label } = await idOf(folder);
+      const s = await storeReady();
+      // Names that already have a value in one of those environments.
+      const filled = names.filter((name) => s.exists(id) && environments.some((env) => s.get(id, name, env) !== undefined));
+      s.set(id, label, names.flatMap((name) => environments.map((environment) => ({ name, environment, value: null, source, hint }))));
+      refreshManaged(id);
+      onChange(folder);
+      return { label, filled };
+    },
+
     // Copies one secret into another project's vault, value and all, without it leaving main. A name
     // still missing its value goes over as missing too.
     async copyTo(id, name, environment, folder) {
@@ -343,6 +359,7 @@ function registerVault(ipcMain, { vault, isBoard }) {
   handle("vault:reveal", (id, name, env) => vault.reveal(String(id), String(name), String(env)));
   handle("vault:copy", (id, name, env) => vault.copy(String(id), String(name), String(env)));
   handle("vault:set", (folder, name, env, value) => vault.setValue(String(folder), String(name), String(env), String(value ?? "")));
+  handle("vault:add-blank", (folder, name, env) => vault.addBlanks(String(folder), [String(name)], [String(env)], { source: "added blank" }));
   handle("vault:copy-to", (id, name, env, folder) => vault.copyTo(String(id), String(name), String(env), String(folder)));
   handle("vault:remove", (id, name, env) => vault.remove(String(id), String(name), String(env)));
   handle("vault:write-back", (folder) => vault.writeBack(String(folder)));

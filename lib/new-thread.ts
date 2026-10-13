@@ -1,4 +1,4 @@
-import type { Backend, Effort } from "./types";
+import type { Backend, Card, Effort } from "./types";
 import type { HeldModifiers } from "./use-mod-held";
 
 // What the New thread dialog offers and remembers (components/NewCardDialog.tsx draws it).
@@ -69,14 +69,35 @@ export const EFFORTS: { id: Effort | ""; label: string }[] = [
   { id: "max", label: "Max effort" },
 ];
 
+// What each backend accepts. Puku-cli only takes low/medium/high/max — xhigh crashes it
+// (puku-cli exits 1 with "option '--effort' argument 'xhigh' is invalid").
+const EFFORT_BY_BACKEND: Record<Backend, Effort[]> = {
+  claude: ["low", "medium", "high", "xhigh", "max"],
+  puku: ["low", "medium", "high", "max"],
+};
+
+// The closest effort a backend accepts. Drops xhigh to high for puku. "" / undefined pass through
+// as undefined (use the model's own default). Use this everywhere a card's effort is sent to a
+// CLI, not a hard-coded branch.
+export function effortFor(backend: Backend, effort: Effort | "" | undefined): Effort | undefined {
+  if (!effort) return undefined;
+  const allowed = EFFORT_BY_BACKEND[backend];
+  if (allowed.includes(effort)) return effort;
+  // Closest fall-back by index: xhigh (4) → high (2) for puku.
+  const claudeOrder: Effort[] = ["low", "medium", "high", "xhigh", "max"];
+  const idx = claudeOrder.indexOf(effort);
+  if (idx === -1) return undefined;
+  for (let i = idx; i >= 0; i--) {
+    const candidate = claudeOrder[i];
+    if (candidate && allowed.includes(candidate)) return candidate;
+  }
+  return undefined;
+}
+
 // The last effort picked, High at first. Only the Claude CLI takes one.
 export function lastEffort(): Effort | "" {
   const saved = remembered(LAST_EFFORT);
   return EFFORTS.find((e) => e.id === saved)?.id ?? DEFAULT_EFFORT;
-}
-
-export function effortFor(backend: Backend, effort: Effort | ""): Effort | undefined {
-  return (backend === "claude" && effort) || undefined;
 }
 
 // Keep the picks of a thread that was just made, for the next one. Effort is kept even when it's "",
@@ -107,4 +128,15 @@ export function startButton(held: HeldModifiers) {
   if (held.ctrl) return { label: "Start, keep open", key: "⌃↵" };
   if (held.mod) return { label: "Start & close", key: "⌘↵" };
   return { label: "Start now", key: "⌘" };
+}
+
+// A model id as the thread header shows it: "Fable 5.1" for one of ours, otherwise the id without "claude-" or a "[1m]" suffix.
+export function modelLabel(id: string) {
+  const bare = id.replace(/\[[^\]]*\]$/, "");
+  return Object.values(MODELS).flat().find((m) => m.id === bare)?.label ?? bare.replace(/^claude-/, "");
+}
+
+// The model and effort a card runs on: its own picks, else what its CLI's init reported (lib/cli-defaults.ts).
+export function runningOn(card: Pick<Card, "model" | "effort" | "stats">): { model?: string; effort?: Effort } {
+  return { model: card.model ?? card.stats?.runsOn?.model, effort: card.effort ?? card.stats?.runsOn?.effort };
 }

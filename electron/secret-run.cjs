@@ -26,7 +26,7 @@ function describe({ kind, command, cwd, script, names, environment, label }) {
   const message = kind === "dev" ? `Start this card's dev server with ${label}'s ${environment} secrets?` : `A thread wants to run a command with secrets from ${label}.`;
   const detail = [`Command: ${command}`, `In: ${cwd}`, script ? `Runs:\n${script}` : null, `Secrets (${environment}): ${names.join(", ")}`, "The thread won't see the values; they're shown as ‹NAME› in its output."].filter(Boolean).join("\n\n");
   const reason = `run "${command}" with ${names.join(", ")} (${label})`;
-  return { message, detail, reason };
+  return { message, detail, reason, view: { kind, command, cwd, script, names, environment, label } };
 }
 
 /**
@@ -162,19 +162,32 @@ function createSecretRun({ vault, ask, rules, spawn, env = process.env, now = Da
   };
 }
 
-// The approval: a dialog with the command and names, then Touch ID where the Mac has it.
-function runApproval({ dialog, systemPreferences, window }) {
-  return async ({ message, detail, reason }) => {
+// The approval: Weft's own window with the command and names (electron/approval-window.cjs), or macOS's
+// alert if that can't open, then Touch ID where the Mac has it. askWindow is optional in tests.
+function runApproval({ dialog, systemPreferences, window, askWindow = undefined }) {
+  const nativeAsk = async ({ message, detail }) => {
     const { response } = await dialog.showMessageBox(window(), { type: "warning", buttons: ["Cancel", "Allow once", "Always allow"], defaultId: 0, cancelId: 0, message, detail });
-    if (response === 0) return null;
+    return [null, "once", "always"][response] ?? null;
+  };
+  const choose = async (request) => {
+    if (!askWindow || !request.view) return nativeAsk(request);
+    try {
+      return await askWindow({ parent: window(), view: request.view, touchId: Boolean(systemPreferences.canPromptTouchID?.()) });
+    } catch {
+      return nativeAsk(request);
+    }
+  };
+  return async (request) => {
+    const choice = await choose(request);
+    if (!choice) return null;
     if (systemPreferences.canPromptTouchID?.()) {
       try {
-        await systemPreferences.promptTouchID(reason);
+        await systemPreferences.promptTouchID(request.reason);
       } catch {
         return null;
       }
     }
-    return response === 2 ? "always" : "once";
+    return choice;
   };
 }
 
@@ -198,11 +211,12 @@ function secretRunRoutes(get, active = () => undefined) {
 
 // Wires it into Electron main with the vault, the approval dialog and the sealed rules file.
 function setupSecretRun({ vault, dataDir, window }) {
-  const { dialog, safeStorage, systemPreferences } = require("electron");
+  const { BrowserWindow, dialog, safeStorage, systemPreferences } = require("electron");
+  const { askInWindow } = require("./approval-window.cjs");
   const { spawn } = require("node:child_process");
   const { createRunRules } = require("./run-rules.cjs");
   const rules = createRunRules({ file: path.join(dataDir, "vault", "run-rules.json"), safeStorage });
-  return createSecretRun({ vault, rules, spawn, ask: runApproval({ dialog, systemPreferences, window }) });
+  return createSecretRun({ vault, rules, spawn, ask: runApproval({ dialog, systemPreferences, window, askWindow: (opts) => askInWindow({ BrowserWindow, ...opts }) }) });
 }
 
 module.exports = { setupSecretRun, createSecretRun, runApproval, secretRunRoutes, describe, baseEnv, REPLY_CHARS, KEEP_CHARS, GRANT_MS, KILL_GRACE_MS };

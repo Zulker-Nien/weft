@@ -64,4 +64,14 @@ async function fixPath({ cacheFile = defaultCacheFile(), readShell = loginShellP
   await fresh;
 }
 
-module.exports = { fixPath };
+// Weft.app's own node, pnpm, npm, puku-cli and claude (scripts/bundle-toolchain.mjs) go at the END of PATH:
+// the Mac's own tools always win, and these fill in only what's missing on a fresh Mac. A later fixPath()
+// refresh puts the shell's PATH first and keeps this entry after it.
+function appendToolchain(binDir, { exists = fs.existsSync } = {}) {
+  if (!binDir || !exists(binDir)) return false;
+  const parts = (process.env.PATH || "").split(":").filter((part) => part && part !== binDir);
+  process.env.PATH = [...parts, binDir].join(":");
+  return true;
+}
+
+module.exports = { fixPath, appendToolchain };

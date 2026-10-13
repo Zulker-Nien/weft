@@ -1,6 +1,7 @@
 import type { ModelUsage, SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { publish } from "./bus";
 import { firstLine, shortToolName, summarizeInput, toolAction } from "./format";
+import { runsOn } from "./cli-defaults";
 import { changedLines, gitBranch } from "./git-stats";
 import { glanceAfterTurn } from "./glance";
 import { isNotLoggedInError, isRateLimitError } from "./login";
@@ -24,6 +25,9 @@ export function handle(id: string, session: Session, msg: SDKMessage): void | Pr
     case "system":
       if (msg.subtype === "init") {
         safeUpdate(id, { sessionId: msg.session_id });
+        const card = getCard(id);
+        const ran = card && runsOn(msg.model, card);
+        if (ran) updateStats(id, { runsOn: ran });
         void refreshLimits(id, session);
       }
       break;

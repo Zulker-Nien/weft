@@ -51,6 +51,16 @@ describe("store cards", () => {
     expect(store.updateCard("a", { title: "t2", column: "review" }).columnAt).toBe(moved);
   });
 
+  it("drops a card's symbol claims at Done and when it's archived", async () => {
+    const store = await load();
+    store.createCard(input(), "a");
+    store.createCard(input(), "b");
+    expect(store.updateCard("a", { claims: ["/x.ts#f"] }).claims).toEqual(["/x.ts#f"]);
+    expect(store.updateCard("a", { column: "done" }).claims).toBeUndefined();
+    store.updateCard("b", { claims: ["/x.ts#f"] });
+    expect(store.updateCard("b", { archived: true }).claims).toBeUndefined();
+  });
+
   it("updateCard throws for an unknown card", async () => {
     const store = await load();
     expect(() => store.updateCard("nope", {})).toThrow("No card nope");

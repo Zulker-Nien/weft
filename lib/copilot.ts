@@ -4,10 +4,11 @@ import { startSearchIndex } from "./search";
 import { boardDigest, lastSeen, rememberSeen, snapshot, withDigest } from "./copilot-digest";
 import { startHookListener } from "./github-hooks";
 import { startIssueSync } from "./github-issues";
-import { endSession, ensureSpare, sendUserMessage, warmUp } from "./runner";
+import { startPukuTrial } from "./puku-trial";
+import { endSession, ensureSpare, retryPukuWithTrial, sendUserMessage, warmUp } from "./runner";
 import { resumeInterrupted } from "./resume";
 import { startScheduler } from "./scheduler";
-import { listProjects } from "./settings";
+import { defaultPermissionMode, listProjects } from "./settings";
 import { clearThread, createCard, getCard, listCards, updateCard } from "./store";
 import { COPILOT_ID } from "./types";
 
@@ -20,7 +21,7 @@ export function ensureCopilot() {
         prompt: "",
         cwd: os.homedir(),
         backend: "claude",
-        permissionMode: "default",
+        permissionMode: defaultPermissionMode(),
         role: "copilot",
       },
       COPILOT_ID,
@@ -71,6 +72,8 @@ export function prewarm() {
   startIssueSync();
   // Hear webhook-relayed issue events within seconds, while you're signed in to Weft (lib/github-hooks.ts).
   startHookListener();
+  // Keep Weft's Puku trial token fresh, and give puku threads waiting on a login the trial when you sign in to Weft.
+  startPukuTrial(() => void retryPukuWithTrial());
   // Carry on the turns the last quit cut off (lib/resume.ts).
   resumeInterrupted();
   ensureCopilot();

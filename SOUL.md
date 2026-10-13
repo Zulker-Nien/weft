@@ -37,7 +37,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
     Pure logic already moved out: `lib/board-view.ts` (columns, project chips, chime/unseen rules) and
     `lib/turn.ts` (how a turn's result reads, cost, limits); Board's hooks into `lib/use-*.ts` (`use-now`,
     `use-toast`, `use-desktop-bridge`, `use-copilot-card`). Next: live events/chimes, view prefs, shortcuts, command palette.
-  - My Vitest suite (`npm test`, ~2,640 tests) covers every line of `lib/` and `app/api/` (98.6% of branches,
+  - My Vitest suite (`npm test`, ~3,130 tests) covers every line of `lib/` and `app/api/` (98.6% of branches,
     `npm run coverage`): a test file beside each module, routes with their libs mocked, the runner's SDK loop
     against a fake `query()` (`lib/runner.harness.ts`, shared by `lib/runner*.test.ts`), and browser code and React hooks under happy-dom +
     @testing-library/react (`// @vitest-environment happy-dom`). Component tests have started under jsdom
@@ -56,6 +56,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `electron/menus.cjs` + `electron/keep-working.cjs`: app menu, menu bar icon, dock; Keep Working (awake with the lid shut, until threads finish).
 - `electron/updater.cjs` + `scripts/release-feed.mjs` + `.github/workflows/release.yml`: updates from GitHub Releases (Squirrel.Mac's JSON
   feed, a download fallback when unsigned) and the tag-triggered signed release; `CHANGELOG.md` holds each version's notes (docs/architecture/updates.md).
+  `scripts/bundle-toolchain.mjs` stages what the app ships for a fresh Mac (node, npm, pnpm, puku-cli without telemetry, claude, all on
+  my own Electron), which `appendToolchain()` in `electron/env.cjs` puts at the end of PATH.
 - `electron/terminal.cjs` + `components/TerminalDrawer.tsx`: the terminal drawer (node-pty shell over IPC, xterm.js).
 - `lib/runner.ts`: one Agent SDK `query()` per thread, its public API (send, queue, stop, retry, login); behind it
   `lib/runner-state.ts` (sessions, shared maps, `hooks` back into runner.ts), `lib/runner-session.ts` (start and drive a CLI,
@@ -64,13 +66,28 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   session to before your last message (`lib/edit-last.ts`, `lib/rewind.ts`) and sends the edit.
 - `lib/env.ts` `guardedCli()`: every thread's CLI env and Bash guards: `lib/secret-guard.ts` (no .env reads),
   `lib/restart-guard.ts` (no restarting Weft mid-turns), `lib/git-guard.ts` (no `git stash`, `reset --hard`, path
-  checkout/restore or `clean -f` in the shared tree) (docs/architecture/thread-guards.md).
+  checkout/restore or `clean -f` in the shared tree), `lib/route-import-guard.ts` (refuses an edit that makes `app/**/page.tsx`,
+  a layout, a `route.ts` or middleware import a module that isn't there yet), `lib/claim-guard.ts` (symbol claims: asks before an edit to a top-level
+  symbol another busy card is editing; `lib/claims.ts`, parsed by `lib/symbols.ts`) (docs/architecture/thread-guards.md).
+  `cliEnv()` also drops secret-named and key-shaped variables from your shell's env (`lib/secret-detect.ts`); the control
+  server's token is a 0600 file, `~/.weft/shell-token` (`electron/shell-token.cjs`, read by `lib/shell-token.ts`), never an env var.
+- `scripts/check-staged.sh` + `scripts/secret-scan.mjs`: the pre-commit hook; gitleaks, or without it Weft's own key shapes on each added line.
+  The Composer flags a pasted or typed key the same way (`components/SecretPaste.tsx`).
 - `lib/schedule.ts` + `lib/scheduler.ts` + `components/SendLater.tsx`: "Send later" replies; the server sends them at their
   time, by default the next 5-hour reset.
+- `lib/shell.ts` + `lib/bang.ts` + `app/api/cards/[id]/shell`: `!` in a reply box runs a shell command in the card's folder; its
+  output shows in the thread (`ShellLine` in `components/ThreadItems.tsx`) and goes to Claude with your next message.
 - `lib/status.ts` + `lib/settings.ts`: the BOARD STATUS protocol (thread prompt and its parser).
+- `lib/subagents.ts` + `components/SubagentPicker.tsx`: when threads delegate to subagents and on which model (Settings → Use for subagents;
+  a fixed pick is forced through `CLAUDE_CODE_SUBAGENT_MODEL`).
+- `lib/puku-trial.ts` + `lib/puku-trial-token.ts` + `lib/puku-proxy.ts` + `app/api/puku/*`: the Puku trial; a puku thread with no Puku
+  login, while you're signed in to Weft, runs through the deployed Weft's proxy on Weft's own key (signed day-long token read by puku's
+  `apiKeyHelper` from `~/.weft/puku-trial-token`, per-account daily cap in `puku_trial_usage`; docs/architecture/puku-trial.md).
 - `lib/home.ts` + `lib/home-release.ts` + `components/home/*` + `app/home/page.tsx` + `app/opengraph-image.tsx` + `public/brand/board.png`: the weft.zip home
-  page, which `app/page.tsx` renders at `/` instead of the board when `isDeployed()` (`VERCEL` or `WEFT_HOME`); `home.css` is plain
-  prefixed CSS because `next.config.ts` sends every `.css` through the Tailwind loader, which drops CSS-module exports.
+  page, which `app/page.tsx` renders at `/` instead of the board when `isDeployed()` (`VERCEL` or `WEFT_HOME`); the home is loaded
+  through `loadHome()` (a cached dynamic import in `lib/home.ts`) so a parse error in it can't 500 the board route — the parse-error
+  companion to `lib/route-import-guard.ts`; `home.css` is plain prefixed CSS because `next.config.ts` sends every `.css` through the
+  Tailwind loader, which drops CSS-module exports.
 - `lib/review.ts`, `lib/devserver.ts`: `weft-review` tour blocks and the card's dev server.
 - `plugin/skills/*`: my own skills (`/weft:done`, `/weft:commit`, `/weft:preview`, `/weft:setup-done`,
   which installs tests, docs and strict lint on a project before `/done`; `/weft:done` also keeps this file current);
@@ -85,6 +102,9 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `lib/commit-pile.ts` + `app/api/pile` + `components/PileBadge.tsx`: the header's "+N/-N" uncommitted counter and the card it
   starts to commit that pile one Review card at a time; its page's Commit buttons are `weft://commit` links
   (`electron/page-links.cjs`) that `lib/pile-commit.ts` runs with no turn (commit by path, push, move to Done).
+- `lib/sprint-plan.ts` + `app/api/sprint` + `components/BacklogBadge.tsx`: the "☰ N" Backlog counter beside it and the card it starts,
+  a read-only planner that sizes each Backlog card, flags duplicates and finished ones, and groups the rest into sprints of cards
+  touching different files (no worktrees, so overlap is the constraint); starts a sprint's cards only on your OK.
 - `lib/card-pictures.ts`: a card's thumbnail (latest thread image, or a pane capture after each turn from `lib/glance.ts`) and its Haiku emoji tile; `lib/retitle.ts` renames a card with a placeholder title ("Image attachment") after its turn (`titleBy` marks a name Weft or you chose) and gives an untagged card 1 to 3 tags in the same Haiku call (`tagsBy`); `components/CardView.tsx` draws the card.
 - `lib/tags.ts` + `lib/tag-store.ts` + `app/api/tags` + `lib/rail-view.ts` + `components/LibraryRail.tsx` (`SideRail`) + `components/TagsDrawer.tsx` +
   `components/TagsDialog.tsx` + `components/CardMarks.tsx` + `components/StarButton.tsx`: ★ star (never auto-archived; the rail's ★ filters
@@ -109,6 +129,9 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   in the Keychain, link or create a project as `.vercel/project.json`, latest deploy; docs/architecture/vercel.md).
 - `electron/supabase.cjs` + `lib/supabase-view.ts` + `lib/use-supabase.ts` + `components/Supabase*.tsx`: the Supabase drawer (its bolt
   on the rail; token sealed in the Keychain, link a project as `supabase/.temp/project-ref`, state, unapplied migrations; docs/architecture/supabase.md).
+- `electron/cloudflare*.cjs` + `lib/cloudflare-view.ts` + `lib/use-cloudflare.ts` + `components/Cloudflare*.tsx`: the Cloudflare drawer (its orange
+  cloud on the rail; API token sealed in the Keychain, link a Worker or Pages project in `~/.weft/cloudflare-links.json`, best fit from the
+  folder's wrangler config; docs/architecture/cloudflare.md).
 - `electron/blastcp*.cjs` + `lib/blastcp-view.ts` + `lib/use-blastcp.ts` + `components/BlastcpDrawer.tsx`: the BlastCP drawer (its rocket logo on the rail, `components/BlastcpLogo.tsx`) (OAuth + PKCE
   sign-in sealed in the Keychain, reads through BlastCP's MCP tools, folder → property links in `~/.weft/blastcp-links.json`; docs/architecture/blastcp.md).
 - The board's native right-click menus (lib/card-menu.ts) are built and popped in `electron/main-menu-popup.cjs`:
@@ -199,6 +222,8 @@ in Electron main, revealed or copied only after the user's Touch ID (docs/archit
   everything from `2766738` on does.
 - The overlap warning (`lib/overlap.ts`) counts a card's edits for its whole life, committed or not, and
   shows shared files only in the reply box: the card's "+N here" tooltip and the New thread dialog don't name them.
+- Symbol claims (`lib/claim-guard.ts`) drop on Done, archive and the commit walk-through, not when a thread runs
+  `git commit` itself; those stay until the card reaches Done.
 - The copilot learns what finished or needs you only with your next message (`lib/copilot-digest.ts`);
   it never runs a turn on its own.
 - puku-cli sessions aren't imported; a full puku thread hasn't been verified end to end.

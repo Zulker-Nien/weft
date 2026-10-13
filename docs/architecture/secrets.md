@@ -65,8 +65,13 @@ secret get a conflict instead of one silently overwriting the other.
 - **Electron main process** holds the device private key, unwraps vault keys and decrypts. The board talks
   to it over IPC (`electron/preload.cjs`). Plaintext never goes through a Next API route.
 - **The Next server's environment reaches every agent**: `cliEnv()` (`lib/env.ts`) copies `process.env`
-  into each CLI. So no secret may live in the server's env, and any internal token between main and the
-  server must be stripped in `cliEnv()`.
+  into each CLI, minus Weft's own `THREADBOARD_SHELL_*` keys, anything named like a secret (`*_KEY`, `*_TOKEN`,
+  `*_SECRET`, `PASSWORD`, `*_DSN`, `DATABASE_URL`…) and any value shaped like a key (`lib/secret-detect.ts`).
+  `ANTHROPIC_*` and `PUKU_*` stay, since the CLIs sign in with them. A command that needs a value gets it
+  from the vault through `mcp__secrets__run`.
+- **The control server's token isn't in any env.** Main writes it to `~/.weft/shell-token` (0600, new each
+  launch, deleted on quit; `electron/shell-token.cjs`) and the server reads it from there (`lib/shell-token.ts`).
+  An env is readable by any process of yours (`ps eww`); the file sits behind the secret guard like a `.env`.
 - **Dev servers** (`lib/devserver.ts`) get the vault's development values in their env; agent shells don't.
 - **Vercel push** runs on your machine with your own Vercel token (Keychain). The ▲ drawer lines the vault's names up
   with the linked project's (on Vercel, vault only, Vercel only, per environment), and every push is its own Touch ID,
@@ -136,6 +141,21 @@ denied). A file watcher notices hand edits and offers "Import changes", so editi
   - The tools are trusted (`isTrustedTool`): Touch ID is the one yes, with no permission prompt before it.
   - Limits: a page's own script can still read a field it was given (that's what the field is for), so the https rule
     and the site in the Touch ID prompt are the guard against a thread filling a page it controls.
+- `mcp__secrets__ask_add(name, environment?, project?)` (built): a key the task needs that isn't in the vault yet. The
+  🔐 drawer opens on its plain Add form with the name and environment filled in and the cursor in the value, so the user
+  only pastes it. `fill_field` and `run` do the same when main reports a name missing (the first one, for `run`).
+  `lib/secret-ask.ts` posts `POST /secrets/ask-add`; `electron/main.cjs` sends the board an `add-secret` menu message,
+  `lib/vault-view.ts` `parseSecretAsk` checks it and `addSecret` (`lib/use-vault.ts`) hands it to the drawer, which
+  moves its project filter to that vault if needed. No value passes through it either way.
+- `mcp__secrets__add_blank(names[], hint?, environment?, project?)` (built): the default for a key a thread needs
+  but isn't blocked on. The thread calls this as soon as it knows the name (with a hint for where to get the
+  value), keeps going with what doesn't need the value, and the user fills the blanks in from 🔐 on the rail
+  when they're ready — a name already filled in keeps its value. Nothing opens; the value never comes back.
+  Posts `POST /secrets/add-blank` (`electron/main.cjs`); main calls `vault.addBlanks(folder, names, [env], { source, hint })`
+  (`electron/vault.cjs`). The drawer's `SecretRow` (`components/SecretRow.tsx`) shows a visible **Fill in** button on
+  every blank row with the hint under the name; blanks sort first within each environment, the rail's badge counts
+  them, and the plain Add form's button reads **Add blank / Add N blanks** with the same flow. Older shells without
+  `addBlank` keep the "type a value" form.
 - `mcp__secrets__run(command, names, environment?, cwd?, timeout_seconds?, project?)` (built): a command with vault
   values in its env, for a thread that never sees them. The motivating case: `DATABASE_URL` is in the vault and a thread
   runs `npm run job` or a migration.
@@ -182,15 +202,19 @@ denied). A file watcher notices hand edits and offers "Import changes", so editi
     `subprocess.run(…)`, Ruby/Perl backticks, or a variable set to the path when the code opens something).
   - Dumps: `printenv`, bare `env`/`export`/`set`, `ps e`, `console.log(process.env)`, `print(os.environ)`,
     `echo $SOME_KEY`, and `vercel env pull` to stdout.
-- Paste guard in the Composer: text that looks like a key (`sk_live_`, `ghp_`, high entropy) offers
-  "Save as secret instead".
+- Paste guard in the Composer (`components/SecretPaste.tsx`): a paste that looks like a key (`lib/secret-detect.ts`)
+  waits in a strip until you paste it anyway or drop it. A key that arrives any other way (typed, dictated,
+  dropped in) shows the same strip as the message changes, with Remove it and Keep it.
+- Commit scan: the pre-commit hook runs gitleaks, or without it `scripts/secret-scan.mjs`, which checks each
+  added line against the same key shapes (test files and `gitleaks:allow` lines skipped).
 
 Limit: an agent with unrestricted Bash can still print the env of a process it can reach, or write a script
-that opens the file itself. This is a strong default, not a sandbox. Known gaps after the audit:
-- The env strip removes only `THREADBOARD_SHELL_*`, so other secrets in your login shell's env reach threads.
-- `THREADBOARD_SHELL_TOKEN` sits in the Next server's env; `ps e` is blocked, but a script could still read it.
-- gitleaks is skipped in the pre-commit hook when it isn't installed; CI pins it but hasn't run yet.
-- The paste guard checks pastes only, not typed or dropped text.
+that opens the file itself (`~/.weft/shell-token` included). This is a strong default, not a sandbox. Known gaps
+(rechecked 2026-10-12):
+- The env strip goes by names and known key shapes; a secret under a plain name (`MY_APP_CONFIG`) with an
+  unusual shape still reaches threads.
+- Without gitleaks the commit scan knows only the key shapes in `lib/secret-detect.ts`. CI pins gitleaks but
+  hasn't run yet.
 
 ## Already exposed today
 

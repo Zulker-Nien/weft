@@ -3,6 +3,7 @@ import { z } from "zod";
 import { attempt, shell, text } from "./browser-tools";
 import { asText } from "./format";
 import { globalSingleton } from "./global-singleton";
+import { askToAdd, missingText } from "./secret-ask";
 import { checkCommand, checkNames, packageScript, resolveCwd } from "./secret-command";
 import { shellToken } from "./shell-token";
 
@@ -66,7 +67,6 @@ type RunReply = {
 function describeRun(command: string, r: RunReply): { said: string; failed: boolean } {
   const vault = asText(r.label, "this");
   if (r.denied) return { said: `The user didn't approve running ${command} with secrets. Ask before trying again.`, failed: true };
-  if (r.missing?.length) return { said: `${r.missing.join(", ")} ${r.missing.length > 1 ? "have" : "has"} no value in the ${vault} vault. Ask the user to add ${r.missing.length > 1 ? "them" : "it"} with 🔐 on the left rail.`, failed: true };
   const how = r.timedOut ? "timed out and was stopped" : r.signal ? `was killed by ${r.signal}` : `exited with code ${r.exitCode}`;
   const secs = `${((r.ms ?? 0) / 1000).toFixed(1)}s`;
   const output = r.output?.trim() ? `${r.truncated ? "(earlier output cut)\n" : ""}${r.output.trimEnd()}` : "(no output)";
@@ -106,7 +106,13 @@ export function runTool(cardId: () => string | undefined, folder: () => string) 
           script: packageScript(argv, dir),
           timeoutMs,
         })) as RunReply;
-        if (!r.denied && !r.missing?.length) markInUse(key);
+        const missing = r.missing ?? [];
+        const [first] = missing;
+        if (first) {
+          const env = environment ?? "development";
+          return text(missingText(missing, env, asText(r.label, "this"), await askToAdd(root, first, env)), true);
+        }
+        if (!r.denied) markInUse(key);
         const { said, failed } = describeRun(command.trim(), r);
         return text(said, failed);
       }),

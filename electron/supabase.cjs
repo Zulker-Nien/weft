@@ -3,6 +3,7 @@
 // linked to. A link is `supabase/.temp/project-ref`, the file `supabase link` writes, so the Supabase CLI in a
 // thread (`supabase db push`, `supabase gen types`) works on the right project without asking. A folder whose
 // .mcp.json points the Supabase MCP server at a project counts as linked too. Like Vercel, it answers the board only.
+const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { gitRemote, mustBeFolder, repoOf } = require("./vercel-project.cjs");
@@ -11,6 +12,11 @@ const API = "https://api.supabase.com";
 const TOKEN_FILE = "supabase-token.json";
 // What Supabase takes as a project ref: 20 lowercase letters.
 const REF = /^[a-z]{20}$/;
+// A region code (ap-southeast-1) and an organization slug, as the Management API takes them.
+const REGION = /^[a-z]{2}-[a-z]+-\d$/;
+const ORG = /^[\w-]+$/;
+// Where a new project's database password goes in the vault: the variable the Supabase CLI reads.
+const PASSWORD = "SUPABASE_DB_PASSWORD";
 
 class SupabaseError extends Error {
   constructor(status, message) {
@@ -67,9 +73,17 @@ function projectRow(p, orgs) {
   return { ref: p.ref ?? p.id, name: p.name, org: org?.name ?? p.organization_slug ?? p.organization_id ?? null, region: p.region ?? null, status: p.status ?? "UNKNOWN", createdAt: Date.parse(p.created_at ?? "") || 0 };
 }
 
-function createSupabase({ dataDir, safeStorage, fetch: fetchImpl = globalThis.fetch, remote = gitRemote }) {
+// The vault name for a new project's password: SUPABASE_DB_PASSWORD, or with the project's name after it when
+// the folder's vault already keeps one (another project's, which a new one mustn't overwrite).
+async function passwordName(vault, folder, project) {
+  const { secrets } = await vault.names(folder);
+  if (!secrets.some((s) => s.name === PASSWORD && s.environment === "development" && !s.missing)) return PASSWORD;
+  return `${PASSWORD}_${project.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "NEW"}`;
+}
+
+function createSupabase({ dataDir, safeStorage, vault = null, fetch: fetchImpl = globalThis.fetch, remote = gitRemote, randomBytes = crypto.randomBytes }) {
   const tokenFile = path.join(dataDir, TOKEN_FILE);
-  let orgs = null; // [{ id, name }], cached for the session
+  let orgs = null; // [{ id, slug, name }], cached for the session
 
   function token() {
     if (!fs.existsSync(tokenFile)) return null;
@@ -77,9 +91,10 @@ function createSupabase({ dataDir, safeStorage, fetch: fetchImpl = globalThis.fe
     return safeStorage.decryptString(Buffer.from(saved.token, "base64"));
   }
 
-  async function call(pathname, { auth = token(), method = "GET" } = {}) {
+  async function call(pathname, { auth = token(), method = "GET", body } = {}) {
     if (!auth) throw new SupabaseError(401, "Add a Supabase access token first.");
-    const res = await fetchImpl(new URL(pathname, API), { method, headers: { Authorization: `Bearer ${auth}` } });
+    const headers = { Authorization: `Bearer ${auth}`, ...(body ? { "Content-Type": "application/json" } : {}) };
+    const res = await fetchImpl(new URL(pathname, API), { method, headers, ...(body ? { body: JSON.stringify(body) } : {}) });
     const data = await res.json().catch(() => ({}));
     if (res.status === 401 || res.status === 403) throw new SupabaseError(res.status, "Supabase turned the token down. Add a new one.");
     if (!res.ok) throw new SupabaseError(res.status, data?.message ?? `Supabase answered ${res.status}.`);
@@ -89,7 +104,7 @@ function createSupabase({ dataDir, safeStorage, fetch: fetchImpl = globalThis.fe
   async function organizations(auth) {
     if (!orgs || auth) {
       const list = await call("/v1/organizations", { auth });
-      orgs = (Array.isArray(list) ? list : []).map((o) => ({ id: o.id ?? o.slug, name: o.name ?? o.slug ?? o.id }));
+      orgs = (Array.isArray(list) ? list : []).map((o) => ({ id: o.id ?? o.slug, slug: o.slug ?? o.id, name: o.name ?? o.slug ?? o.id }));
     }
     return orgs;
   }
@@ -166,6 +181,34 @@ function createSupabase({ dataDir, safeStorage, fetch: fetchImpl = globalThis.fe
       return (Array.isArray(list) ? list : []).map((p) => projectRow(p, known)).sort((a, b) => b.createdAt - a.createdAt);
     },
 
+    // The organizations a new project can go in, for the picker's New project form.
+    async orgs() {
+      return (await organizations()).map((o) => ({ slug: o.slug, name: o.name }));
+    },
+
+    // Makes a Supabase project and links the folder to it. Its database password is made here and kept in the
+    // folder's 🔐 vault; it never reaches the board. The project is still starting when this returns.
+    async create(folder, { name, org, region }) {
+      mustBeFolder(folder);
+      const title = String(name ?? "").trim();
+      if (!title) throw new Error("Name the project.");
+      if (!ORG.test(org)) throw new Error("Pick an organization.");
+      if (!REGION.test(region)) throw new Error(`${region} isn't a Supabase region.`);
+      if (!vault) throw new Error("The 🔐 vault isn't running, so Weft has nowhere to keep the database password.");
+      const secret = await passwordName(vault, folder, title);
+      const password = randomBytes(24).toString("base64url");
+      const body = { name: title, organization_slug: org, db_pass: password, region_selection: { type: "specific", code: region } };
+      const project = await call("/v1/projects", { method: "POST", body });
+      const ref = project.ref ?? project.id;
+      if (REF.test(ref)) writeLink(folder, ref);
+      try {
+        await vault.setValue(folder, secret, "development", password);
+      } catch (err) {
+        throw new Error(`Made ${title} on Supabase, but the vault couldn't keep its database password (${err.message}). Reset it in the project's Database settings.`);
+      }
+      return { ref, name: project.name ?? title, secret };
+    },
+
     // Writes supabase/.temp/project-ref for the folder, after checking the project is really there.
     async link(folder, ref) {
       mustBeFolder(folder);
@@ -201,15 +244,18 @@ function registerSupabase(ipcMain, { supabase, isBoard }) {
   handle("supabase:set-token", (value) => supabase.setToken(String(value ?? "")));
   handle("supabase:forget-token", () => supabase.forgetToken());
   handle("supabase:projects", () => supabase.projects());
+  handle("supabase:orgs", () => supabase.orgs());
+  handle("supabase:create", (folder, opts) => supabase.create(String(folder), { name: String(opts?.name ?? ""), org: String(opts?.org ?? ""), region: String(opts?.region ?? "") }));
   handle("supabase:link", (folder, ref) => supabase.link(String(folder), String(ref)));
   handle("supabase:unlink", (folder) => supabase.unlink(String(folder)));
   handle("supabase:restore", (ref) => supabase.restore(String(ref)));
 }
 
-// Wires Supabase into Electron main for the board window (board() is its webContents).
-function setupSupabase({ ipcMain, dataDir, board }) {
+// Wires Supabase into Electron main for the board window (board() is its webContents). vault keeps a new
+// project's database password (electron/vault.cjs).
+function setupSupabase({ ipcMain, dataDir, board, vault }) {
   const { safeStorage } = require("electron");
-  const supabase = createSupabase({ dataDir, safeStorage });
+  const supabase = createSupabase({ dataDir, safeStorage, vault });
   registerSupabase(ipcMain, { supabase, isBoard: (sender) => Boolean(sender) && sender === board() });
   return supabase;
 }

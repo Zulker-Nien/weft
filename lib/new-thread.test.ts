@@ -10,10 +10,12 @@ import {
   headline,
   lastEffort,
   modelFor,
+  modelLabel,
   problemWith,
   remember,
   rememberPicks,
   remembered,
+  runningOn,
   startButton,
 } from "./new-thread";
 
@@ -66,10 +68,20 @@ describe("effort", () => {
     expect(EFFORTS.map((e) => e.id)).toContain("xhigh");
   });
 
-  it("only the Claude CLI takes one, and Default means none", () => {
+  it("picks the closest effort the backend takes, and empty / undefined mean default", () => {
+    // Claude takes everything.
     expect(effortFor("claude", "low")).toBe("low");
+    expect(effortFor("claude", "xhigh")).toBe("xhigh");
+    expect(effortFor("claude", "max")).toBe("max");
+    // Puku takes low/medium/high/max, drops xhigh to high.
+    expect(effortFor("puku", "low")).toBe("low");
+    expect(effortFor("puku", "high")).toBe("high");
+    expect(effortFor("puku", "max")).toBe("max");
+    expect(effortFor("puku", "xhigh")).toBe("high");
+    // "" / undefined pass through as undefined (use the model's own default).
     expect(effortFor("claude", "")).toBeUndefined();
-    expect(effortFor("puku", "low")).toBeUndefined();
+    expect(effortFor("puku", "")).toBeUndefined();
+    expect(effortFor("puku", undefined)).toBeUndefined();
   });
 });
 
@@ -108,5 +120,24 @@ describe("startButton", () => {
     expect(startButton({ mod: false, ctrl: false })).toEqual({ label: "Start now", key: "⌘" });
     expect(startButton({ mod: true, ctrl: false })).toEqual({ label: "Start & close", key: "⌘↵" });
     expect(startButton({ mod: false, ctrl: true })).toEqual({ label: "Start, keep open", key: "⌃↵" });
+  });
+});
+
+describe("modelLabel", () => {
+  it("names our models, and shortens any other id", () => {
+    expect(modelLabel("claude-fable-5-1")).toBe("Fable 5.1");
+    expect(modelLabel("claude-opus-5-5[1m]")).toBe("Opus 5.5");
+    expect(modelLabel("puku-ai-2.8")).toBe("Puku AI 2.8");
+    expect(modelLabel("claude-opus-4-1")).toBe("opus-4-1");
+    expect(modelLabel("opus")).toBe("opus");
+  });
+});
+
+describe("runningOn", () => {
+  it("prefers the card's own picks over what its CLI's init reported", () => {
+    const runsOn = { model: "claude-opus-5-5", effort: "xhigh" as const };
+    expect(runningOn({ stats: { runsOn } })).toEqual(runsOn);
+    expect(runningOn({ model: "claude-haiku-5-5", effort: "low", stats: { runsOn } })).toEqual({ model: "claude-haiku-5-5", effort: "low" });
+    expect(runningOn({})).toEqual({ model: undefined, effort: undefined });
   });
 });

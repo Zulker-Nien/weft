@@ -12,6 +12,7 @@ const ComposerMock = forwardRef<
   useImperativeHandle(ref, () => ({
     focus: () => box.current?.focus(),
     read: () => box.current?.value.trim() ?? "",
+    readText: () => box.current?.value.trim() ?? "",
     clear: () => {
       if (box.current) box.current.value = "";
     },

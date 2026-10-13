@@ -4,13 +4,15 @@ import { isDoneCommand, skillsForPrompt } from "./automations";
 import { lastSent } from "./edit-last";
 import { showStarter } from "./glance";
 import { isOpenElsewhere } from "./import";
-import { startLogin } from "./login";
+import { cancelLogin, noteTrial, startLogin } from "./login";
+import { fetchTrialToken, hasOwnPukuLogin, trialJustFetched } from "./puku-trial";
 import { sessionRewindPoint } from "./rewind";
 import { answerPermission, settle } from "./runner-ask";
 import { adoptSpare, currentSession, open } from "./runner-session";
+import { withShellContext } from "./shell";
 import { archiveAfter, CLI_NAMES, close, errorText, hooks, isBusy, loginWaiters, queued, safeUpdate, sessions, specFor } from "./runner-state";
 import { appendThread, foldThread, getCard, getThread, updateCard } from "./store";
-import type { Backend, Card, PermissionMode } from "./types";
+import type { Backend, Card, LoginTrial, PermissionMode } from "./types";
 
 // One Agent SDK query() per thread: what the board and the API call to send, stop, queue and answer.
 // The parts behind it: lib/runner-state.ts (sessions and the shared maps), lib/runner-session.ts (starting
@@ -77,7 +79,8 @@ function sessionFor(card: Card) {
 export function sendUserMessage(cardId: string, text: string, { cli = text } = {}) {
   const card = getCard(cardId);
   if (!card) throw new Error("No such card.");
-  sendMessage(cardId, text, { cli });
+  // What your "!" commands printed since your last message goes along with it (lib/shell.ts).
+  sendMessage(cardId, text, { cli: withShellContext(cardId, cli) });
   // /done files the card away when its turn ends, as a move to Done does.
   if (isDoneCommand(text)) archiveWhenIdle(cardId);
   const skills = skillsForPrompt(card, text);
@@ -204,11 +207,38 @@ function needLogin(cardId: string, backend: Backend, message: string) {
   const waiting = loginWaiters.get(backend) ?? new Set<string>();
   waiting.add(cardId);
   loginWaiters.set(backend, waiting);
+  if (backend === "puku" && !hasOwnPukuLogin()) void pukuTrialOrLogin(cardId, message);
+  else login(cardId, backend);
+}
+
+function login(cardId: string, backend: Backend, trial?: LoginTrial) {
   try {
     startLogin(backend, () => retryAfterLogin(backend));
+    if (trial) noteTrial(backend, trial);
   } catch (err) {
     safeUpdate(cardId, { error: errorText(err) });
   }
+}
+
+// A puku thread with no Puku login runs on Weft's Puku trial when it can (lib/puku-trial.ts); otherwise Puku's
+// own login opens, and its pop-up says why the trial didn't cover it.
+async function pukuTrialOrLogin(cardId: string, message: string) {
+  if (trialJustFetched()) {
+    login(cardId, "puku", { reason: "failed", message: `Weft's Puku trial didn't work for this thread: ${message}` });
+    return;
+  }
+  const result = await fetchTrialToken();
+  if (result.ok) retryAfterLogin("puku");
+  else login(cardId, "puku", { reason: result.reason, message: result.message });
+}
+
+// You signed in to your Weft account: puku threads waiting on a login run on the trial instead.
+export async function retryPukuWithTrial() {
+  if (!loginWaiters.get("puku")?.size || hasOwnPukuLogin()) return;
+  const result = await fetchTrialToken();
+  if (!result.ok) return;
+  cancelLogin("puku");
+  retryAfterLogin("puku");
 }
 
 // What the session and turn modules call back into (lib/runner-state.ts hooks), and the board tools' actions.

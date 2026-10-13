@@ -76,7 +76,7 @@ export function boardShortcuts(c: BoardShortcutContext): ShortcutDef[] {
       enabled: c.boardKeys,
       handler: () => c.setShowSettings(true),
     },
-    { id: "copilot", keys: ["c"], description: "Toggle the copilot", group: "General", enabled: c.boardKeys, handler: c.toggleCopilot },
+    { id: "copilot", keys: ["c"], description: "Open or close the copilot", group: "General", enabled: c.boardKeys, handler: c.toggleCopilot },
     { id: "browser", keys: ["b"], description: "Toggle the browser", group: "General", enabled: c.boardKeys, handler: c.toggleBrowser },
     { id: "terminal", keys: ["t"], description: "Toggle the terminal", group: "General", enabled: c.boardKeys, handler: c.toggleTerminal },
     {

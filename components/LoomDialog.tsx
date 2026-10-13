@@ -5,6 +5,7 @@ import type { GameState } from "@/lib/game-server";
 import { setupPrompt, type CheckDef, type ProjectReport } from "@/lib/project-badges";
 import { BadgesTab, ProjectsTab } from "./LoomBadges";
 import { Bar, Cloth, Radar } from "./LoomCharts";
+import LoomProfile from "./LoomProfile";
 import Modal from "./Modal";
 
 type Tab = "you" | "badges" | "projects" | "league";
@@ -36,15 +37,14 @@ function YouTab({ game }: { game: GameState }) {
     <div className="flex flex-col gap-4">
       <div className="flex gap-4">
         <div className="flex flex-1 flex-col gap-3">
-          <div>
-            <div className="text-[11px] uppercase tracking-wide text-muted">Builder card</div>
-            <div className="text-[18px] font-semibold text-ink">
-              {game.name} · <span className="text-warn">{game.className}</span>
-            </div>
-          </div>
+          <LoomProfile name={game.name} className={game.className} github={game.github} />
           <Bar value={game.xp - level.floor} max={level.next - level.floor} left={`Lv ${level.level} ${level.title}`} right={`${game.xp.toLocaleString()} / ${level.next.toLocaleString()} XP`} />
           <div className="grid grid-cols-3 gap-2">
-            <Stat label="Streak" value={`🔥 ${streak.current}`} sub={streak.atRisk ? "Ship something today" : `Best ${streak.best}`} />
+            <Stat
+              label="Wefting streak"
+              value={`🔥 ${streak.current} ${streak.current === 1 ? "day" : "days"}`}
+              sub={streak.atRisk ? "Ship something today" : `Straight · best ${streak.best}`}
+            />
             <Stat label="Freezes" value={`🧊 ${streak.freezes}`} sub="One per 7 days in a row" />
             <Stat label="Today" value={`${game.today.xp} XP`} sub={`${game.today.cards} started · ${game.today.done} shipped`} />
           </div>
@@ -107,7 +107,7 @@ function LeagueTab({ game }: { game: GameState }) {
   );
 }
 
-// "Your loom": the builder card, badges, each project's production-ready tree and the league ladder.
+// "Your loom": your wefter card (with your GitHub profile), badges, each project's production-ready tree and the league ladder.
 // Opens with the header chip's light state and measures your projects in the background.
 export default function LoomDialog({
   cwd,

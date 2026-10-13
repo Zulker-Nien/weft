@@ -27,6 +27,7 @@ function bridge(): { [K in keyof BlastcpBridge]: ReturnType<typeof vi.fn> } {
       ]),
     ),
     link: vi.fn(() => Promise.resolve({ linked: true, name: "Weft" })),
+    createProperty: vi.fn(() => Promise.resolve({ linked: true, name: "Weft Blog" })),
     unlink: vi.fn(() => Promise.resolve({ linked: false })),
   };
 }
@@ -161,15 +162,65 @@ describe("BlastcpDrawer", () => {
     expect(screen.queryByLabelText("Search BlastCP properties")).not.toBeInTheDocument();
   });
 
-  it("points to BlastCP when there are no properties, and cancels; a failed load closes the picker", async () => {
+  it("makes a new property from the search, in the workspace you pick, and links it", async () => {
+    const { b, notify } = setup(signedIn([folder("/dev/weft")]));
+    await userEvent.click(screen.getByText("Link…"));
+    await userEvent.type(await screen.findByLabelText("Search BlastCP properties"), "Weft Blog");
+    await userEvent.click(screen.getByText("+ New property “Weft Blog”"));
+    expect(screen.getByLabelText("New property name")).toHaveValue("Weft Blog");
+    await userEvent.selectOptions(screen.getByLabelText("Workspace"), "side");
+    await userEvent.click(screen.getByText("Create & link"));
+    expect(b.createProperty).toHaveBeenCalledWith("/dev/weft", "side", "Weft Blog");
+    await waitFor(() => expect(notify).toHaveBeenCalledWith("Made Weft Blog on BlastCP; weft now posts as it"));
+    // The next pick asks BlastCP again, so the new property is in the list.
+    await userEvent.click(screen.getByText("Link…"));
+    await waitFor(() => expect(b.workspaces).toHaveBeenCalledTimes(2));
+  });
+
+  it("names a new property after the folder, needs a name, and Back or Escape leaves the form", async () => {
+    const b = bridge();
+    b.workspaces.mockResolvedValueOnce([{ slug: "alex", name: "Alex", properties: [] }]);
+    setup(signedIn([folder("/dev/my-app")]), { b });
+    await userEvent.click(screen.getByText("Link…"));
+    expect(await screen.findByText("No properties yet.")).toBeInTheDocument();
+    await userEvent.click(screen.getByText("+ New property…"));
+    const name = screen.getByLabelText("New property name");
+    expect(name).toHaveValue("My App");
+    // One workspace: no choice to make.
+    expect(screen.queryByLabelText("Workspace")).not.toBeInTheDocument();
+    await userEvent.clear(name);
+    expect(screen.getByText("Create & link")).toBeDisabled();
+    await userEvent.type(name, "{Enter}");
+    expect(b.createProperty).not.toHaveBeenCalled();
+    await userEvent.type(name, "{Escape}");
+    await userEvent.click(screen.getByText("+ New property…"));
+    await userEvent.click(screen.getByText("Back"));
+    await userEvent.click(screen.getByText("+ New property…"));
+    await userEvent.type(screen.getByLabelText("New property name"), "{Enter}");
+    expect(b.createProperty).toHaveBeenCalledWith("/dev/my-app", "alex", "My App");
+  });
+
+  it("keeps the form open when BlastCP refuses the name", async () => {
+    const b = bridge();
+    b.createProperty.mockRejectedValueOnce(new Error('Workspace "alex" already has a property with the slug "weft".'));
+    const { notify } = setup(signedIn([folder("/dev/weft")]), { b });
+    await userEvent.click(screen.getByText("Link…"));
+    await userEvent.click(await screen.findByText("+ New property…"));
+    await userEvent.click(screen.getByText("Create & link"));
+    await waitFor(() => expect(String(notify.mock.calls[0]?.[0])).toContain("already has"));
+    expect(screen.getByLabelText("New property name")).toHaveValue("Weft");
+  });
+
+  it("points to BlastCP when there's no workspace, and cancels", async () => {
     const b = bridge();
     const { onOpenUrl } = setup(signedIn([folder("/dev/weft")]), { b });
     let answer: (v: unknown) => void = () => {};
     b.workspaces.mockReturnValueOnce(new Promise((ok) => (answer = ok)));
     await userEvent.click(screen.getByText("Link…"));
     expect(screen.getByText("Loading your BlastCP properties…")).toBeInTheDocument();
-    answer([{ slug: "alex", name: "Alex", properties: [] }]);
+    answer([]);
     await userEvent.click(await screen.findByText("Make one on BlastCP"));
+    expect(screen.queryByText(/New property/)).not.toBeInTheDocument();
     expect(onOpenUrl).toHaveBeenCalledWith("https://blastcp.com");
     await userEvent.click(screen.getByText("Cancel"));
     expect(screen.getByText("Link…")).toBeInTheDocument();

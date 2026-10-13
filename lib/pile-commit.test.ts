@@ -11,6 +11,7 @@ const busy = new Set<string>();
 vi.mock("./store", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./store")>()),
   getCard: (id: string) => cards.get(id),
+  listCards: () => [...cards.values()],
   updateCard: vi.fn((id: string, patch: Partial<Card>) => {
     const card = { ...cards.get(id)!, ...patch };
     cards.set(id, card);
@@ -122,6 +123,8 @@ describe("commitFromPage", () => {
     const { root, remote } = repo();
     cards.set("pile", card("pile", { cwd: root }));
     cards.set("c1", card("c1"));
+    const real = fs.realpathSync(root);
+    cards.set("c2", card("c2", { claims: [`${real}/a.ts#a`, `${real}/b.ts#b`] }));
     const result = await commitFromPage("pile", { message: "feat: a", paths: ["a.ts"], push: true, done: "c1", change: "1", label: "A" }, SCRIPT);
     expect(result).toEqual({ ok: true, change: "1", hash: git(root, "rev-parse", "--short", "HEAD"), pushed: true, done: true });
     expect(git(root, "log", "-1", "--format=%s")).toBe("feat: a");
@@ -130,6 +133,8 @@ describe("commitFromPage", () => {
     expect(git(root, "status", "--porcelain")).toBe("?? b.ts");
     expect(git(remote, "rev-parse", "--short", "main")).toBe(result.hash);
     expect(cards.get("c1")?.column).toBe("done");
+    // The committed file's claims drop; the uncommitted one's stay.
+    expect(cards.get("c2")?.claims).toEqual([`${real}/b.ts#b`]);
     expect(store.appendThread).toHaveBeenCalledWith("pile", expect.objectContaining({ kind: "tool", name: "Commit", isError: false, summary: `${result.hash} feat: a (1 file) · pushed · card moved to Done` }));
     expect(runner.sendUserMessage).not.toHaveBeenCalled();
   });

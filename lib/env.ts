@@ -1,7 +1,9 @@
 import type { Options } from "@anthropic-ai/claude-agent-sdk";
+import { claimHooks } from "./claim-guard";
 import { GIT_GUARD_MATCHER } from "./git-guard";
-import { IMPORT_GUARD_HOOKS } from "./import-check";
+import { IMPORT_GUARD_MATCHER } from "./import-check";
 import { restartGuardMatcher } from "./restart-guard";
+import { ROUTE_IMPORT_GUARD_MATCHER } from "./route-import-guard";
 import { findSecret } from "./secret-detect";
 import { SECRET_GUARD_MATCHER } from "./secret-guard";
 
@@ -48,7 +50,16 @@ export { RESTART_PROMPT } from "./restart-guard";
 // What a board thread's CLI is started with: that env, the hook that turns away reads of .env files and
 // environment dumps in every permission mode, the one that won't restart Weft while other cards' turns
 // run (otherTurns counts them), the one that won't stash, reset --hard or clean away other cards' uncommitted
-// work, and the one that reports an edit breaking an import.
-export function guardedCli(otherTurns: () => number): Pick<Options, "env" | "hooks"> {
-  return { env: cliEnv(), hooks: { PreToolUse: [SECRET_GUARD_MATCHER, restartGuardMatcher(otherTurns), GIT_GUARD_MATCHER], ...IMPORT_GUARD_HOOKS } };
+// work, the one that refuses an edit making a route file import a module that isn't there yet, the one that
+// reports an edit breaking an import, and symbol claims, which ask before an edit to what
+// another busy card is editing (cardId names the session's card, once it has one).
+export function guardedCli(otherTurns: () => number, cardId: () => string | undefined): Pick<Options, "env" | "hooks"> {
+  const claims = claimHooks(cardId);
+  return {
+    env: cliEnv(),
+    hooks: {
+      PreToolUse: [SECRET_GUARD_MATCHER, restartGuardMatcher(otherTurns), GIT_GUARD_MATCHER, ROUTE_IMPORT_GUARD_MATCHER, claims.pre],
+      PostToolUse: [IMPORT_GUARD_MATCHER, claims.post],
+    },
+  };
 }

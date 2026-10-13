@@ -16,13 +16,13 @@ const SECRET_FILE = /^(\.env([.*?[].*)?|\.envrc|\.dev\.vars)$/i;
 // Files that list names with placeholder values.
 const TEMPLATE = /\.(example|sample|template|dist|defaults)$/i;
 // Weft's own files in the data dir: the sign-in token, the device key, the vault (ciphertext, but
-// threads have no reason to read it), the sealed Vercel and Supabase tokens, and the control server's token.
-const DATA_SECRET = /^(account\.json|device-key\.json|vercel-token\.json|supabase-token\.json|shell-token|vault(\/.*)?)$/i;
+// threads have no reason to read it), the sealed Vercel, Supabase and Cloudflare tokens, and the control server's token.
+const DATA_SECRET = /^(account\.json|device-key\.json|vercel-token\.json|supabase-token\.json|cloudflare-token\.json|shell-token|vault(\/.*)?)$/i;
 // A process's environment, on Linux.
 const PROC_ENV = /^\/proc\/[^/]+\/environ$/;
 // What a glob like `.e*` or `account*` is tried against.
 const SECRET_NAMES = [".env", ".env.local", ".env.development.local", ".env.production", ".env.production.local", ".envrc", ".dev.vars"];
-const DATA_NAMES = ["account.json", "device-key.json", "vercel-token.json", "supabase-token.json", "shell-token", "vault"];
+const DATA_NAMES = ["account.json", "device-key.json", "vercel-token.json", "supabase-token.json", "cloudflare-token.json", "shell-token", "vault"];
 
 // A glob as a regex. As in the shell, a leading * or ? skips dotfiles unless dotGlob (ripgrep's globs don't).
 function globRegex(glob: string, dotGlob: boolean): RegExp {

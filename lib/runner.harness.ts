@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import type * as ChildProcess from "node:child_process";
 import { vi } from "vitest";
+import type { SubagentModel } from "./subagents";
 import type { Card, ThreadItem } from "./types";
 
 // Captured before any test fakes timers, so flush() always really waits.
@@ -84,10 +85,19 @@ export function harnessState() {
     threads: new Map<string, ThreadItem[]>(),
     queries: [] as FakeQuery[],
     keepAlive: 0,
+    subagentModel: "choose" as SubagentModel,
     openElsewhere: false,
     // sessionId → transcript file, as lib/import.ts finds them.
     sessionFiles: new Map<string, string>(),
     startLogin: [] as { backend: string; onDone?: () => void }[],
+    cancelLogin: [] as string[],
+    noteTrial: [] as { backend: string; trial: unknown }[],
+    // Weft's Puku trial (lib/puku-trial.ts), as the tests set it.
+    ownPukuLogin: false,
+    trialJustFetched: false,
+    trialResult: { ok: true } as { ok: true } | { ok: false; reason: string; message: string },
+    fetchedTrials: 0,
+    trialOptions: null as null | { env: Record<string, string>; settings: { apiKeyHelper: string } },
     skillsForPrompt: [] as string[],
     publish: [] as unknown[],
     execCalls: [] as string[][],
@@ -150,6 +160,7 @@ export const importMock = (h: Harness) => ({ isOpenElsewhere: () => h.openElsewh
 export const settingsMock = (h: Harness) => ({
   keepAliveMinutes: () => h.keepAlive,
   threadPrompt: () => "THREAD PROMPT",
+  subagentModel: () => h.subagentModel,
   defaultPermissionMode: () => "bypassPermissions",
   touchProject: () => {},
   automations: () => [],
@@ -163,6 +174,18 @@ export const loginMock = (h: Harness) => ({
     h.startLogin.push({ backend, onDone });
     return {};
   },
+  cancelLogin: (backend: string) => void h.cancelLogin.push(backend),
+  noteTrial: (backend: string, trial: unknown) => void h.noteTrial.push({ backend, trial }),
+});
+
+export const pukuTrialMock = (h: Harness) => ({
+  hasOwnPukuLogin: () => h.ownPukuLogin,
+  trialJustFetched: () => h.trialJustFetched,
+  fetchTrialToken: () => {
+    h.fetchedTrials++;
+    return Promise.resolve(h.trialResult);
+  },
+  trialOptions: () => h.trialOptions,
 });
 
 export function childProcessMock(h: Harness, actual: typeof ChildProcess) {
@@ -185,9 +208,17 @@ export function resetHarness(h: Harness) {
   h.threads.clear();
   h.queries.length = 0;
   h.keepAlive = 0;
+  h.subagentModel = "choose";
   h.openElsewhere = false;
   h.sessionFiles.clear();
   h.startLogin.length = 0;
+  h.cancelLogin.length = 0;
+  h.noteTrial.length = 0;
+  h.ownPukuLogin = false;
+  h.trialJustFetched = false;
+  h.trialResult = { ok: true };
+  h.fetchedTrials = 0;
+  h.trialOptions = null;
   h.skillsForPrompt = [];
   h.publish.length = 0;
   h.execCalls.length = 0;

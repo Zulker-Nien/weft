@@ -7,7 +7,7 @@ const path = require("node:path");
 
 const ENVIRONMENTS = ["development", "preview", "production"];
 
-/** @typedef {{ name: string, environment: string, ciphertext?: string, nonce?: string, keyVersion?: number, updatedAt: string, source?: string }} Entry */
+/** @typedef {{ name: string, environment: string, ciphertext?: string, nonce?: string, keyVersion?: number, updatedAt: string, source?: string, hint?: string }} Entry */
 /** @typedef {{ id: string, label: string, keyVersion: number, grants: { device: string, keyVersion: number, wrapped: string }[], secrets: Entry[] }} Vault */
 
 // Long enough values show their last 4 characters; shorter ones show nothing, since 4 of 8 is half of it.
@@ -69,7 +69,7 @@ function createVaultStore({ dir, device, sodium, now = Date.now }) {
       if (!vault) return [];
       return vault.secrets.map((s) => {
         const missing = !s.ciphertext;
-        return { name: s.name, environment: s.environment, missing, tail: missing ? "" : tailOf(valueOf(vault, s)), updatedAt: s.updatedAt, source: s.source };
+        return { name: s.name, environment: s.environment, missing, tail: missing ? "" : tailOf(valueOf(vault, s)), updatedAt: s.updatedAt, source: s.source, hint: s.hint };
       });
     },
 
@@ -81,15 +81,19 @@ function createVaultStore({ dir, device, sodium, now = Date.now }) {
       return entry?.ciphertext ? valueOf(vault, entry) : undefined;
     },
 
-    // Writes several at once. A null value marks the name missing, unless it already has one.
+    // Writes several at once. A null value marks the name missing (a blank), unless it already has one; a
+    // blank's hint says where to get its value, and a later hint replaces it. A value drops the hint.
     set(id, label, entries) {
       const vault = read(id) ?? create(id, label);
       const key = keyOf(vault);
-      for (const { name, environment, value, source } of entries) {
+      for (const { name, environment, value, source, hint } of entries) {
         if (!ENVIRONMENTS.includes(environment)) throw new Error(`Unknown environment: ${environment}`);
         const old = find(vault, name, environment);
-        if (value === null && old) continue;
-        const entry = { name, environment, updatedAt: new Date(now()).toISOString(), source };
+        if (value === null && old) {
+          if (hint && !old.ciphertext) old.hint = hint;
+          continue;
+        }
+        const entry = { name, environment, updatedAt: new Date(now()).toISOString(), source, ...(value === null && hint && { hint }) };
         if (value !== null) Object.assign(entry, sodium.encrypt(value, key, sodium.aad(id, name, environment, vault.keyVersion)), { keyVersion: vault.keyVersion });
         if (old) vault.secrets[vault.secrets.indexOf(old)] = entry;
         else vault.secrets.push(entry);

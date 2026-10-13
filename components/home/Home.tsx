@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { Fraunces, Instrument_Sans } from "next/font/google";
+import GoogleAnalytics from "@/components/GoogleAnalytics";
 import emblem from "@/electron/assets/emblem.png";
 import twinSuns from "@/electron/assets/splash-speeder.jpg";
 import { AIMHUGE, COFFEE, REPO, downloadLink } from "@/lib/home";
@@ -16,7 +17,9 @@ const instrument = Instrument_Sans({ subsets: ["latin"], variable: "--font-instr
 export default async function Home() {
   const download = downloadLink(await latestRelease());
   return (
-    <div className={`${fraunces.variable} ${instrument.variable} wz-root`}>
+    <>
+      <GoogleAnalytics />
+      <div className={`${fraunces.variable} ${instrument.variable} wz-root`}>
       <nav className="wz-wrap wz-nav">
         <span className="wz-brand">
           <Image src={emblem} alt="" width={28} height={28} className="wz-emblem" /> Weft
@@ -57,5 +60,6 @@ export default async function Home() {
         by <a href={AIMHUGE}>aimhuge.com</a> · Free and open source on <a href={REPO}>GitHub</a>
       </footer>
     </div>
+    </>
   );
 }

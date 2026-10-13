@@ -2,29 +2,33 @@
 
 import { useState } from "react";
 import { folderName } from "@/lib/format";
-import { NEW_PROJECT_URL, pickerList, type SupabaseFolder, type SupabaseProject } from "@/lib/supabase-view";
+import { defaultProjectName, defaultRegion, pickerList, type NewSupabaseProject, type SupabaseFolder, type SupabaseOrg, type SupabaseProject } from "@/lib/supabase-view";
+import { SMALL } from "./supabase-ui";
+import SupabaseNewProject from "./SupabaseNewProject";
 import { Note } from "./VaultParts";
 
-export const SMALL = "rounded px-1.5 py-0.5 text-[11px] text-muted hover:bg-sunken hover:text-ink disabled:opacity-40";
-export const external = (url: string) => window.threadboard?.openExternal(url);
-
 // The Supabase drawer's Link… picker (components/SupabaseDrawer.tsx): one of your Supabase projects, best fits
-// first, or a new one made on supabase.com.
+// first, or a new one made right here (components/SupabaseNewProject.tsx).
 export default function SupabasePicker({
   folder,
   projects,
+  orgs,
   busy,
   onPick,
+  onCreate,
   onCancel,
 }: {
   folder: SupabaseFolder;
   // null while main is still listing them.
   projects: SupabaseProject[] | null;
+  orgs: SupabaseOrg[] | null;
   busy: boolean;
   onPick: (p: SupabaseProject) => Promise<void>;
+  onCreate: (p: NewSupabaseProject) => Promise<void>;
   onCancel: () => void;
 }) {
   const [search, setSearch] = useState("");
+  const [creating, setCreating] = useState(false);
   const rows = projects ? pickerList(projects, folder, search).slice(0, 50) : [];
   return (
     <section className="mt-2 rounded-lg border border-accent/40 bg-card px-2 py-2" aria-label={`Link ${folderName(folder.folder)}`}>
@@ -34,13 +38,49 @@ export default function SupabasePicker({
           Cancel
         </button>
       </div>
-      <button
-        onClick={() => external(NEW_PROJECT_URL)}
-        className="mt-1.5 flex w-full items-center gap-1 rounded-md border border-dashed border-line-strong px-2 py-1 text-left text-[12px] text-accent hover:bg-accent-soft"
-        title="Make a project on supabase.com, then come back and link it"
-      >
-        <span aria-hidden>+</span> New project on supabase.com ↗
-      </button>
+      {creating ? (
+        <SupabaseNewProject
+          initialName={defaultProjectName(folder)}
+          initialRegion={defaultRegion(projects ?? [])}
+          orgs={orgs}
+          busy={busy}
+          onCreate={onCreate}
+          onBack={() => setCreating(false)}
+        />
+      ) : (
+        <button
+          onClick={() => setCreating(true)}
+          className="mt-1.5 flex w-full items-center gap-1 rounded-md border border-dashed border-line-strong px-2 py-1 text-left text-[12px] text-accent hover:bg-accent-soft"
+          title="Make a Supabase project for this folder and link it"
+        >
+          <span aria-hidden>+</span> New project
+        </button>
+      )}
+      {!creating && <Projects projects={projects} rows={rows} search={search} busy={busy} onSearch={setSearch} onPick={onPick} onCancel={onCancel} />}
+    </section>
+  );
+}
+
+// The search box and the list of projects to link.
+function Projects({
+  projects,
+  rows,
+  search,
+  busy,
+  onSearch: setSearch,
+  onPick,
+  onCancel,
+}: {
+  projects: SupabaseProject[] | null;
+  rows: ReturnType<typeof pickerList>;
+  search: string;
+  busy: boolean;
+  onSearch: (search: string) => void;
+  onPick: (p: SupabaseProject) => Promise<void>;
+  onCancel: () => void;
+}) {
+  return (
+    <>
       <input
         autoFocus
         value={search}
@@ -69,6 +109,6 @@ export default function SupabasePicker({
           </li>
         ))}
       </ul>
-    </section>
+    </>
   );
 }

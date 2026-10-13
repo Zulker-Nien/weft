@@ -1,0 +1,135 @@
+// Stages the tools Weft.app ships in Contents/Resources/toolchain, so a fresh Mac with no Node, pnpm,
+// Claude Code or puku can still build Next.js + Supabase projects (docs/architecture/updates.md, "Toolchain").
+// Run before electron-builder (npm run dist does):
+//   node scripts/bundle-toolchain.mjs [outDir]   (default: .toolchain-dist)
+// Layout:
+//   bin/    node npm npx pnpm pnpx puku-cli claude: wrappers that electron/main.cjs appends to the END of PATH,
+//           so a Mac's own node, pnpm or CLIs always win and these fill in only what's missing
+//   npm/    npm, pnpm/  pnpm (pinned, from the registry)
+//   puku/   @puku/puku-cli and its production deps, pruned (see prunePuku)
+// Every wrapper runs on Weft's own Electron as Node (ELECTRON_RUN_AS_NODE), through Weft Helper so macOS
+// shows no second Dock icon, the same way electron/server.cjs runs the Next server.
+import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+
+export const NPM_VERSION = "11.11.0";
+export const PNPM_VERSION = "10.33.0";
+export const PUKU_VERSION = "1.8.56";
+
+const ROOT = path.resolve(import.meta.dirname, "..");
+const out = path.resolve(ROOT, process.argv[2] || ".toolchain-dist");
+const bin = path.join(out, "bin");
+
+function run(command, args, cwd) {
+  execFileSync(command, args, { cwd, stdio: ["ignore", "inherit", "inherit"] });
+}
+
+// npm pack <spec> → <out>/<dir>, the package's own folder (npm ships its deps inside; pnpm is one bundled file).
+function unpack(spec, dir) {
+  const target = path.join(out, dir);
+  fs.mkdirSync(target, { recursive: true });
+  const tarball = execFileSync("npm", ["pack", spec, "--silent", "--pack-destination", out], { encoding: "utf8" }).trim().split("\n").pop();
+  run("tar", ["-xzf", path.join(out, tarball), "-C", target, "--strip-components=1"]);
+  fs.rmSync(path.join(out, tarball));
+  console.log(`Unpacked ${spec} into ${path.relative(ROOT, target)}`);
+}
+
+function installPuku() {
+  const app = path.join(out, "puku");
+  fs.mkdirSync(app, { recursive: true });
+  fs.writeFileSync(path.join(app, "package.json"), JSON.stringify({ private: true }) + "\n");
+  console.log(`Installing @puku/puku-cli@${PUKU_VERSION} into ${path.relative(ROOT, app)}`);
+  run("npm", ["install", `@puku/puku-cli@${PUKU_VERSION}`, "--omit=dev", "--no-audit", "--no-fund", "--no-package-lock"], app);
+  if (!fs.existsSync(path.join(app, "node_modules", "@puku", "puku-cli", "bin", "puku-cli"))) {
+    throw new Error("puku-cli's bin is missing after npm install");
+  }
+  prunePuku(path.join(app, "node_modules"));
+}
+
+// What this Mac never loads:
+// - ripgrep and sharp builds for other platforms;
+// - better-sqlite3: puku uses the built-in node:sqlite, and the prebuilt binding is for Node's ABI, not Electron's;
+// - telemetry: the OpenTelemetry exporters load only through import() when telemetry is on, and @sentry/node
+//   (static imports; it pulls in most of @opentelemetry) gets a no-op stand-in. Sentry.init() returns undefined,
+//   so puku sees error reporting as off. Together ~230 MB.
+function prunePuku(nodeModules) {
+  const pruned = [];
+  const prune = (dir) => {
+    if (!fs.existsSync(dir)) return;
+    fs.rmSync(dir, { recursive: true, force: true });
+    pruned.push(dir);
+  };
+  const ripgrep = path.join(nodeModules, "@puku", "puku-cli", "dist", "vendor", "ripgrep");
+  for (const name of fs.existsSync(ripgrep) ? fs.readdirSync(ripgrep) : []) {
+    if (name !== `${process.arch}-${process.platform}`) prune(path.join(ripgrep, name));
+  }
+  const img = path.join(nodeModules, "@img");
+  for (const name of fs.existsSync(img) ? fs.readdirSync(img) : []) {
+    if (name.startsWith("sharp-") && !name.includes(`${process.platform}-${process.arch}`)) prune(path.join(img, name));
+  }
+  for (const name of ["better-sqlite3", "@opentelemetry", "@sentry", "@sentry-internal", "@prisma", "require-in-the-middle", "import-in-the-middle"]) {
+    prune(path.join(nodeModules, name));
+  }
+  writeSentryStub(path.join(nodeModules, "@sentry", "node"));
+  console.log(`Pruned ${pruned.length} folders from puku (other platforms, unused native builds, telemetry)`);
+}
+
+function writeSentryStub(dir) {
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, "package.json"),
+    JSON.stringify({ name: "@sentry/node", version: "0.0.0-weft-stub", main: "index.cjs", exports: { import: "./index.mjs", require: "./index.cjs" } }, null, 2) + "\n",
+  );
+  fs.writeFileSync(
+    path.join(dir, "index.cjs"),
+    `// No-op @sentry/node, written by Weft's scripts/bundle-toolchain.mjs: Weft.app ships puku without telemetry.
+const span = new Proxy({}, { get: (_target, key) => (key === "then" ? undefined : () => span) });
+const done = () => Promise.resolve(true);
+const noop = () => {};
+module.exports = {
+  init: noop, addBreadcrumb: noop, captureException: noop, captureMessage: noop, setUser: noop, setTag: noop,
+  setContext: noop, flush: done, close: done, startSpan: (_options, callback) => callback(span),
+  startInactiveSpan: () => span, getActiveSpan: () => undefined,
+};
+`,
+  );
+  fs.writeFileSync(
+    path.join(dir, "index.mjs"),
+    `import stub from "./index.cjs";\nexport const { init, addBreadcrumb, captureException, captureMessage, setUser, setTag, setContext, flush, close, startSpan, startInactiveSpan, getActiveSpan } = stub;\nexport default stub;\n`,
+  );
+}
+
+// bin/<name>: CONTENTS is Weft.app/Contents (bin → toolchain → Resources → Contents).
+const PRELUDE = `#!/bin/sh
+# Written by Weft's scripts/bundle-toolchain.mjs.
+TOOLCHAIN="$(cd "$(dirname "$0")/.." && pwd)"
+CONTENTS="$(cd "$TOOLCHAIN/../.." && pwd)"
+`;
+const NODE = `NODE="$CONTENTS/Frameworks/Weft Helper.app/Contents/MacOS/Weft Helper"
+[ -x "$NODE" ] || NODE="$CONTENTS/MacOS/Weft"
+`;
+function writeWrapper(name, body) {
+  fs.writeFileSync(path.join(bin, name), PRELUDE + body, { mode: 0o755 });
+}
+function writeWrappers() {
+  fs.mkdirSync(bin, { recursive: true });
+  const onNode = (script) => `${NODE}ELECTRON_RUN_AS_NODE=1 exec "$NODE" ${script} "$@"\n`;
+  writeWrapper("node", onNode(""));
+  writeWrapper("npm", onNode(`"$TOOLCHAIN/npm/bin/npm-cli.js"`));
+  writeWrapper("npx", onNode(`"$TOOLCHAIN/npm/bin/npx-cli.js"`));
+  writeWrapper("pnpm", onNode(`"$TOOLCHAIN/pnpm/bin/pnpm.cjs"`));
+  writeWrapper("pnpx", onNode(`"$TOOLCHAIN/pnpm/bin/pnpm.cjs" dlx`));
+  writeWrapper("puku-cli", onNode(`"$TOOLCHAIN/puku/node_modules/@puku/puku-cli/bin/puku-cli"`));
+  // The Agent SDK's own Claude Code binary, which the Next server already ships for threads.
+  writeWrapper("claude", `exec "$CONTENTS/Resources/server/node_modules/@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/claude" "$@"\n`);
+}
+
+fs.rmSync(out, { recursive: true, force: true });
+fs.mkdirSync(out, { recursive: true });
+unpack(`npm@${NPM_VERSION}`, "npm");
+unpack(`pnpm@${PNPM_VERSION}`, "pnpm");
+installPuku();
+writeWrappers();
+const size = execFileSync("du", ["-sh", out], { encoding: "utf8" }).split("\t")[0];
+console.log(`Toolchain ready: ${path.relative(ROOT, out)} (${size}): ${fs.readdirSync(bin).join(", ")}`);

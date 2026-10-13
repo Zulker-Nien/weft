@@ -137,16 +137,16 @@ describe("sendMessage", () => {
 });
 
 describe("a turn's messages", () => {
-  it("saves the session id from init and the plan limits from the usage report", async () => {
-    addCard({ id: "c1" });
+  it("saves the session id, model and plan limits from init and the usage report", async () => {
+    addCard({ id: "c1", effort: "low" });
     runner.sendMessage("c1", "hi");
     await flush(1);
     lastQuery().usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET.mockResolvedValue({
       rate_limits: { five_hour: { utilization: 42, resets_at: null }, seven_day: null },
     });
-    lastQuery().emit(init("sess-9"));
+    lastQuery().emit({ ...init("sess-9"), model: "claude-fable-5-1" });
     await flush();
-    expect(card("c1").sessionId).toBe("sess-9");
+    expect(card("c1")).toMatchObject({ sessionId: "sess-9", stats: { runsOn: { model: "claude-fable-5-1", effort: "low" } } });
     expect(card("c1").stats?.fiveHour).toEqual({ used: 42, resetsAt: undefined });
   });
 
@@ -496,12 +496,13 @@ describe("spares", () => {
     runner.ensureSpare(cwd);
     await flush();
     const spare = lastQuery();
-    spare.emit(init("spare-sess"));
+    spare.emit({ ...init("spare-sess"), model: "claude-opus-5-5" });
     await flush();
 
-    addCard({ id: "c1", permissionMode: "bypassPermissions" });
+    addCard({ id: "c1", permissionMode: "bypassPermissions", effort: "high" });
     runner.sendMessage("c1", "go");
     expect(card("c1").sessionId).toBe("spare-sess");
+    expect(card("c1").stats?.runsOn).toEqual({ model: "claude-opus-5-5", effort: "high" });
     // The spare's init didn't ask for plan limits on the card's behalf.
     expect(spare.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET).not.toHaveBeenCalled();
     await flush();

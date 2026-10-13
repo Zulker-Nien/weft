@@ -9,13 +9,7 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 ## [Unreleased]
 
 ### Added
-- Vault → Vercel env push: the ▲ drawer lines each linked project's 🔐 secrets up with its Vercel variables per
-  environment and pushes one with **Push** (sensitive, Touch ID per push); threads can do it with
-  `mcp__secrets__push_to_vercel`.
-- GitHub on the left rail: its mark opens a drawer with the `gh` CLI's sign-in (or how to sign in) and, per project, its
-  repo, an **Issues → Backlog cards** switch, the last sync and **Sync now**.
-- Instant GitHub issue sync: **Instant, by webhook** in the GitHub drawer adds a repo webhook relayed by the deployed
-  Weft on Vercel (it checks GitHub's signature) and Weft's Supabase (Realtime), so cards follow issues within seconds.
+- Supabase drawer: each unapplied migration's name opens the card that wrote it (`migrationOwner` in `lib/supabase-view.ts`).
 - Email at weft.zip: Resend receives every mail to the domain and the deployed Weft forwards it to one inbox (`app/api/email/webhook`,
   `lib/email-forward.ts`; `npm run resend` sets up the Resend side through the vault; docs/architecture/email-forwarding.md).
 - Home page for weft.zip: the deployed Weft (Vercel) renders a landing page at `/` instead of the board (`components/home/`,
@@ -23,6 +17,41 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
   scene, a download button that reads the latest release feed (`lib/home-release.ts`) and a real screenshot of the board
   (`public/brand/board.png`).
   `app/opengraph-image.tsx` draws the shared-link picture on the twin suns scene.
+- The thread header's CLI chip names the model and effort the thread runs on ("Opus 5.5 · xhigh"), from its CLI's
+  init, with your Claude Code `effortLevel` when the card picked none; hover it for the full id.
+- Puku trial: puku threads work with no Puku account. Signed in to your Weft account, a puku-cli with no login of
+  its own runs on Weft's Puku key through the deployed Weft (`/api/puku/v1`, a streaming pass-through that checks a
+  signed day-long token, meters each account per day and answers 429 over 300 requests or 2M tokens); the key never
+  ships in the app. Signed out, Puku's login pop-up offers **Sign in to Weft**, and signing in runs the waiting
+  threads again (docs/architecture/puku-trial.md).
+- Weft.app ships its own toolchain, so a fresh Mac with no Node can build Next.js + Supabase projects: `node`, `npm`,
+  `npx`, `pnpm`, `pnpx`, `puku-cli` and `claude` in `Resources/toolchain/bin`, all on Weft's own Electron as Node and
+  appended to the end of PATH, so a Mac's own tools still win. puku-cli ships without its OpenTelemetry and Sentry
+  telemetry (426 → 196 MB) (`scripts/bundle-toolchain.mjs`).
+- Subagents: every thread's prompt says when to hand work to a subagent (broad searches, independent pieces in
+  parallel, test and lint runs, second-opinion reviews), and Settings → Use for subagents picks their model: let
+  the model choose (the default, with a short Haiku / Sonnet / Opus guide), Haiku, Sonnet, Opus, or the thread's
+  own. Changing it, or the thread prompt, now replaces idle CLIs so their next message uses it.
+- Symbol claims: a card claims the top-level function, component, class or type its thread edits (found with the
+  TypeScript parser; inside one over 150 lines, the statement holding the edit, like `Board/useEffect#3`), and when another busy card in the same folder goes to edit it, the thread asks: "Card ‘Fix
+  login’ is editing LoginForm in Login.tsx. Wait, or go ahead?" Claims drop at Done, on archive and on commit.
+- Vault → Vercel env push: the ▲ drawer lines each linked project's 🔐 secrets up with its Vercel variables per
+  environment and pushes one with **Push** (sensitive, Touch ID per push); threads can do it with
+  `mcp__secrets__push_to_vercel`.
+- A thread that needs a key the 🔐 vault doesn't hold opens the plain Add form with the name filled in
+  (`mcp__secrets__ask_add`, and `fill_field` or `run` on a missing name), so you only paste the value.
+- GitHub on the left rail: its mark opens a drawer with the `gh` CLI's sign-in (or how to sign in) and, per project, its
+  repo, an **Issues → Backlog cards** switch, the last sync and **Sync now**.
+- Instant GitHub issue sync: **Instant, by webhook** in the GitHub drawer adds a repo webhook relayed by the deployed
+  Weft on Vercel (it checks GitHub's signature) and Weft's Supabase (Realtime), so cards follow issues within seconds.
+- Cloudflare on the left rail: its cloud under Supabase's bolt opens a drawer that links a project to a Worker or Pages
+  project (token kept in the Keychain, best fit from the folder's wrangler config), with its address, latest deploy and
+  dashboard links.
+- The Supabase drawer makes projects: **+ New project** in Link… names it after the repo, asks the org (with more than one)
+  and region (where most of your projects are), creates it through the Management API and links the folder. Weft makes
+  the database password and keeps it in the folder's 🔐 vault as `SUPABASE_DB_PASSWORD`, never shown.
+- BlastCP's property picker can make a new property: **+ New property** names it after your search or the project, asks
+  which workspace when you have more than one, creates it on BlastCP (with its starter voice and playbooks) and links the project.
 - Your loom: the builder card is now your wefter card, "Wefter: name · class", with your GitHub profile (picture, @login,
   bio, location, company, site, followers, repos) from `gh api user`; the streak reads "Wefting streak, N days straight".
 - `!` in a reply box runs a shell command in the card's folder (`lib/shell.ts`), like Claude Code's bash mode: the box
@@ -76,7 +105,7 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 - The code quality badge scores Documentation too: a README, an agent guide, architecture docs, a CHANGELOG, source
   files that open with a comment saying what they're for, and no file paths in the docs that no longer exist.
 - The copilot shows as a card at the top of its column (✨ whole board), so you can see when it's running or needs you;
-  click it to open it in the same window as any card (with its own browser pane and New chat), or Allow, Deny and Stop right on the card.
+  click it to open it in the same window as any card (with its own browser pane and New chat), as does the top bar's ✨ Copilot button; Allow, Deny and Stop work right on the card.
 - The New thread page cycles through the speeder and the five backdrop scenes, a new one each time you open it.
 - Placeholder cards pulse in every column while the board loads, instead of empty columns and "0" counts.
 - ▶ on every idle card with a session sends "continue" into its thread, for a model that gave up too early; a card you
@@ -132,6 +161,8 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 - The Weft account's refresh token is sealed in the Keychain by Electron main instead of a plain `~/.weft/account.json`.
 
 ### Changed
+- Auto is now the fallback permission mode everywhere: cards a thread starts with no parent card, and a new copilot,
+  follow Settings → Default mode instead of `default`.
 - The ▲ Vercel, Supabase and BlastCP drawers open on their last status (kept in memory and localStorage across
   restarts) instead of "Asking Vercel…", refresh it quietly behind, and ask the service at most every 30s on
   focus. The three hooks share `lib/use-linked-status.ts`.
@@ -151,8 +182,19 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Removed
 - Builder card: the Thrift attribute (cost per shipped card) is gone; seven attributes remain.
+- The reply box's "Also running here: …" line: in a busy repo it always showed. The card's "+N here" chip and
+  the New thread dialog's line stay; symbol claims (on the roadmap) will warn at the moment two cards clash.
 
 ### Fixed
+- An edit that makes a route file (`app/**/page.tsx`, a layout, a `route.ts`, middleware) import a module that isn't
+  there yet is now refused before it lands, with the file to write first: one such import took the board and every
+  `/api` route down for ~5 minutes (`lib/route-import-guard.ts`, docs/bug-fixes/010).
+- A parse error in `components/home/Home.tsx` no longer 500s the board. The home is now loaded through
+  `loadHome()` in `lib/home.ts` (a cached dynamic import) from both `app/page.tsx` and `app/home/page.tsx`, so
+  `app/page.tsx` no longer static-imports a module it doesn't render in dev; `/home` shows a small fallback when
+  the home fails to load (`docs/bug-fixes/011`).
+- The packaged app no longer crashes at launch with "Cannot find module 'libsodium-wrappers'": the Electron bundle now
+  carries the main process's two packages, `libsodium-wrappers` (the 🔐 vault) and `node-pty` (the terminal drawer).
 - Threads, a card's dev server and `!` commands no longer inherit Weft's own `next dev` env (`NODE_ENV=development`,
   `PORT`, `__NEXT_*`, `NEXT_PRIVATE_*`, `NEXT_PUBLIC_*`, `TURBOPACK*`), so `next build` in another project prerenders
   again instead of failing on `/_global-error` (`lib/env.ts`).

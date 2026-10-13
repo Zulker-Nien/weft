@@ -25,7 +25,7 @@ const { createMenus } = require("./menus.cjs");
 const { createPageLinks } = require("./page-links.cjs");
 const { createPanePages } = require("./pane-pages.cjs");
 const { removeShellToken, writeShellToken } = require("./shell-token.cjs");
-const { fixPath } = require("./env.cjs");
+const { appendToolchain, fixPath } = require("./env.cjs");
 const { startServer } = require("./server.cjs");
 const { createStartupScreen } = require("./startup-screen.cjs");
 const { createStartupTimer } = require("./startup-timer.cjs");
@@ -78,6 +78,21 @@ const pane = createBrowserPane({
   routes: {
     // The Weft account's session, sealed by safeStorage; the server reads it here instead of a plain file.
     ...require("./account-store.cjs").accountRoutesFor(dataDir()),
+    // mcp__secrets__add_blank: names into the card's vault with no value yet, for the user to fill in later
+    // (lib/secret-ask.ts). The rail's 🔐 count goes up; nothing opens.
+    "POST /secrets/add-blank": ({ folder, names, environment, hint }) => {
+      if (!vault) throw new Error("The secrets vault isn't ready yet.");
+      const list = Array.isArray(names) ? names.map(String) : [];
+      return vault.addBlanks(String(folder), list, [String(environment || "development")], { source: "a thread", hint: hint ? String(hint).slice(0, 200) : undefined });
+    },
+    // mcp__secrets__ask_add, and a fill or run that found a key missing: the name goes in as a blank, then the
+    // 🔐 drawer opens on its Add form with the name filled in (lib/secret-ask.ts); the board checks the ask
+    // (lib/vault-view.ts parseSecretAsk).
+    "POST /secrets/ask-add": async ({ folder, name, environment }) => {
+      await vault?.addBlanks(String(folder), [String(name)], [String(environment || "development")], { source: "a thread" }).catch(() => null);
+      sendMenu("add-secret", JSON.stringify({ folder, name, environment }));
+      return { opened: true };
+    },
     // mcp__secrets__push_to_vercel: a vault value onto the card's linked Vercel project, after Touch ID.
     ...require("./vercel-env.cjs").envRoutes(() => vercelEnv),
     // mcp__board_view__*: threads see and drive the board itself, secrets redacted (electron/board-view.cjs).
@@ -161,6 +176,7 @@ let controlUrl;
 async function boot() {
   await startup.show("Finding your command-line tools…");
   await fixPath();
+  if (app.isPackaged) appendToolchain(path.join(process.resourcesPath, "toolchain", "bin"));
   timer.mark("path");
   await startup.show("Starting the board…");
   controlUrl ??= await pane.startControlServer();
@@ -407,9 +423,11 @@ secretRun = require("./secret-run.cjs").setupSecretRun({ vault, dataDir: dataDir
 // So does Vercel: its token is in the Keychain and its links are .vercel/project.json.
 vercelEnv = require("./vercel.cjs").setupVercel({ ipcMain, dataDir: dataDir(), board: () => appView?.webContents, vault }).env;
 // And Supabase: its token is in the Keychain and its links are supabase/.temp/project-ref.
-require("./supabase.cjs").setupSupabase({ ipcMain, dataDir: dataDir(), board: () => appView?.webContents });
+require("./supabase.cjs").setupSupabase({ ipcMain, dataDir: dataDir(), board: () => appView?.webContents, vault });
 // And BlastCP: its sign-in is in the Keychain too, and which property a folder posts as is in the data folder.
 require("./blastcp.cjs").setupBlastcp({ ipcMain, dataDir: dataDir(), board: () => appView?.webContents });
+// And Cloudflare: its token is in the Keychain and which Worker or Pages project a folder is is in the data folder.
+require("./cloudflare.cjs").setupCloudflare({ ipcMain, dataDir: dataDir(), board: () => appView?.webContents });
 // The board's first cards are on screen: save this launch's timing and tell the board if it ran slow.
 ipcMain.handle("startup:ready", () => timer.finish());
 ipcMain.on("badge:set",(_e, count) => menus.refreshWaiting(Number(count) || 0));

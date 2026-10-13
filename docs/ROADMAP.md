@@ -68,6 +68,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `Done` **Continue and retry from the card** — a ▶ in the footer of any idle card with a session sends "continue" (for a model that gave up too early); a stopped or failed card also gets **Restart**, its last message again in a fresh CLI (`lib/card-resume.ts`, `lib/restart.ts`). **▶ Resume N** in the Review header carries on every turn there that a restart cut off or that failed (`lib/resume-actions.ts`).
 - `Now` **Edit your last message** — ↑ in an empty reply box brings it back; Enter stops a running turn, rewinds the conversation to before the message (`resumeSessionAt`), folds the old turn into an "Edited" line, and sends the new text. Files stay as the turn left them. Claude board threads only; others send the edit as a new message. Still open: editing an older message, and undoing that turn's file edits (`rewindFiles`).
 - `P2` **Auto-title** — name a card from its first exchange when you left the title blank, instead of the first 60 characters of the prompt.
+- `Now` **`!` shell commands** — a reply starting with `!` runs in the card's folder (`lib/shell.ts`, `POST /api/cards/:id/shell`), shows in the thread, and its output goes to Claude with your next message as `<bash-input>`/`<bash-stdout>`, as Claude Code's bash mode does. Still open: streaming output while it runs, stopping one early, ↑ history of past commands, and aliases (it runs `$SHELL -c`, not an interactive shell).
 - `P2` **Slash commands and skills in the reply box** — list the CLI's slash commands and skills available in the card's folder.
 - `P2` **File mentions** — `@` autocompletes file paths from the card's folder in prompts and replies.
 - `P2` **Context meter and compact** — show how full the thread's context is and offer `/compact` before it runs out mid-task.
@@ -84,7 +85,9 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `P1` **Branch per card** — a branch named from the card title (`tb/fix-login-redirect`), shown on the card.
 - `P1` **Diff view in Review** — the files and hunks a card changed since it started, in the thread panel.
 - `P1` **Commit, push, and open a PR** — buttons that commit the card's work, push its branch, and open a PR with `gh`; the PR link is saved on the card.
-- `Done` **Busy-folder warning** — a card shows an amber "+N here" on its folder line while another card is busy in the same folder, and the reply box says "Also running here: …" (`lib/overlap.ts`). It doesn't look at uncommitted changes.
+- `Done` **Busy-folder warning** — a card shows an amber "+N here" on its folder line while another card is busy in the same folder, and the New thread dialog says "Also running here: …" (`lib/overlap.ts`). It doesn't look at uncommitted changes. The reply box's always-on line was dropped (in a busy repo it always showed); symbol claims below warn at the actual clash instead.
+- `Done` **Symbol claims** — a card claims the top-level function, component or class it edits (`Board.tsx#CommandPalette`, found from the Edit's `old_string` with the TypeScript parser; a symbol over 150 lines splits into the statement holding the edit, `Board.tsx#Board/useEffect#3`; `card.claims`, last 50); when another busy card goes to edit a claimed symbol, a PreToolUse hook asks the user to wait or go ahead (`lib/claim-guard.ts`). Imports are never claimed; Write, NotebookEdit, non-TS files and edits spanning more than five symbols claim the whole file. Claims drop at Done, on archive, and when the commit walk-through commits the file. A thread's own `git commit` doesn't drop them yet.
+- `P1` **Per-card hunk commits** — the commit pile stages only a card's own hunks in a file two cards share (`git apply --cached`), so symbol claims don't fold two cards into one commit. Builds on symbol claims.
 - `Done` **File overlap warning** — each card keeps the files its thread edited (Edit, Write, MultiEdit, NotebookEdit; `card.touchedFiles`, last 50), and when busy cards in one folder edited the same files the warning says so: "Also running here: Fix login — both edited a.ts" (`lib/overlap.ts`). It counts edits for the card's whole life, committed or not.
 - `P2` **Worktree setup command** — a per-project command run in each fresh worktree (`npm install`, copy `.env.local`) before the thread starts.
 - `P2` **Comment on the diff** — comments on diff lines go back to the thread as a reply, like a code review.
@@ -100,6 +103,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 
 - `Now` **CLI auto-login pop-up** — when Claude Code or puku-cli is logged out, run its login, show the output and login link in a pop-up, then let the card continue.
 - `P1` **Model and effort per card** — pick the model and thinking effort when creating a card, and change them mid-thread.
+- `Now` **Puku trial** — puku threads with no Puku account: signed in to Weft, a day-long trial token and puku-cli's `apiKeyHelper` route them through the deployed Weft's proxy (`/api/puku/v1`) to Puku on Weft's own key, metered per account per day in `puku_trial_usage` with a 429 over the cap (docs/architecture/puku-trial.md). Still open: secrets on Vercel, the migration and a deploy; a global cap across accounts; a usage readout in Settings.
 - `P1` **Finish puku-cli support** — run a full puku thread end to end, fix any SDK differences, and add it to the smoke test (it has only connected so far).
 - `P1` **Login shell environment** — read PATH and env from the user's login shell at startup, so an app opened from the Dock finds `puku-cli`, `node`, `gh`, and project tools.
 - `P2` **Per-project defaults** — default CLI, model, permission mode, and extra instructions per project folder.
@@ -137,6 +141,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `Now` **Card pages survive a restart** — each card's last page is saved to `~/.weft/pages/` (temp pages copied) and comes back when you open the card (`electron/pane-pages.cjs`).
 - `P2` **Page history and cloud sync** — every page a card showed as a timeline, synced to Supabase (Postgres `card_pages` + Storage, R2 later if egress costs), with share links.
 - `Now` **Page zoom** — a % button in the pane's toolbar (steps, presets, Actual Size), ⌘+/−/0 and ⌘+scroll on the page in Chrome's steps, and pinch to magnify (`electron/browser-pane.cjs`).
+- `Now` **Board view for threads** — `mcp__board_view__*` screenshots, clicks, hovers, types into and reads Weft's own board window, so a thread that changes a drawer or dialog checks it in the real app; fixed operations only, secret values redacted (`electron/board-view.cjs`, docs/architecture/board-view.md).
 - `P2` **Fit to pane** — one click to fit a large image or a fixed-width page to the pane's width.
 - `P2` **Glance switch and model** — a Settings toggle for the update page, and a choice of model.
 - `P1` **Browser tab per card** — each card drives its own tab, and the pane shows the selected card's tab; today one page is shared by all cards.
@@ -169,6 +174,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `Done` **Vault: add a secret by key** — Shift+`S` (also in the ⌘K palette and the `?` sheet) opens the 🔐 drawer on its Add form.
 - `Done` **Vault: threads fill fields** — `mcp__secrets__list` (names only) and `mcp__secrets__fill_field` (Touch ID per card and site, then main types the value into the pane, masked, read back as `‹NAME›`).
 - `Done` **Vault: values for commands** — `mcp__secrets__run`: approve the exact command and names (once or always), main runs it with no shell and the values in its env, output redacted to `‹NAME›`; dev servers get development values; a secrets-using card's stored tool results are redacted.
+- `Done` **Vault: threads ask for a missing key** — `mcp__secrets__ask_add`, and `fill_field` / `run` on a missing name, open the 🔐 drawer's plain Add form with the name filled in.
 - `P1` **Vault: values for API calls and requests** — a header or body value for an HTTP request a thread makes (Supabase Management API), and `mcp__secrets__request` (Needs you with a paste field).
 - `P2` **Vault: remembered approvals in the drawer** — list and remove the commands set to Always allow; patterns like `npm run job:*`.
 - `Done` **Vault: `.env.local` written back** — Weft writes the file from the vault with a `# Managed by Weft` header and watches it for hand edits.
@@ -247,6 +253,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `P2` **Weekly recap** — on Monday the browser pane opens "Your week in Weft": shipped, projects, streak, new badges.
 - `P2` **What you build** — Haiku tags each shipped card with a domain (Payments, AI agents, Decks) for the builder card.
 - `P2` **Audit clean** — an `npm audit` check (no high or critical) in the Security branch, run at most daily.
+- `Done` **GitHub profile on your wefter card** — the Loom's You tab shows your GitHub picture, @login, bio and stats through `gh api user` (`lib/github-profile.ts`).
 - `P3` **Public builder card** — your profile beside your name in a league, shareable as an image; find collaborators by class and stack.
 - `P3` **Weft Wrapped** — a year-in-review page and image.
 - `P3` **Efficiency and test-first badges** — ship under $1, a 95% cache hit week; a card that edited the test before the code.
@@ -275,13 +282,14 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `P2` **PR review comments back to the card** — new review comments on a card's PR show up as a reply draft on that card.
 - `P2` **Open in editor** — open a card's folder or worktree in VS Code, Cursor, or Zed, and jump to a file and line from a tool row.
 - ~~`P2` **Open in terminal** — open a terminal in the card's folder or worktree.~~ Shipped as the terminal drawer (Control-backtick as in VS Code, or `t`): a shell per folder that follows the open card or selected project, split side by side up to three (⌘\\).
-- `P2` **Packaged terminal** — bundle `node-pty` into the packaged app, and a way to close idle folders' shells.
+- `P2` **Packaged terminal** — `node-pty` ships in the packaged app's Electron bundle; still to come: a way to close idle folders' shells.
 - `P2` **Board CLI** — `weft add "fix the flaky test" --cwd .` to create cards from a terminal or script.
 - `P2` **Linear** — create cards from Linear issues and keep issue status in step with the card's column.
 - `P2` **Slack** — post Done and Needs-you summaries to a channel, and create cards from a slash command.
-- ~~`P2` **BlastCP queue on the rail**~~ Shipped as the BlastCP rocket on the rail: connect with OAuth, link a property per project, see its next posts, drafts and failures, open them in the pane. Next: draft a post from a card, and a rail badge for posts waiting on you.
+- ~~`P2` **BlastCP queue on the rail**~~ Shipped as the BlastCP rocket on the rail: connect with OAuth, link a property per project, see its next posts, drafts and failures, open them in the pane; the picker can also make a new property. Next: draft a post from a card, and a rail badge for posts waiting on you.
 - ~~`P2` **Link a Vercel project**~~ Shipped as ▲ on the rail: token in the Keychain, link an existing project or make a new one (with its GitHub repo connected), see the latest deploy. Next, in the same drawer: connect GitHub on an already-linked project, deploy and redeploy, and build and runtime logs. Built: push 🔐 vault values to Vercel environments, from the drawer or a thread (`mcp__secrets__push_to_vercel`), Touch ID per push.
-- ~~`P2` **Link a Supabase project**~~ Shipped as the bolt on the rail: token in the Keychain, link a project (or pick up `.mcp.json`'s), see its state, region, unapplied migrations, Restore a paused one. Next: push migrations from the drawer, copy the URL and keys into the 🔐 vault, add the Supabase MCP server for threads, create a project in place.
+- ~~`P2` **Link a Supabase project**~~ Shipped as the bolt on the rail: token in the Keychain, link a project (or pick up `.mcp.json`'s), see its state, region, unapplied migrations, Restore a paused one. Next: push migrations from the drawer, copy the URL and keys into the 🔐 vault, add the Supabase MCP server for threads. Create a project in place shipped too (+ New project in Link…, password into the vault).
+- ~~`P2` **Link a Cloudflare project**~~ Shipped as the orange cloud on the rail: API token in the Keychain, link a Worker or Pages project (best fit from the folder's wrangler config), see its address, latest deploy and where it deploys from. Next: write `account_id` for wrangler, push 🔐 vault values as Worker secrets, tail logs, zones and DNS.
 - `P2` **Vercel previews** — after a push, open the preview deployment in the card's browser tab and save the URL on the card.
 - `P3` **Sentry** — create a card from an error with its stack trace and a link back.
 - `P3` **Jira and GitLab** — the same issue and PR flows for teams on those tools.
@@ -290,6 +298,8 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 ## Settings and onboarding
 
 - `Now` **Settings dialog** — one place to edit the thread prompt, how long idle CLIs stay open, recent projects, and CLI login state.
+- `Now` **Subagents** — every thread is told when to delegate to subagents, and Settings → Use for subagents picks their model: let the model choose (with a Haiku / Sonnet / Opus guide), one fixed model, or the thread's own (`lib/subagents.ts`).
+- `P2` **Live subagent progress** — show what a running subagent is doing under its line in the thread; today its messages are dropped until it reports back (`lib/runner-turn.ts`).
 - `Now` **Weft account** — optional sign-in: a GitHub "Sign in" button in the top bar right of Copilot (your avatar once signed in, `components/AccountButton.tsx`), and Settings → Weft account with GitHub, Google or an email link, against the Weft prod Supabase project (`lib/account.ts`, `components/AccountSettings.tsx`). PKCE in the system browser, back to Weft on `weft://account-callback` (the loopback `/api/account/callback` in plain `next dev`); the session lives in `~/.weft/account.json` (0600). First real GitHub sign-in verified 2026-10-12: one user, one profile row. A `profiles` table with row-level security is filled on first sign-in (`supabase/migrations/`). Nothing uses the account yet: it's the base for page sync, share links and shared boards.
 - `P1` **First-run check** — on first launch, check for `claude` and `puku-cli`, their login state, and `git`, then pick a first project folder.
 - `P2` **Guided first card** — a starter card in a scratch folder that shows Running, Needs you, Review, and the browser pane in a couple of minutes.
@@ -302,6 +312,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 ## Packaging, updates and distribution
 
 - `P1` **Packaged macOS app** — a build pipeline that bundles the built Next output with Electron, so the app doesn't need the repo or `npm run desktop`.
+- `Done` **Batteries-included app** — Weft.app ships `node`, `npm`, `npx`, `pnpm`, `pnpx`, `puku-cli` (no telemetry) and `claude` on its own Electron, at the end of PATH, so a fresh Mac builds Next.js + Supabase projects with nothing else installed (`scripts/bundle-toolchain.mjs`, docs/architecture/updates.md). Next: maybe git and gh (the Puku trial is under Agents, models and CLIs).
 - `P1` **Signing and notarization** — sign and notarize the macOS build so it opens without Gatekeeper warnings. Wired up in `.github/workflows/release.yml` (Developer ID, hardened runtime, notarytool via an App Store Connect key); waiting on the certificate from Alex's individual Apple Developer membership.
 - `Done` **Auto-update** — a packaged Weft checks the latest GitHub release's `update.json` at launch and every 4 hours; a signed build downloads in the background and offers Restart to Update, an unsigned one offers the download (`electron/updater.cjs`, docs/architecture/updates.md). Next: show the release notes after the restart.
 - `Done` **Home page at weft.zip** — the deployed Weft (Vercel) renders a landing page at `/` instead of the board (`components/home/`, `lib/home.ts`; `/home` locally): one screen, on purpose: the emblem, the headline and one sentence over the twin suns scene, a real screenshot of the board (`public/brand/board.png`) and a download button that reads the latest release's `update.json` (`lib/home-release.ts`) and `app/opengraph-image.tsx` for shared links. Next: the weft.zip domain on the Vercel project; refresh the screenshot after big board changes.

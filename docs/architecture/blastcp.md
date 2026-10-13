@@ -10,10 +10,11 @@ Instagram, YouTube, email…); a property is one brand you post as, inside a wor
 | --- | --- | --- |
 | Sign-in | `electron/blastcp-oauth.cjs` | OAuth 2.1 + PKCE against blastcp.com, like an MCP client |
 | Main side | `electron/blastcp.cjs` | Keeps the token sealed, calls BlastCP's MCP tools, keeps the links; IPC to the board window only |
-| Bridge | `electron/preload.cjs` → `window.threadboard.blastcp` | `status`, `connect`, `forget`, `workspaces`, `link`, `unlink` |
+| Bridge | `electron/preload.cjs` → `window.threadboard.blastcp` | `status`, `connect`, `forget`, `workspaces`, `link`, `createProperty`, `unlink` |
 | View | `lib/blastcp-view.ts` | Types, the queue at a glance, the property picker's order, the rail hover text |
 | Hook | `lib/use-blastcp.ts` | Loads status only while the drawer is open (and on window focus, at most every 30s); opens on the cached last status (`lib/use-linked-status.ts`) |
-| Drawer | `components/BlastcpDrawer.tsx`, wired in `components/LibraryRail.tsx` | Connect, link a property, the queue |
+| Drawer | `components/BlastcpDrawer.tsx`, wired in `components/LibraryRail.tsx` | Connect, the queue |
+| Picker | `components/BlastcpPicker.tsx` | Link a property, or make a new one and link it |
 
 ## Connecting
 
@@ -51,6 +52,14 @@ tools a thread's BlastCP connector uses, so Weft needs nothing BlastCP doesn't a
 - `list_posts { org_slug, property_slug, limit: 100 }`: the property's newest posts. `queueOf()` turns them into
   what goes out next (scheduled or publishing, soonest first), drafts, posts waiting on a human approval, failures,
   and the last one published.
+
+## Making a property
+
+The picker's last row, **+ New property**, opens a small form: a name (your search, else the folder's name in words,
+`newPropertyName()`) and, when you're in more than one workspace, which one. **Create & link** calls BlastCP's
+`create_property { org_slug, name }` (BlastCP derives the slug and seeds a starter voice and playbooks), then writes
+the link from the slug it returns. A slug the workspace already has comes back as BlastCP's error and the form stays
+open to rename. A window or main from before this landed asks for a restart (`createProperty()` in `lib/blastcp-view.ts`).
 
 ## Links
 

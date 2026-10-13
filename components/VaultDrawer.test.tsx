@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { VaultBridge, VaultOverview, VaultSummary } from "@/lib/vault-view";
+import { addSecret } from "@/lib/use-vault";
 import "./test-utils";
 import VaultDrawer from "./VaultDrawer";
 
@@ -32,6 +33,7 @@ function bridge() {
     reveal: vi.fn(),
     copy: vi.fn(),
     set: vi.fn(() => Promise.resolve({ saved: true as const })),
+    addBlank: vi.fn(() => Promise.resolve({ label: "notes", filled: [] })),
     copyTo: vi.fn(() => Promise.resolve({ copied: true as const, label: "notes", replaced: false })),
     remove: vi.fn(),
     lock: vi.fn(() => Promise.resolve({ unlocked: false as const })),
@@ -80,24 +82,79 @@ describe("VaultDrawer", () => {
     const { b, reload } = setup("/dev/notes");
     expect(screen.getByText(/No secrets yet/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /Add/ }));
-    const add = screen.getByRole("button", { name: "Add to vault" });
     await userEvent.type(screen.getByLabelText("Name"), "1BAD");
     expect(screen.getByText(/not starting with a digit/)).toBeInTheDocument();
     await userEvent.clear(screen.getByLabelText("Name"));
     await userEvent.type(screen.getByLabelText("Name"), "OPENAI_KEY");
+    // No value typed: with the shell's addBlank, the button is "Add to N environments" but the action
+    // is still per-env, so we go through addBlank to put the name in without a value.
     const env = (name: string) => screen.getByRole("button", { name });
     expect(env("Development")).toHaveAttribute("aria-pressed", "true");
-    await userEvent.click(env("Development"));
     await userEvent.click(env("Production"));
-    expect(add).toBeDisabled();
     await userEvent.type(screen.getByLabelText("Value"), "sk-123");
+    const add = screen.getByRole("button", { name: "Add to 2 environments" });
     expect(screen.getByLabelText("Value")).toHaveAttribute("type", "password");
     await userEvent.click(screen.getByRole("button", { name: "Show value" }));
     expect(screen.getByLabelText("Value")).toHaveAttribute("type", "text");
     await userEvent.click(add);
+    expect(b.set).toHaveBeenCalledWith("/dev/notes", "OPENAI_KEY", "development", "sk-123");
     expect(b.set).toHaveBeenCalledWith("/dev/notes", "OPENAI_KEY", "production", "sk-123");
     await waitFor(() => expect(reload).toHaveBeenCalled());
     expect(screen.queryByLabelText("Value")).not.toBeInTheDocument();
+  });
+
+  it("saves an empty value as a blank when the shell supports it, and the button labels it as such", async () => {
+    const { b, reload } = setup("/dev/notes");
+    await userEvent.click(screen.getByRole("button", { name: /Add/ }));
+    // With no value, the button is "Add blank" instead of "Add to vault".
+    const blank = screen.getByRole("button", { name: "Add blank" });
+    expect(blank).toBeDisabled();
+    await userEvent.type(screen.getByLabelText("Name"), "STRIPE_WEBHOOK_SECRET");
+    expect(blank).not.toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Production" }));
+    expect(screen.getByRole("button", { name: "Add 2 blanks" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Add 2 blanks" }));
+    expect(b.addBlank).toHaveBeenCalledWith("/dev/notes", "STRIPE_WEBHOOK_SECRET", "development");
+    expect(b.addBlank).toHaveBeenCalledWith("/dev/notes", "STRIPE_WEBHOOK_SECRET", "production");
+    await waitFor(() => expect(reload).toHaveBeenCalled());
+    expect(b.set).not.toHaveBeenCalled();
+  });
+
+  it("shows a Fill in button on a blank row, with its hint in the tooltip and under the name", () => {
+    const blankOverview: VaultOverview = {
+      unlocked: false,
+      vaults: [
+        vault("github:o/web", "o/web", "/dev/web", {
+          secrets: [
+            { name: "STRIPE_SECRET_KEY", environment: "development", missing: true, tail: "", updatedAt: "", source: "a thread", hint: "Stripe dashboard → Developers → API keys" },
+            { name: "GITHUB_TOKEN", environment: "development", missing: true, tail: "", updatedAt: "" },
+          ],
+        }),
+      ],
+    };
+    const { b } = setup("/dev/web", undefined, blankOverview);
+    Object.assign(b, { addBlank: vi.fn() });
+    const stripe = screen.getByRole("button", { name: "Fill in STRIPE_SECRET_KEY" });
+    expect(stripe).toHaveAttribute("title", "Fill in STRIPE_SECRET_KEY: Stripe dashboard → Developers → API keys");
+    expect(screen.getByText("Stripe dashboard → Developers → API keys")).toBeInTheDocument();
+    const github = screen.getByRole("button", { name: "Fill in GITHUB_TOKEN" });
+    expect(github).toHaveAttribute("title", "Fill in GITHUB_TOKEN");
+    expect(screen.getByText("STRIPE_SECRET_KEY").title).toContain("added by a thread");
+  });
+
+  it("opens the plain Add form with a thread's key name filled in, in its project's vault", async () => {
+    const { b } = setup("/dev/notes");
+    act(() => addSecret(vi.fn(), { folder: "/dev/web", name: "SUPABASE_SECRET_KEY", environment: "preview" }));
+    // The filter moves to the asked project, and the cursor waits in the value.
+    expect(screen.getByRole("combobox", { name: "Filter by project" })).toHaveValue("/dev/web");
+    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("SUPABASE_SECRET_KEY");
+    expect(screen.getByRole("button", { name: "Preview" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Development" })).toHaveAttribute("aria-pressed", "false");
+    const value = screen.getByLabelText("Value");
+    expect(value).toHaveFocus();
+    await userEvent.type(value, "sb_secret_x");
+    await userEvent.click(screen.getByRole("button", { name: "Add to vault" }));
+    expect(b.set).toHaveBeenCalledWith("/dev/web", "SUPABASE_SECRET_KEY", "preview", "sb_secret_x");
   });
 
   it("adds one secret to several environments at once, and needs at least one", async () => {

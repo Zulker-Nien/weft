@@ -24,11 +24,11 @@
     "test": "vitest run",
     "prepare": "git config core.hooksPath .githooks || true",
     "app": "THREADBOARD_DIST=.next-app next build && THREADBOARD_DIST=.next-app THREADBOARD_PROD=1 electron .",
-    "dist": "THREADBOARD_DIST=.next-dist THREADBOARD_STANDALONE=1 next build && node scripts/prepare-standalone.mjs .next-dist && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --dir",
-    "dist:release": "THREADBOARD_DIST=.next-dist THREADBOARD_STANDALONE=1 next build && node scripts/prepare-standalone.mjs .next-dist && electron-builder --mac --publish never",
-    "resend": "node scripts/resend-domain.mjs",
+    "dist": "THREADBOARD_DIST=.next-dist THREADBOARD_STANDALONE=1 next build && node scripts/prepare-standalone.mjs .next-dist && node scripts/bundle-toolchain.mjs && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --dir",
+    "dist:release": "THREADBOARD_DIST=.next-dist THREADBOARD_STANDALONE=1 next build && node scripts/prepare-standalone.mjs .next-dist && node scripts/bundle-toolchain.mjs && electron-builder --mac --publish never",
     "coverage": "vitest run --coverage",
-    "postinstall": "chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null || true; node scripts/patch-next-hmr.mjs"
+    "postinstall": "chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null || true; node scripts/patch-next-hmr.mjs",
+    "resend": "node scripts/resend-domain.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.293",
@@ -80,9 +80,17 @@
     "files": [
       "electron/**/*",
       "package.json",
-      "!node_modules${/*}"
+      "!node_modules${/*}",
+      "node_modules/libsodium/**/*",
+      "node_modules/libsodium-wrappers/**/*",
+      "node_modules/node-pty/package.json",
+      "node_modules/node-pty/lib/**/*",
+      "node_modules/node-pty/prebuilds/darwin-${arch}/**/*"
     ],
     "asar": true,
+    "asarUnpack": [
+      "node_modules/node-pty/prebuilds/**/*"
+    ],
     "npmRebuild": false,
     "extraResources": [
       {
@@ -95,6 +103,13 @@
       {
         "from": ".next-dist/standalone/node_modules",
         "to": "server/node_modules",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": ".toolchain-dist",
+        "to": "toolchain",
         "filter": [
           "**/*"
         ]

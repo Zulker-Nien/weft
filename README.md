@@ -56,6 +56,10 @@ same time; Next.js allows one dev server per project folder.
   from Alfred, Raycast, or Shortcuts. (Registered by the packaged app.)
 - The window remembers its size and position, and the app reads your login shell's PATH, so it
   finds `claude` and `puku-cli` even when started from Finder.
+- **Puku trial**: a puku thread works with no Puku account. While you're signed in to your Weft account and
+  puku-cli has no login of its own, Weft runs it on Weft's own Puku key through a proxy on the deployed Weft, with a
+  daily cap per account (300 requests, 2M tokens); Weft's key never ships in the app. Signed out, the login pop-up
+  offers **Sign in to Weft** or Puku's own login. See docs/architecture/puku-trial.md.
 - **Updates**: the packaged app checks GitHub Releases at launch and every few hours, downloads a new version in the
   background, and the Weft menu offers **Restart to Update** (it asks first if threads are running). Weft → Check for
   Updates… checks now. What changed is in [CHANGELOG.md](CHANGELOG.md); releasing is in docs/architecture/updates.md.
@@ -126,6 +130,12 @@ The new-thread dialog (⌘N) and every card's reply box use the same editor:
   text goes out. Files the replaced turn changed stay as they are (the box says how many), and Esc
   leaves everything as it was. Threads that can't rewind (picked-up sessions, puku-cli) send the
   edit as a new message instead, and say so before you press Enter.
+- **`!` runs a shell command.** Start a reply with `!` (`!git status`, `!npm test -- lib/x`) and the box
+  turns amber and Send becomes Run: Enter runs it in the card's folder, right away even mid-turn, and the
+  thread shows the command and its output. What it printed goes to Claude with your next message, as in
+  Claude Code's bash mode. It's for quick looks: no input, killed after 2 minutes, the last 20,000
+  characters kept, keys in the output masked, and commands that would show a secret (`cat .env`, `env`)
+  are refused; use the terminal (⌃\`) for those and for anything long-running. Not in the copilot.
 - In a reply, Enter sends and Shift+Enter starts a new line (Enter in a list or code block starts a
   new line too). In the new-thread dialog, Enter starts a new line, ⌘↵ starts the thread and closes the
   dialog, and ⌃↵ starts it and keeps the dialog open, emptied, for the next one. Hold ⌘ or ⌃ and the
@@ -179,17 +189,37 @@ archives every Done card on screen, and `Z` (or the toast's Undo) brings back th
 
 Cards get no git worktree of their own, on purpose, so two cards in one folder share a working tree.
 Weft warns you instead: a busy card shows "+1 here" next to its folder when another card is running
-or waiting in the same folder (or one inside it), and a thread's reply box says "Also running here:
-<title>" before you send. The New thread dialog says the same beside Start now when the folder you
-picked already has a busy card. When the busy cards there have edited the same files, the reply box
-names them too: "Also running here: Fix login — both edited a.ts". Each card remembers the files its
+or waiting in the same folder (or one inside it), and the New thread dialog says "Also running here:
+<title>" beside Start now when the folder you picked already has a busy card. Each card remembers the files its
 thread edited (the last 50, for the card's whole life, since Weft can't cheaply tell what got committed).
 It reads all this from the board alone, with no git calls.
+
+When two cards actually clash, Weft asks. Each card claims the top-level symbols its thread edits: the function,
+component, class, type or interface around an Edit's `old_string`, found with the TypeScript parser
+(`Board.tsx#CommandPalette`). A symbol over 150 lines is split: the claim is the statement inside it that holds
+the edit, and so on down (`Board.tsx#Board/moveFocus`, `Board/useEffect#3`, `Board/return/main`), since Board() alone is
+85% of its file. Imports are never claimed; a Write, a non-TS/JS file or an edit spanning more than five symbols
+claims the whole file. When another busy card in the same tree goes to edit a claimed symbol, its thread
+stops on a permission prompt: "Card ‘Fix login’ is editing LoginForm in Login.tsx. Wait, or go ahead?" A card's
+claims drop when it reaches Done or is archived, and a file's when the commit walk-through commits it.
 
 Every thread runs inside Weft's own server, so restarting Weft cuts off every running turn. A thread
 can't do that behind your back: while other cards are running, a `kill`, `pkill`, `killall` or port-freeing
 aimed at Weft's server, app or port, or a second `npm run dev` in Weft's folder, is turned away with how
 many turns it would cut off, and the thread asks you instead. Its own project's dev server is fair game.
+
+## Subagents
+
+Every thread is told to hand work to subagents: broad searches across many files, independent pieces of a
+task (several at once), test and lint runs where only the failures matter, and a second-opinion review. That
+keeps their file dumps out of the thread's context. Settings → Use for subagents picks their model:
+
+- **Let the model choose** (the default): the thread picks per subagent, Haiku for searches and lookups,
+  Sonnet for most coding, Opus for hard reasoning where a mistake is costly.
+- **Haiku, Sonnet or Opus**, or **Same model as the thread**: every subagent runs on it (the CLI's
+  `CLAUDE_CODE_SUBAGENT_MODEL`, forced). Idle threads pick a change up on their next message.
+
+puku-cli threads get the advice to delegate but keep their own model names.
 
 ## No waiting for CLIs to start
 
@@ -313,7 +343,7 @@ sprint's cards can run side by side in one folder, clear of the cards already at
 browser pane with one column per sprint, and its buttons (Start this sprint, Move to sprint…, Merge, Split, Archive)
 answer the thread through `weft://reply` links. It starts a sprint's cards, or adds and archives cards, only when you say so.
 
-## Progress: streaks, badges and your builder card
+## Progress: streaks, badges and your wefter card
 
 Beside the code quality badge, **🔥 25 · Lv 15** is your streak and level (Settings > Show progress turns it
 off). Hover it for today's numbers; click it for **Your loom**:
@@ -324,7 +354,9 @@ off). Hover it for today's numbers; click it for **Your loom**:
 - **Streaks.** Any day you start, work on or ship a card counts. Every 7 days in a row earns a streak freeze
   (up to 2); a missed day spends one instead of ending the streak. The chip dims when you haven't done
   anything yet today.
-- **Your builder card.** Seven attributes worked out from what you build: Follow-through (cards that reach
+- **Your wefter card.** "Wefter: your name · your class", with your GitHub profile beside it when the `gh` CLI
+  is signed in: picture, @login, bio, location, company, site, followers and repos (`lib/github-profile.ts`,
+  `gh api user`, kept for 6 hours). Your streak reads as your wefting streak, so many days straight. Seven attributes worked out from what you build: Follow-through (cards that reach
   Done), Velocity, Range (projects and stacks), Rigor and Guard (the projects' testing, security and
   observability checks), Craft (the cards you wrapped up with `/done`, reviewed, documented and refactored) and Stamina. Your top
   two name your class, like "Roaming Shipper". Stack skills level up each technology (from `package.json`
@@ -428,6 +460,8 @@ four characters showing.
 - Revealing or copying a value asks for Touch ID (or a confirmation on a Mac without it). One Touch ID covers a few
   minutes of use, the drawer hides values again after 3 idle minutes, and a copied value leaves the clipboard
   after a minute.
+- **Threads ask for a key they need.** When a key isn't in the vault yet, the thread opens 🔐 on the plain Add form
+  with the name filled in (`mcp__secrets__ask_add`); you paste the value and click Add to vault.
 - **Threads fill fields for you without seeing the value.** A thread lists the vault's names
   (`mcp__secrets__list`), opens the page in the browser pane and calls `mcp__secrets__fill_field`: Touch ID asks
   "let a thread type GITHUB_CLIENT_SECRET (aimhuge/weft) into supabase.com", then the value goes into the field,
@@ -468,19 +502,33 @@ the Vercel dashboard. Its 🔐 line lines up the project's vault secrets with it
 Supabase's green bolt under ▲ links each board project to a Supabase project. Paste a personal access token from
 [supabase.com/dashboard/account/tokens](https://supabase.com/dashboard/account/tokens) once; Weft checks it with
 Supabase and keeps it in your Keychain, and threads never see it. **Link…** lists every project the token reaches,
-best name match first; Weft writes `supabase/.temp/project-ref` (and keeps `.temp` out of git), just as `supabase link`
+best name match first, and **+ New project** makes one right there (name, org, region; Weft makes the database password
+and keeps it in the project's 🔐 vault as `SUPABASE_DB_PASSWORD`); Weft writes `supabase/.temp/project-ref` (and keeps `.temp` out of git), just as `supabase link`
 does, so the Supabase CLI in any thread works on the right project. A folder whose `.mcp.json` already points the
 Supabase MCP server at a project shows up linked. A linked project shows its org, state (Healthy, Paused…; **Restore**
 wakes a paused one), region, API URL, which of the folder's `supabase/migrations` haven't been applied yet, and links
 to its auth users, logs, API keys, usage and dashboard. More in
 [docs/architecture/supabase.md](docs/architecture/supabase.md).
 
+## Cloudflare
+
+Cloudflare's orange cloud under Supabase's bolt links each board project to a Cloudflare Worker or Pages project. Paste
+an API token from [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens) once (the
+"Edit Cloudflare Workers" template covers it); Weft checks it with Cloudflare and keeps it in your Keychain, and threads
+never see it. **Link…** lists every Worker and Pages project across the accounts the token reaches, best fit first: the
+one the folder's `wrangler.toml` / `wrangler.json(c)` names, then the one built from its GitHub repo, then its name.
+Cloudflare has no link file of its own, so Weft keeps links in `~/.weft/cloudflare-links.json`. A linked project shows
+its account, address (custom domain, else `pages.dev` or `workers.dev`; click to open it in the browser pane), latest
+deploy (Ready, Building, Failed for Pages; Deployed and by what for Workers), where it deploys from, and links to its
+deploys, logs, settings, domains and dashboard. More in [docs/architecture/cloudflare.md](docs/architecture/cloudflare.md).
+
 ## BlastCP
 
 The BlastCP rocket under 🔐 and ▲ on the left rail shows what each board project has queued on [BlastCP](https://blastcp.com), the
 posting queue. **Connect BlastCP** opens BlastCP in your browser to sign in and approve Weft (OAuth with PKCE); Weft
 keeps the sign-in in your Keychain and threads never see it. **Link…** picks the property a project posts as, from
-every workspace you're in, best name match first. A linked project shows its next scheduled posts with their
+every workspace you're in, best name match first, or **+ New property** makes one on BlastCP (named after your
+search or the project, in the workspace you pick) and links it. A linked project shows its next scheduled posts with their
 platform and time, a line of drafts, posts to approve and failures, and when the last one went out; clicking any of
 them opens it in the browser pane. BlastCP sign-ins last 30 days, so the drawer warns in the last week and offers
 Reconnect. More in [docs/architecture/blastcp.md](docs/architecture/blastcp.md).
@@ -498,8 +546,8 @@ copilot opens as a pop-up at `/copilot`.
 
 The copilot also shows as a card at the top of whichever column it is in (Running, Needs you, Review),
 marked ✨ whole board instead of a folder. Click it to open it like any card, in the same window with its own
-browser pane beside it (New chat in place of star, archive and delete); the ✨ button and ⌃⌥Space still open the
-separate copilot window. Allow, Deny and Stop work from the card. A project filter keeps it; a search hides it. It can't be dragged or starred.
+browser pane beside it (New chat in place of star, archive and delete). The top bar's ✨ Copilot button, `c` and the
+command palette open it the same way; ⌃⌥Space and ⌘J still open the separate copilot window, which works with the board hidden. Allow, Deny and Stop work from the card. A project filter keeps it; a search hides it. It can't be dragged or starred.
 
 ## Terminal
 
@@ -611,7 +659,6 @@ Weft is released under the [Apache License 2.0](LICENSE).
 - Automated tests are thin: `npm test` runs a Vitest suite over `lib/` (status parser, review tour,
   API guard, automations, formatting, settings, store, board tools) and over the API routes, with the
   runner and store mocked, and over the runner's SDK loop with a fake `query()`. UI tests have only started: the card, the reply box and the new-thread dialog (`components/*.test.tsx`, jsdom + Testing Library); the board and thread view have none. CI runs lint, typecheck and tests; a pre-commit hook type-checks what's staged.
-- The terminal drawer runs in dev mode (`npm run desktop`) only: the packaged `.app` leaves
-  `node_modules` out of the Electron bundle, so `node-pty` isn't there to load.
+- The packaged app's terminal drawer (`node-pty` now ships in the Electron bundle) hasn't been tried on a fresh Mac yet.
 - No git worktree per card, on purpose: parallel cards in one repo share a working tree. Weft warns
   when they share a folder, but doesn't yet spot two threads editing the same files.

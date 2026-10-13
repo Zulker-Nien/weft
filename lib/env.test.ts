@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cliEnv, guardedCli } from "./env";
 import { GIT_GUARD_MATCHER } from "./git-guard";
-import { IMPORT_GUARD_HOOKS } from "./import-check";
+import { IMPORT_GUARD_MATCHER } from "./import-check";
+import { ROUTE_IMPORT_GUARD_MATCHER } from "./route-import-guard";
 import { SECRET_GUARD_MATCHER } from "./secret-guard";
 
 afterEach(() => {
@@ -113,21 +114,25 @@ describe("cliEnv", () => {
 });
 
 describe("guardedCli", () => {
-  it("starts a thread with the stripped env, the secret guard, the restart guard, the git guard and the import guard", () => {
+  it("starts a thread with the stripped env, the secret guard, the restart guard, the git guard, the route import guard, the import guard and symbol claims", () => {
     vi.stubEnv("THREADBOARD_SHELL_TOKEN", "secret");
-    const opts = guardedCli(() => 0);
+    const opts = guardedCli(() => 0, () => undefined);
     expect(opts.env).not.toHaveProperty("THREADBOARD_SHELL_TOKEN");
-    expect(opts.hooks?.PostToolUse).toEqual(IMPORT_GUARD_HOOKS.PostToolUse);
+    const post = opts.hooks?.PostToolUse ?? [];
+    expect(post[0]).toBe(IMPORT_GUARD_MATCHER);
+    expect(post[1]?.matcher).toBe("Edit|MultiEdit|Write|NotebookEdit");
     const pre = opts.hooks?.PreToolUse ?? [];
     expect(pre[0]).toBe(SECRET_GUARD_MATCHER);
     expect(pre[1]?.matcher).toBe("Bash");
     expect(pre[2]).toBe(GIT_GUARD_MATCHER);
+    expect(pre[3]).toBe(ROUTE_IMPORT_GUARD_MATCHER);
+    expect(pre[4]?.matcher).toBe("Edit|MultiEdit|Write|NotebookEdit");
   });
 
   it("counts other cards' turns with the function it's given", async () => {
     vi.stubEnv("PORT", "1000");
     const others = vi.fn(() => 2);
-    const hook = guardedCli(others).hooks?.PreToolUse?.[1]?.hooks[0];
+    const hook = guardedCli(others, () => undefined).hooks?.PreToolUse?.[1]?.hooks[0];
     const input = { hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "lsof -ti :1000 | xargs kill" }, cwd: "/tmp" };
     const out = await hook?.(input as never, undefined, { signal: new AbortController().signal });
     expect(others).toHaveBeenCalled();

@@ -12,9 +12,9 @@ import { createCard, getCard, listCards } from "@/lib/store";
 import { rememberTags } from "@/lib/tag-store";
 import { normalizeTags } from "@/lib/tags";
 import { MODES, type Backend, type Effort, type PermissionMode } from "@/lib/types";
+import { effortFor } from "@/lib/new-thread";
 
 const BACKENDS: Backend[] = ["claude", "puku"];
-const EFFORTS: Effort[] = ["low", "medium", "high", "xhigh", "max"];
 
 const MODEL_ID = /^[\w.\-\[\]]{1,60}$/;
 
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
 
     const model = typeof body.model === "string" && MODEL_ID.test(body.model) ? body.model : undefined;
 
-    const effort = backend === "claude" && EFFORTS.includes(body.effort as Effort) ? (body.effort as Effort) : undefined;
+    const effort = effortFor(backend, body.effort as Effort | "");
 
     // Tags given here are yours, so retitle won't pick others (lib/retitle.ts); new ones join the catalog.
     const tags = Array.isArray(body.tags) ? normalizeTags(body.tags.map((t) => asText(t))) : [];

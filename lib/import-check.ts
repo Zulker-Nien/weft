@@ -1,4 +1,4 @@
-import type { HookCallback, HookCallbackMatcher, HookEvent } from "@anthropic-ai/claude-agent-sdk";
+import type { HookCallback, HookCallbackMatcher } from "@anthropic-ai/claude-agent-sdk";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -176,6 +176,5 @@ export const importGuard: HookCallback = (input) => {
   return Promise.resolve(problems.length ? { decision: "block", reason: importReport(problems) } : {});
 };
 
-export const IMPORT_GUARD_HOOKS: Partial<Record<HookEvent, HookCallbackMatcher[]>> = {
-  PostToolUse: [{ matcher: "Edit|MultiEdit|Write", hooks: [importGuard] }],
-};
+// For PostToolUse in every board thread (lib/env.ts guardedCli).
+export const IMPORT_GUARD_MATCHER: HookCallbackMatcher = { matcher: "Edit|MultiEdit|Write", hooks: [importGuard] };

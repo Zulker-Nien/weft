@@ -8,13 +8,15 @@ export type VaultEnvironment = "development" | "preview" | "production";
 export interface VaultSecret {
   name: string;
   environment: VaultEnvironment;
-  // Named by .env.example but with no value yet.
+  // A blank: the name with no value yet, put in by a thread (mcp__secrets__add_blank), .env.example or you.
   missing: boolean;
   // The value's last 4 characters, or "" when it's too short to show any.
   tail: string;
   updatedAt: string;
-  // The file it was imported from.
+  // The file it was imported from, or who added it as a blank ("a thread").
   source?: string;
+  // A blank's note on where to get its value, from the thread that added it.
+  hint?: string;
 }
 
 export interface VaultSummary {
@@ -79,6 +81,8 @@ export interface VaultBridge {
   reveal(id: string, name: string, environment: string): Promise<RevealResult>;
   copy(id: string, name: string, environment: string): Promise<{ copied: true } | { denied: true } | { missing: true }>;
   set(folder: string, name: string, environment: string, value: string): Promise<{ saved: true }>;
+  // Adds the name with no value yet. Missing in older shells.
+  addBlank?: (folder: string, name: string, environment: string) => Promise<{ label: string; filled: string[] }>;
   copyTo(id: string, name: string, environment: string, folder: string): Promise<{ copied: true; label: string; replaced: boolean } | { missing: true }>;
   remove(id: string, name: string, environment: string): Promise<{ removed: boolean }>;
   lock(): Promise<{ unlocked: false }>;
@@ -132,20 +136,35 @@ export const IDLE_LOCK_MS = 3 * 60_000;
 
 export const secretKey = (s: { name: string; environment: string }) => `${s.environment}\n${s.name}`;
 
-// Secrets by environment, in development / preview / production order, empty environments left out.
+// Secrets by environment, in development / preview / production order, empty environments left out. Blanks
+// come first in each, so the ones to fill in sit at the top.
 export function groupSecrets(secrets: VaultSecret[]) {
   return ENVIRONMENTS.map((env) => ({
     ...env,
-    secrets: secrets.filter((s) => s.environment === env.id).sort((a, b) => a.name.localeCompare(b.name)),
+    secrets: secrets.filter((s) => s.environment === env.id).sort((a, b) => Number(b.missing) - Number(a.missing) || a.name.localeCompare(b.name)),
   })).filter((g) => g.secrets.length > 0);
 }
 
+// The Add form's button. With no value typed (and a shell that can add blanks), it adds the name as a blank.
+export function saveLabel(editing: { fixed: boolean; value: string; environments: unknown[] }, canBlank: boolean) {
+  if (editing.fixed) return "Save";
+  const blank = canBlank && editing.value === "";
+  const many = editing.environments.length > 1;
+  if (blank) return many ? `Add ${editing.environments.length} blanks` : "Add blank";
+  return many ? `Add to ${editing.environments.length} environments` : "Add to vault";
+}
+
+// A blank row's tooltip: who added it and where its value comes from.
+export function blankTitle(s: { name: string; source?: string; hint?: string }) {
+  return [`${s.name} has no value yet${s.source ? ` (added by ${s.source})` : ""}.`, s.hint, "Click Fill in to paste it."].filter(Boolean).join("\n");
+}
+
 export function masked(secret: { missing?: boolean; tail: string }) {
-  if (secret.missing) return "missing";
+  if (secret.missing) return "blank";
   return `••••${secret.tail}`;
 }
 
-// The rail icon's count (names still missing a value) and dot (a .env.local to import).
+// The rail icon's count (blanks still to fill in) and dot (a .env.local to import).
 export function railBadge(vaults: VaultSummary[]) {
   return {
     missing: vaults.reduce((n, v) => n + v.secrets.filter((s) => s.missing).length, 0),
@@ -155,7 +174,7 @@ export function railBadge(vaults: VaultSummary[]) {
 
 export function railTitle(badge: { missing: number; nudge: boolean }) {
   const parts = ["Secrets: this project's vault"];
-  if (badge.missing) parts.push(`${badge.missing} missing`);
+  if (badge.missing) parts.push(`${badge.missing} blank${badge.missing === 1 ? "" : "s"} to fill in`);
   if (badge.nudge) parts.push(".env.local has values to import");
   return parts.join(" · ");
 }
@@ -201,7 +220,7 @@ export type SecretAction = "reveal" | "copy" | "edit" | "remove" | `copy-to:${st
 // board's other projects (one click each: menus have no submenus), and remove.
 export function secretMenu(secret: { missing: boolean }, others: { folder: string; label: string }[] = []): MenuItem[] {
   const items: MenuItem[] = secret.missing
-    ? [{ id: "edit", label: "Set Value…" }]
+    ? [{ id: "edit", label: "Fill In Value…" }]
     : [{ id: "reveal", label: "Reveal Value" }, { id: "copy", label: "Copy Value" }, { id: "edit", label: "Change Value…" }];
   if (others.length) items.push({ type: "separator" }, ...others.map((o) => ({ id: `copy-to:${o.folder}`, label: `Copy to ${o.label}` })));
   items.push({ type: "separator" }, { id: "remove", label: "Remove from Vault…" });
@@ -227,6 +246,33 @@ export function vaultFilter(top: string | null, pick: VaultFilterPick | null): s
 export function filterVaults(vaults: VaultSummary[], folder: string | null) {
   if (!folder) return vaults;
   return vaults.filter((v) => v.folders.includes(folder));
+}
+
+// A thread asking for a secret it needs (mcp__secrets__ask_add, or a fill or run that found it missing): the
+// plain Add form opens with the name filled in, in the card's project's vault.
+export interface SecretAsk {
+  folder: string;
+  name: string;
+  environment: VaultEnvironment;
+}
+
+// The ask in main's "add-secret" message; undefined when there's none or it's malformed (the empty form opens).
+export function parseSecretAsk(payload: string | undefined): SecretAsk | undefined {
+  if (!payload) return undefined;
+  let ask: Partial<SecretAsk> | null;
+  try {
+    ask = JSON.parse(payload) as Partial<SecretAsk> | null;
+  } catch {
+    return undefined;
+  }
+  if (typeof ask?.folder !== "string" || typeof ask.name !== "string" || !validName(ask.name)) return undefined;
+  const environment = ENVIRONMENTS.find((e) => e.id === ask.environment)?.id ?? "development";
+  return { folder: ask.folder, name: ask.name, environment };
+}
+
+// The vault an Add form opens in: the asked folder's, else the first one the filter shows.
+export function askedVault(vaults: VaultSummary[], shown: VaultSummary[], folder?: string): VaultSummary | undefined {
+  return (folder ? vaults.find((v) => v.folders.includes(folder)) : undefined) ?? shown[0];
 }
 
 // The filter's choices: every project's vault by name, after "All projects".
