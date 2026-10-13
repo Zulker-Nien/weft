@@ -44,7 +44,8 @@ describe("runShell", () => {
     expect(item.exitCode).toBe(0);
   });
 
-  it("reports a failing command's exit code, in zsh when $SHELL isn't set", async () => {
+  // Weft is macOS-only, where /bin/zsh always exists; CI's Ubuntu runner has no zsh.
+  it.skipIf(!fs.existsSync("/bin/zsh"))("reports a failing command's exit code, in zsh when $SHELL isn't set", async () => {
     const shell = process.env.SHELL;
     delete process.env.SHELL;
     try {
