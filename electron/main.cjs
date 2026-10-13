@@ -41,7 +41,7 @@ const TAGLINE = "A board for your AI";
 const ASSETS = path.join(__dirname, "assets");
 const PRELOAD = path.join(__dirname, "preload.cjs");
 const TOKEN = crypto.randomBytes(24).toString("hex");
-const PREFERRED_PORT = Number(process.env.THREADBOARD_PORT) || 1000;
+const PREFERRED_PORT = Number(process.env.THREADBOARD_PORT) || 1024;
 const COPILOT_SHORTCUT = "Control+Alt+Space";
 const PROTOCOL = "weft";
 const mac = process.platform === "darwin";

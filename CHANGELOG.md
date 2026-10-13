@@ -10,6 +10,9 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Fixed
 
+- The board stays on one port again: it now prefers 127.0.0.1:1024. The old 1000 is a privileged port macOS won't
+  let Weft bind, so every launch fell back to a random port and cards' panes, dev OAuth redirects and saved pages
+  pointed at a dead one.
 - The email forwarder drops mail to `dmarc@`, `postmaster@` and `abuse@` (and their sub-addresses) instead of
   forwarding them: a 200 with the reason in Vercel logs, so Resend doesn't retry and your inbox stays clean
   (`shouldDrop` in `lib/email-forward.ts`).

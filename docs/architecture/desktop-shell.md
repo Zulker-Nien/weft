@@ -12,11 +12,11 @@ lives in `electron/server.cjs`.
 - `app.setName("Weft")`, `productName` in `package.json` is "Weft".
 - `TOKEN` is a 24-byte random hex string generated once at startup; passed to the
   control server (see below) and to the Next server as `THREADBOARD_SHELL_TOKEN`.
-- `PREFERRED_PORT` is `THREADBOARD_PORT` or `1000`. From source, `server.cjs` first runs
+- `PREFERRED_PORT` is `THREADBOARD_PORT` or `1024`. From source, `server.cjs` first runs
   `electron/free-port.cjs`, which kills whatever listens there and deletes the dev build folder
   (`.next`), so a stale server never forces a second port or a shared build folder; the packaged
-  app still falls back to a free port when 1000 is taken. (`npm run dev`, the board-only mode without Electron, also
-  uses `1000`, so a dev server and the desktop app never collide on different ports.)
+  app still falls back to a free port when 1024 is taken. (`npm run dev`, the board-only mode without Electron, also
+  uses `1024`, so a dev server and the desktop app never collide on different ports.)
 - `app.requestSingleInstanceLock()` makes a second `weft` launch just emit
   `second-instance`, which the first process handles by calling `showMain()` and
   routing any `weft://` argument through `handleLink()`.

@@ -13,7 +13,7 @@ cloth.
 git clone https://github.com/aimhuge/weft.git && cd weft
 npm install
 npm run desktop     # Electron app: board + side browser
-npm run dev         # board only, in a normal browser at http://127.0.0.1:1000 (no browser pane)
+npm run dev         # board only, in a normal browser at http://127.0.0.1:1024 (no browser pane)
 npm test            # unit tests (Vitest), about a second; npm run lint for ESLint
 ```
 
