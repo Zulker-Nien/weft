@@ -1,0 +1,259 @@
+/* The weft.zip home page (components/home/Home.tsx). Its own palette, drawn from the mark: indigo cloth, cream
+   thread and a clay accent. Nothing here reads the board's theme variables, so the page looks the same whatever
+   the board is set to. Scoped to .wz-root, which is also the page's scroll container (the root layout's body is
+   overflow-hidden for the board). Plain global CSS with a wz- prefix, not a CSS module: next.config.ts routes
+   every .css file through the Tailwind loader, which drops module exports. */
+
+.wz-root {
+  --cloth: #151a29;
+  --thread: #ece5d8;
+  --thread-2: #c9c0b1;
+  --thread-3: #8f8a80;
+  --clay: #da7a4c;
+  --clay-2: #f0995f;
+  --display: var(--font-fraunces), "Iowan Old Style", Georgia, serif;
+  --body: var(--font-instrument), system-ui, sans-serif;
+  --mono: var(--font-geist-mono), ui-monospace, Menlo, monospace;
+  position: relative;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  color-scheme: dark;
+  background: var(--cloth);
+  color: var(--thread);
+  font-family: var(--body);
+  font-size: 17px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wz-root ::selection {
+  background: var(--clay);
+  color: var(--cloth);
+}
+
+.wz-root a {
+  color: var(--thread-2);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.wz-root a:hover {
+  color: var(--thread);
+}
+
+.wz-wrap {
+  max-width: 1160px;
+  margin: 0 auto;
+  padding-left: 28px;
+  padding-right: 28px;
+}
+
+/* Nav: sits over the hero's sky. */
+.wz-nav {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 72px;
+  font-size: 15px;
+}
+
+.wz-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 500;
+  font-variation-settings: "SOFT" 60, "WONK" 1, "opsz" 36;
+}
+
+.wz-emblem {
+  display: block;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.5));
+}
+
+/* Hero: the twin suns scene, full bleed; the text over the sky. */
+.wz-hero {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.wz-photo {
+  object-fit: cover;
+  object-position: 50% 72%;
+}
+
+.wz-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgb(21 26 41 / 0.9) 0%, rgb(21 26 41 / 0.6) 40%, rgb(21 26 41 / 0) 75%),
+    linear-gradient(180deg, rgb(21 26 41 / 0.5) 0%, rgb(21 26 41 / 0) 30%, rgb(21 26 41 / 0) 65%, rgb(21 26 41 / 1) 100%);
+}
+
+.wz-heroInner {
+  position: relative;
+  z-index: 1;
+  padding-top: 160px;
+  padding-bottom: 200px;
+}
+
+.wz-h1 {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: clamp(46px, 6.6vw, 92px);
+  line-height: 0.95;
+  letter-spacing: -0.028em;
+  font-variation-settings: "SOFT" 50, "WONK" 1, "opsz" 144;
+}
+
+.wz-h1 em {
+  font-style: italic;
+  color: var(--clay-2);
+  font-variation-settings: "SOFT" 100, "WONK" 1, "opsz" 144;
+}
+
+.wz-lede {
+  margin: 24px 0 0;
+  max-width: 30em;
+  font-size: clamp(17px, 1.35vw, 20px);
+  color: var(--thread-2);
+  text-wrap: pretty;
+}
+
+.wz-ctas {
+  margin-top: 34px;
+}
+
+.wz-root .wz-btnPrimary {
+  display: inline-flex;
+  padding: 14px 24px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+  background: var(--clay);
+  color: #1a0e07;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.2) inset,
+    0 10px 30px -10px rgb(218 122 76 / 0.6);
+  transition:
+    transform 0.25s cubic-bezier(0.2, 0.7, 0.2, 1),
+    background 0.2s;
+}
+
+.wz-root .wz-btnPrimary:hover {
+  color: #1a0e07;
+  background: var(--clay-2);
+  transform: translateY(-1px);
+}
+
+.wz-note {
+  margin: 14px 0 0;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--thread-2);
+  text-shadow: 0 1px 6px rgb(21 26 41 / 0.9);
+}
+
+/* The real board, in a window, rising out of the hero. */
+.wz-shotWrap {
+  position: relative;
+  z-index: 2;
+  margin-top: -120px;
+}
+
+.wz-shot {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgb(236 229 216 / 0.16);
+  background: #0f131c;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.5),
+    0 60px 120px -40px rgb(0 0 0 / 0.9);
+}
+
+.wz-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.wz-footer {
+  padding-top: 40px;
+  padding-bottom: 48px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--thread-3);
+}
+
+/* Reveal on load */
+.wz-rise {
+  animation: wz-rise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.wz-d1 { animation-delay: 0.1s; }
+.wz-d2 { animation-delay: 0.2s; }
+.wz-d3 { animation-delay: 0.35s; }
+
+@keyframes wz-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Narrower than the photo's sky: the text sits over the suns and the car, so the scrim darkens top to bottom. */
+@media (max-width: 960px) {
+  .wz-scrim {
+    background: linear-gradient(180deg, rgb(21 26 41 / 0.88) 0%, rgb(21 26 41 / 0.75) 55%, rgb(21 26 41 / 0.3) 80%, rgb(21 26 41 / 1) 100%);
+  }
+
+  .wz-heroInner {
+    padding-top: 128px;
+    padding-bottom: 160px;
+  }
+
+  .wz-shotWrap {
+    margin-top: -90px;
+  }
+}
+
+@media (max-width: 600px) {
+  .wz-root {
+    font-size: 16px;
+  }
+
+  .wz-wrap {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .wz-heroInner {
+    padding-top: 112px;
+    padding-bottom: 120px;
+  }
+
+  .wz-shotWrap {
+    margin-top: -70px;
+  }
+
+  .wz-shot {
+    border-radius: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wz-rise {
+    animation: none;
+  }
+}

@@ -68,6 +68,9 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `lib/schedule.ts` + `lib/scheduler.ts` + `components/SendLater.tsx`: "Send later" replies; the server sends them at their
   time, by default the next 5-hour reset.
 - `lib/status.ts` + `lib/settings.ts`: the BOARD STATUS protocol (thread prompt and its parser).
+- `lib/home.ts` + `lib/home-release.ts` + `components/home/*` + `app/home/page.tsx` + `app/opengraph-image.tsx` + `public/brand/board.png`: the weft.zip home
+  page, which `app/page.tsx` renders at `/` instead of the board when `isDeployed()` (`VERCEL` or `WEFT_HOME`); `home.css` is plain
+  prefixed CSS because `next.config.ts` sends every `.css` through the Tailwind loader, which drops CSS-module exports.
 - `lib/review.ts`, `lib/devserver.ts`: `weft-review` tour blocks and the card's dev server.
 - `plugin/skills/*`: my own skills (`/weft:done`, `/weft:commit`, `/weft:preview`, `/weft:setup-done`,
   which installs tests, docs and strict lint on a project before `/done`; `/weft:done` also keeps this file current);

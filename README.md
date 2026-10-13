@@ -573,6 +573,17 @@ recent launches, run `node electron/startup-timer.cjs`.
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the feature list.
 
+## weft.zip
+
+The same Next.js app, deployed on Vercel, is Weft's website: with `VERCEL` set at build time, `/` renders the home page
+(`components/home/Home.tsx`, what it says in `lib/home.ts`) instead of the board, which has no CLIs to run there. On your
+Mac the page is at `/home` (`WEFT_HOME=1` shows it at `/` too). Its download button reads the latest release's
+`update.json` from GitHub Releases once an hour and links the dmg; until the first release it points at the repo. The
+shared-link picture is `app/opengraph-image.tsx`. The page is one screen, on purpose: the steel weave emblem and the twin suns scene from
+`electron/assets/` (through `next/image`), one sentence, the download button, and a real screenshot of the board in
+`public/brand/board.png`; retake that one when the board changes a lot (`mcp__board_view__screenshot` with the thread
+panel and drawers closed).
+
 ## Contributing and license
 
 Issues and PRs are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
