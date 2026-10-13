@@ -503,6 +503,14 @@ switched-away shells keep running with their output. Split (or ⌘\\ in a termin
 by side, up to three per folder; hover a terminal for its restart and close buttons. It's your login shell on a pty (`node-pty`, `electron/terminal.cjs`), drawn
 with xterm.js (`components/TerminalDrawer.tsx`). Desktop app only.
 
+## Email at weft.zip
+
+Mail to any address at weft.zip (hello@, support@, you name it) lands in one inbox. Resend receives it (the domain's
+MX record) and posts an `email.received` event to the deployed Weft, whose `/api/email/webhook` checks the signature,
+reads the mail back and sends it on from `forward@weft.zip`, named "<sender> via <alias>" and replying to the sender.
+Nothing runs on your Mac. `npm run resend -- create|verify|webhook` sets up the Resend side through the vault. More in
+[docs/architecture/email-forwarding.md](docs/architecture/email-forwarding.md).
+
 ## How it fits together
 
 - `electron/main.cjs` starts the Next.js server, shows it in a window, and hosts the side browser

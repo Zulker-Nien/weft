@@ -89,6 +89,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   library (docs/architecture/tags.md).
 - `lib/github-issues.ts` + `app/api/github/issues`: a project's open GitHub issues become Backlog cards through the `gh` CLI, labels as tags,
   one direction; opt-in folders in settings `issueFolders`, polled from `prewarm()` every 5 min (docs/architecture/github-issues.md).
+- `lib/email-forward.ts` + `app/api/email/webhook` + `scripts/resend-domain.mjs`: mail to weft.zip, received by Resend (the domain's MX) and
+  forwarded by the deployed Weft to one inbox (Svix-signed `email.received` → read back → send on; docs/architecture/email-forwarding.md).
 - `lib/account.ts` + `app/api/account` + `lib/use-account.ts`: the optional Weft account (Supabase Auth, PKCE; the
   redirect target is `weft://account-callback` in the packaged app and the loopback HTTP origin in `next dev`,
   handled by `electron/account-link.cjs` and `app/api/account/weft-callback/route.ts`; sign-in / sign-out pages

@@ -9,6 +9,8 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 ## [Unreleased]
 
 ### Added
+- Email at weft.zip: Resend receives every mail to the domain and the deployed Weft forwards it to one inbox (`app/api/email/webhook`,
+  `lib/email-forward.ts`; `npm run resend` sets up the Resend side through the vault; docs/architecture/email-forwarding.md).
 - Your loom: the builder card is now your wefter card, "Wefter: name · class", with your GitHub profile (picture, @login,
   bio, location, company, site, followers, repos) from `gh api user`; the streak reads "Wefting streak, N days straight".
 - `!` in a reply box runs a shell command in the card's folder (`lib/shell.ts`), like Claude Code's bash mode: the box

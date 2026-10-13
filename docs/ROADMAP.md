@@ -263,6 +263,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 
 ## Integrations
 
+- `Now` **Email at weft.zip** — Resend receives every mail to the domain and the deployed Weft forwards it to one inbox (`lib/email-forward.ts`, docs/architecture/email-forwarding.md). Still open: a DMARC record, per-alias routing, attachments over Resend's 40 MB.
 - `Now` **GitHub Issues sync** — in phases (docs/architecture/github-issues.md):
   - `P1` Phase 1, card → issue: make an issue from a card, its tags as labels, and link the two.
   - `Done` Phase 2, issues → cards: ⌘K "Import GitHub issues into <project>" opts a folder in; its open issues become Backlog cards through `gh` (body + link + "Fixes owner/name#N" as the prompt, labels as tags), re-checked every 5 min. A closed issue archives its card if it never started; started cards are never touched; a deleted card stays deleted (`lib/github-issues.ts`).
