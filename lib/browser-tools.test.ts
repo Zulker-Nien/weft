@@ -52,7 +52,11 @@ describe("BROWSER_PROMPT", () => {
     const showDir = path.join(process.env.THREADBOARD_DATA!, "show");
     expect(bt.BROWSER_PROMPT).toContain(`${showDir}/<topic>.html`);
     expect(bt.BROWSER_PROMPT).toContain(`${showDir}/<topic>/index.html`);
-    expect(bt.BROWSER_PROMPT).not.toContain("/tmp");
+    // The test sandbox sits under os.tmpdir() (/tmp on Linux CI), so look past the show dir itself:
+    // nothing else in the prompt may point pages at a temp dir.
+    const rest = bt.BROWSER_PROMPT.split(showDir).join("<show>");
+    expect(rest).not.toContain("/tmp");
+    expect(rest).not.toContain(os.tmpdir());
   });
 });
 
