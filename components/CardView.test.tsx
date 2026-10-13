@@ -131,6 +131,18 @@ describe("CardView", () => {
     expect(screen.getByText("Fix the login page").closest("[data-card-id]")).toHaveAttribute("draggable", "false");
   });
 
+  it("outlines the card you opened last in ink, not unseen's accent, keeping unseen's tint and dot", () => {
+    const frame = () => screen.getByText("Fix the login page").closest("[data-card-id]");
+    renderCard({}, { lastOpen: true, unseen: true });
+    expect(frame()).toHaveClass("card-last-open", "card-unseen");
+    expect(frame()).not.toHaveClass("border-accent/70");
+    expect(screen.getByTitle("New since you last looked")).toBeInTheDocument();
+    cleanup();
+    renderCard({}, { lastOpen: true, selected: true });
+    expect(frame()).toHaveClass("border-accent");
+    expect(frame()).not.toHaveClass("card-last-open");
+  });
+
   it("a permission parked in Backlog still offers Allow and Deny", () => {
     renderCard({ column: "backlog", pending });
     expect(screen.getByRole("button", { name: "Allow" })).toBeInTheDocument();

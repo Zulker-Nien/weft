@@ -13,6 +13,7 @@ import { playChime, preloadChimes } from "@/lib/chimes";
 import {
   cardChangeEffects,
   groupByColumn,
+  hitPlanLimit,
   latestLimits,
   SORTERS,
   stepThrough,
@@ -132,6 +133,8 @@ export default function Board() {
   const [home, setHome] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // The card you opened last: still outlined after you close it, so you can find your place on the board.
+  const [lastOpenId, setLastOpenId] = useState<string | null>(null);
   const { toast, setToast, notify } = useToast();
   // Restart when idle (lib/restart-when-idle.ts): the header chip and the palette command.
   const restartView = useRestart();
@@ -226,6 +229,7 @@ export default function Board() {
       }
       selectedRef.current = id;
       setSelectedId(id);
+      if (id) setLastOpenId(id);
       setRenameId(null);
       if (id) setUnseen((prev) => (prev.has(id) ? without(prev, id) : prev));
       setThread([]);
@@ -434,6 +438,8 @@ export default function Board() {
   // Archived cards are hidden from the board, so the header doesn't count them either.
   const waiting = cards.filter((c) => c.column === "needs_you" && !c.archived).length;
   const running = cards.filter((c) => c.column === "running" && !c.archived).length;
+  // "Switch all" only shows once a thread hit its plan limit.
+  const limitHit = hitPlanLimit(cards);
 
   // Shortcuts that act on the board stand down while a dialog or the project menu is up.
   const boardKeys = !(showNew || showSettings || showHelp || showPalette || Boolean(login) || menuOpen);
@@ -883,7 +889,7 @@ export default function Board() {
                   archiveTip={hint("archive-done", `Archive all ${doneToArchive.length}`)}
                   onArchiveAll={() => archiveCards(doneToArchive)}
                   resumeAll={column.id === "review" ? resumeAll : undefined}
-                  onSwitchAll={column.id === "running" || column.id === "needs_you" ? () => switchAll(column.id) : undefined}
+                  onSwitchAll={limitHit && (column.id === "running" || column.id === "needs_you") ? () => switchAll(column.id) : undefined}
                   onReviewAll={column.id === "review" ? reviewAll : undefined}
                 />
                 <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
@@ -905,6 +911,7 @@ export default function Board() {
                       card={card}
                       now={now}
                       selected={card.id === selectedId}
+                      lastOpen={card.id === lastOpenId}
                       unseen={unseen.has(card.id)}
                       alsoHere={busyHere(cards, card)}
                       onOpen={() => openCard(card)}

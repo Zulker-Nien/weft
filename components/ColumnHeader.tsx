@@ -6,7 +6,7 @@ import Icon from "./Icon";
 import { SwitchAllButton } from "./switch-all-button";
 import Tip from "./Tip";
 
-// A column's name and count. Running and Needs you get "Switch all" to move their threads to the other CLI. Review gets "Review all", which starts the commit walk-through card (lib/pile-review.ts), and "▶ Resume N" when turns there were cut off or failed (lib/card-resume.ts). Done also gets "Show N archived" and an archive-all button (Shift+E) for the cards it shows.
+// A column's name and count. Running and Needs you get "Switch all" to move their threads to the other CLI, once a thread hit its plan limit. Review gets "Review all", which starts the commit walk-through card (lib/pile-review.ts), and "▶ Resume N" when turns there were cut off or failed (lib/card-resume.ts). Done also gets "Show N archived" and an archive-all button (Shift+E) for the cards it shows.
 export default function ColumnHeader({
   column,
   count,

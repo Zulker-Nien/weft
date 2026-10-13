@@ -90,6 +90,12 @@ export function latestLimits(cards: Card[]): (CardStats & { cwd: string; backend
   return { ...latest.stats, cwd: latest.cwd, backend: latest.backend };
 }
 
+// Whether a thread on the board hit its CLI's plan limit, so the Running and Needs you columns
+// offer "Switch all" to the other CLI only when there's a reason to switch.
+export function hitPlanLimit(cards: Card[]): boolean {
+  return cards.some((c) => c.rateLimitHit && !c.archived);
+}
+
 // The item `by` steps away from `current`, wrapping at both ends; an unknown current counts as the first.
 export function stepThrough<T>(options: readonly T[], current: T, by: number): T {
   const at = Math.max(0, options.indexOf(current));

@@ -419,6 +419,13 @@ button:disabled {
   background-color: color-mix(in srgb, var(--accent) 8%, var(--card, transparent));
 }
 
+/* The card you opened last (components/CardView.tsx): a bold ink ring and glow, so your place on the board jumps out. */
+.card-last-open {
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 0 18px 2px color-mix(in srgb, var(--ink) 40%, transparent);
+}
+
 /* A build error: Next's overlay can't be closed and hides a board that still works, so components/BuildErrorBar.tsx
    stands in for it (lib/build-error.ts sets the attribute). */
 html[data-build-error] nextjs-portal {
