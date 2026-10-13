@@ -45,6 +45,11 @@ export const MODELS: Record<Backend, { id: string; label: string }[]> = {
   ],
 };
 
+// The CLI that serves a model id, or undefined for an id neither serves.
+export function backendFor(model: string): Backend | undefined {
+  return (Object.keys(MODELS) as Backend[]).find((b) => MODELS[b].some((m) => m.id === model));
+}
+
 const DEFAULT_MODEL: Record<Backend, string> = {
   claude: "claude-opus-5-5",
   puku: "opus-4.8",

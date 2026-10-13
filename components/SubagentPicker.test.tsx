@@ -17,18 +17,19 @@ describe("SubagentPicker", () => {
     render(<SubagentPicker value="choose" />);
     const select = screen.getByRole("combobox", { name: "Use for subagents" });
     expect(select).toHaveValue("choose");
-    expect(screen.getByRole("option", { name: "Let the model choose" })).toBeInTheDocument();
-    await userEvent.selectOptions(select, "haiku");
-    expect(api.saveSettings).toHaveBeenCalledWith({ subagentModel: "haiku" });
-    expect(select).toHaveValue("haiku");
+    expect(screen.getByRole("group", { name: "Claude" })).toHaveTextContent("Fable 5.1");
+    expect(screen.getByRole("group", { name: "Puku" })).toHaveTextContent("Opus 4.8");
+    await userEvent.selectOptions(select, "opus-4.8");
+    expect(api.saveSettings).toHaveBeenCalledWith({ subagentModel: "opus-4.8" });
+    expect(select).toHaveValue("opus-4.8");
   });
 
   it("goes back and says why when the save fails", async () => {
     api.saveSettings.mockRejectedValue(new Error("offline"));
-    render(<SubagentPicker value="sonnet" />);
+    render(<SubagentPicker value="claude-sonnet-5-5" />);
     const select = screen.getByRole("combobox", { name: "Use for subagents" });
-    await userEvent.selectOptions(select, "opus");
-    await waitFor(() => expect(select).toHaveValue("sonnet"));
+    await userEvent.selectOptions(select, "claude-opus-5-5");
+    await waitFor(() => expect(select).toHaveValue("claude-sonnet-5-5"));
     expect(screen.getByText("Couldn’t save: offline")).toBeInTheDocument();
   });
 });

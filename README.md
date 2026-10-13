@@ -216,8 +216,12 @@ keeps their file dumps out of the thread's context. Settings → Use for subagen
 
 - **Let the model choose** (the default): the thread picks per subagent, Haiku for searches and lookups,
   Sonnet for most coding, Opus for hard reasoning where a mistake is costly.
-- **Haiku, Sonnet or Opus**, or **Same model as the thread**: every subagent runs on it (the CLI's
-  `CLAUDE_CODE_SUBAGENT_MODEL`, forced). Idle threads pick a change up on their next message.
+- **Same model as the thread**: every subagent runs on the thread's own model.
+- **Any model either CLI serves**, grouped under Claude (Fable 5.1, Opus 5.5, Sonnet 5.5, Haiku 5.5) and
+  Puku (Opus 4.8, Puku AI 2.8, Puku AI 2.7). On a thread whose CLI serves it, the model is forced through
+  that CLI's env (`CLAUDE_CODE_SUBAGENT_MODEL` or `PUKU_CLI_SUBAGENT_MODEL`). On the other CLI's threads,
+  the thread runs that CLI headless as the subagent (`puku-cli -p … --model opus-4.8`, or `claude -p`),
+  read-only unless the task needs edits. That needs the other CLI installed and logged in.
 
 puku-cli threads get the advice to delegate but keep their own model names.
 

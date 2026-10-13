@@ -48,8 +48,8 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
   telemetry (426 → 196 MB) (`scripts/bundle-toolchain.mjs`).
 - Subagents: every thread's prompt says when to hand work to a subagent (broad searches, independent pieces in
   parallel, test and lint runs, second-opinion reviews), and Settings → Use for subagents picks their model: let
-  the model choose (the default, with a short Haiku / Sonnet / Opus guide), Haiku, Sonnet, Opus, or the thread's
-  own. Changing it, or the thread prompt, now replaces idle CLIs so their next message uses it.
+  the model choose (the default, with a short Haiku / Sonnet / Opus guide), the thread's own, or any Claude or Puku
+  model; a model from the other CLI runs that CLI headless (`puku-cli -p` / `claude -p`) as the subagent. Changing it, or the thread prompt, now replaces idle CLIs so their next message uses it.
 - Symbol claims: a card claims the top-level function, component, class or type its thread edits (found with the
   TypeScript parser; inside one over 150 lines, the statement holding the edit, like `Board/useEffect#3`), and when another busy card in the same folder goes to edit it, the thread asks: "Card ‘Fix
   login’ is editing LoginForm in Login.tsx. Wait, or go ahead?" Claims drop at Done, on archive and on commit.

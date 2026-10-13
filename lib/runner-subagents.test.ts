@@ -48,16 +48,24 @@ describe("subagents", () => {
     expect(q.options.env).toEqual({ PATH: "/usr/bin" });
   });
 
-  it("forces a picked subagent model through the CLI's env, but not on puku-cli or the copilot", async () => {
-    h.subagentModel = "haiku";
+  it("forces a model the thread's CLI serves through its env; the other CLI's runs headless; not on the copilot", async () => {
+    h.subagentModel = "claude-haiku-5-5";
     addCard({ id: "c1" });
     addCard({ id: "pk", backend: "puku" });
     addCard({ id: "cp", role: "copilot" });
     const q = await send("c1");
-    expect(q.options.env).toEqual({ PATH: "/usr/bin", CLAUDE_CODE_SUBAGENT_MODEL: "haiku", CLAUDE_CODE_SUBAGENT_MODEL_FORCE: "1" });
-    expect((q.options.systemPrompt as { append: string }).append).toContain("Subagents run on Haiku");
-    expect((await send("pk")).options.env).toEqual({ PATH: "/usr/bin" });
+    expect(q.options.env).toEqual({ PATH: "/usr/bin", CLAUDE_CODE_SUBAGENT_MODEL: "claude-haiku-5-5", CLAUDE_CODE_SUBAGENT_MODEL_FORCE: "1" });
+    expect((q.options.systemPrompt as { append: string }).append).toContain("Subagents run on Haiku 5.5 (Claude)");
+    const pk = await send("pk");
+    expect(pk.options.env).toEqual({ PATH: "/usr/bin" });
+    expect((pk.options.systemPrompt as { append: string }).append).toContain("claude -p");
     expect((await send("cp")).options.env).toEqual({ PATH: "/usr/bin" });
+  });
+
+  it("gives a puku thread a Puku subagent model through puku-cli's env", async () => {
+    h.subagentModel = "puku-ai-2.7";
+    addCard({ id: "pk", backend: "puku" });
+    expect((await send("pk")).options.env).toEqual({ PATH: "/usr/bin", PUKU_CLI_SUBAGENT_MODEL: "puku-ai-2.7" });
   });
 
   it("an idle session is replaced when the subagent model changes in Settings", async () => {
@@ -65,10 +73,10 @@ describe("subagents", () => {
     const q = await send("c1");
     q.emit(success("ok"));
     await flush();
-    h.subagentModel = "opus";
+    h.subagentModel = "claude-opus-5-5";
     runner.sendMessage("c1", "next");
     expect(q.aborted).toBe(true);
     await flush();
-    expect(lastQuery().options.env).toMatchObject({ CLAUDE_CODE_SUBAGENT_MODEL: "opus" });
+    expect(lastQuery().options.env).toMatchObject({ CLAUDE_CODE_SUBAGENT_MODEL: "claude-opus-5-5" });
   });
 });

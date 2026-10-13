@@ -5,7 +5,7 @@ import { asText } from "@/lib/format";
 import { fail, guard } from "@/lib/guard";
 import { setAutomations, setDefaultBackend, setDefaultPermissionMode, setKeepAliveMinutes, setPushOnDone, setSubagentModel, setThreadPrompt, settingsView } from "@/lib/settings";
 import { SKILL_NAME } from "@/lib/skills";
-import { isSubagentModel, SUBAGENT_MODELS } from "@/lib/subagents";
+import { isSubagentModel } from "@/lib/subagents";
 import { AUTOMATION_TRIGGERS, MODES, type Automation, type Backend, type PermissionMode } from "@/lib/types";
 
 const BACKENDS: Backend[] = ["claude", "puku"];
@@ -61,7 +61,7 @@ function validate(body: {
   }
   if (body.pushOnDone !== undefined && typeof body.pushOnDone !== "boolean") throw new Error("pushOnDone must be true or false.");
   if (body.subagentModel !== undefined && !isSubagentModel(body.subagentModel)) {
-    throw new Error(`subagentModel must be one of ${SUBAGENT_MODELS.join(", ")}.`);
+    throw new Error("subagentModel must be choose, inherit, or a model id one of the CLIs serves.");
   }
   // Validate automations now so a bad rule 400s before any settings setter runs.
   return body.automations === undefined ? undefined : readAutomations(body.automations);

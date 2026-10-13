@@ -89,9 +89,9 @@ describe("settings", () => {
     let s = await load();
     expect(s.subagentModel()).toBe("choose");
     expect(s.settingsView().subagentModel).toBe("choose");
-    s.setSubagentModel("sonnet");
+    s.setSubagentModel("opus-4.8");
     s = await load();
-    expect(s.subagentModel()).toBe("sonnet");
+    expect(s.subagentModel()).toBe("opus-4.8");
     s.setSubagentModel("choose");
     expect(fs.readFileSync(path.join(dir, "settings.json"), "utf8")).not.toContain("subagentModel");
   });

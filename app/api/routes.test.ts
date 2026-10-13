@@ -690,7 +690,7 @@ describe("/settings", () => {
     const res = await patch({
       threadPrompt: "be brief",
       pushOnDone: false,
-      subagentModel: "haiku",
+      subagentModel: "opus-4.8",
       keepAliveMinutes: 10,
       defaultPermissionMode: "acceptEdits",
       automations: [
@@ -703,7 +703,7 @@ describe("/settings", () => {
     expect(settings.setKeepAliveMinutes).toHaveBeenCalledWith(10);
     expect(settings.setDefaultPermissionMode).toHaveBeenCalledWith("acceptEdits");
     expect(settings.setPushOnDone).toHaveBeenCalledWith(false);
-    expect(settings.setSubagentModel).toHaveBeenCalledWith("haiku");
+    expect(settings.setSubagentModel).toHaveBeenCalledWith("opus-4.8");
     const [rules] = vi.mocked(settings.setAutomations).mock.calls[0]!;
     expect(rules[0]).toEqual({ id: "a1", on: "done", skill: "weft:done" });
     expect(rules[1]).toMatchObject({ on: "prompt-matches", skill: "deploy", pattern: "ship it" });
