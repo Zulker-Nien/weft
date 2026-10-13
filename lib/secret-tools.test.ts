@@ -32,7 +32,8 @@ describe("secretsMcpServer", () => {
     expect(server.alwaysLoad).toBe(true);
     expect(st.SECRETS_PROMPT).toContain("mcp__secrets__fill_field");
     expect(st.SECRETS_PROMPT).toContain("mcp__secrets__run");
-    expect(server.tools.map((t) => t.name)).toEqual(["list", "fill_field", "run"]);
+    expect(st.SECRETS_PROMPT).toContain("mcp__secrets__push_to_vercel");
+    expect(server.tools.map((t) => t.name)).toEqual(["list", "fill_field", "push_to_vercel", "run"]);
   });
 
   it("lists names for the card's folder, or another project's", async () => {
@@ -74,5 +75,26 @@ describe("secretsMcpServer", () => {
     expect([none.isError, said(none)]).toEqual([true, "No element matches #k"]);
     reply({ error: "Secrets only go into https pages" }, false);
     expect(said(await run("fill_field", { name: "K", selector: "#k" }))).toBe("Secrets only go into https pages");
+  });
+
+  it("pushes a vault value to Vercel without the value, production by default", async () => {
+    reply({ pushed: true, project: "weft", label: "aimhuge/weft" });
+    const r = await run("push_to_vercel", { name: "SUPABASE_SECRET_KEY" });
+    expect(sent()).toEqual({ url: "http://127.0.0.1:4567/vercel/env-push", body: { folder: "/proj", name: "SUPABASE_SECRET_KEY", environment: "production" } });
+    expect([r.isError, said(r)]).toEqual([false, "Pushed SUPABASE_SECRET_KEY (production) from the aimhuge/weft vault to Vercel project weft. It takes effect on the next deploy."]);
+
+    fetchMock.mockReset();
+    reply({ pushed: true });
+    expect(said(await run("push_to_vercel", { name: "K", environment: "preview", project: "/other" }))).toBe("Pushed K (preview) from the this vault to Vercel project the linked project. It takes effect on the next deploy.");
+    expect(sent().body).toEqual({ folder: "/other", name: "K", environment: "preview" });
+  });
+
+  it("reports a no and a missing value", async () => {
+    reply({ denied: true, label: "aimhuge/weft" });
+    const no = await run("push_to_vercel", { name: "K" });
+    expect([no.isError, said(no)]).toEqual([true, "The user didn't approve pushing K. Ask before trying again."]);
+    reply({ missing: true, label: "aimhuge/weft" });
+    const missing = await run("push_to_vercel", { name: "K" });
+    expect([missing.isError, said(missing)]).toEqual([true, "K (production) has no value in the aimhuge/weft vault. Ask the user to add it with 🔐 on the left rail."]);
   });
 });

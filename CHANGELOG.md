@@ -9,6 +9,13 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 ## [Unreleased]
 
 ### Added
+- Vault → Vercel env push: the ▲ drawer lines each linked project's 🔐 secrets up with its Vercel variables per
+  environment and pushes one with **Push** (sensitive, Touch ID per push); threads can do it with
+  `mcp__secrets__push_to_vercel`.
+- GitHub on the left rail: its mark opens a drawer with the `gh` CLI's sign-in (or how to sign in) and, per project, its
+  repo, an **Issues → Backlog cards** switch, the last sync and **Sync now**.
+- Instant GitHub issue sync: **Instant, by webhook** in the GitHub drawer adds a repo webhook relayed by the deployed
+  Weft on Vercel (it checks GitHub's signature) and Weft's Supabase (Realtime), so cards follow issues within seconds.
 - Email at weft.zip: Resend receives every mail to the domain and the deployed Weft forwards it to one inbox (`app/api/email/webhook`,
   `lib/email-forward.ts`; `npm run resend` sets up the Resend side through the vault; docs/architecture/email-forwarding.md).
 - Home page for weft.zip: the deployed Weft (Vercel) renders a landing page at `/` instead of the board (`components/home/`,

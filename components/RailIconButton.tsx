@@ -1,6 +1,6 @@
 "use client";
 
-// A plain icon under the left rail's divider that opens its drawer: ▲ Vercel, Supabase's bolt, BlastCP's rocket. 🔐 has its own,
+// A plain icon under the left rail's divider that opens its drawer: ▲ Vercel, Supabase's bolt, BlastCP's rocket, GitHub's mark. 🔐 has its own,
 // with badges (components/LibraryRail.tsx).
 export default function RailIconButton({ icon, label, open, title, onClick }: { icon: React.ReactNode; label: string; open: boolean; title: string; onClick: () => void }) {
   return (

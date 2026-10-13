@@ -263,7 +263,7 @@ describe("registerVercel", () => {
     const ipcMain = { handle: (channel: string, fn: (event: { sender: unknown }, ...args: unknown[]) => unknown) => handlers.set(channel, fn) };
     const board = {};
     const vercel = { status: vi.fn(), setToken: vi.fn(), forgetToken: vi.fn(), projects: vi.fn(), scopes: vi.fn(), link: vi.fn(), create: vi.fn(), unlink: vi.fn() };
-    registerVercel(ipcMain, { vercel, isBoard: (s: unknown) => s === board });
+    registerVercel(ipcMain, { vercel, env: null, isBoard: (s: unknown) => s === board });
     const call = (channel: string, ...args: unknown[]) => handlers.get(channel)!({ sender: board }, ...args);
     await expect(handlers.get("vercel:status")!({ sender: {} }, [])).rejects.toThrow("board window");
     await call("vercel:status", ["/a", 3]);
@@ -289,5 +289,19 @@ describe("registerVercel", () => {
     expect(vercel.projects).toHaveBeenCalled();
     expect(vercel.link).toHaveBeenCalledWith("/a", "p", "o");
     expect(vercel.unlink).toHaveBeenCalledWith("/a");
+    expect(handlers.has("vercel:env-push")).toBe(false);
+  });
+
+  it("adds the env handlers when it has the vault's side", async () => {
+    const handlers = new Map<string, (event: { sender: unknown }, ...args: unknown[]) => unknown>();
+    const ipcMain = { handle: (channel: string, fn: (event: { sender: unknown }, ...args: unknown[]) => unknown) => handlers.set(channel, fn) };
+    const board = {};
+    const env = { status: vi.fn(), push: vi.fn() };
+    registerVercel(ipcMain, { vercel: {}, env, isBoard: (s: unknown) => s === board });
+    await handlers.get("vercel:env-status")!({ sender: board }, "/a");
+    await handlers.get("vercel:env-push")!({ sender: board }, "/a", "KEY", "production");
+    await expect(handlers.get("vercel:env-push")!({ sender: {} }, "/a", "KEY", "production")).rejects.toThrow("board window");
+    expect(env.status).toHaveBeenCalledWith("/a");
+    expect(env.push).toHaveBeenCalledWith("/a", "KEY", "production");
   });
 });

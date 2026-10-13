@@ -64,6 +64,9 @@ function client() {
   );
 }
 
+// The account's Supabase client, signed in as you when you are (lib/github-hooks.ts reads and listens with it).
+export const accountClient = () => client();
+
 export function toAccountUser(user: User): AccountUser {
   const meta: Record<string, unknown> = user.user_metadata;
   const pick = (...keys: string[]) => keys.map((k) => meta[k]).find((v): v is string => typeof v === "string" && v !== "") ?? null;

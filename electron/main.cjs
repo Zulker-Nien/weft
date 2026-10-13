@@ -63,8 +63,8 @@ const timer = createStartupTimer({
 });
 
 // The secrets vault, set up further down; the pane types its values in for threads (fillSecret).
-// With it, the commands and dev servers that run with vault values (electron/secret-run.cjs).
-let vault, secretRun;
+// With it, commands and dev servers run with vault values (secret-run.cjs) and the push to Vercel (vercel-env.cjs).
+let vault, secretRun, vercelEnv;
 // Small native warning dialog; shared by pageLinks (walk-through buttons) and accountLink (OAuth callback).
 const warnUser = (message, detail) => dialog.showMessageBox(win, { type: "warning", message, detail });
 const pane = createBrowserPane({
@@ -78,6 +78,8 @@ const pane = createBrowserPane({
   routes: {
     // The Weft account's session, sealed by safeStorage; the server reads it here instead of a plain file.
     ...require("./account-store.cjs").accountRoutesFor(dataDir()),
+    // mcp__secrets__push_to_vercel: a vault value onto the card's linked Vercel project, after Touch ID.
+    ...require("./vercel-env.cjs").envRoutes(() => vercelEnv),
     // mcp__board_view__*: threads see and drive the board itself, secrets redacted (electron/board-view.cjs).
     ...boardViewRoutes(createBoardView({ board: () => appView?.webContents })),
   },
@@ -398,15 +400,12 @@ ipcMain.handle("dialog:openFolder", async () => {
 });
 ipcMain.on("shell:openExternal", (_e, url) => /^https?:\/\//i.test(String(url)) && shell.openExternal(String(url)));
 createMenuPopup({ ipcMain, Menu, BrowserWindow });
-ipcMain.on("shell:reveal", (_e, folder) => {
-  const dir = String(folder);
-  if (path.isAbsolute(dir) && fs.existsSync(dir)) shell.openPath(dir);
-});
+ipcMain.on("shell:reveal", (_e, folder) => path.isAbsolute(String(folder)) && fs.existsSync(String(folder)) && shell.openPath(String(folder)));
 // The secrets vault answers the board window only; threads reach values only through the pane typing them in, behind Touch ID.
 vault = require("./vault.cjs").setupVault({ ipcMain, dataDir: dataDir(), window: () => win, board: () => appView?.webContents });
 secretRun = require("./secret-run.cjs").setupSecretRun({ vault, dataDir: dataDir(), window: () => win });
 // So does Vercel: its token is in the Keychain and its links are .vercel/project.json.
-require("./vercel.cjs").setupVercel({ ipcMain, dataDir: dataDir(), board: () => appView?.webContents });
+vercelEnv = require("./vercel.cjs").setupVercel({ ipcMain, dataDir: dataDir(), board: () => appView?.webContents, vault }).env;
 // And Supabase: its token is in the Keychain and its links are supabase/.temp/project-ref.
 require("./supabase.cjs").setupSupabase({ ipcMain, dataDir: dataDir(), board: () => appView?.webContents });
 // And BlastCP: its sign-in is in the Keychain too, and which property a folder posts as is in the data folder.

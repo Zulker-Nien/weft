@@ -19,6 +19,7 @@ import {
 } from "@/lib/vercel-view";
 import { Note } from "./VaultParts";
 import VercelPicker from "./VercelPicker";
+import VercelEnv from "./VercelEnv";
 
 const TONE = { ok: "bg-ok-soft text-ok", warn: "bg-warn-soft text-warn", bad: "bg-danger-soft text-danger", muted: "bg-sunken text-muted" } as const;
 const SMALL = "rounded px-1.5 py-0.5 text-[11px] text-muted hover:bg-sunken hover:text-ink disabled:opacity-40";
@@ -132,7 +133,15 @@ export default function VercelDrawer({
               notify={notify}
             />
           ) : (
-            <FolderSection key={f.folder} folder={f} busy={busy} onLink={() => void startPicking(f.folder)} onUnlink={() => void change(() => vercel.unlink(f.folder))} onOpenUrl={onOpenUrl} />
+            <FolderSection
+              key={f.folder}
+              folder={f}
+              busy={busy}
+              onLink={() => void startPicking(f.folder)}
+              onUnlink={() => void change(() => vercel.unlink(f.folder))}
+              onOpenUrl={onOpenUrl}
+              env={<VercelEnv folder={f.folder} bridge={vercel} notify={notify} />}
+            />
           ),
         )}
       </div>
@@ -188,7 +197,22 @@ function TokenForm({ error, busy, onSave, onForget }: { error: string | null; bu
   );
 }
 
-function FolderSection({ folder: f, busy, onLink, onUnlink, onOpenUrl }: { folder: VercelFolder; busy: boolean; onLink: () => void; onUnlink: () => void; onOpenUrl: (url: string) => void }) {
+function FolderSection({
+  folder: f,
+  busy,
+  onLink,
+  onUnlink,
+  onOpenUrl,
+  env,
+}: {
+  folder: VercelFolder;
+  busy: boolean;
+  onLink: () => void;
+  onUnlink: () => void;
+  onOpenUrl: (url: string) => void;
+  // The 🔐 → Vercel env section (components/VercelEnv.tsx), shown once the link reads.
+  env: React.ReactNode;
+}) {
   const link = f.link;
   return (
     <section className="mt-2 rounded-lg border border-line bg-card px-2.5 py-2">
@@ -213,6 +237,7 @@ function FolderSection({ folder: f, busy, onLink, onUnlink, onOpenUrl }: { folde
         </p>
       )}
       {link && !f.error && <Linked link={link} repo={f.repo} onOpenUrl={onOpenUrl} />}
+      {link && !f.error && <div className="mt-1 text-[11px] text-muted">{env}</div>}
     </section>
   );
 }

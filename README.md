@@ -389,8 +389,14 @@ The old library's recipes, to-dos and notes became starred cards tagged `recipe`
 
 ### GitHub issues
 
-⌘K → **Import GitHub issues into <project>** turns that project's open issues into Backlog cards, through the `gh`
-CLI. Each card gets the issue's title, its body plus a link and a reminder to put `Fixes owner/name#N` in the commit,
+GitHub's mark at the bottom of the left rail opens the GitHub drawer: who the `gh` CLI is signed in as (or how to sign
+in, with `gh auth login --web`), and each board project's repo with an **Issues → Backlog cards** switch, its last sync
+("Synced 3m ago · 2 added"), **Sync now** and links to the repo and its issues in the browser pane. Weft never holds a
+GitHub token; `gh` keeps its own. ⌘K → **Import GitHub issues into <project>** turns sync on too. Signed in to a Weft
+account, **Instant, by webhook** adds a webhook to the repo (you need admin on it), relayed by the deployed Weft on Vercel and Weft's Supabase, so
+cards follow issue changes within seconds instead of on the next 5-minute check.
+
+A synced project's open issues become Backlog cards, through the `gh` CLI. Each card gets the issue's title, its body plus a link and a reminder to put `Fixes owner/name#N` in the commit,
 and its labels as tags (in their GitHub colours). The card shows "#N", linked to the issue. Weft checks again every 5
 minutes: a closed issue archives its card if the card never started, and a card that has started is never touched. A
 card you delete stays deleted. It's one direction for now; Weft never edits an issue. More in
@@ -452,7 +458,9 @@ folder's GitHub repo so every push deploys. Either way Weft writes `.vercel/proj
 `.gitignore`), just as `vercel link` does, so the Vercel CLI in any thread works on the right project. A linked
 project shows its team, production URL, latest deploy (Ready, Building, Failed; click to open it in the browser
 pane), whether it deploys from this folder's repo, and links to the latest deploy's page, logs, env vars, domains and
-the Vercel dashboard. More in
+the Vercel dashboard. Its 🔐 line lines up the project's vault secrets with its Vercel variables per environment:
+**Push** sends a value from the vault to Vercel (as sensitive, after Touch ID), and a thread can do the same with
+`mcp__secrets__push_to_vercel`, so a key never goes through the dashboard or a thread. More in
 [docs/architecture/vercel.md](docs/architecture/vercel.md).
 
 ## Supabase

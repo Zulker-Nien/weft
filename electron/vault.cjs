@@ -8,6 +8,7 @@ const { findEnvFiles, envFileKind, isVercelPull, parseEnv, shortLived } = requir
 const { loadDeviceKey } = require("./device-key.cjs");
 const { createVaultStore, tailOf } = require("./vault-store.cjs");
 const { MANAGED_FILE, createEnvWatcher, ignoreLocalEnv, isManaged, planWrite, readOrNull, renderEnv, writeFileAtomic } = require("./env-writeback.cjs");
+const { touchIdPrompt } = require("./touch-id.cjs");
 
 // How long one Touch ID keeps reveal and copy open, counted from the last use.
 const UNLOCK_MS = 3 * 60_000;
@@ -302,6 +303,14 @@ function createVault({ dataDir, safeStorage, sodium, prompt, clipboard, run = gi
       return { value, label };
     },
 
+    // Hands one value to send() in main after a Touch ID every time, even while unlocked: a push to a service
+    // (electron/vercel-env.cjs) is a write somewhere else. What send returns comes back; the value doesn't.
+    async sendValue(folder, name, environment, reason, send) {
+      const { label, values } = await this.valuesFor(folder, [name], environment);
+      if (!(name in values)) return { missing: true, label };
+      return (await prompt(reason(label))) ? { ...(await send(values[name])), label } : { denied: true, label };
+    },
+
     // Values for a command main runs (electron/secret-run.cjs), never sent over IPC. names null means every
     // name with a value in that environment, for a dev server. The caller asks the user first.
     async valuesFor(folder, names, environment) {
@@ -338,29 +347,6 @@ function registerVault(ipcMain, { vault, isBoard }) {
   handle("vault:remove", (id, name, env) => vault.remove(String(id), String(name), String(env)));
   handle("vault:write-back", (folder) => vault.writeBack(String(folder)));
   handle("vault:lock", () => vault.lock());
-}
-
-// Touch ID, or a plain confirmation where the Mac can't ask for it.
-function touchIdPrompt({ systemPreferences, dialog, window }) {
-  return async (reason) => {
-    if (systemPreferences.canPromptTouchID?.()) {
-      try {
-        await systemPreferences.promptTouchID(reason);
-        return true;
-      } catch {
-        return false;
-      }
-    }
-    const { response } = await dialog.showMessageBox(window(), {
-      type: "warning",
-      buttons: ["Cancel", "Allow"],
-      defaultId: 0,
-      cancelId: 0,
-      message: `Weft wants to ${reason}`,
-      detail: "Touch ID isn't available, so confirm here.",
-    });
-    return response === 1;
-  };
 }
 
 // Wires the vault into Electron main for the board window (board() is its webContents).

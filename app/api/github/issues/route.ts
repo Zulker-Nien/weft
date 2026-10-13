@@ -1,6 +1,7 @@
 import { connection } from "next/server";
 import { resolveFolder } from "@/lib/folders";
 import { asText } from "@/lib/format";
+import { removeHook } from "@/lib/github-hooks";
 import { disableIssueSync, enableIssueSync, issueSyncFolders, issueSyncStatus, syncIssues } from "@/lib/github-issues";
 import { fail, guard } from "@/lib/guard";
 
@@ -37,6 +38,8 @@ export async function DELETE(req: Request) {
     const folder = asText(body.folder).trim();
     if (!folder) throw new Error("Which folder should stop syncing its issues?");
     disableIssueSync(folder);
+    // A webhook is no use without the sync; a failure to remove it leaves the sync off anyway.
+    await removeHook(folder).catch((err: unknown) => console.warn(`GitHub webhook for ${folder}: ${(err as Error).message}`));
     return Response.json({ folders: issueSyncFolders() });
   } catch (err) {
     return fail(err);

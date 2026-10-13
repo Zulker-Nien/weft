@@ -92,6 +92,9 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   library (docs/architecture/tags.md).
 - `lib/github-issues.ts` + `app/api/github/issues`: a project's open GitHub issues become Backlog cards through the `gh` CLI, labels as tags,
   one direction; opt-in folders in settings `issueFolders`, polled from `prewarm()` every 5 min (docs/architecture/github-issues.md).
+  `lib/github-status.ts` + `app/api/github` + `lib/github-view.ts` + `lib/use-github.ts` + `components/GithubDrawer.tsx`: the rail's GitHub drawer
+  (the `gh` sign-in, each project's repo and its issue sync switch). `lib/github-hooks.ts` + `app/api/github/hooks` +
+  `lib/github-relay.ts` + `app/api/github/webhook`: instant sync, a repo webhook relayed by the deployed Weft on Vercel (→ `github_events` on Supabase → Realtime).
 - `lib/email-forward.ts` + `app/api/email/webhook` + `scripts/resend-domain.mjs`: mail to weft.zip, received by Resend (the domain's MX) and
   forwarded by the deployed Weft to one inbox (Svix-signed `email.received` → read back → send on; docs/architecture/email-forwarding.md).
 - `lib/account.ts` + `app/api/account` + `lib/use-account.ts`: the optional Weft account (Supabase Auth, PKCE; the
@@ -102,7 +105,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   `supabase/migrations/`, MCP server in `.mcp.json`.
 - `electron/vault*.cjs` + `electron/dotenv.cjs` + `electron/device-key.cjs` + `components/VaultDrawer.tsx`: the 🔐 secrets vault
   (docs/architecture/secrets.md); decryption only in main, IPC to the board window only, `lib/vault-view.ts` + `lib/use-vault.ts` on the board side.
-- `electron/vercel*.cjs` + `lib/vercel-view.ts` + `lib/use-vercel.ts` + `lib/use-linked-status.ts` (the three drawers' cached status hook) + `components/Vercel*.tsx`: the ▲ Vercel drawer (token sealed
+- `electron/vercel*.cjs` (`vercel-env.cjs`: 🔐 vault → Vercel env push, Touch ID per push, also `mcp__secrets__push_to_vercel`) + `lib/vercel-view.ts` + `lib/use-vercel.ts` + `lib/use-linked-status.ts` (the three drawers' cached status hook) + `components/Vercel*.tsx`: the ▲ Vercel drawer (token sealed
   in the Keychain, link or create a project as `.vercel/project.json`, latest deploy; docs/architecture/vercel.md).
 - `electron/supabase.cjs` + `lib/supabase-view.ts` + `lib/use-supabase.ts` + `components/Supabase*.tsx`: the Supabase drawer (its bolt
   on the rail; token sealed in the Keychain, link a project as `supabase/.temp/project-ref`, state, unapplied migrations; docs/architecture/supabase.md).

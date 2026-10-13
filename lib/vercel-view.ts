@@ -86,6 +86,56 @@ export interface VercelBridge {
   link(folder: string, projectId: string, orgId: string): Promise<{ linked: true; name: string }>;
   create(folder: string, options: CreateOptions): Promise<CreateResult>;
   unlink(folder: string): Promise<{ linked: false }>;
+  // Vault → Vercel (electron/vercel-env.cjs); missing on a main that started before env push was built.
+  envStatus?: (folder: string) => Promise<VercelEnvStatus>;
+  envPush?: (folder: string, name: string, environment: VercelEnvironment) => Promise<VercelPushResult>;
+}
+
+export type VercelEnvironment = "development" | "preview" | "production";
+
+// One vault name in one environment, lined up with the linked project's variables (names only, never values).
+export interface VercelEnvRow {
+  name: string;
+  environment: VercelEnvironment;
+  // The vault has a value for it (not just the name).
+  inVault: boolean;
+  onVercel: boolean;
+}
+
+export interface VercelEnvStatus {
+  // The vault's name (owner/repo) and the Vercel project's.
+  label: string;
+  project: string;
+  rows: VercelEnvRow[];
+}
+
+export interface VercelPushResult {
+  pushed?: boolean;
+  project?: string;
+  denied?: boolean;
+  missing?: boolean;
+  label: string;
+}
+
+export const ENV_SHORT: Record<VercelEnvironment, string> = { development: "dev", preview: "preview", production: "prod" };
+
+// Rows the vault can push: it has the value and Vercel doesn't have the name there yet.
+export const toPush = (rows: VercelEnvRow[]) => rows.filter((r) => r.inVault && !r.onVercel);
+
+// The env section's one-line summary.
+export function envLine(rows: VercelEnvRow[]) {
+  const push = toPush(rows).length;
+  const both = rows.filter((r) => r.inVault && r.onVercel).length;
+  if (!rows.some((r) => r.inVault)) return "No vault values to push yet";
+  if (!push) return `All ${both} vault ${both === 1 ? "secret is" : "secrets are"} on Vercel`;
+  return `${push} to push${both ? ` · ${both} on Vercel` : ""}`;
+}
+
+// The toast after a push, or why it didn't happen.
+export function pushText(name: string, environment: VercelEnvironment, r: VercelPushResult) {
+  if (r.denied) return `${name} stayed in the vault: Touch ID wasn't approved`;
+  if (r.missing) return `${name} has no ${environment} value in the ${r.label} vault`;
+  return `Pushed ${name} to ${r.project ?? "Vercel"} (${environment}). It's live from the next deploy`;
 }
 
 export const TOKEN_URL = "https://vercel.com/account/tokens";

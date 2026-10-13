@@ -5,6 +5,7 @@ import type { VaultBridge } from "./vault-view";
 import type { VercelBridge } from "./vercel-view";
 import type { SupabaseBridge } from "./supabase-view";
 import type { BlastcpBridge } from "./blastcp-view";
+import type { GithubStatus } from "./github-view";
 import type {
   AccountProvider,
   AccountView,
@@ -280,6 +281,11 @@ export const api = {
   importIssues: (folder: string) =>
     call<{ folder: string; added: number; updated: number; archived: number }>("POST", "/api/github/issues", { folder }),
   stopIssues: (folder: string) => call<{ folders: string[] }>("DELETE", "/api/github/issues", { folder }),
+  // A webhook on the folder's repo, relayed by Weft's Supabase, so its issues sync within seconds (lib/github-hooks.ts).
+  addHook: (folder: string) => call<{ repo: string }>("POST", "/api/github/hooks", { folder }),
+  removeHook: (folder: string) => call<{ ok: true }>("DELETE", "/api/github/hooks", { folder }),
+  // The GitHub drawer: who gh is signed in as, and each folder's repo and issue sync (lib/github-status.ts).
+  github: (folders: string[]) => call<GithubStatus>("GET", `/api/github?${new URLSearchParams(folders.map((f) => ["folder", f]))}`),
 };
 
 // A thread snapshot with the live items that arrived while it loaded, which are newer than it.

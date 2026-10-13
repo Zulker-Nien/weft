@@ -1,7 +1,7 @@
 # Vercel
 
-Status: linking built 2026-10-12 (pick an existing project or create one). GitHub connect on a linked project,
-deploys, env push and logs are next.
+Status: linking built 2026-10-12 (pick an existing project or create one); env push from the 🔐 vault built
+2026-10-12. GitHub connect on a linked project, deploys and logs are next.
 
 ▲ on the left rail (under 🔐, in `components/LibraryRail.tsx`) opens a drawer that links each board project to a
 Vercel project. It's the base for the rest of the Vercel work: everything after linking needs the token and the
@@ -45,22 +45,44 @@ and then the logs, env and domains links are left out. A link Vercel can't read 
 shows the error, so you can still unlink it. Status loads only while the drawer is open (`lib/use-vercel.ts`), on
 open, on folder change and on window focus, since each load is a few API calls per project. It opens on the last status it had (memory, then localStorage `weft:drawer-status:<name>`), refreshes it behind, and a focus asks again only after 30s (`lib/use-linked-status.ts`, shared by the three drawers).
 
+## Env push: 🔐 vault → Vercel
+
+A linked folder's card in the drawer has a 🔐 line ("1 to push · 4 on Vercel") that opens the vault's names against
+the project's variables, one row per name and environment: **Push** (in the vault, not on Vercel), **on Vercel · push
+again** (replaces Vercel's value with the vault's), **Vercel only**, or **no value** (a name the vault has without a
+value). It opens by itself when something is left to push.
+
+- **Names only to the board.** `envList` reads `/v10/projects/<id>/env` without `decrypt`, so no value comes back from
+  Vercel either; the comparison is by name and environment (`electron/vercel-env.cjs` `status`).
+- **A push is one Touch ID, every time.** `vault.sendValue` asks with the secret, the vault, the environment and the
+  project ("push SUPABASE_SECRET_KEY (aimhuge/weft, production) to Vercel project weft"), even while the drawer is
+  unlocked, since it writes somewhere else. The value goes from the vault straight into `envSet`'s request inside main.
+- **Sensitive by default.** Production and Preview values go in as `sensitive` (Vercel never shows them again);
+  Development can't be sensitive, so it's `encrypted`. `upsert=true` replaces the value for that name and environment.
+  A variable takes effect on the next deploy.
+- **Threads can push too**, through `mcp__secrets__push_to_vercel(name, environment)` (`lib/secret-tools.ts`) and the
+  control server's `POST /vercel/env-push` (`envRoutes`): the same Touch ID, and the thread gets back only what
+  happened. Its prompt says to use it instead of the dashboard or `vercel env add` for a vault value.
+- A Weft whose main started before env push shows "Restart Weft to push 🔐 secrets to Vercel" (no `envStatus` on the bridge).
+
 ## Files
 
 - `electron/vercel.cjs`: `createVercel` (status, token, projects, scopes, link, create, unlink) and `registerVercel`,
   whose IPC handlers answer the board window only.
 - `electron/vercel-project.cjs`: request building, reading Vercel's answers (`deploymentOf`, `gitOf`,
   `productionUrl`), and the folder's side (`readLink`, `writeLink`, `ignoreVercel`, `frameworkOf`, `repoOf`).
+- `electron/vercel-env.cjs`: `createVercelEnv` (status, push) over `vercel.envList` / `vercel.envSet` and `vault.sendValue`,
+  and `envRoutes` for threads.
 - `electron/preload.cjs`: `window.threadboard.vercel`.
 - `lib/vercel-view.ts`: types, the bridge, matching, labels, name rules. `lib/use-vercel.ts`: loading, over `lib/use-linked-status.ts` (the cache).
-- `components/VercelDrawer.tsx` (token form, linked folders), `components/VercelPicker.tsx` (Link…),
+- `components/VercelDrawer.tsx` (token form, linked folders), `components/VercelEnv.tsx` (the 🔐 env rows), `components/VercelPicker.tsx` (Link…),
   `components/VercelCreate.tsx` (+ New project).
 
 ## Next
 
 1. **Connect GitHub** on a project that's linked but doesn't deploy from its repo (same `/link` call as create).
 2. **Deploy**: list recent deployments, redeploy, promote; open a preview in the card's pane after a push.
-3. **Env push**: diff 🔐 vault values against Vercel's environments, push per environment with a click
-   (docs/architecture/secrets.md, step 5). Values go from the vault to Vercel inside main.
+3. **Env pull and compare**: values can't be compared without decrypting Vercel's (sensitive ones never decrypt), so
+   "changed" isn't shown yet; a pull into the vault for non-sensitive ones is open.
 4. **Logs**: build logs of a failed deploy, runtime logs, in the drawer or the pane.
 5. **Agent tools**: `mcp__vercel__*` for status and logs, with the token kept in main.

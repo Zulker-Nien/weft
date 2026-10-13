@@ -267,6 +267,8 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `Now` **GitHub Issues sync** — in phases (docs/architecture/github-issues.md):
   - `P1` Phase 1, card → issue: make an issue from a card, its tags as labels, and link the two.
   - `Done` Phase 2, issues → cards: ⌘K "Import GitHub issues into <project>" opts a folder in; its open issues become Backlog cards through `gh` (body + link + "Fixes owner/name#N" as the prompt, labels as tags), re-checked every 5 min. A closed issue archives its card if it never started; started cards are never touched; a deleted card stays deleted (`lib/github-issues.ts`).
+  - `Done` Instant sync by webhook: a repo webhook posts to `/api/github/webhook` on the deployed Weft (Vercel), which saves a `github_events` row the server hears through Realtime and syncs that repo (`lib/github-hooks.ts`). The poll stays as the fallback.
+  - `Done` The GitHub drawer on the left rail: the `gh` sign-in, and per project its repo, the issue sync switch, the last sync, Sync now (`components/GithubDrawer.tsx`, `lib/github-status.ts`).
   - `P2` Phase 3, two-way: title, labels and open/closed kept in step both ways.
   - `P2` Phase 4, Projects v2: a GitHub Project's Status column follows the card's column.
   - `P2` Phase 5, comments: a turn's summary posted to the issue (summaries only, vault values removed, a warning on a public repo).
@@ -278,7 +280,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `P2` **Linear** — create cards from Linear issues and keep issue status in step with the card's column.
 - `P2` **Slack** — post Done and Needs-you summaries to a channel, and create cards from a slash command.
 - ~~`P2` **BlastCP queue on the rail**~~ Shipped as the BlastCP rocket on the rail: connect with OAuth, link a property per project, see its next posts, drafts and failures, open them in the pane. Next: draft a post from a card, and a rail badge for posts waiting on you.
-- ~~`P2` **Link a Vercel project**~~ Shipped as ▲ on the rail: token in the Keychain, link an existing project or make a new one (with its GitHub repo connected), see the latest deploy. Next, in the same drawer: connect GitHub on an already-linked project, deploy and redeploy, push 🔐 vault values to Vercel environments (diff first), and build and runtime logs.
+- ~~`P2` **Link a Vercel project**~~ Shipped as ▲ on the rail: token in the Keychain, link an existing project or make a new one (with its GitHub repo connected), see the latest deploy. Next, in the same drawer: connect GitHub on an already-linked project, deploy and redeploy, and build and runtime logs. Built: push 🔐 vault values to Vercel environments, from the drawer or a thread (`mcp__secrets__push_to_vercel`), Touch ID per push.
 - ~~`P2` **Link a Supabase project**~~ Shipped as the bolt on the rail: token in the Keychain, link a project (or pick up `.mcp.json`'s), see its state, region, unapplied migrations, Restore a paused one. Next: push migrations from the drawer, copy the URL and keys into the 🔐 vault, add the Supabase MCP server for threads, create a project in place.
 - `P2` **Vercel previews** — after a push, open the preview deployment in the card's browser tab and save the URL on the card.
 - `P3` **Sentry** — create a card from an error with its stack trace and a link back.

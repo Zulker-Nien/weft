@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
-import { createdText, deployState, vercelActions, gitLine, matchScore, pickerList, projectNameFor, shownFolders, startScope, validProjectName, vercelBridge, vercelTitle, type VercelFolder, type VercelProject, type VercelStatus } from "./vercel-view";
+import { createdText, deployState, ENV_SHORT, envLine, pushText, toPush, vercelActions, gitLine, matchScore, pickerList, projectNameFor, shownFolders, startScope, validProjectName, vercelBridge, vercelTitle, type VercelEnvironment, type VercelEnvRow, type VercelFolder, type VercelProject, type VercelStatus } from "./vercel-view";
 
 const project = (name: string, over: Partial<VercelProject> = {}): VercelProject => ({ id: name, name, orgId: "team_1", team: "Acme", teamSlug: "acme", git: null, framework: null, updatedAt: 0, ...over });
 const folder = (path: string, repo: string | null = null, over: Partial<VercelFolder> = {}): VercelFolder => ({ folder: path, repo, link: null, error: null, ...over });
@@ -123,5 +123,27 @@ describe("vercelBridge", () => {
     const bridge = { status: () => null };
     (window as unknown as { threadboard: unknown }).threadboard = { vercel: bridge };
     expect(vercelBridge()).toBe(bridge);
+  });
+});
+
+describe("vault → Vercel env", () => {
+  const row = (name: string, environment: VercelEnvironment, inVault: boolean, onVercel: boolean): VercelEnvRow => ({ name, environment, inVault, onVercel });
+
+  it("counts what's left to push", () => {
+    const rows = [row("A", "production", true, false), row("B", "production", true, true), row("C", "preview", false, true), row("D", "production", false, false)];
+    expect(toPush(rows)).toEqual([rows[0]]);
+    expect(envLine(rows)).toBe("1 to push · 1 on Vercel");
+    expect(envLine([rows[0]!])).toBe("1 to push");
+    expect(envLine([rows[1]!])).toBe("All 1 vault secret is on Vercel");
+    expect(envLine([rows[1]!, row("E", "development", true, true)])).toBe("All 2 vault secrets are on Vercel");
+    expect(envLine([rows[2]!, rows[3]!])).toBe("No vault values to push yet");
+    expect(ENV_SHORT.production).toBe("prod");
+  });
+
+  it("words a push, a no and a missing value", () => {
+    expect(pushText("K", "production", { pushed: true, project: "weft", label: "a/b" })).toBe("Pushed K to weft (production). It's live from the next deploy");
+    expect(pushText("K", "preview", { pushed: true, label: "a/b" })).toBe("Pushed K to Vercel (preview). It's live from the next deploy");
+    expect(pushText("K", "production", { denied: true, label: "a/b" })).toBe("K stayed in the vault: Touch ID wasn't approved");
+    expect(pushText("K", "development", { missing: true, label: "a/b" })).toBe("K has no development value in the a/b vault");
   });
 });

@@ -72,6 +72,9 @@ contextBridge.exposeInMainWorld("threadboard", {
     link: (folder, projectId, orgId) => ipcRenderer.invoke("vercel:link", folder, projectId, orgId),
     create: (folder, options) => ipcRenderer.invoke("vercel:create", folder, options),
     unlink: (folder) => ipcRenderer.invoke("vercel:unlink", folder),
+    // Vault → Vercel (electron/vercel-env.cjs): names only come back; a push asks Touch ID in main.
+    envStatus: (folder) => ipcRenderer.invoke("vercel:env-status", folder),
+    envPush: (folder, name, environment) => ipcRenderer.invoke("vercel:env-push", folder, name, environment),
   },
   // Supabase (electron/supabase.cjs): the token stays in main; links are supabase/.temp/project-ref. Board window only.
   supabase: {

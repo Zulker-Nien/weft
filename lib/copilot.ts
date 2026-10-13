@@ -2,6 +2,7 @@ import os from "node:os";
 import { startSessionSync } from "./import";
 import { startSearchIndex } from "./search";
 import { boardDigest, lastSeen, rememberSeen, snapshot, withDigest } from "./copilot-digest";
+import { startHookListener } from "./github-hooks";
 import { startIssueSync } from "./github-issues";
 import { endSession, ensureSpare, sendUserMessage, warmUp } from "./runner";
 import { resumeInterrupted } from "./resume";
@@ -68,6 +69,8 @@ export function prewarm() {
   startScheduler();
   // Sync the GitHub issues of the folders that opted in, every 5 minutes (lib/github-issues.ts).
   startIssueSync();
+  // Hear webhook-relayed issue events within seconds, while you're signed in to Weft (lib/github-hooks.ts).
+  startHookListener();
   // Carry on the turns the last quit cut off (lib/resume.ts).
   resumeInterrupted();
   ensureCopilot();

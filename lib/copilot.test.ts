@@ -21,6 +21,7 @@ vi.mock("./search", () => ({ startSearchIndex: vi.fn() }));
 vi.mock("./scheduler", () => ({ startScheduler: vi.fn() }));
 vi.mock("./resume", () => ({ resumeInterrupted: vi.fn() }));
 vi.mock("./github-issues", () => ({ startIssueSync: vi.fn() }));
+vi.mock("./github-hooks", () => ({ startHookListener: vi.fn() }));
 vi.mock("./settings", () => ({ listProjects: vi.fn(() => db.projects) }));
 
 const store = await import("./store");

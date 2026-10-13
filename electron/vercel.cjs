@@ -175,11 +175,29 @@ function createVercel({ dataDir, safeStorage, fetch: fetchImpl = globalThis.fetc
       fs.rmSync(path.join(folder, ".vercel", "project.json"), { force: true });
       return { linked: false };
     },
+
+    // The linked project's environment variables: names and where each goes, never values (no decrypt).
+    async envList(folder) {
+      const link = readLink(folder);
+      if (!link) throw new Error(`${path.basename(folder)} isn't linked to a Vercel project yet.`);
+      const { envs = [] } = await call(`/v10/projects/${encodeURIComponent(link.projectId)}/env`, { teamId: teamOf(link.orgId) });
+      return { project: link.projectName ?? link.projectId, envs: envs.map((e) => ({ key: e.key, targets: Array.isArray(e.target) ? e.target : [e.target].filter(Boolean), type: e.type ?? null })) };
+    },
+
+    // Adds or replaces one variable for one environment. Production and Preview values go in as sensitive
+    // (nobody reads them back from Vercel's dashboard); Development can't be sensitive, so it's encrypted.
+    async envSet(folder, key, environment, value) {
+      const link = readLink(folder);
+      if (!link) throw new Error(`${path.basename(folder)} isn't linked to a Vercel project yet.`);
+      const type = environment === "development" ? "encrypted" : "sensitive";
+      await call(`/v10/projects/${encodeURIComponent(link.projectId)}/env`, { method: "POST", teamId: teamOf(link.orgId), query: { upsert: "true" }, body: { key, value, type, target: [environment] } });
+      return { pushed: true, project: link.projectName ?? link.projectId };
+    },
   };
 }
 
 // The IPC handlers. isBoard(sender) says whether a message came from the board window.
-function registerVercel(ipcMain, { vercel, isBoard }) {
+function registerVercel(ipcMain, { vercel, env, isBoard }) {
   const handle = (channel, fn) =>
     ipcMain.handle(channel, async (event, ...args) => {
       if (!isBoard(event.sender)) throw new Error("Vercel only answers the board window.");
@@ -196,14 +214,20 @@ function registerVercel(ipcMain, { vercel, isBoard }) {
     return vercel.create(String(folder), { name: String(o.name ?? ""), teamId: typeof o.teamId === "string" ? o.teamId : null, git: o.git === true });
   });
   handle("vercel:unlink", (folder) => vercel.unlink(String(folder)));
+  if (env) {
+    handle("vercel:env-status", (folder) => env.status(String(folder)));
+    handle("vercel:env-push", (folder, name, environment) => env.push(String(folder), String(name), String(environment)));
+  }
 }
 
-// Wires Vercel into Electron main for the board window (board() is its webContents).
-function setupVercel({ ipcMain, dataDir, board }) {
+// Wires Vercel into Electron main for the board window (board() is its webContents). With the vault, it also
+// pushes vault values to the linked project (electron/vercel-env.cjs); env is what threads reach it through.
+function setupVercel({ ipcMain, dataDir, board, vault }) {
   const { safeStorage } = require("electron");
   const vercel = createVercel({ dataDir, safeStorage });
-  registerVercel(ipcMain, { vercel, isBoard: (sender) => Boolean(sender) && sender === board() });
-  return vercel;
+  const env = vault ? require("./vercel-env.cjs").createVercelEnv({ vercel, vault }) : null;
+  registerVercel(ipcMain, { vercel, env, isBoard: (sender) => Boolean(sender) && sender === board() });
+  return { vercel, env };
 }
 
 module.exports = { setupVercel, createVercel, registerVercel, TOKEN_FILE };

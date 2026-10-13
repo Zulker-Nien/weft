@@ -3,9 +3,46 @@
 Status: issues → cards built 2026-10-12 (phase 2 below). One direction only: Weft reads issues and never edits
 one. Card → issue, two-way sync, Projects v2 columns and comments are later phases.
 
-Turn it on for a project from ⌘K: **Import GitHub issues into <project>** (the open thread's project, or your
-most recent one). That opts the folder in and syncs it right away; the toast reports how many cards were added,
+Turn it on for a project in the **GitHub drawer** (GitHub's mark at the bottom of the left rail): tick **Issues →
+Backlog cards** on its repo. Or from ⌘K: **Import GitHub issues into <project>** (the open thread's project, or your
+most recent one). Either opts the folder in and syncs it right away; the toast reports how many cards were added,
 updated and archived.
+
+The drawer also shows who `gh` is signed in as (signed out, it shows `gh auth login --web` and **Check again**), each
+synced folder's last sync or error, **Sync now**, and links to the repo and its issues in the browser pane. Unticking
+stops the sync; the cards it made stay.
+
+## Instant updates, by webhook
+
+The poll can leave a new issue waiting up to 5 minutes. **Instant, by webhook** (under the sync switch) puts a
+webhook on the repo so cards follow within seconds. Weft runs on localhost, which GitHub can't reach, so the
+webhook goes to the deployed Weft on Vercel (`https://weft-topaz.vercel.app/api/github/webhook`), which saves the
+event on Weft's Supabase (project `lqjyravglujyizyqypxq`) for your Weft to hear. It needs you signed in to a Weft
+account and admin on the repo.
+
+1. **Add.** `lib/github-hooks.ts` `addHook` makes a 32-byte secret, saves a `github_hooks` row on your account
+   (`repo`, `secret`; RLS: yours only, and no client can read `secret` back), then
+   `gh api repos/<repo>/hooks --method POST --input -` with the secret on stdin (never in the process list):
+   `events: ["issues"]`, URL `…/api/github/webhook?hook=<row id>` (`WEFT_RELAY_URL` points it elsewhere). GitHub's hook id goes back on the row.
+   If GitHub refuses (404/403: not admin), the row is deleted again.
+2. **Relay.** `app/api/github/webhook` on the Vercel deployment (the one Weft route with no localhost guard; the
+   signature is its check) runs `lib/github-relay.ts`: it looks up the hook, checks `X-Hub-Signature-256`
+   (HMAC-SHA256 of the body with its secret, compared in constant time), answers `ping`, drops events other than
+   `issues`, checks the payload's repo is the hook's, and saves a `github_events` row (repo, event, action, issue
+   number, delivery id; no payload) through Supabase's REST API with `SUPABASE_SECRET_KEY`, set on Vercel's
+   Production environment only. It clears that hook's rows older than a day. Without the key it answers 503.
+3. **Hear.** The Weft server keeps one Realtime channel on your `github_events` inserts while you're signed in
+   and have a hook (`startHookListener` from `prewarm()`, following sign-in and sign-out). An event syncs every
+   synced folder on that repo, 1.5s after GitHub's burst settles (opened, then labeled).
+4. **Remove.** Unticking Instant, or turning the folder's sync off, deletes the hook on GitHub and the row.
+
+The 5-minute poll keeps running, so a missed event (Weft closed, Realtime reconnecting) costs at most 5 minutes.
+
+- `supabase/migrations/20261012131000_github_webhooks.sql`: `github_hooks`, `github_events`, their RLS and grants,
+  and `github_events` in the `supabase_realtime` publication.
+- `app/api/github/hooks`: POST `{folder}` adds, DELETE `{folder}` removes.
+- The relay ships with every push to `main` (the `weft` Vercel project builds this repo); `SUPABASE_SECRET_KEY` is a
+  Supabase secret key (`sb_secret_…`) for Weft Prod, listed in `.env.example`.
 
 ## How it works
 
@@ -40,6 +77,12 @@ For each opted-in folder, each open issue becomes a Backlog card:
   it off.
 - The poll starts in `prewarm()` (`lib/copilot.ts`), off the request path: a first sync 20s after the server
   starts, then every 5 minutes.
+- `lib/github-status.ts` + `app/api/github` (GET `?folder=…`): the drawer's status, `gh api user` for the account (asked
+  every load, so Check again works at once), each folder's repo (`repoOf`, cached 10 minutes, a miss 1 minute) and
+  which repos have a webhook (`hookedRepos`).
+- `lib/github-view.ts` (types, the sync line, toast and rail title), `lib/use-github.ts` (cached like the other drawers,
+  `lib/use-linked-status.ts`, but through the Next server: `gh` needs no Electron bridge), `components/GithubDrawer.tsx`,
+  `components/GithubLogo.tsx`.
 - `components/board-palette.ts`: the ⌘K command.
 - `components/CardMarks.tsx`: the "#N" link on the card.
 

@@ -68,8 +68,10 @@ secret get a conflict instead of one silently overwriting the other.
   into each CLI. So no secret may live in the server's env, and any internal token between main and the
   server must be stripped in `cliEnv()`.
 - **Dev servers** (`lib/devserver.ts`) get the vault's development values in their env; agent shells don't.
-- **Vercel push** runs on your machine with your own Vercel token (Keychain). Weft shows a diff
-  (missing, changed, extra per environment) and every write needs your click; agents can't push.
+- **Vercel push** runs on your machine with your own Vercel token (Keychain). The ▲ drawer lines the vault's names up
+  with the linked project's (on Vercel, vault only, Vercel only, per environment), and every push is its own Touch ID,
+  from the drawer or from a thread (`mcp__secrets__push_to_vercel`); the value goes from the vault to Vercel inside main
+  (docs/architecture/vercel.md).
 
 ## Where you find it: the left rail
 
@@ -239,5 +241,6 @@ that opens the file itself. This is a strong default, not a sandbox. Known gaps 
 3. **Agent tools, dev-server injection, redaction.** Built 2026-10-12: `list`, `fill_field`, `run`, dev-server injection,
    redaction of stored tool results. Still open: `request`, values for HTTP requests, the approvals list in the drawer.
 4. **Supabase sync**: the tables above with ciphertext only, multi-device grants, recovery key.
-5. **Vercel push**: diff view, per-environment push with confirmation.
+5. **Vercel push** (built 2026-10-12): names diff per environment, push per name with Touch ID, from the drawer or a
+   thread. Still open: "changed" (needs Vercel's values), pull.
 6. **Teams**: invites, fingerprint check, roles, rotate-on-remove, the event log in the panel.

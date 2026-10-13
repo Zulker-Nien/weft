@@ -7,7 +7,8 @@ import { markInUse, RUN_PROMPT, runTool } from "./secret-run";
 // The vault for threads (docs/architecture/secrets.md): names only, and values typed into a pane field by
 // Electron main after the user's Touch ID. A value never comes back through these tools.
 export const SECRETS_PROMPT = `When a task needs a secret value the user keeps in Weft's 🔐 vault (an API key, an OAuth client secret, a password): don't ask them to paste it, don't read .env files, and never try to see the value. Call mcp__secrets__list for the names, open the page with the field in the browser pane, and call mcp__secrets__fill_field; the user approves with Touch ID and the value goes straight into the field.
-${RUN_PROMPT}`;
+${RUN_PROMPT}
+To put a vault value on the project's linked Vercel project (an env var a deploy needs), call mcp__secrets__push_to_vercel with its name and environment; the user approves with Touch ID and Weft sends it to Vercel itself. Don't use the Vercel dashboard or \`vercel env add\` for a vault value.`;
 
 const ENVIRONMENTS = ["development", "preview", "production"] as const;
 
@@ -51,6 +52,24 @@ export function secretsMcpServer(cardId: () => string | undefined, folder: () =>
             if (!r.found) return text(`No element matches ${selector}`, true);
             markInUse(cardId());
             return text(`Typed ${name} from the ${vault} vault into ${selector}.`);
+          }),
+      ),
+      tool(
+        "push_to_vercel",
+        "Push a secret from the 🔐 vault to the project's linked Vercel project as an environment variable (replacing Vercel's value for that environment). The user approves with Touch ID; you never see the value. Takes effect on the next deploy.",
+        {
+          name: z.string().describe("The secret's name, e.g. SUPABASE_SECRET_KEY"),
+          environment: z.enum(ENVIRONMENTS).optional().describe("Which value, and which Vercel environment it goes to; defaults to production"),
+          project,
+        },
+        ({ name, environment, project: p }) =>
+          attempt(async () => {
+            const env = environment ?? "production";
+            const r = await shell("/vercel/env-push", { folder: p ?? folder(), name, environment: env });
+            const vault = asText(r.label, "this");
+            if (r.denied) return text(`The user didn't approve pushing ${name}. Ask before trying again.`, true);
+            if (r.missing) return text(`${name} (${env}) has no value in the ${vault} vault. Ask the user to add it with 🔐 on the left rail.`, true);
+            return text(`Pushed ${name} (${env}) from the ${vault} vault to Vercel project ${asText(r.project, "the linked project")}. It takes effect on the next deploy.`);
           }),
       ),
       runTool(cardId, folder),
