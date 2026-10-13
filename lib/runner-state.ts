@@ -101,6 +101,8 @@ export interface Session {
   model?: string;
   // Set once the drive loop has finished; the CLI is gone.
   ended?: boolean;
+  // When its last turn ended (or it opened), for closing the least recently used idle CLIs first.
+  lastUsed?: number;
   done: Promise<void>;
 }
 
@@ -159,9 +161,16 @@ export function specFor(card: Card): Spec {
   };
 }
 
-// Closes a card's CLI after the keep-alive time without messages (never, if that's 0).
+// Idle card CLIs kept open at most. Each one holds a CLI plus a copy of every MCP server it starts, so
+// with keep-alive at 0 a busy day once left ~40 open and the Mac (and Weft's server) crawling.
+export const MAX_IDLE_SESSIONS = 8;
+
+// Closes a card's CLI after the keep-alive time without messages (never, if that's 0), and the least
+// recently used idle CLIs past MAX_IDLE_SESSIONS. A closed card resumes its session on the next message.
 export function scheduleIdle(session: Session) {
   clearTimeout(session.idle);
+  session.lastUsed = Date.now();
+  trimIdle();
   const cardId = session.cardId;
   const settingMinutes = keepAliveMinutes();
   // A picked-up session's CLI closes after 10 idle minutes at most, for the same reason.
@@ -169,6 +178,16 @@ export function scheduleIdle(session: Session) {
   const minutes = imported ? Math.min(settingMinutes || 10, 10) : settingMinutes;
   if (!cardId || minutes <= 0) return;
   session.idle = setTimeout(() => closeWhenIdle(cardId, session), Math.min(minutes * 60_000, MAX_TIMER_MS));
+}
+
+function trimIdle() {
+  const idle = [...sessions.entries()]
+    .filter(([, s]) => !s.busy && !s.spec.copilot && s.pending.length === 0 && !s.ended)
+    .sort(([, a], [, b]) => (a.lastUsed ?? 0) - (b.lastUsed ?? 0));
+  for (const [cardId, s] of idle.slice(0, Math.max(0, idle.length - MAX_IDLE_SESSIONS))) {
+    clearTimeout(s.idle);
+    closeWhenIdle(cardId, s);
+  }
 }
 
 function closeWhenIdle(cardId: string, session: Session) {

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, mergeThread, type NewCardInput } from "./client";
+import { UPLOAD_REPLY_MS, api, mergeThread, type NewCardInput } from "./client";
 import type { ThreadItem } from "./types";
 
 type FetchCall = [string, RequestInit];
@@ -135,9 +135,14 @@ describe("api.uploadAttachment", () => {
     body: unknown;
     status = 0;
     responseText = "";
-    upload: { onprogress?: (e: { lengthComputable: boolean; loaded: number; total: number }) => void } = {};
+    upload: { onprogress?: (e: { lengthComputable: boolean; loaded: number; total: number }) => void; onload?: () => void } = {};
     onload?: () => void;
     onerror?: () => void;
+    onloadend?: () => void;
+    aborted = false;
+    abort() {
+      this.aborted = true;
+    }
     constructor() {
       FakeXHR.last = this;
     }
@@ -155,6 +160,7 @@ describe("api.uploadAttachment", () => {
       this.status = status;
       this.responseText = responseText;
       this.onload?.();
+      this.onloadend?.();
     }
   }
 
@@ -212,6 +218,33 @@ describe("api.uploadAttachment", () => {
     const done = api.uploadAttachment(new Blob(["x"]), "f");
     FakeXHR.last.finish(101, JSON.stringify(saved));
     await expect(done).rejects.toThrow("Upload failed (101).");
+  });
+
+  it("gives up when the server doesn't answer a minute after the bytes are sent", async () => {
+    vi.useFakeTimers();
+    try {
+      const done = api.uploadAttachment(new Blob(["x"]), "f");
+      FakeXHR.last.upload.onload!();
+      vi.advanceTimersByTime(UPLOAD_REPLY_MS);
+      await expect(done).rejects.toThrow("didn't answer in a minute");
+      expect(FakeXHR.last.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps waiting no longer once the reply arrives", async () => {
+    vi.useFakeTimers();
+    try {
+      const done = api.uploadAttachment(new Blob(["x"]), "f");
+      FakeXHR.last.upload.onload!();
+      FakeXHR.last.finish(200, JSON.stringify(saved));
+      vi.advanceTimersByTime(UPLOAD_REPLY_MS);
+      await expect(done).resolves.toEqual(saved);
+      expect(FakeXHR.last.aborted).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("rejects on a network error", async () => {

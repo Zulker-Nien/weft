@@ -107,6 +107,26 @@ function formatPercent(fraction: number) {
   return `${Math.round(fraction * 100)}%`;
 }
 
+// The strip along the bottom of a media node while it uploads, then while the server saves it, or why it failed.
+function UploadBar({ upload }: { upload?: Upload }) {
+  const progress = upload?.progress ?? 0;
+  return (
+    <span className="absolute inset-x-0 bottom-0 flex items-center gap-2 rounded-b-lg bg-black/60 px-2 py-1 text-[11px] text-white">
+      {upload?.error ? (
+        <span className="truncate">Upload failed: {upload.error}</span>
+      ) : (
+        <>
+          <Spinner size={10} />
+          <span>{progress >= 1 ? "Saving…" : `Uploading ${formatPercent(progress)}`}</span>
+          <span className="h-1 flex-1 overflow-hidden rounded bg-white/25">
+            <span className="block h-full bg-white" style={{ width: formatPercent(progress) }} />
+          </span>
+        </>
+      )}
+    </span>
+  );
+}
+
 function MediaView({ node, selected, deleteNode }: NodeViewProps) {
   const { src, name, kind, uploadId } = node.attrs as MediaAttrs;
   const upload = useUpload(uploadId);
@@ -137,21 +157,7 @@ function MediaView({ node, selected, deleteNode }: NodeViewProps) {
         </span>
       )}
 
-      {(busy || upload?.error) && (
-        <span className="absolute inset-x-0 bottom-0 flex items-center gap-2 rounded-b-lg bg-black/60 px-2 py-1 text-[11px] text-white">
-          {upload?.error ? (
-            <span className="truncate">Upload failed: {upload.error}</span>
-          ) : (
-            <>
-              <Spinner size={10} />
-              <span>Uploading {formatPercent(upload?.progress ?? 0)}</span>
-              <span className="h-1 flex-1 overflow-hidden rounded bg-white/25">
-                <span className="block h-full bg-white" style={{ width: formatPercent(upload?.progress ?? 0) }} />
-              </span>
-            </>
-          )}
-        </span>
-      )}
+      {(busy || upload?.error) && <UploadBar upload={upload} />}
 
       <button
         type="button"

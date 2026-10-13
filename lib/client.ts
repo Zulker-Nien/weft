@@ -147,6 +147,9 @@ export interface UploadedAttachment {
   bytes: number;
 }
 
+// How long an upload waits for the server's reply once its bytes are sent.
+export const UPLOAD_REPLY_MS = 60_000;
+
 // Uploads a pasted or dropped file as-is. XHR rather than fetch, for upload progress (0 to 1).
 function upload(file: Blob, name: string, onProgress?: (fraction: number) => void) {
   return new Promise<UploadedAttachment>((resolve, reject) => {
@@ -158,6 +161,15 @@ function upload(file: Blob, name: string, onProgress?: (fraction: number) => voi
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) onProgress?.(e.loaded / e.total);
     };
+    // The bytes are all sent; a server too busy to answer in a minute shouldn't leave it spinning forever.
+    let waiting: ReturnType<typeof setTimeout> | undefined;
+    xhr.upload.onload = () => {
+      waiting = setTimeout(() => {
+        xhr.abort();
+        reject(new Error("Weft's server didn't answer in a minute. Remove it and paste again."));
+      }, UPLOAD_REPLY_MS);
+    };
+    xhr.onloadend = () => clearTimeout(waiting);
     xhr.onload = () => {
       let data: { error?: string } & Partial<UploadedAttachment> = {};
       try {

@@ -8,6 +8,13 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ## [Unreleased]
 
+### Fixed
+
+- At most 8 idle card CLIs stay open; past that the least recently used close and resume on your next message, so
+  a long day no longer leaves dozens of CLIs (and their MCP servers) slowing the Mac and the board.
+- A pasted file whose bytes are sent shows "Saving…", and fails after a minute without a reply instead of
+  spinning at "Uploading 100%" forever.
+
 ### Added
 - **Review all** at the top of the Review column starts the same commit walk-through card as the header's "+N/-N" counter (`lib/pile-review.ts`).
 - Supabase drawer: each unapplied migration's name opens the card that wrote it (`migrationOwner` in `lib/supabase-view.ts`).
