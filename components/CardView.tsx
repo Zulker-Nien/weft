@@ -5,7 +5,7 @@ import { api } from "@/lib/client";
 import { folderName, isLive, STAGES, stageStep, timeAgo } from "@/lib/format";
 import { modelLabel, runningOn } from "@/lib/new-thread";
 import { isBusy } from "@/lib/overlap";
-import { formatAt } from "@/lib/schedule";
+import { sendsWhen } from "@/lib/schedule";
 import { type Card } from "@/lib/types";
 import { ContinueButton, RestartButton, type ResumeHow } from "./CardResume";
 import CardPicture from "./CardPicture";
@@ -55,10 +55,10 @@ function FooterMeta({ card, now, alsoHere, marks }: { card: Card; now: number; a
       {nextSend ? (
         <span
           className="flex shrink-0 items-center gap-0.5 text-accent"
-          title={`${scheduled.length} message${scheduled.length > 1 ? "s" : ""} scheduled; the next sends ${nextSend.afterRestart ? "after Weft restarts" : formatAt(nextSend.at, now)}`}
+          title={`${scheduled.length} message${scheduled.length > 1 ? "s" : ""} scheduled; the next sends ${nextSend.afterRestart ? "after Weft restarts" : sendsWhen(nextSend, now)}`}
         >
-          <Icon name={nextSend.afterRestart ? "reload" : "clock"} size={10} />
-          {nextSend.afterRestart ? "after restart" : formatAt(nextSend.at, now)}
+          <Icon name={nextSend.afterRestart || nextSend.afterTurn ? "reload" : "clock"} size={10} />
+          {sendsWhen(nextSend, now)}
         </span>
       ) : null}
       {card.openElsewhere && (
@@ -180,10 +180,10 @@ function waitsForLogin(card: Card) {
   return card.column === "needs_you" && !card.pending && /^Log in to /.test(card.lastLine ?? "");
 }
 
-// The border says a lot: selection, unseen, or needs-you's amber. Extracted to keep CardView's complexity in check.
-function cardBorder(card: Card, selected: boolean, unseen: boolean) {
+// The border says a lot: selection, last opened (ink, unlike unseen's accent), unseen, or needs-you's amber.
+function cardBorder(card: Card, selected: boolean, unseen: boolean, lastOpen: boolean) {
   if (selected) return "border-accent ring-1 ring-accent";
-  if (unseen) return "border-accent/70 ring-1 ring-accent/40 card-unseen";
+  if (lastOpen || unseen) return `${lastOpen ? "card-last-open border-ink" : "border-accent/70 ring-1 ring-accent/40"} ${unseen ? "card-unseen" : ""}`;
   return card.column === "needs_you" ? "border-warn/60" : "border-line hover:border-line-strong";
 }
 
@@ -191,6 +191,7 @@ export default function CardView({
   card,
   now,
   selected,
+  lastOpen = false,
   unseen = false,
   onOpen,
   onAnswer,
@@ -204,6 +205,8 @@ export default function CardView({
   card: Card;
   now: number;
   selected: boolean;
+  // The card you opened last, outlined after you close it.
+  lastOpen?: boolean;
   // Moved here while you weren't looking; cleared when you open it.
   unseen?: boolean;
   onOpen: () => void;
@@ -232,7 +235,7 @@ export default function CardView({
   const progress = showsProgress(card);
   const answered = answeredId !== null && answeredId === card.pending?.id;
   const needsLogin = waitsForLogin(card);
-  const border = cardBorder(card, selected, unseen);
+  const border = cardBorder(card, selected, unseen, lastOpen);
 
   function answer(allow: boolean) {
     if (!card.pending || answered) return;

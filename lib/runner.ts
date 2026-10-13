@@ -8,6 +8,7 @@ import { cancelLogin, noteTrial, startLogin } from "./login";
 import { fetchTrialToken, hasOwnPukuLogin, trialJustFetched } from "./puku-trial";
 import { holdForRestart } from "./restart-when-idle";
 import { sessionRewindPoint } from "./rewind";
+import { addScheduled } from "./schedule";
 import { answerPermission, settle } from "./runner-ask";
 import { adoptSpare, currentSession, open } from "./runner-session";
 import { withShellContext } from "./shell";
@@ -93,6 +94,8 @@ export function sendUserMessage(cardId: string, text: string, { cli = text } = {
   if (!card) throw new Error("No such card.");
   // Held before its shell output and skills are taken, so they go with it after the restart.
   if (holdForRestart(cardId, text)) return;
+  // Mid-turn (a page's link, a failed commit's note): it waits on the card and goes as the turn ends.
+  if (holdForTurn(card, text)) return;
   // What your "!" commands printed since your last message goes along with it (lib/shell.ts).
   sendMessage(cardId, text, { cli: withShellContext(cardId, cli) });
   // /done files the card away when its turn ends, as a move to Done does.
@@ -101,6 +104,28 @@ export function sendUserMessage(cardId: string, text: string, { cli = text } = {
   if (!skills.length) return;
   updateCard(cardId, { promptSkills: [...(card.promptSkills ?? []), ...skills] });
   queueMessages(cardId, skills.map((skill) => `/${skill}`));
+}
+
+// A message for a thread that's mid-turn waits on the card as "after this turn" (the reply box's queue
+// shows it, and you can pull it back) instead of being turned away. The copilot has no such queue.
+function holdForTurn(card: Card, text: string) {
+  if (!isBusy(card.id) || card.role === "copilot") return false;
+  updateCard(card.id, { scheduled: addScheduled(card.scheduled, { id: randomUUID(), text, at: Date.now(), afterTurn: true }) });
+  return true;
+}
+
+// As a turn ends: what waited for it goes out as one message, in the order it came.
+function sendHeld(cardId: string) {
+  const scheduled = getCard(cardId)?.scheduled ?? [];
+  const held = scheduled.filter((m) => m.afterTurn);
+  if (!held.length || isBusy(cardId)) return;
+  const rest = scheduled.filter((m) => !m.afterTurn);
+  updateCard(cardId, { scheduled: rest.length ? rest : undefined });
+  try {
+    sendUserMessage(cardId, held.map((m) => m.text).join("\n\n"));
+  } catch (err) {
+    safeUpdate(cardId, { error: `A message that waited for the turn couldn't go: ${errorText(err)}` });
+  }
 }
 
 // ↑ in the reply box: your last message, rewritten. Its turn is stopped if it's still running, rewound
@@ -274,6 +299,7 @@ export async function retryPukuWithTrial() {
 
 // What the session and turn modules call back into (lib/runner-state.ts hooks), and the board tools' actions.
 hooks.sendQueued = sendQueued;
+hooks.sendHeld = sendHeld;
 hooks.needLogin = needLogin;
 hooks.boardActions = {
   start: (cardId: string, text: string) => sendMessage(cardId, text),

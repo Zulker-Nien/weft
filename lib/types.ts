@@ -95,6 +95,8 @@ export interface ScheduledMessage {
   at: number;
   // Sent while a restart waited for the running threads (lib/restart-when-idle.ts): it goes out once Weft is back.
   afterRestart?: boolean;
+  // Sent while the thread was mid-turn (a page's link, a failed commit's note): it goes out as that turn ends.
+  afterTurn?: boolean;
 }
 
 // A thread's tour of what it built, for the user to step through in Review (see lib/review.ts).

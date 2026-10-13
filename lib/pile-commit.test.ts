@@ -112,9 +112,15 @@ describe("moveToDone", () => {
     expect(() => moveToDone("nope")).toThrow("No such card");
     cards.set("cp", card("cp", { role: "copilot" }));
     expect(() => moveToDone("cp")).toThrow("copilot");
-    cards.set("b", card("b"));
+  });
+
+  it("lets a busy card's Done move wait for its turn to end", () => {
+    cards.set("b", card("b", { column: "running" }));
     busy.add("b");
-    expect(() => moveToDone("b")).toThrow("still running");
+    moveToDone("b");
+    expect(cards.get("b")?.column).toBe("running");
+    expect(runner.queueMessages).toHaveBeenCalledWith("b", []);
+    expect(runner.archiveWhenIdle).toHaveBeenCalledWith("b");
   });
 });
 
@@ -187,13 +193,11 @@ describe("commitFromPage", () => {
   it("reports a card that can't move to Done, and runs commits one at a time", async () => {
     const { root } = repo();
     cards.set("pile", card("pile", { cwd: root }));
-    cards.set("c1", card("c1"));
-    busy.add("c1");
     const [first, second] = await Promise.all([
-      commitFromPage("pile", { message: "feat: a", paths: ["a.ts"], push: false, done: "c1" }, SCRIPT),
+      commitFromPage("pile", { message: "feat: a", paths: ["a.ts"], push: false, done: "gone" }, SCRIPT),
       commitFromPage("pile", { message: "feat: b", paths: ["b.ts"], push: false }, SCRIPT),
     ]);
-    expect(first).toMatchObject({ ok: false, failed: "done", error: "That card's thread is still running." });
+    expect(first).toMatchObject({ ok: false, failed: "done", error: "No such card." });
     expect(second.ok).toBe(true);
     expect(git(root, "log", "--format=%s", "-2")).toBe("feat: b\nfeat: a");
   });

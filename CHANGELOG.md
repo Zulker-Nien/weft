@@ -10,6 +10,17 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Added
 
+- Vercel drawer: pull plain env variables the 🔐 vault has no value for (never replacing one), and **Live pull from Vercel**,
+  a team webhook relayed by the deployed Weft and Supabase that pulls them as they're added (`lib/vercel-hooks.ts`,
+  `lib/vercel-relay.ts`; docs/architecture/vercel.md).
+- **Cloudflare setup token**: the Cloudflare drawer asks for a setup token ("Create additional tokens" template); Weft
+  makes its own narrower token with it (account settings, Workers, Pages), keeps that in the Keychain and deletes the
+  setup token. The token form is bigger, with numbered steps. A token you made yourself still works as before.
+- **Settings, reorganized**: Settings fills the window over one of Weft's scenes (yours, if you picked one), with six pages
+  down the left (General, Models, Threads, Automations, Shortcuts, Accounts) as frosted cards and no tabs. Models holds
+  every model pick: new threads' CLI, model and effort, subagents, and the Done wrap-up. A dot marks a page with edits waiting for Save.
+- **Last opened card**: the card you opened last keeps a neutral ink outline after you close it, so you can find your
+  place; unseen cards keep the accent border, tint and dot.
 - **Model on the card**: a card's footer names the model its thread runs on ("Opus 5.5") beside the CLI dot, in the
   CLI's colour; hover it for the full id and effort.
 - **Sign in on weft.zip**: the deployed site has a real `/login` page (`app/login/page.tsx`) with
@@ -33,6 +44,12 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Fixed
 
+- **No more "This thread is already running"**: a message that reaches a busy thread from its page (Tell me what
+  to change, a failed commit's note) waits on the card as "after this turn" in the reply queue and goes as the turn
+  ends. "Commit and run /done" on a busy card runs /done once its turn is over instead of failing.
+
+- A card switched to puku-cli no longer keeps its Claude model ("Fable 5.1" on puku, which the gateway quietly ran as
+  puku-ai-2.8): it moves to puku's default, and the thread header's model chip now lists each CLI's models to pick from.
 - "Review all" on the Review column opens the walk-through card it starts, instead of leaving it to land unseen
   among the other Review cards.
 - Idle puku threads no longer burn CPU. puku-cli ran a forced, full Node garbage collection every second (a

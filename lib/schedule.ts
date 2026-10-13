@@ -80,6 +80,12 @@ export function dueMessage(card: Card, now = Date.now()): ScheduledMessage | und
   return first && first.at <= now ? first : undefined;
 }
 
+// When a scheduled message goes, as its chip says it: "after restart", "after this turn" or its time.
+export function sendsWhen(m: ScheduledMessage, now = Date.now()) {
+  if (m.afterRestart) return "after restart";
+  return m.afterTurn ? "after this turn" : formatAt(m.at, now);
+}
+
 // "11:41pm", or "sat 9:00am" when it isn't today.
 export function formatAt(at: number, now = Date.now()) {
   const d = new Date(at);

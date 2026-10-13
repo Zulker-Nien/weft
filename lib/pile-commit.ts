@@ -79,13 +79,13 @@ function output(err: unknown) {
 }
 
 // A move to Done as the board's own (app/api/cards/[id]/route.ts PATCH): Done's automations, then archive.
+// On a card that's mid-turn they wait for the turn to end (the card draws in Done meanwhile, wrappingUp).
 export function moveToDone(id: string) {
   const card = getCard(id);
   if (!card) throw new Error("No such card.");
   if (card.role === "copilot") throw new Error("The copilot isn't on the board.");
   if (card.column === "done") return;
-  if (isBusy(id)) throw new Error("That card's thread is still running.");
-  updateCard(id, { column: "done" });
+  if (!isBusy(id)) updateCard(id, { column: "done" });
   queueMessages(id, messagesForMove(card, "done"));
   archiveWhenIdle(id);
 }

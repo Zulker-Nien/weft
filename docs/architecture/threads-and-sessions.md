@@ -182,14 +182,32 @@ the copilot's `start_card`). The copilot's `move_card` never runs automations.
 
 #### /weft:done's model and effort override
 
-Settings has a "Run /weft:done on …" pair of selects (`components/DonePicker.tsx`) that pick the
-model and effort `/weft:done` runs on when you move a card to Done — handy for keeping the
-wrap-up on a fixed model. The override is turn-scoped: a Done move snapshots the card's own
-`model` / `effort` into `preDoneModel` / `preDoneEffort` (`app/api/cards/[id]` `moveCard` →
-`applyDoneOverride`), the `/weft:done` turn runs on the override, and `lib/runner.ts`
-`restoreDoneOverride` puts the originals back once that turn ends. The override is a no-op
-for puku cards (the done skill's `puku-agent` fan-out is Claude-only). A `/weft:done` you
-type yourself doesn't go through this path, so it always uses the card's own picks.
+Settings → **Automations → Done wrap-up** has a "Run /weft:done on …" row (`components/DonePicker.tsx`)
+with two side-by-side selects: a model and an effort, each starting at "Card's own" (id `""`).
+Handy for keeping the wrap-up on a fixed model or cost ceiling without changing the thread's
+own picks. Both `doneModel` and `doneEffort` live in `lib/settings.ts` (`doneModel()` /
+`setDoneModel()`, `doneEffort()` / `setDoneEffort()`) and ride on `SettingsView`; the empty
+string is the default and is stored as `undefined` in `settings.json`. The model menu is
+`components/ModelSelect.tsx` (Claude and Puku headings, the same one `SubagentPicker` uses),
+and the effort menu is `EFFORTS` from `lib/new-thread.ts`. `app/api/settings/route.ts`
+validates each value against the model/effort catalogs and 400s on a bad id.
+
+The override is turn-scoped. When you move a card to Done, `moveCard` in
+`app/api/cards/[id]/route.ts` calls `applyDoneOverride(card)` (right before queuing the
+move's `/weft:done` message): if `doneOverrides(card)` (`lib/automations.ts`) returns a
+non-empty patch, the card's `model` / `effort` are saved to `preDoneModel` / `preDoneEffort`
+and replaced with the override. The next turn (the queued `/weft:done`) starts on the
+override; `lib/runner.ts` `restoreDoneOverride(cardId)` then puts the originals back.
+`finishResult` in `lib/runner-turn.ts` calls it once the `/weft:done` turn settles — success,
+failure, or stop — so the next turn on the card sees its real picks, and a card that never
+moved to Done (a `/weft:done` you typed yourself) is a no-op for the restore.
+
+`doneOverrides` is selective rather than blanket: the model applies only when the override's
+backend matches the card's backend (a Claude id on a puku card or a puku id on a Claude card
+is dropped, since switching CLIs would start a fresh session and break `/weft:done`'s
+view of the conversation). The effort always applies, but `effortFor()` steps xhigh down to
+high for puku (puku-cli rejects `xhigh`). The result is that a puku card with both fields
+set still gets a real override, just the one its CLI accepts.
 
 ### Editing your last message (↑)
 
@@ -235,6 +253,17 @@ the weekly reset" (also plus `RESET_GRACE_MS`) after the 5-hour one; at 100% the
 what stops the thread, so it goes first and becomes the Alt+Enter default. Puku threads, and Claude
 ones with no known reset, get "In 1 hour" first; "Tomorrow morning" (9am) and a date-time picker are always there. The copilot
 can't schedule. The card shows the next time as a clock badge in its footer.
+
+A message that reaches a busy thread is held the same way instead of refused ("This thread is
+already running"): `sendUserMessage()` calls `holdForTurn()` (`lib/runner.ts`), which adds it to
+`card.scheduled` with `afterTurn: true` (the page links' Tell me what to change, a failed commit's
+note, the scheduler). `finishResult()` (`lib/runner-turn.ts`) calls `sendHeld()` through `hooks` once
+the turn is over and no queued automations remain, even when the turn ends needing you (the held text
+may be the answer); everything held goes out as one message. The reply queue and the card footer
+label it "after this turn" (`sendsWhen()`, `lib/schedule.ts`); it can be taken back or cancelled
+like a scheduled one. The copilot has no queue, so it still refuses a message mid-turn. A Done move
+from a page's Commit button (`moveToDone()`, `lib/pile-commit.ts`) on a busy card leaves the card
+where it is and queues the Done automations, which run after the turn.
 
 ### Archiving after Done
 

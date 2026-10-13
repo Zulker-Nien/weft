@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RESET_GRACE_MS, addScheduled, dueMessage, formatAt, nextFiveHourReset, nextWeeklyReset, planResets, sendLaterOptions, toLocalInput } from "./schedule";
+import { RESET_GRACE_MS, addScheduled, dueMessage, formatAt, nextFiveHourReset, nextWeeklyReset, planResets, sendLaterOptions, sendsWhen, toLocalInput } from "./schedule";
 import type { Card } from "./types";
 
 const NOW = new Date(2026, 9, 10, 22, 30).getTime();
@@ -104,6 +104,15 @@ describe("addScheduled and dueMessage", () => {
     expect(dueMessage(card({ scheduled }), NOW - 1)).toBeUndefined();
     expect(dueMessage(card({ scheduled }), NOW)?.id).toBe("a");
     expect(dueMessage(card(), NOW)).toBeUndefined();
+  });
+});
+
+describe("sendsWhen", () => {
+  it("names a held message's moment, else its time", () => {
+    const at = new Date(2026, 9, 10, 23, 41).getTime();
+    expect(sendsWhen({ id: "a", text: "x", at, afterRestart: true }, NOW)).toBe("after restart");
+    expect(sendsWhen({ id: "b", text: "x", at, afterTurn: true }, NOW)).toBe("after this turn");
+    expect(sendsWhen({ id: "c", text: "x", at }, NOW)).toBe("11:41pm");
   });
 });
 

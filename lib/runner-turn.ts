@@ -193,6 +193,9 @@ function finishResult(id: string, status: BoardStatus | undefined, stopped: bool
     // Once the drive loop has handled this result, so the next turn starts on a settled card.
     else if (status?.column !== "needs_you") setTimeout(() => hooks.sendQueued(id), 0);
   }
+  // A message that came mid-turn goes whatever the turn's end: it's yours (or a page's on your click).
+  // Queued automations go first when they're running on; it then waits for the last of them.
+  if (!queued.has(id)) setTimeout(() => hooks.sendHeld(id), 0);
 }
 
 // A teammate's update page for the pane when the turn showed nothing (lib/glance.ts), written in the background.

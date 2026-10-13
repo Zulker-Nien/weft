@@ -123,6 +123,7 @@ export const archiveAfter = globalSingleton("__weftArchiveAfter", () => new Set<
 // the modules below runner.ts reach it through these, which runner.ts fills in as it loads.
 export interface RunnerHooks {
   sendQueued: (cardId: string) => void;
+  sendHeld: (cardId: string) => void;
   needLogin: (cardId: string, backend: Backend, message: string) => void;
   boardActions: BoardActions;
 }
