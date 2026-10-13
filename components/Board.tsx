@@ -741,7 +741,6 @@ export default function Board() {
         <HeaderBadges cwd={selected?.cwd ?? project ?? latest?.cwd} cards={cards} start={improveQuality} notify={notify} toast={setToast} />
         <div className="flex-1" />
         <CopilotButton open={copilotOpen} needsYou={copilotNeedsYou} title={hint("copilot", "Copilot")} onClick={toggleCopilot} />
-        <AccountButton onOpenSettings={() => setShowSettings(true)} />
         <button
           onClick={toggleBrowser}
           title={hint("browser", "Browser")}
@@ -773,6 +772,7 @@ export default function Board() {
           <Icon name="plus" size={14} /> New thread
           <kbd className="ml-0.5 rounded border border-current/30 px-1 font-mono text-[10.5px] leading-[15px] opacity-70">N</kbd>
         </button>
+        <AccountButton onOpenSettings={() => setShowSettings(true)} />
       </header>
 
       <CrashGuard what="project bar" className="mx-3 mt-2">
