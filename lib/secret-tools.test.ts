@@ -100,6 +100,25 @@ describe("secretsMcpServer", () => {
     expect(sent().body).toEqual({ folder: "/other", name: "K", environment: "production" });
   });
 
+  it("adds blank names to the vault and reports which were already filled", async () => {
+    reply({ label: "aimhuge/weft", filled: ["GITHUB_TOKEN"] });
+    const r = await run("add_blank", { names: ["GITHUB_TOKEN", "STRIPE_SECRET_KEY"], hint: "Stripe dashboard → Developers → API keys" });
+    expect(sent()).toEqual({
+      url: "http://127.0.0.1:4567/secrets/add-blank",
+      body: { folder: "/proj", names: ["GITHUB_TOKEN", "STRIPE_SECRET_KEY"], environment: "development", hint: "Stripe dashboard → Developers → API keys" },
+    });
+    expect([r.isError, said(r)]).toEqual([
+      false,
+      "STRIPE_SECRET_KEY is a blank in the aimhuge/weft vault (development) now; the user fills it in from 🔐. Carry on with what doesn't need it, and check mcp__secrets__list before you use it. GITHUB_TOKEN already has a value there.",
+    ]);
+
+    // No names were new blanks.
+    fetchMock.mockReset();
+    reply({ label: "aimhuge/weft", filled: ["A", "B"] });
+    expect(said(await run("add_blank", { names: ["A", "B"], environment: "production", project: "/other" }))).toBe("A, B already have values there.");
+    expect(sent().body).toEqual({ folder: "/other", names: ["A", "B"], environment: "production", hint: undefined });
+  });
+
   it("pushes a vault value to Vercel without the value, production by default", async () => {
     reply({ pushed: true, project: "weft", label: "aimhuge/weft" });
     const r = await run("push_to_vercel", { name: "SUPABASE_SECRET_KEY" });
