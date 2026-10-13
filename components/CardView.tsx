@@ -218,7 +218,7 @@ export default function CardView({
   // The request already answered here, so a second click can't answer it (or the next one) again.
   const [answeredId, setAnsweredId] = useState<string | null>(null);
   const live = isLive(card);
-  // The copilot opens its own window and can't be moved, starred or filed under a project.
+  // The copilot opens like any card but can't be moved, starred or filed under a project.
   const copilot = card.role === "copilot";
   // A running card is placed by its status line; one waiting on you (a question or a permission) can still be dragged.
   const fixed = card.column === "running" || copilot;

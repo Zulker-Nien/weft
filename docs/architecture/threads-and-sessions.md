@@ -299,20 +299,20 @@ thread, and re-warms it.
 
 The copilot opens two ways:
 
-- As a card in the main window's "Running" column, rendered by `components/Board.tsx` with the
-  same `CardView` and `ThreadPanel` as a board card. Clicking the copilot card runs `select(id)`,
-  not `openCard`, so it doesn't bring up the same "Running" card a second time; the thread
-  panel's `pilot` branch swaps the card header's skill/star/archive/delete buttons for a single
-  "New chat" button (`NewChatButton` in `components/ThreadPanel.tsx`) and replaces the empty
-  thread with `CopilotEmpty` (`components/CopilotEmpty.tsx`). The copilot card is not draggable
-  (`fixed = card.column === "running" || copilot` in `CardView.tsx`) and can't be starred,
-  deleted, archived or filed under a project, so the column/context menu keys (`CardActions` /
-  `open-card` / `delete` etc.) reject it on the server side too.
-- In its own `BrowserWindow` (the `copilot:toggle` shortcut `Control+Alt+Space`, the
-  `weft://copilot` link, the tray/menu item). The window is hidden on close so the conversation
-  survives; `useDesktopBridge()` exposes its open state as `copilotOpen` for the header button.
-  The board's `browser.prune` includes `COPILOT_ID` alongside the live cards, so a stale copilot
-  pane is closed the same way a stale card pane is.
+- As a card, in the same framed window as any thread. It shows at the top of whichever column it is in
+  (`components/Board.tsx`, drawn by `CardView`), and `toggleCopilot()` opens or closes it: a click on its card, the
+  top bar's ✨ Copilot button (lit while it's the open card), the `c` key and the command palette all call it. It
+  selects `COPILOT_ID` (through `openCard`, which warms the CLI) and `selected` falls back to the `useCopilotCard()`
+  card, since the cards route leaves it out of `cards`. `components/ThreadPanel.tsx` has a `pilot` mode: ✨ "whole
+  board" in place of the folder, `NewChatButton` (`onNewChat` → `api.resetCopilot()`) in place of skills, star, archive
+  and delete, no rename, no "+ tag", no Send later or review panel, and `CopilotEmpty`
+  (`components/CopilotEmpty.tsx`, shared with the window) as the empty thread. The card isn't draggable
+  (`fixed = card.column === "running" || copilot` in `CardView.tsx`) and can't be starred, archived, deleted or
+  filed under a project; the server rejects moving, archiving and deleting it. The board's `browser.prune` includes `COPILOT_ID` alongside the
+  live cards, so its pane page survives like a card's.
+- In its own `BrowserWindow` (`COPILOT_SHORTCUT` `Control+Alt+Space`, ⌘J in the app menu, the `weft://copilot` link, the
+  tray and dock items), which works with the board hidden. The window is hidden on close so the conversation
+  survives; `useDesktopBridge()` still reports its open state as `copilotOpen`, which the board no longer draws.
 
 `lib/board-tools.ts` registers the `mcp__board__*` MCP server used only by the
 copilot: `list_cards`, `read_thread`, `create_card`, `move_card`, `stop_card` are in
