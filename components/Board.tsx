@@ -21,6 +21,7 @@ import {
   type SortKey,
 } from "@/lib/board-view";
 import { useBoardEvents } from "@/lib/use-events";
+import { useRestart } from "@/lib/use-restart";
 import { useDesktopBridge } from "@/lib/use-desktop-bridge";
 import { useStartupCheck } from "@/lib/use-startup-check";
 import { readViewPrefs, writeViewPrefs } from "@/lib/view-prefs";
@@ -39,6 +40,8 @@ import { boardPaletteItems, promptItems } from "./board-palette";
 import { boardShortcuts } from "./board-shortcuts";
 import { addSecret } from "@/lib/use-vault";
 import { parseSecretAsk } from "@/lib/vault-view";
+import { addWebhookAsk } from "@/lib/use-webhooks";
+import { parseWebhookAsk } from "@/lib/webhooks-view";
 import Icon from "./Icon";
 import ColumnHeader from "./ColumnHeader";
 import { filterCards, isFiltering, railPinned, addTag, toggleTag, type RailFilter, type RailPanel } from "@/lib/rail-view";
@@ -54,6 +57,7 @@ import { NO_DRAG } from "@/lib/no-drag";
 // fails as its module loads, breaks only its own spot on the board.
 const AccountButton = guarded(() => import("./AccountButton"), { inline: true, what: "account button" });
 const CopilotButton = guarded(() => import("./CopilotButton"), { inline: true, what: "copilot button" });
+const RestartChip = guarded(() => import("./RestartChip"), { inline: true, what: "restart chip" });
 const BrowserPane = guarded(() => import("./BrowserPane"), { what: "browser pane", className: "m-3 w-[360px] self-start" });
 const CardView = guarded(() => import("./CardView"), { what: "card" });
 const SideRail = guarded(() => import("./LibraryRail"), { what: "rail", className: "m-3 w-[220px] self-start" });
@@ -129,6 +133,8 @@ export default function Board() {
   const [loaded, setLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { toast, setToast, notify } = useToast();
+  // Restart when idle (lib/restart-when-idle.ts): the header chip and the palette command.
+  const restartView = useRestart();
   const [thread, setThread] = useState<ThreadItem[]>([]);
   const [streaming, setStreaming] = useState("");
   const [showNew, setShowNew] = useState(false);
@@ -289,6 +295,10 @@ export default function Board() {
         case "account":
           announceAccountChange();
           break;
+        case "restart":
+          restartView.apply(event.restart);
+          if (event.restart.error) setToast(event.restart.error);
+          break;
         case "projects":
           resolveFolders(event.projects.map((p) => p.path));
           setProjects(event.projects);
@@ -323,6 +333,7 @@ export default function Board() {
       if (prefs.project !== undefined) setProject(prefs.project);
       if (prefs.sort && prefs.sort in SORTERS) setSort(prefs.sort);
       loadCopilot();
+      restartView.reload();
       if (selectedRef.current) loadThread(selectedRef.current);
     },
   );
@@ -368,6 +379,10 @@ export default function Board() {
         // A thread asked for a key the vault doesn't have: the 🔐 Add form with its name filled in.
         case "add-secret":
           addSecret(setLibraryOpen, parseSecretAsk(payload));
+          break;
+        // A thread added a webhook for you to register: the 🪝 drawer opens on its row.
+        case "add-webhook":
+          addWebhookAsk(setLibraryOpen, parseWebhookAsk(payload));
           break;
       }
     };
@@ -496,7 +511,7 @@ export default function Board() {
   // Everything the command palette offers: the board's actions, the projects, and every card.
   function paletteItems(): PaletteItem[] {
     return boardPaletteItems(
-      { cards, selected, projectSummaries, home, doneToArchive, lastArchived, archivedCount, showArchived, rootOf },
+      { cards, selected, projectSummaries, home, doneToArchive, lastArchived, archivedCount, showArchived, rootOf, restartArmed: !!restartView.restart?.armed },
       {
         openNew: () => openNew(),
         focusFilter,
@@ -748,6 +763,7 @@ export default function Board() {
           {running} running
           {waiting > 0 && <span className="text-warn"> · {waiting} need{waiting === 1 ? "s" : ""} you</span>}
         </span>
+        <RestartChip restart={restartView.restart} notify={notify} />
         <HeaderBadges cwd={selected?.cwd ?? project ?? latest?.cwd} cards={cards} start={improveQuality} notify={notify} toast={setToast} />
         <div className="flex-1" />
         <CopilotButton open={selectedId === COPILOT_ID} needsYou={copilotNeedsYou} title={hint("copilot", "Copilot")} onClick={toggleCopilot} />
@@ -827,6 +843,7 @@ export default function Board() {
           catalog={tagCatalog}
           onOpenUrl={showPage}
           onOpenCard={openCard}
+          onStartCard={improveQuality}
           notify={notify}
         />
         <main

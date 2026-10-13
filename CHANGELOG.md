@@ -8,10 +8,39 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ## [Unreleased]
 
+### Added
+
+- **Model on the card**: a card's footer names the model its thread runs on ("Opus 5.5") beside the CLI dot, in the
+  CLI's colour; hover it for the full id and effort.
+- **Sign in on weft.zip**: the deployed site has a real `/login` page (`app/login/page.tsx`) with
+  **Continue with GitHub** (no Google, no magic link on the new page). The board's top-bar sign-in,
+  Settings → Weft account, and the Puku-trial upgrade prompt keep the same flow. A new
+  `app/api/auth/callback` GET route (and `/api/auth/weft-callback` POST) replace the old
+  `app/api/account/*` JSON surface; the in-app hook is `useAuth` from a thin `lib/auth/` wrapper
+  whose public API mirrors `@aimhuge/auth`, so swapping to the package upstream is one line.
+  `safeNextPath` rejects open-redirect tricks on `?next=`. Home page has a **Sign in** link in the nav
+  when signed out, hidden when signed in. The deployed post-sign-in landing is a small "you're in"
+  card at `/app` (`app/app/page.tsx`) with the desktop download CTA.
+- **Restart when idle**: Weft → Restart When Idle, the command palette or a thread's `mcp__board__restart_weft_when_idle`
+  stops new turns from starting and restarts Weft once the running ones end. Messages sent meanwhile wait on their card
+  and go out after the restart; the header's **⟳ Restart after N** names what it waits on and cancels on click. The
+  updater's "threads are still running" question offers it too, as **Restart When Idle**.
+
 ### Fixed
 
 - "Review all" on the Review column opens the walk-through card it starts, instead of leaving it to land unseen
   among the other Review cards.
+- Idle puku threads no longer burn CPU. puku-cli ran a forced, full Node garbage collection every second (a
+  `setInterval(gc, 1000)` it took from Claude Code, where it's Bun's cheap hint), so each idle puku CLI used 8-15%
+  and ten pegged the Mac. Weft now starts puku-cli with `PUKU_CLI_DISABLE_HEAP_RELAUNCH=1`, which leaves `gc`
+  unexposed (idle: 0.1%) and runs puku as one process instead of a wrapper plus `Puku`. Puku is also held tighter:
+  2 idle puku CLIs at most, closed after 10 idle minutes, and one puku spare that isn't refilled after a card
+  takes it (`lib/puku-idle.ts`).
+- Ending a puku thread ends its `Puku` process too. puku-cli's `node` wrapper left its `Puku` child running under
+  PID 1 at 10-30% CPU after every idle close, stop or server restart. Each thread CLI now starts in a process group
+  of its own that ends as a whole (`lib/cli-process.ts`); the server takes every CLI with it when it exits, and on
+  start it ends the orphaned ones an earlier server left in Weft's project folders (`lib/cli-reaper.ts`). A puku you
+  run in a terminal is never touched.
 - The board stays on one port again: it now prefers 127.0.0.1:1024. The old 1000 is a privileged port macOS won't
   let Weft bind, so every launch fell back to a random port and cards' panes, dev OAuth redirects and saved pages
   pointed at a dead one.
@@ -26,6 +55,16 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
   spinning at "Uploading 100%" forever.
 
 ### Added
+- **Blanks are the default for missing secrets.** A thread that needs a key it doesn't have puts the name in
+  the vault as a blank right away with `mcp__secrets__add_blank` (with a hint for where to get the value),
+  keeps going, and the user fills the blanks in from 🔐 on the rail when they're ready. The rail's badge
+  counts them, blanks sort first within each environment, every blank row has a visible **Fill in** button
+  and the hint under the name, the right-click menu's **Set Value…** becomes **Fill In Value…**, and the
+  plain Add form's button reads **Add blank / Add N blanks** until a value is typed. `mcp__secrets__ask_add`
+  stays as the urgent path (drawer opens with the name filled in). `lib/secret-ask.ts` `ASK_PROMPT` is the
+  new default, `electron/vault.cjs` `addBlanks` stores the hint and source, `lib/vault-view.ts` `saveLabel` /
+  `blankTitle` / blank-first sort name the UI, `components/SecretRow.tsx` and `components/VaultParts.tsx`
+  draw it. Older shells without `addBlank` keep the "type a value" form.
 - **Review all** at the top of the Review column starts the same commit walk-through card as the header's "+N/-N" counter (`lib/pile-review.ts`).
 - Supabase drawer: each unapplied migration's name opens the card that wrote it (`migrationOwner` in `lib/supabase-view.ts`).
 - Email at weft.zip: Resend receives every mail to the domain and the deployed Weft forwards it to one inbox (`app/api/email/webhook`,

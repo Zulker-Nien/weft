@@ -7,6 +7,7 @@ import { boardViewMcpServer } from "./board-view-tools";
 import { BROWSER_PROMPT, browserMcpServer } from "./browser-tools";
 import { runsOn } from "./cli-defaults";
 import { executableFor } from "./cli-path";
+import { spawnCli, withStderr } from "./cli-process";
 import { claimQuestion } from "./claim-guard";
 import { guardedCli, RESTART_PROMPT } from "./env";
 import { isNotLoggedInError, isRateLimitError } from "./login";
@@ -16,10 +17,12 @@ import { askUser, settle } from "./runner-ask";
 import { close, hooks, Inbox, queued, safeUpdate, scheduleIdle, sessions, spares, specFor, type Session, type Spec } from "./runner-state";
 import { TURN_CODE, handle } from "./runner-turn";
 import { SECRETS_PROMPT, secretsMcpServer } from "./secret-tools";
+import { WEBHOOKS_PROMPT, webhooksMcpServer } from "./webhook-tools";
 import { defaultPermissionMode, subagentModel, threadPrompt } from "./settings";
 import { trialOptions } from "./puku-trial";
 import { PLUGIN_DIR } from "./skills";
 import { switchSpare } from "./spare-switch";
+import { backendEnv, refillsSpare } from "./puku-idle";
 import { subagentEnv, subagentPrompt } from "./subagents";
 import { getCard, updateCard } from "./store";
 import * as turnRules from "./turn";
@@ -106,6 +109,14 @@ export function ensureSpare(cwd: string, backend: Backend = "claude") {
     spares.delete(key);
     close(existing);
   }
+  // One puku spare at most: the folder the New thread dialog asked for last.
+  if (backend === "puku") {
+    for (const [k, s] of spares) {
+      if (s.spec.backend !== "puku") continue;
+      spares.delete(k);
+      close(s);
+    }
+  }
   const oldest = spares.entries().next().value;
   if (spares.size >= MAX_SPARES && oldest) {
     spares.delete(oldest[0]);
@@ -135,7 +146,7 @@ export function adoptSpare(card: Card): Session | undefined {
   const ran = runsOn(card.model ?? spare.model, card);
   safeUpdate(card.id, { warm: true, ...(spare.sessionId ? { sessionId: spare.sessionId } : {}), ...(ran ? { stats: { ...card.stats, runsOn: ran } } : {}) });
   scheduleIdle(spare);
-  setTimeout(() => ensureSpare(card.cwd, card.backend), 0);
+  if (refillsSpare(card.backend)) setTimeout(() => ensureSpare(card.cwd, card.backend), 0);
   return spare;
 }
 
@@ -152,13 +163,14 @@ function queryOptions(session: Session, executable: string | undefined): Options
   const subagents = subagentModel();
   // A puku thread with no Puku login of its own runs on Weft's Puku trial while you're signed in to Weft.
   const trial = spec.backend === "puku" ? trialOptions() : null;
+  const logStderr = (data: string) => console.error(`[thread ${(session.cardId ?? "spare").slice(0, 8)}] ${data.trimEnd()}`);
   return {
     cwd: spec.cwd,
     resume: spec.sessionId,
     forkSession: spec.sessionId ? spec.forkSession : undefined,
     resumeSessionAt: spec.sessionId ? spec.resumeAt : undefined,
     ...guarded,
-    env: { ...threadEnv(spec, guarded.env, subagents), ...trial?.env },
+    env: { ...threadEnv(spec, guarded.env, subagents), ...backendEnv(spec.backend), ...trial?.env },
     settings: trial?.settings,
     abortController: session.abort,
     includePartialMessages: true,
@@ -176,12 +188,12 @@ function queryOptions(session: Session, executable: string | undefined): Options
     systemPrompt: {
       type: "preset",
       preset: "claude_code",
-      append: spec.copilot ? `${BROWSER_PROMPT}\n\n${COPILOT_PROMPT}` : `${BROWSER_PROMPT}\n\n${SECRETS_PROMPT}\n\n${RESTART_PROMPT}\n\n${subagentPrompt(subagents, spec.backend)}\n\n${threadPrompt()}\n\n${REVIEW_PROMPT}`,
+      append: spec.copilot ? `${BROWSER_PROMPT}\n\n${COPILOT_PROMPT}` : `${BROWSER_PROMPT}\n\n${SECRETS_PROMPT}\n\n${WEBHOOKS_PROMPT}\n\n${RESTART_PROMPT}\n\n${subagentPrompt(subagents, spec.backend)}\n\n${threadPrompt()}\n\n${REVIEW_PROMPT}`,
     },
     mcpServers: {
       browser: browserMcpServer(cardId),
       // Threads only: the copilot runs the board, not a project.
-      ...(spec.copilot ? {} : { secrets: secretsMcpServer(cardId, () => spec.cwd, () => getCard(cardId() ?? "")?.title), board_view: boardViewMcpServer() }),
+      ...(spec.copilot ? {} : { secrets: secretsMcpServer(cardId, () => spec.cwd, () => getCard(cardId() ?? "")?.title), webhooks: webhooksMcpServer(() => spec.cwd), board_view: boardViewMcpServer() }),
       board: spec.copilot ? boardMcpServer(hooks.boardActions) : threadBoardMcpServer(cardId, hooks.boardActions),
     },
     canUseTool: (toolName, input, opts) => {
@@ -192,7 +204,8 @@ function queryOptions(session: Session, executable: string | undefined): Options
       // A symbol-claim clash (lib/claim-guard.ts) asks in its own words.
       return askUser(session.cardId, session, toolName, input, opts.signal, claimQuestion(opts.toolUseID) ?? opts.title);
     },
-    stderr: (data) => console.error(`[thread ${(session.cardId ?? "spare").slice(0, 8)}] ${data.trimEnd()}`),
+    // Its own spawn, so ending the session ends puku-cli's `Puku` child too (lib/cli-process.ts).
+    spawnClaudeCodeProcess: (opts) => (session.process = spawnCli(opts, logStderr)),
   };
 }
 
@@ -225,7 +238,7 @@ async function drive(session: Session, executable: string | undefined) {
 function failed(session: Session, err: unknown) {
   const cardId = session.cardId;
   if (!cardId || session.abort.signal.aborted) return;
-  const message = err instanceof Error ? err.message : String(err);
+  const message = withStderr(err instanceof Error ? err.message : String(err), session.process?.stderrTail());
   if (isRateLimitError(message)) hitRateLimit(cardId, session.spec.backend, message);
   else if (isNotLoggedInError(message)) hooks.needLogin(cardId, session.spec.backend, message);
   else safeUpdate(cardId, { error: message });

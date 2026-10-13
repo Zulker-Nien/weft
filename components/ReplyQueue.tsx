@@ -39,10 +39,14 @@ export function ReplyQueue({
         <li
           key={m.id}
           className={ROW}
-          title={`Sends ${new Date(m.at).toLocaleString("en-US", { weekday: "long", hour: "numeric", minute: "2-digit" })}, even if this thread is closed`}
+          title={
+            m.afterRestart
+              ? "Sent while Weft waits to restart; it goes out once Weft is back"
+              : `Sends ${new Date(m.at).toLocaleString("en-US", { weekday: "long", hour: "numeric", minute: "2-digit" })}, even if this thread is closed`
+          }
         >
-          <Icon name="clock" size={11} className="shrink-0" />
-          <span className="shrink-0 font-mono text-[11px]">{formatAt(m.at, now)}</span>
+          <Icon name={m.afterRestart ? "reload" : "clock"} size={11} className="shrink-0" />
+          <span className="shrink-0 font-mono text-[11px]">{m.afterRestart ? "after restart" : formatAt(m.at, now)}</span>
           <button
             type="button"
             onClick={() => onTakeBack(m)}

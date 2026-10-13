@@ -140,7 +140,7 @@ export default function VercelDrawer({
               onLink={() => void startPicking(f.folder)}
               onUnlink={() => void change(() => vercel.unlink(f.folder))}
               onOpenUrl={onOpenUrl}
-              env={<VercelEnv folder={f.folder} bridge={vercel} notify={notify} />}
+              env={<VercelEnv folder={f.folder} team={f.link?.orgId ?? null} bridge={vercel} notify={notify} />}
             />
           ),
         )}

@@ -12,7 +12,7 @@ import { parseShell } from "./shell-parse";
 // first). With nothing else running it allows them. A project's own dev server is never Weft's.
 
 export const RESTART_PROMPT =
-  "Never restart Weft or kill its server yourself (its `next dev`, Electron, Weft.app or its port): ask the user, because a restart cuts off every running card's turn. Your project's own dev server is fine to restart.";
+  "Never restart Weft or kill its server yourself (its `next dev`, Electron, Weft.app or its port): a restart cuts off every running card's turn. When Weft needs one (say its Electron side changed), call mcp__board__restart_weft_when_idle: nothing new starts and Weft restarts once every running turn, yours included, has ended. Your project's own dev server is fine to restart.";
 
 // What a command would have to hit to take Weft down.
 export interface WeftProcess {
@@ -201,8 +201,8 @@ export function restartVerdict(command: string, cwd: string, weft: WeftProcess, 
   const turns = otherTurns === 1 ? "1 other turn is" : `${otherTurns} other turns are`;
   return (
     `This would stop or restart Weft itself (${target}). ${turns} running on the board right now, and a restart ` +
-    "cuts every one of them off mid-work. Don't do it yourself: tell the user what needs restarting and why, and let " +
-    `them restart Weft when those turns finish. Your own project's dev server is fine to kill: target its port or pid, not Weft's${weft.port ? ` (port ${weft.port})` : ""}.`
+    "cuts every one of them off mid-work. Don't do it yourself: call mcp__board__restart_weft_when_idle, which restarts " +
+    `Weft once those turns and yours have finished, and tell the user why it needs one. Your own project's dev server is fine to kill: target its port or pid, not Weft's${weft.port ? ` (port ${weft.port})` : ""}.`
   );
 }
 

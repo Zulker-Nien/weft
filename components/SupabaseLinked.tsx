@@ -1,5 +1,6 @@
 "use client";
 
+import { migratePrompt, migrateTitle } from "@/lib/supabase-migrate";
 import { migrationLine, migrationOwner, projectState, supabaseActions, type SupabaseFolder, type SupabaseLink } from "@/lib/supabase-view";
 import type { Card } from "@/lib/types";
 import SupabaseLogo from "./SupabaseLogo";
@@ -8,7 +9,8 @@ import { external } from "./supabase-ui";
 const TONE = { ok: "bg-ok-soft text-ok", warn: "bg-warn-soft text-warn", bad: "bg-danger-soft text-danger", muted: "bg-sunken text-muted" } as const;
 
 // A Supabase drawer folder's linked project (components/SupabaseDrawer.tsx): its state, API URL, migrations (each
-// unapplied one linked to the card that wrote it) and the dashboard shortcuts.
+// unapplied one linked to the card that wrote it, and Migrate, which starts a card to apply them: lib/supabase-migrate.ts)
+// and the dashboard shortcuts.
 export default function SupabaseLinked({
   folder,
   link,
@@ -17,6 +19,7 @@ export default function SupabaseLinked({
   onOpenUrl,
   cards,
   onOpenCard,
+  onStart,
 }: {
   folder: SupabaseFolder;
   link: SupabaseLink;
@@ -25,6 +28,7 @@ export default function SupabaseLinked({
   onOpenUrl: (url: string) => void;
   cards: Card[];
   onOpenCard: (card: Card) => void;
+  onStart: (cwd: string, prompt: string, title: string) => void;
 }) {
   const state = link.status ? projectState(link.status) : null;
   const migrations = migrationLine(folder, link);
@@ -62,6 +66,15 @@ export default function SupabaseLinked({
             </span>
           ))}
           {migrations.more && ", …"}
+          {migrations.fix && (
+            <button
+              onClick={() => onStart(folder.folder, migratePrompt(folder, link, cards), migrateTitle(folder))}
+              className="ml-1.5 rounded bg-warn-soft px-1 text-[10px] leading-[15px] text-warn hover:underline"
+              title="Start a card that reviews these migrations, applies them on your OK and lines the files up with Supabase's history"
+            >
+              Migrate
+            </button>
+          )}
         </p>
       )}
       {link.source === "mcp" && <p className="text-faint">Linked in .mcp.json</p>}

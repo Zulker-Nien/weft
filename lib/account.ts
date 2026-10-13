@@ -10,7 +10,7 @@ import type { AccountProvider, AccountUser, AccountView } from "./types";
 
 // A Weft account is optional: the board works signed out, and signing in unlocks cloud features
 // (page sync, share links). Sign-in runs in the system browser and comes back to this machine: as
-// weft://account-callback in the desktop app, or the loopback /api/account/callback in plain `next dev`
+// weft://account-callback in the desktop app, or the loopback /api/auth/callback in plain `next dev`
 // (see redirectUrl). PKCE keeps the code verifier in the session file, so the link only works on the
 // machine that started the sign-in.
 
@@ -18,7 +18,7 @@ import type { AccountProvider, AccountUser, AccountView } from "./types";
 // WEFT_SUPABASE_KEY="" turns accounts off.
 export const SUPABASE_URL = process.env.WEFT_SUPABASE_URL || "https://lqjyravglujyizyqypxq.supabase.co";
 export const SUPABASE_KEY = process.env.WEFT_SUPABASE_KEY ?? "sb_publishable_DHNc-IYsRJSJkbN38qZNLQ_G59w6uVe";
-export const CALLBACK_PATH = "/api/account/callback";
+export const CALLBACK_PATH = "/api/auth/callback";
 const SESSION_FILE = path.join(DATA_DIR, "account.json");
 
 export const PROVIDERS: AccountProvider[] = ["github", "google"];
@@ -90,19 +90,11 @@ export async function accountView(): Promise<AccountView> {
   return { configured: true, user: data.session ? toAccountUser(data.session.user) : null };
 }
 
-// The custom URL scheme the desktop app registers as the OAuth redirect target, so the URL is
-// stable across dev server port changes (the port is picked at random on every Weft restart).
-// In packaged builds the OS hands weft://account-callback back to Electron's main process, which
-// forwards the code to /api/account/weft-callback. In plain `next dev` (no Electron) the scheme
-// is not registered, so we fall back to the HTTP loopback.
-export const ACCOUNT_CALLBACK_HOST = "account-callback";
-export function weftCallbackUrl(): string {
-  return `${WEEFT_PROTOCOL}://${ACCOUNT_CALLBACK_HOST}`;
-}
+import { weftCallbackUrl } from "./account-callback";
+export { ACCOUNT_CALLBACK_HOST, WEEFT_PROTOCOL, weftCallbackUrl } from "./account-callback";
 
 // Where Supabase sends the browser back to. The packaged desktop app uses the weft:// scheme so
 // the URL doesn't depend on the dev port; plain `next dev` uses the loopback HTTP origin instead.
-export const WEEFT_PROTOCOL = "weft";
 export function redirectUrl(origin: string): string {
   if (process.env.THREADBOARD_SHELL_URL) return weftCallbackUrl();
   return `${origin.replace(/\/+$/, "")}${CALLBACK_PATH}`;
@@ -130,7 +122,7 @@ export async function sendMagicLink(email: string, origin: string): Promise<void
   if (error) throw error;
 }
 
-// The code from /api/account/callback?code=…; it's good for 5 minutes and only once.
+// The code from /api/auth/callback?code=…; it's good for 5 minutes and only once.
 export async function finishSignIn(code: string): Promise<AccountUser> {
   if (!code) throw new Error("The sign-in link had no code. Try signing in again.");
   const { data, error } = await client().auth.exchangeCodeForSession(code);

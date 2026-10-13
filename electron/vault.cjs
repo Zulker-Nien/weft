@@ -250,13 +250,15 @@ function createVault({ dataDir, safeStorage, sodium, prompt, clipboard, run = gi
       return { copied: true };
     },
 
-    // Adds a secret by hand, or replaces its value: works for a project with no .env file at all.
-    async setValue(folder, name, environment, value) {
+    // Adds a secret by hand, or replaces its value: works for a project with no .env file at all. With a source (a
+    // pull from Vercel, electron/vercel-env.cjs, which only fills names with no value) the board hears it like a hand edit.
+    async setValue(folder, name, environment, value, { source } = {}) {
       if (!NAME.test(name)) throw new Error(`${name || "A blank name"} isn't a variable name: use letters, digits and _, not starting with a digit.`);
       if (!value) throw new Error(`Type a value for ${name}.`);
       const { id, label } = await idOf(folder);
-      (await storeReady()).set(id, label, [{ name, environment, value }]);
+      (await storeReady()).set(id, label, [{ name, environment, value, source }]);
       refreshManaged(id);
+      if (source) onChange(folder);
       return { saved: true };
     },
 

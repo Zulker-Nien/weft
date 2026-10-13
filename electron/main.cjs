@@ -69,8 +69,7 @@ let vault, secretRun, vercelEnv;
 const warnUser = (message, detail) => dialog.showMessageBox(win, { type: "warning", message, detail });
 const pane = createBrowserPane({
   secrets: () => vault, secretRun: () => secretRun,
-  getWindow: () => win, getAppView: () => appView,
-  token: TOKEN,
+  getWindow: () => win, getAppView: () => appView, token: TOKEN,
   onContents: (contents) => menus.attachContextMenu(contents),
   pages: createPanePages(dataDir()),
   // weft:// links clicked inside a pane page, like a walk-through's buttons.
@@ -82,8 +81,7 @@ const pane = createBrowserPane({
     // (lib/secret-ask.ts). The rail's 🔐 count goes up; nothing opens.
     "POST /secrets/add-blank": ({ folder, names, environment, hint }) => {
       if (!vault) throw new Error("The secrets vault isn't ready yet.");
-      const list = Array.isArray(names) ? names.map(String) : [];
-      return vault.addBlanks(String(folder), list, [String(environment || "development")], { source: "a thread", hint: hint ? String(hint).slice(0, 200) : undefined });
+      return vault.addBlanks(String(folder), Array.isArray(names) ? names.map(String) : [], [String(environment || "development")], { source: "a thread", hint: hint ? String(hint).slice(0, 200) : undefined });
     },
     // mcp__secrets__ask_add, and a fill or run that found a key missing: the name goes in as a blank, then the
     // 🔐 drawer opens on its Add form with the name filled in (lib/secret-ask.ts); the board checks the ask
@@ -93,6 +91,8 @@ const pane = createBrowserPane({
       sendMenu("add-secret", JSON.stringify({ folder, name, environment }));
       return { opened: true };
     },
+    "POST /app/restart": ({ then }) => require("./restart-when-idle.cjs").restartFor({ then, updater: menus.updater, app }), // the server's restart when idle, once nothing runs
+    "POST /webhooks/ask-add": ({ folder, id }) => (sendMenu("add-webhook", JSON.stringify({ folder, id })), { ok: true }), // mcp__webhooks__ask_add: the board opens 🪝 on a recorded webhook
     // mcp__secrets__push_to_vercel: a vault value onto the card's linked Vercel project, after Touch ID.
     ...require("./vercel-env.cjs").envRoutes(() => vercelEnv),
     // mcp__board_view__*: threads see and drive the board itself, secrets redacted (electron/board-view.cjs).
@@ -106,7 +106,7 @@ const pageLinks = createPageLinks({
   warn: warnUser,
 });
 
-// weft://account-callback links: forward to the board's /api/account/weft-callback so the OAuth
+// weft://account-callback links: forward to the board's /api/auth/weft-callback so the OAuth
 // code can be exchanged against the PKCE verifier.
 const accountLink = createAccountLink({ getServer: () => server, showMain, warn: warnUser });
 

@@ -1,5 +1,5 @@
 // The little green/red page the system browser is left on after the Weft account sign-in.
-// /api/account/callback and /api/account/weft-callback both render it, so the user sees the same
+// /api/auth/callback and /api/auth/weft-callback both render it, so the user sees the same
 // result whether the OAuth redirect hit the HTTP loopback (dev) or the weft:// handler (packaged).
 
 function escape(text: string) {

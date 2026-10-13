@@ -1,7 +1,8 @@
 # Vercel
 
 Status: linking built 2026-10-12 (pick an existing project or create one); env push from the 🔐 vault built
-2026-10-12. GitHub connect on a linked project, deploys and logs are next.
+2026-10-12; env pull into the vault, by hand or live by webhook, built 2026-10-13. GitHub connect on a linked project,
+deploys and logs are next.
 
 ▲ on the left rail (under 🔐, in `components/LibraryRail.tsx`) opens a drawer that links each board project to a
 Vercel project. It's the base for the rest of the Vercel work: everything after linking needs the token and the
@@ -65,14 +66,49 @@ value). It opens by itself when something is left to push.
   happened. Its prompt says to use it instead of the dashboard or `vercel env add` for a vault value.
 - A Weft whose main started before env push shows "Restart Weft to push 🔐 secrets to Vercel" (no `envStatus` on the bridge).
 
+## Env pull: Vercel → 🔐 vault
+
+The other way round, for a variable someone added on Vercel (the dashboard, `vercel env add`) that the vault doesn't
+hold yet. The vault stays the source of truth: a pull only fills a name the vault has **no value** for (absent, or a
+blank waiting for one) and never replaces a value.
+
+- **What can come down.** Vercel decrypts only `plain` and `encrypted` variables (`GET /v1/projects/<id>/env/<envId>`,
+  `vercel.envValue`). `sensitive` (and the old `secret`) never decrypt, so they stay **Vercel only** and the pull's
+  toast lists them to add by hand; `system` ones are Vercel's own. `status()` marks the rows that can come down
+  `pullable`, and those show **Vercel only · pull**, which pulls every pullable row of that project.
+- **No Touch ID.** Unlike a push, a pull writes into your own vault and sends nothing anywhere: `vault.setValue` saves
+  each with source "Vercel", rewrites a managed `.env.local` and tells the board (`vault:changed`). The value
+  goes from Vercel's answer into the vault inside main; the board and threads get names back.
+- **Live pull** (the drawer's "Live pull from Vercel" switch, for a project in a team: account webhooks belong to a
+  team and need Pro or Enterprise). Vercel can't reach a Weft on localhost, so it goes through the deployed Weft, like
+  the GitHub issue webhooks:
+
+  ```
+  Vercel env added ─▶ weft-topaz.vercel.app/api/vercel/webhook?hook=<id>   (lib/vercel-relay.ts: x-vercel-signature,
+                                                                            HMAC-SHA1 of the body with the hook's secret)
+                    ─▶ vercel_events row on Weft's Supabase (project id only; the payload never holds a value)
+                    ─▶ Realtime ─▶ this Weft's server (lib/vercel-hooks.ts, after a 1.5s settle)
+                    ─▶ control server POST /vercel/env-pull for each board folder linked to that project ─▶ main pulls
+  ```
+
+  Turning it on (`POST /api/vercel/hooks`) picks the hook's id, has main create the team webhook
+  (`POST /v1/webhooks`, events `project.env-variable.created` and `.updated`, all the team's projects, since project
+  events need that scope), and inserts the `vercel_hooks` row with Vercel's secret (insert-only; only the relay reads it
+  back with the secret key). Then it pulls the folder once. On each server start and sign-in the listener pulls every
+  board folder on a hooked team once, to catch what changed while Weft wasn't listening. Off deletes the webhook and
+  the row. Migration: `supabase/migrations/20261013080000_vercel_webhooks.sql`. The relay needs `SUPABASE_SECRET_KEY`
+  on the deployment (the GitHub relay already uses it); `WEFT_VERCEL_RELAY_URL` points hooks at another deployment.
+
 ## Files
 
 - `electron/vercel.cjs`: `createVercel` (status, token, projects, scopes, link, create, unlink) and `registerVercel`,
   whose IPC handlers answer the board window only.
 - `electron/vercel-project.cjs`: request building, reading Vercel's answers (`deploymentOf`, `gitOf`,
   `productionUrl`), and the folder's side (`readLink`, `writeLink`, `ignoreVercel`, `frameworkOf`, `repoOf`).
-- `electron/vercel-env.cjs`: `createVercelEnv` (status, push) over `vercel.envList` / `vercel.envSet` and `vault.sendValue`,
-  and `envRoutes` for threads.
+- `electron/vercel-env.cjs`: `createVercelEnv` (status, push, pull, webhook create/delete) over `vercel.envList` /
+  `vercel.envSet` / `vercel.envValue`, `vault.sendValue` and `vault.setValue`, and `envRoutes` for threads and the server.
+- `lib/vercel-relay.ts` + `app/api/vercel/webhook/route.ts`: the relay on the deployed Weft. `lib/vercel-hooks.ts` +
+  `app/api/vercel/hooks/route.ts`: the switch and the Realtime listener (started from `prewarm()`).
 - `electron/preload.cjs`: `window.threadboard.vercel`.
 - `lib/vercel-view.ts`: types, the bridge, matching, labels, name rules. `lib/use-vercel.ts`: loading, over `lib/use-linked-status.ts` (the cache).
 - `components/VercelDrawer.tsx` (token form, linked folders), `components/VercelEnv.tsx` (the 🔐 env rows), `components/VercelPicker.tsx` (Link…),
@@ -82,7 +118,7 @@ value). It opens by itself when something is left to push.
 
 1. **Connect GitHub** on a project that's linked but doesn't deploy from its repo (same `/link` call as create).
 2. **Deploy**: list recent deployments, redeploy, promote; open a preview in the card's pane after a push.
-3. **Env pull and compare**: values can't be compared without decrypting Vercel's (sensitive ones never decrypt), so
-   "changed" isn't shown yet; a pull into the vault for non-sensitive ones is open.
+3. **Env compare**: values can't be compared without decrypting Vercel's (sensitive ones never decrypt), so
+   "changed" isn't shown yet. Pull (built) fills only names the vault has no value for.
 4. **Logs**: build logs of a failed deploy, runtime logs, in the drawer or the pane.
 5. **Agent tools**: `mcp__vercel__*` for status and logs, with the token kept in main.

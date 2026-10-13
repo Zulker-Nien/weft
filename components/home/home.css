@@ -257,3 +257,40 @@
     animation: none;
   }
 }
+
+/* The /login page (app/login/page.tsx). Same palette as the home, but a
+   centred card on a flat cloth. The card uses the package's auth tokens
+   once @aimhuge/auth ships; the wz-auth* class names are the local fallback
+   so the page renders today without depending on the package's CSS. */
+.wz-auth {
+  display: grid;
+  place-items: center;
+  padding: 80px 24px;
+}
+
+.wz-authCard {
+  width: 100%;
+  max-width: 420px;
+  padding: 32px;
+  border-radius: 14px;
+  background: rgb(28 34 50 / 0.85);
+  border: 1px solid rgb(236 229 216 / 0.1);
+  box-shadow: 0 20px 60px -20px rgb(0 0 0 / 0.7);
+  backdrop-filter: blur(8px);
+}
+
+.wz-authTitle {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 30px;
+  color: var(--thread);
+  letter-spacing: -0.02em;
+}
+
+.wz-authSub {
+  margin: 8px 0 24px;
+  font-size: 14.5px;
+  color: var(--thread-2);
+  text-wrap: pretty;
+}

@@ -24,6 +24,38 @@ SDK's `query()` consumes it as the prompt, so a single CLI process keeps running
 between turns and each user message is a new `SDKUserMessage` on the same iterator.
 `close()` ends the input and lets the process exit.
 
+### The CLI process and its children
+
+`spawnClaudeCodeProcess` (`spawnCli` in `lib/cli-process.ts`) replaces the SDK's own spawn so each CLI
+starts `detached`, the leader of a process group of its own. puku-cli is a `node` wrapper that starts a
+`Puku` child and doesn't pass signals on, so killing only the wrapper (all the SDK does) used to leave `Puku`
+under PID 1 burning CPU. Now the whole group ends: on the SDK's `kill()`, on its abort (after its stdin-EOF
+grace), and when the wrapper exits on its own (an idle close): SIGTERM, then SIGKILL after `KILL_GRACE_MS`.
+Live groups sit in `groups`, and a `process.on("exit")` hook SIGKILLs them all when the server exits (Next's
+SIGTERM/SIGINT handlers call `process.exit`). Because a custom spawn skips the SDK's stderr capture, `spawnCli`
+keeps the stderr tail itself and `failed()` adds it back to the error (`withStderr`), so a logged-out or
+rate-limited CLI still reads as one.
+
+A server killed outright never runs that hook, so `prewarm()` calls `reapStrayClis()` (`lib/cli-reaper.ts`):
+it kills processes whose parent is PID 1, that are `Puku`, a `puku-cli` wrapper or the SDK's Claude Code
+binary from Weft's `node_modules`, and whose cwd (from `lsof`) is in a project or card folder. A puku you run
+in a terminal has the shell as its parent, so it never matches.
+
+### Idle puku CLIs (`lib/puku-idle.ts`)
+
+An idle puku-cli used 8-15% CPU (more with a big session) while Claude Code idled at 0.4%. A CPU profile over
+the inspector (`kill -USR1`, then CDP `Profiler`) showed a timer calling `gc` and ~4% of samples in the garbage
+collector: puku-cli's headless loop runs `setInterval(Bun.gc ?? globalThis.gc, 1000)`, a line from Claude Code,
+where Bun's `gc()` is a cheap hint. puku-cli runs on Node and its bin relaunches itself with `--expose-gc` (and an
+8 GB heap), so on Node it's a full synchronous collection every second. `backendEnv()` adds
+`PUKU_CLI_DISABLE_HEAP_RELAUNCH=1` to a puku thread's env: no relaunch, no `gc`, no timer, idle at 0.1%, and one
+process instead of wrapper plus `Puku`. The price is Node's default heap limit (~4 GB on a 16 GB Mac).
+
+Puku is also capped tighter than Claude Code: `trimIdle()` closes idle puku sessions past `MAX_IDLE_PUKU` (2),
+`keepAliveFor()` closes one after `PUKU_KEEP_ALIVE_MINUTES` (10) even when keep-alive is never, `ensureSpare()`
+keeps one puku spare (the folder asked for last), and `adoptSpare()` refills only Claude Code spares
+(`refillsSpare()`). A puku card with no spare starts cold, about 1.1-1.6 s to answer `initialize`.
+
 `open()` starts a session, registers it in the `sessions` map (kept on `globalThis`, so
 every API route shares it), and returns the running `Session`. `drive()` (`lib/runner-session.ts`) calls `query()` with:
 
@@ -83,11 +115,13 @@ starts a fresh spare for that folder.
 A card's CLI is set at creation, but three affordances let you change it after the fact:
 
 - **The thread header's `BackendPicker`** (`components/BackendPicker.tsx`) wraps the model chip
-  in a button. Click it, pick the other CLI, the next turn runs there. Disabled while a turn is
-  live (`lib/format.ts:isLive` — running or a permission request pending), with a tooltip that
-  says so. The copilot (`role: "copilot"`) is locked to Claude Code, so it keeps the static
-  `BackendBadge`. The picker calls `api.switchBackend(id, other, false)` — no replay; that's the
-  rate-limit banner's job (it always replays).
+  in a button. Its menu lists each CLI's models (`MODELS` in `lib/new-thread.ts`). A model of the
+  card's own CLI changes the open CLI's model in place (`setModel()` in `lib/runner.ts`, which goes
+  through `switchSpare` so commits are signed as the new model), even mid-turn. A model of the other
+  CLI switches CLI; that row is disabled while a turn is live (`lib/format.ts:isLive`). The copilot
+  (`role: "copilot"`) is locked to Claude Code, so it keeps the static `BackendBadge`. The picker
+  calls `api.switchBackend(id, backend, false, model)`; the route refuses a model the CLI doesn't
+  serve. No replay: that's the rate-limit banner's job (it always replays).
 - **Right-click → "Run on puku-cli" / "Run on Claude Code"** in `lib/card-menu.ts`. The bulk
   equivalent is the **"Switch all"** link at the top of a column (`components/switch-all-button.tsx`),
   which only reaches cards in the *Running* column.
@@ -97,9 +131,11 @@ A card's CLI is set at creation, but three affordances let you change it after t
 
 All three paths land in `switchBackend()` (`lib/backend-switch.ts`), which ends the session, clears
 `sessionId` and `rateLimitHit`, normalizes the per-CLI incompatibilities (puku has no YOLO, no
-`xhigh` effort) through `effortFor()` (`lib/new-thread.ts`), and optionally replays. The next
+`xhigh` effort, no Claude models) through `effortFor()` and `modelOn()` (`lib/new-thread.ts`), and
+optionally replays. `modelOn` matters because the Puku gateway doesn't refuse a Claude id: it
+answers it as puku-ai-2.8, so a switched card's chip used to say "Fable 5.1" on puku. The next
 turn's CLI flags are then derived from `specFor(card)` (`lib/runner-state.ts`), which also
-normalizes through `effortFor` — so a card already in a bad state recovers without the user
+normalizes through `effortFor` and `modelOn` (and so does the chip, through `runningOn`) — so a card already in a bad state recovers without the user
 flipping it. See `docs/bug-fixes/012-fable-xhigh-effort-crashes-puku.md`.
 
 ### Commit and PR attribution
@@ -143,6 +179,17 @@ for your own moves to Review or Done, which `PATCH /api/cards/[id]` queues. "A t
 rules don't queue anything; `firstMessage()` appends "Start by using the /x skill" to the card's
 prompt, used by every path that starts a Backlog card (`POST /api/cards`, the PATCH to running,
 the copilot's `start_card`). The copilot's `move_card` never runs automations.
+
+#### /weft:done's model and effort override
+
+Settings has a "Run /weft:done on …" pair of selects (`components/DonePicker.tsx`) that pick the
+model and effort `/weft:done` runs on when you move a card to Done — handy for keeping the
+wrap-up on a fixed model. The override is turn-scoped: a Done move snapshots the card's own
+`model` / `effort` into `preDoneModel` / `preDoneEffort` (`app/api/cards/[id]` `moveCard` →
+`applyDoneOverride`), the `/weft:done` turn runs on the override, and `lib/runner.ts`
+`restoreDoneOverride` puts the originals back once that turn ends. The override is a no-op
+for puku cards (the done skill's `puku-agent` fan-out is Claude-only). A `/weft:done` you
+type yourself doesn't go through this path, so it always uses the card's own picks.
 
 ### Editing your last message (↑)
 

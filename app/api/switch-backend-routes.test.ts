@@ -205,6 +205,15 @@ describe("POST /api/cards/:id/switch-backend", () => {
     }
   });
 
+  it("passes a model of that CLI along, and 400s one from the other CLI", async () => {
+    const card = addCard({ backend: "claude" });
+    await post(card.id, { backend: "puku", model: "puku-ai-2.7" });
+    expect(runner.switchBackend).toHaveBeenLastCalledWith(card.id, "puku", { replay: false, model: "puku-ai-2.7" });
+    const res = await post(card.id, { backend: "puku", model: "claude-fable-5-1" });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toMatch(/isn't a puku model/);
+  });
+
   it("404s an unknown card; 400s a bad backend or bad JSON", async () => {
     addCard();
     expect((await post("ghost", { backend: "puku" })).status).toBe(404);

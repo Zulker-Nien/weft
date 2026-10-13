@@ -4,12 +4,14 @@ import type { Card } from "./types";
 const cards = new Map<string, Card>();
 const busy = new Set<string>();
 const sent: Array<[string, string]> = [];
+let restartArmed = false;
 
 vi.mock("./store", () => ({
   getCard: (id: string) => cards.get(id),
   listCards: () => [...cards.values()],
   updateCard: (id: string, patch: Partial<Card>) => Object.assign(cards.get(id)!, patch),
 }));
+vi.mock("./restart-when-idle", () => ({ restartArmed: () => restartArmed }));
 vi.mock("./runner", () => ({
   isBusy: (id: string) => busy.has(id),
   sendUserMessage: (id: string, text: string) => {
@@ -28,6 +30,7 @@ beforeEach(() => {
   cards.clear();
   busy.clear();
   sent.length = 0;
+  restartArmed = false;
 });
 
 describe("scheduleMessage", () => {
@@ -78,6 +81,19 @@ describe("sendDueMessages", () => {
     sendDueMessages(NOW);
     expect(cards.get("a")!.error).toMatch(/scheduled message couldn't go: folder gone/);
     expect(cards.get("a")!.scheduled).toBeUndefined();
+  });
+});
+
+describe("sendDueMessages while a restart is armed", () => {
+  it("sends nothing, leaves what's due on the card, and sends it once the restart is cancelled", () => {
+    card("a", { scheduled: [{ id: "1", text: "held", at: NOW - 1 }] });
+    restartArmed = true;
+    sendDueMessages(NOW);
+    expect(sent).toEqual([]);
+    expect(cards.get("a")!.scheduled!.map((m) => m.id)).toEqual(["1"]);
+    restartArmed = false;
+    sendDueMessages(NOW);
+    expect(sent).toEqual([["a", "held"]]);
   });
 });
 

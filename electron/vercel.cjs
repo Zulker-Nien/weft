@@ -9,6 +9,8 @@ const { VercelError, deploymentOf, frameworkOf, gitOf, gitRemote, mustBeFolder, 
 const TOKEN_FILE = "vercel-token.json";
 // The most projects one scope (your account or a team) lists; enough to pick from by name.
 const PAGE = 100;
+// What a pull webhook listens for (docs/architecture/vercel.md): a variable added or changed on any of the team's projects.
+const ENV_EVENTS = ["project.env-variable.created", "project.env-variable.updated"];
 
 function createVercel({ dataDir, safeStorage, fetch: fetchImpl = globalThis.fetch, remote = gitRemote }) {
   const tokenFile = path.join(dataDir, TOKEN_FILE);
@@ -181,7 +183,34 @@ function createVercel({ dataDir, safeStorage, fetch: fetchImpl = globalThis.fetc
       const link = readLink(folder);
       if (!link) throw new Error(`${path.basename(folder)} isn't linked to a Vercel project yet.`);
       const { envs = [] } = await call(`/v10/projects/${encodeURIComponent(link.projectId)}/env`, { teamId: teamOf(link.orgId) });
-      return { project: link.projectName ?? link.projectId, envs: envs.map((e) => ({ key: e.key, targets: Array.isArray(e.target) ? e.target : [e.target].filter(Boolean), type: e.type ?? null })) };
+      return { project: link.projectName ?? link.projectId, envs: envs.map((e) => ({ id: e.id ?? null, key: e.key, targets: Array.isArray(e.target) ? e.target : [e.target].filter(Boolean), type: e.type ?? null })) };
+    },
+
+    // One variable's value, decrypted by Vercel: only plain and encrypted ones come back; a sensitive one is null.
+    // Main alone calls this, to put the value straight into the vault (electron/vercel-env.cjs pull).
+    async envValue(folder, envId) {
+      const link = readLink(folder);
+      if (!link) throw new Error(`${path.basename(folder)} isn't linked to a Vercel project yet.`);
+      const env = await call(`/v1/projects/${encodeURIComponent(link.projectId)}/env/${encodeURIComponent(envId)}`, { teamId: teamOf(link.orgId) });
+      return typeof env.value === "string" && env.value && env.type !== "sensitive" ? env.value : null;
+    },
+
+    // A team webhook for the env-variable events, posting to url (the relay on the deployed Weft, lib/vercel-relay.ts).
+    // Vercel makes the secret that signs each delivery; it goes back to the server alone, never the board.
+    async createWebhook(teamId, url) {
+      if (!String(teamId).startsWith("team_")) throw new Error("Vercel webhooks belong to a team: link a project in a team (Pro or Enterprise).");
+      const hook = await call("/v1/webhooks", { method: "POST", teamId, body: { url, events: ENV_EVENTS } });
+      return { id: hook.id, secret: hook.secret };
+    },
+
+    async deleteWebhook(teamId, id) {
+      try {
+        await call(`/v1/webhooks/${encodeURIComponent(id)}`, { method: "DELETE", teamId });
+      } catch (err) {
+        // Already gone from Vercel: nothing left to take off.
+        if (err.status !== 404) throw err;
+      }
+      return { removed: true };
     },
 
     // Adds or replaces one variable for one environment. Production and Preview values go in as sensitive
@@ -217,6 +246,7 @@ function registerVercel(ipcMain, { vercel, env, isBoard }) {
   if (env) {
     handle("vercel:env-status", (folder) => env.status(String(folder)));
     handle("vercel:env-push", (folder, name, environment) => env.push(String(folder), String(name), String(environment)));
+    handle("vercel:env-pull", (folder) => env.pull(String(folder)));
   }
 }
 
@@ -230,4 +260,4 @@ function setupVercel({ ipcMain, dataDir, board, vault }) {
   return { vercel, env };
 }
 
-module.exports = { setupVercel, createVercel, registerVercel, TOKEN_FILE };
+module.exports = { setupVercel, createVercel, registerVercel, TOKEN_FILE, ENV_EVENTS };

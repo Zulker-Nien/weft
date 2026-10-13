@@ -1,5 +1,6 @@
-import { automations } from "./settings";
-import type { AutomationTrigger, Card, Column } from "./types";
+import { backendFor, effortFor } from "./new-thread";
+import { automations, doneEffort, doneModel } from "./settings";
+import type { AutomationTrigger, Card, Column, Effort } from "./types";
 
 // Board automations: Settings rules like "when you move a card to Done, run weft:done". A rule's
 // skill runs in the card's own thread, as if you'd typed /<skill> there, so it sees the whole
@@ -54,4 +55,17 @@ export function skillsForPrompt(card: Card, prompt: string): string[] {
 // A message that wraps the thread up (/done, /weft:done, /done-quick): the card is archived once it runs.
 export function isDoneCommand(text: string): boolean {
   return /^\/(weft:)?done(-quick)?(\s|$)/.test(text.trim());
+}
+
+// The model and effort Settings says /weft:done should run on for this card, or {} to leave the
+// card's own picks alone. The model applies only to cards on the CLI that serves it: switching CLIs
+// starts a fresh session, and /weft:done needs the thread's conversation to know what it changed.
+// The effort applies to every card, stepped down to what its CLI takes (puku has no xhigh).
+export function doneOverrides(card: Card): { model?: string; effort?: Effort } {
+  const out: { model?: string; effort?: Effort } = {};
+  const model = doneModel();
+  if (model && backendFor(model) === card.backend) out.model = model;
+  const effort = effortFor(card.backend, doneEffort());
+  if (effort) out.effort = effort;
+  return out;
 }

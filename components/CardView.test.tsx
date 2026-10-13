@@ -32,6 +32,16 @@ describe("CardView", () => {
     expect(screen.getByText("· commit")).toBeInTheDocument();
   });
 
+  it("names the model beside the CLI dot once it's known, with the effort in its tooltip", () => {
+    renderCard({ stats: { runsOn: { model: "claude-opus-5-5", effort: "high" } } });
+    expect(screen.getByText("Opus 5.5")).toHaveAttribute("title", "Claude Code on claude-opus-5-5 · high effort");
+  });
+
+  it("shows no model before the CLI reports one", () => {
+    renderCard();
+    expect(screen.queryByText(/Opus|Sonnet|Fable|Haiku/)).not.toBeInTheDocument();
+  });
+
   it("shows the error instead of the last line", () => {
     renderCard({ lastLine: "Working", error: "CLI crashed" });
     expect(screen.getByText("CLI crashed")).toBeInTheDocument();
@@ -243,33 +253,41 @@ describe("BackendBadge", () => {
 describe("BackendPicker", () => {
   afterEach(cleanup);
 
-  it("opens a menu of both CLIs, marks the current one, and calls switchBackend with the other", async () => {
-    render(<BackendPicker card={makeCard({ backend: "claude" })} />);
-    const trigger = screen.getByRole("button", { name: /Switch CLI/ });
-    await userEvent.click(trigger);
-    expect(screen.getByRole("button", { name: "Claude Code" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "puku-cli" })).toHaveAttribute("aria-pressed", "false");
-    await userEvent.click(screen.getByRole("button", { name: "puku-cli" }));
-    expect(api.switchBackend).toHaveBeenCalledWith("c1", "puku", false);
+  it("lists each CLI's models, marks the current one, and switches CLI with the picked model", async () => {
+    render(<BackendPicker card={makeCard({ backend: "claude", model: "claude-opus-5-5" })} />);
+    await userEvent.click(screen.getByRole("button", { name: /Switch model/ }));
+    expect(screen.getByRole("button", { name: "Opus 5.5" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Opus 4.8" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("group", { name: "puku-cli" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Puku AI 2.7" }));
+    expect(api.switchBackend).toHaveBeenCalledWith("c1", "puku", false, "puku-ai-2.7");
   });
 
-  it("is a no-op when the chosen CLI is the same as the card's", async () => {
-    render(<BackendPicker card={makeCard({ backend: "puku" })} />);
-    await userEvent.click(screen.getByRole("button", { name: /Switch CLI/ }));
-    await userEvent.click(screen.getByRole("button", { name: "puku-cli" }));
+  it("a puku card left with a Claude model shows puku's default as current", async () => {
+    render(<BackendPicker card={makeCard({ backend: "puku", model: "claude-fable-5-1" })} />);
+    await userEvent.click(screen.getByRole("button", { name: /Switch model/ }));
+    expect(screen.getByRole("button", { name: "Opus 4.8" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Fable 5.1" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("is a no-op when the chosen model is the card's own", async () => {
+    render(<BackendPicker card={makeCard({ backend: "puku", model: "puku-ai-2.8" })} />);
+    await userEvent.click(screen.getByRole("button", { name: /Switch model/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Puku AI 2.8" }));
     expect(api.switchBackend).not.toHaveBeenCalled();
   });
 
-  it("disables both rows while the thread is live", async () => {
+  it("while live, keeps this CLI's models and disables the other CLI's", async () => {
     render(<BackendPicker card={makeCard({ backend: "claude", column: "running" })} />);
-    await userEvent.click(screen.getByRole("button", { name: /Switch CLI/ }));
-    expect(screen.getByRole("button", { name: "Claude Code" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "puku-cli" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: /Switch model/ }));
+    expect(screen.getByRole("button", { name: "Sonnet 5.5" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Opus 4.8" })).toBeDisabled();
+    expect(screen.getByText("Stop the thread to switch CLI.")).toBeInTheDocument();
   });
 
   it("the copilot doesn't get a switcher — just the static badge", () => {
     render(<BackendPicker card={makeCard({ id: "copilot", backend: "claude", role: "copilot" })} />);
-    expect(screen.queryByRole("button", { name: /Switch CLI/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Switch model/ })).not.toBeInTheDocument();
     expect(screen.getByText("claude")).toBeInTheDocument();
   });
 });

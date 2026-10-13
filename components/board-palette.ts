@@ -18,6 +18,8 @@ export interface PaletteState {
   archivedCount: number;
   showArchived: boolean;
   rootOf: (cwd: string) => string;
+  // A restart is waiting for the running threads (lib/restart-when-idle.ts).
+  restartArmed?: boolean;
 }
 
 export interface PaletteActions {
@@ -61,6 +63,14 @@ function importIssuesItem(s: PaletteState, a: PaletteActions): PaletteItem[] {
   return [command("import-issues", `Import GitHub issues into ${name}`, "github", run, undefined, "github issues backlog sync")];
 }
 
+// Restart when idle (lib/restart-when-idle.ts), or cancel the one that's waiting.
+function restartItem(s: PaletteState, a: PaletteActions): PaletteItem {
+  const fail = (err: unknown) => a.toast?.(err instanceof Error ? err.message : String(err));
+  if (s.restartArmed) return command("restart-cancel", "Cancel the restart", "x", () => void api.cancelRestart().catch(fail), undefined, "relaunch");
+  const run = () => void api.restartWhenIdle().catch(fail);
+  return command("restart", "Restart Weft when idle", "reload", run, undefined, "relaunch reload quit update wait finish");
+}
+
 function commandItems(s: PaletteState, a: PaletteActions): PaletteItem[] {
   const { doneToArchive, lastArchived, archivedCount, selected } = s;
   const commands: PaletteItem[] = [
@@ -74,6 +84,7 @@ function commandItems(s: PaletteState, a: PaletteActions): PaletteItem[] {
     command("add-secret", "Add a secret", "lock", a.addSecret, "shift+s", "vault env key token password"),
     command("needs-you", "Jump to a card that needs you", "alert", a.jumpToNeedsYou, "a", "waiting"),
     ...importIssuesItem(s, a),
+    restartItem(s, a),
     ...(doneToArchive.length
       ? [command("archive-done", `Archive all ${doneToArchive.length} in Done`, "archive", () => a.archiveCards(doneToArchive), "shift+e", "clear file")]
       : []),

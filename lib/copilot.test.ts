@@ -23,6 +23,9 @@ vi.mock("./scheduler", () => ({ startScheduler: vi.fn() }));
 vi.mock("./resume", () => ({ resumeInterrupted: vi.fn() }));
 vi.mock("./github-issues", () => ({ startIssueSync: vi.fn() }));
 vi.mock("./github-hooks", () => ({ startHookListener: vi.fn() }));
+vi.mock("./vercel-hooks", () => ({ startVercelListener: vi.fn() }));
+vi.mock("./webhook-forward", () => ({ startWebhookRelay: vi.fn() }));
+vi.mock("./cli-reaper", () => ({ reapStrayClis: vi.fn(() => Promise.resolve([])) }));
 vi.mock("./settings", () => ({ listProjects: vi.fn(() => db.projects), defaultPermissionMode: () => "auto" }));
 
 const store = await import("./store");

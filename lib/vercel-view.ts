@@ -89,6 +89,8 @@ export interface VercelBridge {
   // Vault → Vercel (electron/vercel-env.cjs); missing on a main that started before env push was built.
   envStatus?: (folder: string) => Promise<VercelEnvStatus>;
   envPush?: (folder: string, name: string, environment: VercelEnvironment) => Promise<VercelPushResult>;
+  // Vercel → vault: every plain variable the vault has no value for (electron/vercel-env.cjs pull).
+  envPull?: (folder: string) => Promise<VercelPullResult>;
 }
 
 export type VercelEnvironment = "development" | "preview" | "production";
@@ -100,6 +102,8 @@ export interface VercelEnvRow {
   // The vault has a value for it (not just the name).
   inVault: boolean;
   onVercel: boolean;
+  // Not in the vault, and Vercel will hand its value back (plain or encrypted, not sensitive): Pull brings it down.
+  pullable?: boolean;
 }
 
 export interface VercelEnvStatus {
@@ -117,6 +121,14 @@ export interface VercelPushResult {
   label: string;
 }
 
+export interface VercelPullResult {
+  label: string;
+  project: string;
+  pulled: { name: string; environment: VercelEnvironment }[];
+  // On Vercel and not in the vault, but sensitive, so Vercel won't hand the value back.
+  skipped: { name: string; environment: VercelEnvironment }[];
+}
+
 export const ENV_SHORT: Record<VercelEnvironment, string> = { development: "dev", preview: "preview", production: "prod" };
 
 // Rows the vault can push: it has the value and Vercel doesn't have the name there yet.
@@ -129,6 +141,16 @@ export function envLine(rows: VercelEnvRow[]) {
   if (!rows.some((r) => r.inVault)) return "No vault values to push yet";
   if (!push) return `All ${both} vault ${both === 1 ? "secret is" : "secrets are"} on Vercel`;
   return `${push} to push${both ? ` · ${both} on Vercel` : ""}`;
+}
+
+// Rows Pull would bring down.
+export const toPull = (rows: VercelEnvRow[]) => rows.filter((r) => r.pullable);
+
+// The toast after a pull: what came down, and what has to be added by hand.
+export function pullText(r: VercelPullResult) {
+  const names = (list: { name: string }[]) => [...new Set(list.map((e) => e.name))].join(", ");
+  const got = r.pulled.length ? `Pulled ${names(r.pulled)} into the ${r.label} vault` : `Nothing new to pull from ${r.project}`;
+  return r.skipped.length ? `${got}. Sensitive on Vercel, add by hand: ${names(r.skipped)}` : got;
 }
 
 // The toast after a push, or why it didn't happen.

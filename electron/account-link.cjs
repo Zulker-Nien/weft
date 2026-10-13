@@ -1,5 +1,5 @@
 // weft://account-callback arrives from the OS after the Weft account OAuth flow. Electron main
-// parses the link, forwards the query string to /api/account/weft-callback so the code can be
+// parses the link, forwards the query string to /api/auth/weft-callback so the code can be
 // exchanged against the PKCE verifier kept in the session file. Success is silent (the board's
 // useAccount polls while waiting); errors show a small native dialog with the message the
 // server rendered.
@@ -59,7 +59,7 @@ async function handleAccountCallback(raw, { getServer, showMain, warn }) {
   const server = getServer();
   if (!server) return warn("Couldn't finish signing in to Weft", "The board's server isn't running yet.");
   try {
-    const res = await fetch(`${server.url}/api/account/weft-callback`, {
+    const res = await fetch(`${server.url}/api/auth/weft-callback`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-threadboard": "1" },
       body: JSON.stringify(body),

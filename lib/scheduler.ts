@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { restartArmed } from "./restart-when-idle";
 import { isBusy, sendUserMessage } from "./runner";
 import { addScheduled, dueMessage } from "./schedule";
 import { getCard, listCards, updateCard } from "./store";
@@ -28,6 +29,8 @@ export function unscheduleMessage(cardId: string, messageId: string): Card {
 
 // Sends each card's due message, one per card per check. A card mid-turn waits for its turn to end.
 export function sendDueMessages(now = Date.now()) {
+  // A restart is waiting for the running turns to end; what's due goes out once Weft is back.
+  if (restartArmed()) return;
   for (const card of listCards()) {
     const due = dueMessage(card, now);
     if (!due || isBusy(card.id)) continue;

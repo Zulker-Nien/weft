@@ -68,7 +68,10 @@ function createUpdater({
     return res.json();
   },
   countRunning = async () => null,
-  confirm = async () => true,
+  // With threads running: "idle" restarts once they finish, "now" cuts them off, anything else waits.
+  ask = async () => "now",
+  // Arms the server's restart when idle to install the update (lib/restart-when-idle.ts).
+  restartWhenIdle = async () => {},
   tell = () => {},
   notify = () => {},
   openExternal = () => {},
@@ -143,8 +146,19 @@ function createUpdater({
     const running = await countRunning().catch(() => null);
     if (running > 0) {
       const what = running === 1 ? "1 thread is" : `${running} threads are`;
-      if (!(await confirm(`${what} still running`, "Restarting stops them mid-turn. Restart and update anyway?"))) return false;
+      const choice = await ask(`${what} still running`, "Restarting now stops them mid-turn. Restart when they finish, and nothing new starts until then.");
+      if (choice === "idle") {
+        await restartWhenIdle();
+        return false;
+      }
+      if (choice !== "now") return false;
     }
+    return installNow();
+  }
+
+  // Restarts into the downloaded update without asking: the server's restart when idle calls this once nothing runs.
+  function installNow() {
+    if (state.phase !== "ready") return false;
     onBeforeInstall();
     autoUpdater.quitAndInstall();
     return true;
@@ -170,6 +184,7 @@ function createUpdater({
   return {
     check,
     install,
+    installNow,
     download,
     start,
     stop,
@@ -180,6 +195,7 @@ function createUpdater({
 
 // The updater with Electron's own pieces: Squirrel, dialogs, a notification, and the board's running count.
 function createAppUpdater({ getServer, onChange }) {
+  const { armRestart } = require("./restart-when-idle.cjs");
   const { BaseWindow, Notification, app, autoUpdater, dialog, shell } = require("electron");
   return createUpdater({
     currentVersion: app.getVersion(),
@@ -191,9 +207,15 @@ function createAppUpdater({ getServer, onChange }) {
       const { cards } = await (await fetch(`${server.url}/api/cards`)).json();
       return cards.filter((card) => card.column === "running").length;
     },
-    confirm: async (message, detail) =>
-      (await dialog.showMessageBox({ type: "question", message, detail, buttons: ["Restart and Update", "Not Now"], defaultId: 1, cancelId: 1 }))
-        .response === 0,
+    ask: async (message, detail) => {
+      const buttons = ["Restart When Idle", "Restart Now", "Not Now"];
+      const { response } = await dialog.showMessageBox({ type: "question", message, detail, buttons, defaultId: 0, cancelId: 2 });
+      return ["idle", "now", null][response];
+    },
+    restartWhenIdle: async () => {
+      const error = await armRestart(getServer(), "update");
+      if (error) dialog.showMessageBox({ type: "warning", message: "Couldn't wait for the threads to finish", detail: error });
+    },
     tell: (message, detail) => dialog.showMessageBox({ type: "info", message, detail }),
     notify: (title, body) => Notification.isSupported() && new Notification({ title, body }).show(),
     openExternal: (url) => shell.openExternal(url),

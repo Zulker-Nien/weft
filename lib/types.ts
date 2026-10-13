@@ -93,6 +93,8 @@ export interface ScheduledMessage {
   id: string;
   text: string;
   at: number;
+  // Sent while a restart waited for the running threads (lib/restart-when-idle.ts): it goes out once Weft is back.
+  afterRestart?: boolean;
 }
 
 // A thread's tour of what it built, for the user to step through in Review (see lib/review.ts).
@@ -131,6 +133,10 @@ export interface Card {
   // Chosen when the thread was made; left out, the CLI's own default.
   model?: string;
   effort?: Effort;
+  // The model's and effort's value before a Done move patched them for the /weft:done turn
+  // (app/api/cards/[id] moveCard). Cleared by restoreDoneOverride once that turn ends.
+  preDoneModel?: string;
+  preDoneEffort?: Effort;
   column: Column;
   // When the card last moved to another column; the command palette opens on the latest moves.
   columnAt?: number;
@@ -308,6 +314,9 @@ export interface SettingsView {
   pushOnDone: boolean;
   // What board threads' subagents run on; "choose" lets each thread pick (lib/subagents.ts).
   subagentModel: SubagentModel;
+  // The model and effort /weft:done runs on; "" means use the card's own (lib/automations.ts doneOverrides).
+  doneModel: string;
+  doneEffort: Effort | "";
   projects: Project[];
 }
 
@@ -349,7 +358,20 @@ export type BoardEvent =
   | { type: "login"; login: LoginView }
   | { type: "projects"; projects: Project[] }
   // You signed in or out of your Weft account (lib/account.ts).
-  | { type: "account" };
+  | { type: "account" }
+  // A restart was armed, cancelled, or the turns it waits on changed (lib/restart-when-idle.ts).
+  | { type: "restart"; restart: RestartStatus };
+
+// Restart when idle (lib/restart-when-idle.ts): no new turn starts, and Weft restarts when the last one ends.
+export interface RestartStatus {
+  armed: boolean;
+  // What happens once idle: a plain relaunch, or installing a downloaded update.
+  then?: "relaunch" | "update";
+  // The turns it waits on: running now, or with queued messages still to run.
+  waiting: { id: string; title: string }[];
+  // Why the restart didn't happen, when it couldn't (it's disarmed then).
+  error?: string;
+}
 
 // Your Weft account (lib/account.ts): optional, for cloud features.
 export type AccountProvider = "github" | "google";

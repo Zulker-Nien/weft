@@ -1,10 +1,11 @@
 // The app menu, right-click menus, menu bar icon and dock menu. main.cjs passes in the windows and
 // actions they reach for; getters stand in for windows that don't exist yet.
-const { BaseWindow, Menu, Tray, app, clipboard, nativeImage, shell, webContents } = require("electron");
+const { BaseWindow, Menu, Tray, app, clipboard, dialog, nativeImage, shell, webContents } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 const { showAboutWindow } = require("./about.cjs");
 const { createKeepWorking } = require("./keep-working.cjs");
+const { armRestart } = require("./restart-when-idle.cjs");
 const { createAppUpdater } = require("./updater.cjs");
 
 function createMenus({ APP_NAME, ASSETS, COPILOT_SHORTCUT, mac, pane, getWin, getAppView, getServer, showMain, sendMenu, showCopilot, toggleCopilot, dataDir }) {
@@ -61,6 +62,14 @@ function createMenus({ APP_NAME, ASSETS, COPILOT_SHORTCUT, mac, pane, getWin, ge
                 { role: "hideOthers" },
                 { role: "unhide" },
                 { type: "separator" },
+                // Waits for the running threads to finish, starting nothing new, then restarts (restart-when-idle.cjs).
+                {
+                  label: "Restart When Idle",
+                  click: async () => {
+                    const error = await armRestart(getServer());
+                    if (error) dialog.showMessageBox({ type: "warning", message: "Couldn't restart Weft", detail: error });
+                  },
+                },
                 { role: "quit" },
               ],
             },

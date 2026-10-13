@@ -58,6 +58,10 @@ vi.mock("@/lib/settings", () => ({
   setAutomations: vi.fn(),
   setPushOnDone: vi.fn(),
   setSubagentModel: vi.fn(),
+  setDoneModel: vi.fn(),
+  setDoneEffort: vi.fn(),
+  doneModel: vi.fn(() => ""),
+  doneEffort: vi.fn(() => ""),
   settingsView: vi.fn(() => ({ threadPrompt: "tp", keepAliveMinutes: 5, automations: [] })),
 }));
 
@@ -65,6 +69,7 @@ vi.mock("@/lib/automations", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/automations")>()),
   firstMessage: vi.fn((card: Card) => `first:${card.prompt}`),
   messagesForMove: vi.fn((_card: Card, column: string) => [`/move-${column}`]),
+  doneOverrides: vi.fn(() => ({})),
 }));
 
 vi.mock("@/lib/copilot", () => ({
@@ -419,6 +424,18 @@ describe("PATCH /cards/:id", () => {
     expect(runner.archiveWhenIdle).toHaveBeenCalledWith(card.id);
   });
 
+  it("moving to Done applies the /weft:done model/effort override and snapshots the card's own picks", async () => {
+    const automations = await import("@/lib/automations");
+    vi.mocked(automations.doneOverrides).mockReturnValueOnce({ model: "claude-opus-5-5", effort: "xhigh" });
+    const card = addCard({ column: "review", model: "claude-sonnet-5-5", effort: "medium" });
+    await patch(card.id, { column: "done" });
+    const after = db.cards.get(card.id)!;
+    expect(after.model).toBe("claude-opus-5-5");
+    expect(after.effort).toBe("xhigh");
+    expect(after.preDoneModel).toBe("claude-sonnet-5-5");
+    expect(after.preDoneEffort).toBe("medium");
+  });
+
   it("refuses unknown columns, Needs you, busy threads and the copilot", async () => {
     const card = addCard();
     expect((await patch(card.id, { column: "limbo" })).status).toBe(400);
@@ -691,6 +708,8 @@ describe("/settings", () => {
       threadPrompt: "be brief",
       pushOnDone: false,
       subagentModel: "opus-4.8",
+      doneModel: "claude-opus-5-5",
+      doneEffort: "xhigh",
       keepAliveMinutes: 10,
       defaultPermissionMode: "acceptEdits",
       automations: [
@@ -704,6 +723,8 @@ describe("/settings", () => {
     expect(settings.setDefaultPermissionMode).toHaveBeenCalledWith("acceptEdits");
     expect(settings.setPushOnDone).toHaveBeenCalledWith(false);
     expect(settings.setSubagentModel).toHaveBeenCalledWith("opus-4.8");
+    expect(settings.setDoneModel).toHaveBeenCalledWith("claude-opus-5-5");
+    expect(settings.setDoneEffort).toHaveBeenCalledWith("xhigh");
     const [rules] = vi.mocked(settings.setAutomations).mock.calls[0]!;
     expect(rules[0]).toEqual({ id: "a1", on: "done", skill: "weft:done" });
     expect(rules[1]).toMatchObject({ on: "prompt-matches", skill: "deploy", pattern: "ship it" });
@@ -718,6 +739,8 @@ describe("/settings", () => {
       { defaultPermissionMode: "yolo" },
       { pushOnDone: "no" },
       { subagentModel: "gpt-5" },
+      { doneModel: "gpt-5" },
+      { doneEffort: "extreme" },
       { automations: "nope" },
       { automations: [{ on: "sometimes", skill: "x" }] },
       { automations: [{ on: "done", skill: "bad skill!" }] },

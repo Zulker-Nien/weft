@@ -1,4 +1,4 @@
-import { firstMessage, messagesForMove } from "@/lib/automations";
+import { firstMessage, messagesForMove, doneOverrides } from "@/lib/automations";
 import { resolveFolder } from "@/lib/folders";
 import { asText } from "@/lib/format";
 import { fail, guard } from "@/lib/guard";
@@ -37,6 +37,10 @@ function moveCard(card: Card, column: Column) {
     sendMessage(card.id, firstMessage(card));
   } else if (MANUAL.includes(column)) {
     updateCard(card.id, { column });
+    // /weft:done can run on a different model / effort than the card's own (lib/automations doneOverrides).
+    // Snapshot the card's picks before queueing the move's messages, so the /weft:done turn uses the
+    // override and any later turn on the card goes back to the originals (lib/runner restoreDoneOverride).
+    if (column === "done") applyDoneOverride(card);
     // Your own move runs that column's automations (Settings), such as weft:done for Done.
     queueMessages(card.id, messagesForMove(card, column));
     // Done files the card away once its automations (weft:done) have run.
@@ -45,6 +49,19 @@ function moveCard(card: Card, column: Column) {
   } else {
     throw new Error("Cards move to Needs you on their own.");
   }
+}
+
+// Snapshots the card's model and effort onto preDoneModel / preDoneEffort, then sets them to the
+// override Settings chose for /weft:done. A no-op when the setting is empty or the card isn't Claude.
+function applyDoneOverride(card: Card) {
+  const overrides = doneOverrides(card);
+  if (!overrides.model && !overrides.effort) return;
+  updateCard(card.id, {
+    preDoneModel: card.model,
+    preDoneEffort: card.effort,
+    ...(overrides.model ? { model: overrides.model } : {}),
+    ...(overrides.effort ? { effort: overrides.effort } : {}),
+  });
 }
 
 export async function PATCH(req: Request, { params }: Ctx) {

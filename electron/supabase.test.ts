@@ -140,9 +140,18 @@ describe("createSupabase", () => {
       repo: "me/web",
       migrations: 2,
       error: null,
-      link: { ref: REF, name: "web", org: "Acme", region: "ap-southeast-1", status: "ACTIVE_HEALTHY", createdAt: Date.parse("2026-10-01T00:00:00Z"), source: "cli", url: `https://${REF}.supabase.co`, pending: ["three"] },
+      link: { ref: REF, name: "web", org: "Acme", region: "ap-southeast-1", status: "ACTIVE_HEALTHY", createdAt: Date.parse("2026-10-01T00:00:00Z"), source: "cli", url: `https://${REF}.supabase.co`, pending: ["three"], drift: [] },
     });
     expect(status.folders[1]?.link).toBeNull();
+  });
+
+  it("counts a migration applied under another version as applied, and reports the drift", async () => {
+    const { supabase } = make({ ...API, [`/v1/projects/${REF}/database/migrations`]: ok([{ version: "20260101000999", name: "one" }]) });
+    await supabase.setToken("sbp_1");
+    const folder = project(["20260101000000_one.sql", "20260301000000_three.sql"]);
+    writeLink(folder, REF);
+    const { folders } = await supabase.status([folder]);
+    expect(folders[0]?.link).toMatchObject({ pending: ["three"], drift: [{ name: "one", local: "20260101000000", remote: "20260101000999" }] });
   });
 
   it("leaves pending unknown when the migrations call fails or there are none", async () => {

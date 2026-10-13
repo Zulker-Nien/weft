@@ -30,6 +30,7 @@ export default function SupabaseDrawer({
   project,
   cards,
   onOpenCard,
+  onStart,
   onOpenUrl,
   notify,
 }: {
@@ -41,6 +42,8 @@ export default function SupabaseDrawer({
   // The board's cards, to link an unapplied migration to the card that wrote it, and opening one.
   cards: Card[];
   onOpenCard: (card: Card) => void;
+  // Starts a card in a folder (the Migrate card); rejects when that fails.
+  onStart: (cwd: string, prompt: string, title: string) => Promise<string | undefined>;
   // Shows a page in the board's browser pane.
   onOpenUrl: (url: string) => void;
   notify: (err: unknown) => void;
@@ -155,6 +158,7 @@ export default function SupabaseDrawer({
               onOpenUrl={onOpenUrl}
               cards={cards}
               onOpenCard={onOpenCard}
+              onStart={(cwd, prompt, title) => void onStart(cwd, prompt, title).catch(notify)}
             />
           ),
         )}
@@ -243,6 +247,7 @@ function FolderSection({
   onOpenUrl,
   cards,
   onOpenCard,
+  onStart,
 }: {
   folder: SupabaseFolder;
   busy: boolean;
@@ -252,6 +257,7 @@ function FolderSection({
   onOpenUrl: (url: string) => void;
   cards: Card[];
   onOpenCard: (card: Card) => void;
+  onStart: (cwd: string, prompt: string, title: string) => void;
 }) {
   const link = f.link;
   return (
@@ -280,7 +286,7 @@ function FolderSection({
           {link.name ?? link.ref}: {f.error}
         </p>
       )}
-      {link && !f.error && <SupabaseLinked folder={f} link={link} busy={busy} onRestore={onRestore} onOpenUrl={onOpenUrl} cards={cards} onOpenCard={onOpenCard} />}
+      {link && !f.error && <SupabaseLinked folder={f} link={link} busy={busy} onRestore={onRestore} onOpenUrl={onOpenUrl} cards={cards} onOpenCard={onOpenCard} onStart={onStart} />}
     </section>
   );
 }

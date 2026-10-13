@@ -191,45 +191,66 @@ describe("createUpdater", () => {
   });
 
   it("restarts into the update, asking first when threads are running", async () => {
-    const confirm = vi.fn(() => Promise.resolve(false));
-    const { updater, squirrel, onBeforeInstall } = make({ countRunning: () => Promise.resolve(2), confirm });
+    const ask = vi.fn(() => Promise.resolve<string | null>(null));
+    const restartWhenIdle = vi.fn(() => Promise.resolve());
+    const { updater, squirrel, onBeforeInstall } = make({ countRunning: () => Promise.resolve(2), ask, restartWhenIdle });
     expect(await updater.install()).toBe(false); // nothing downloaded yet
     await updater.check();
     squirrel.emit("update-downloaded");
     expect(await updater.install()).toBe(false);
-    expect(confirm).toHaveBeenCalledWith("2 threads are still running", expect.any(String));
+    expect(ask).toHaveBeenCalledWith("2 threads are still running", expect.any(String));
     expect(squirrel.quitAndInstall).not.toHaveBeenCalled();
-    confirm.mockResolvedValue(true);
+    ask.mockResolvedValue("now");
     expect(await updater.install()).toBe(true);
     expect(onBeforeInstall).toHaveBeenCalled();
     expect(squirrel.quitAndInstall).toHaveBeenCalled();
+    expect(restartWhenIdle).not.toHaveBeenCalled();
+  });
+
+  it("waits for the running threads when asked to restart when idle", async () => {
+    const restartWhenIdle = vi.fn(() => Promise.resolve());
+    const { updater, squirrel } = make({ countRunning: () => Promise.resolve(1), ask: () => Promise.resolve("idle"), restartWhenIdle });
+    await updater.check();
+    squirrel.emit("update-downloaded");
+    expect(await updater.install()).toBe(false);
+    expect(restartWhenIdle).toHaveBeenCalled();
+    expect(squirrel.quitAndInstall).not.toHaveBeenCalled();
+    // The server calls back once nothing runs.
+    expect(updater.installNow()).toBe(true);
+    expect(squirrel.quitAndInstall).toHaveBeenCalled();
+  });
+
+  it("installs now only once an update is downloaded", () => {
+    const { updater, squirrel } = make();
+    expect(updater.installNow()).toBe(false);
+    expect(squirrel.quitAndInstall).not.toHaveBeenCalled();
   });
 
   it("restarts without asking when nothing is running", async () => {
-    const confirm = vi.fn(() => Promise.resolve(true));
-    const { updater, squirrel } = make({ countRunning: () => Promise.resolve(0), confirm });
+    const ask = vi.fn(() => Promise.resolve("now"));
+    const { updater, squirrel } = make({ countRunning: () => Promise.resolve(0), ask });
     await updater.check();
     squirrel.emit("update-downloaded");
     expect(await updater.install()).toBe(true);
-    expect(confirm).not.toHaveBeenCalled();
+    expect(ask).not.toHaveBeenCalled();
   });
 
   it("restarts when the server can't say what's running", async () => {
-    const confirm = vi.fn(() => Promise.resolve(false));
-    const { updater, squirrel } = make({ countRunning: () => Promise.reject(new Error("server down")), confirm });
+    const ask = vi.fn(() => Promise.resolve(null));
+    const { updater, squirrel } = make({ countRunning: () => Promise.reject(new Error("server down")), ask });
     await updater.check();
     squirrel.emit("update-downloaded");
     expect(await updater.install()).toBe(true);
-    expect(confirm).not.toHaveBeenCalled();
+    expect(ask).not.toHaveBeenCalled();
   });
 
   it("says '1 thread is' for a single running thread", async () => {
-    const confirm = vi.fn(() => Promise.resolve(true));
-    const { updater, squirrel } = make({ countRunning: () => Promise.resolve(1), confirm });
+    const ask = vi.fn(() => Promise.resolve("now"));
+    const { updater, squirrel } = make({ countRunning: () => Promise.resolve(1), ask });
     await updater.check();
     squirrel.emit("update-downloaded");
     await updater.install();
-    expect(confirm).toHaveBeenCalledWith("1 thread is still running", expect.any(String));
+    expect(ask).toHaveBeenCalledWith("1 thread is still running", expect.any(String));
   });
 
   it("checks after launch and on a timer, only when packaged", async () => {

@@ -71,8 +71,8 @@ vi.mock("./store", () => ({
   },
 }));
 
-// The tag catalog (lib/tag-store.ts) writes ~/.weft/tags.json; here it just records what joined it.
-const remembered: string[][] = [];
+vi.mock("./restart-when-idle", () => ({ armRestart: vi.fn() }));
+const remembered: string[][] = []; // the tag catalog (lib/tag-store.ts) writes ~/.weft/tags.json; here it records what joined it
 vi.mock("./tag-store", () => ({ rememberTags: (tags: string[]) => remembered.push(tags) }));
 
 const touched: string[] = [];
@@ -172,7 +172,7 @@ describe("isTrustedTool", () => {
   it("trusts Weft's own in-process tools: the browser pane and the safe board tools", () => {
     expect(isTrustedTool("mcp__browser__navigate", "sdk")).toBe(true);
     expect(isTrustedTool("mcp__board__list_cards", "sdk")).toBe(true);
-    expect(isTrustedTool("mcp__board__create_card", "sdk") && isTrustedTool("mcp__secrets__fill_field", "sdk")).toBe(true);
+    expect(isTrustedTool("mcp__board__create_card", "sdk") && isTrustedTool("mcp__secrets__fill_field", "sdk") && isTrustedTool("mcp__webhooks__add_blank", "sdk")).toBe(true);
     expect([isTrustedTool("mcp__board_view__click", "sdk"), isTrustedTool("mcp__board_view__click", "stdio")]).toEqual([true, false]);
   });
 
@@ -183,7 +183,7 @@ describe("isTrustedTool", () => {
   });
 
   it("never trusts a tool from a server that isn't in-process, whatever its name", () => {
-    expect(isTrustedTool("mcp__browser__navigate", "stdio") || isTrustedTool("mcp__secrets__fill_field", "stdio")).toBe(false);
+    expect(isTrustedTool("mcp__browser__navigate", "stdio") || isTrustedTool("mcp__secrets__fill_field", "stdio") || isTrustedTool("mcp__webhooks__relay", "stdio")).toBe(false);
     expect(isTrustedTool("mcp__board__list_cards", undefined)).toBe(false);
   });
 });
@@ -277,12 +277,10 @@ describe("threadBoardMcpServer", () => {
     expect(nth(created, 0, "created card").input).toMatchObject({ tags: ["docs"], tagsBy: "user" });
   });
 
-
-  it("registers only list_cards and create_card (no read, start, send, move, stop, answer)", () => {
+  it("registers only list_cards, create_card and restart_weft_when_idle (no read, start, send, move, stop, answer)", () => {
     threadBoardMcpServer(() => "parent-1", { start: vi.fn() });
-    expect(captures.map((t) => t.name)).toEqual(["list_cards", "create_card"]);
-    expect(SAFE_BOARD_TOOLS.has("list_cards")).toBe(true);
-    expect(SAFE_BOARD_TOOLS.has("create_card")).toBe(true);
+    expect(captures.map((t) => t.name)).toEqual(["list_cards", "create_card", "restart_weft_when_idle"]);
+    expect(["list_cards", "create_card"].every((name) => SAFE_BOARD_TOOLS.has(name))).toBe(true);
     expect(SAFE_BOARD_TOOLS.has("start_card")).toBe(false);
   });
 

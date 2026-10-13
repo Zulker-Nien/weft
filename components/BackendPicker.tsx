@@ -3,17 +3,19 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/client";
 import { isLive } from "@/lib/format";
-import { runningOn } from "@/lib/new-thread";
+import { BACKENDS, MODELS, runningOn } from "@/lib/new-thread";
 import { BACKEND_LABELS, type Backend, type Card } from "@/lib/types";
 import { useEscape } from "@/lib/use-escape";
 import { BackendBadge } from "./CardView";
 import Icon from "./Icon";
 
-// A clickable version of the CLI chip for the thread header. Click it, pick the other CLI, and
-// the next turn runs there. No replay by default — that's the rate-limit banner's job (and it
+// A clickable version of the CLI chip for the thread header. Click it and pick a model: one of this
+// CLI's swaps the open CLI's model, one of the other CLI's switches CLI and the next turn runs there
+// (stop the thread first). No replay by default — that's the rate-limit banner's job (and it
 // always replays). The copilot is locked to claude, so it gets the static badge instead.
 export default function BackendPicker({ card }: { card: Card }) {
-  const { model } = runningOn(card);
+  // Without a "[1m]" context suffix, so it matches a MODELS id.
+  const model = runningOn(card).model?.replace(/\[[^\]]*\]$/, "");
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const live = isLive(card);
@@ -29,10 +31,10 @@ export default function BackendPicker({ card }: { card: Card }) {
     return () => window.removeEventListener("pointerdown", away);
   }, [open]);
 
-  function pick(next: Backend) {
+  function pick(next: Backend, id: string) {
     setOpen(false);
-    if (next === card.backend) return;
-    void api.switchBackend(card.id, next, false).catch(() => {});
+    if (next === card.backend && id === model) return;
+    void api.switchBackend(card.id, next, false, id).catch(() => {});
   }
 
   if (locked) return <BackendBadge backend={card.backend} card={card} />;
@@ -43,35 +45,39 @@ export default function BackendPicker({ card }: { card: Card }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        aria-label={`Switch CLI (currently ${BACKEND_LABELS[card.backend]})`}
+        aria-label={`Switch model (currently ${BACKEND_LABELS[card.backend]})`}
         aria-expanded={open}
-        title={live ? "Stop the thread to switch CLI" : "Switch CLI"}
+        title="Switch model or CLI"
         className={`shrink-0 rounded ${model ? "" : "px-0"}`}
       >
         <BackendBadge backend={card.backend} card={card} />
       </button>
       {open && (
         <div className="absolute left-0 top-full z-30 mt-1 w-48 rounded-lg border border-line bg-panel p-1 shadow-lg">
-          {(["claude", "puku"] as const).map((b) => (
-            <button
-              key={b}
-              type="button"
-              disabled={live}
-              onClick={() => pick(b)}
-              className={row}
-              aria-pressed={card.backend === b}
-            >
-              <span className="flex w-[14px] shrink-0 justify-center text-accent">
-                {card.backend === b && <Icon name="check" size={13} />}
-              </span>
-              <span className="flex-1 font-medium text-ink">{BACKEND_LABELS[b]}</span>
-            </button>
+          {BACKENDS.map((b) => (
+            <div key={b.id} role="group" aria-label={b.label}>
+              <p className="px-2 pb-0.5 pt-1.5 text-[11px] font-medium text-faint">{b.label}</p>
+              {MODELS[b.id].map((m) => {
+                const on = card.backend === b.id && model === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    disabled={live && b.id !== card.backend}
+                    onClick={() => pick(b.id, m.id)}
+                    className={row}
+                    aria-pressed={on}
+                  >
+                    <span className="flex w-[14px] shrink-0 justify-center text-accent">
+                      {on && <Icon name="check" size={13} />}
+                    </span>
+                    <span className="flex-1 font-medium text-ink">{m.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           ))}
-          <p className="px-2 pb-1 pt-1.5 text-[11px] leading-snug text-faint">
-            {live
-              ? "Stop the thread to switch."
-              : `Next turn runs on ${card.backend === "puku" ? "Claude Code" : "puku-cli"}.`}
-          </p>
+          {live && <p className="px-2 pb-1 pt-1.5 text-[11px] leading-snug text-faint">Stop the thread to switch CLI.</p>}
         </div>
       )}
     </div>

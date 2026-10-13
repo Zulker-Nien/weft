@@ -33,11 +33,11 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - tests before refactoring; small behavior-preserving steps
   - "make the change easy, then make the easy change"
   - name the smell (Long Function, Large Class, Duplicated Code, Feature Envy) before fixing it
-  - hotspots: components/Board.tsx (~1,030 lines), electron/main.cjs (~460). lib/runner.ts was split in five, each under 300.
+  - hotspots: components/Board.tsx (~1,050 lines), electron/main.cjs (~460). lib/runner.ts was split in five, each under 300.
     Pure logic already moved out: `lib/board-view.ts` (columns, project chips, chime/unseen rules) and
     `lib/turn.ts` (how a turn's result reads, cost, limits); Board's hooks into `lib/use-*.ts` (`use-now`,
     `use-toast`, `use-desktop-bridge`, `use-copilot-card`). Next: live events/chimes, view prefs, shortcuts, command palette.
-  - My Vitest suite (`npm test`, ~3,130 tests) covers every line of `lib/` and `app/api/` (98.6% of branches,
+  - My Vitest suite (`npm test`, ~3,500 tests) covers every line of `lib/` and `app/api/` (98.6% of branches,
     `npm run coverage`): a test file beside each module, routes with their libs mocked, the runner's SDK loop
     against a fake `query()` (`lib/runner.harness.ts`, shared by `lib/runner*.test.ts`), and browser code and React hooks under happy-dom +
     @testing-library/react (`// @vitest-environment happy-dom`). Component tests have started under jsdom
@@ -62,7 +62,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `lib/runner.ts`: one Agent SDK `query()` per thread, its public API (send, queue, stop, retry, login); behind it
   `lib/runner-state.ts` (sessions, shared maps, `hooks` back into runner.ts), `lib/runner-session.ts` (start and drive a CLI,
   warm spares, the BUILD fingerprint), `lib/runner-turn.ts` (what the CLI sends during a turn) and `lib/runner-ask.ts` (permissions);
-  puku-cli via `pathToClaudeCodeExecutable` (`lib/cli-path.ts`). The init's model plus the effort (the card's, else `effortLevel` from the CLI's settings, `lib/cli-defaults.ts`)
+  puku-cli via `pathToClaudeCodeExecutable` (`lib/cli-path.ts`); every CLI starts in its own process group so its children end
+  with it (`lib/cli-process.ts`), and `lib/cli-reaper.ts` ends the orphans a killed server left behind. The init's model plus the effort (the card's, else `effortLevel` from the CLI's settings, `lib/cli-defaults.ts`)
   land in `stats.runsOn`, which the header's CLI chip shows (`BackendBadge`). `editLastMessage()` is ↑ in the reply box: it rewinds the
   session to before your last message (`lib/edit-last.ts`, `lib/rewind.ts`) and sends the edit.
 - `lib/env.ts` `guardedCli()`: every thread's CLI env and Bash guards: `lib/secret-guard.ts` (no .env reads),
@@ -80,15 +81,21 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   output shows in the thread (`ShellLine` in `components/ThreadItems.tsx`) and goes to Claude with your next message.
 - `lib/status.ts` + `lib/settings.ts`: the BOARD STATUS protocol (thread prompt and its parser).
 - `lib/subagents.ts` + `components/SubagentPicker.tsx`: when threads delegate to subagents and on which model (Settings → Use for subagents,
-  any Claude or Puku model: forced through `CLAUDE_CODE_SUBAGENT_MODEL` / `PUKU_CLI_SUBAGENT_MODEL` on its own CLI, a headless `-p` run on the other; the model menu is `components/ModelSelect.tsx`).
+  any Claude or Puku model: forced through `CLAUDE_CODE_SUBAGENT_MODEL` / `PUKU_CLI_SUBAGENT_MODEL` on its own CLI, a headless `-p` run on the other).
+- `lib/automations.ts` `doneOverrides` + `components/DonePicker.tsx`: Settings → Run /weft:done on … picks the model (any Claude or
+  Puku model, applied to cards on its own CLI) and effort `/weft:done` uses on a Done move; both model menus are `components/ModelSelect.tsx`; `app/api/cards/[id]` moveCard snapshots the card's own picks into `preDoneModel` /
+  `preDoneEffort` and `lib/runner.ts` `restoreDoneOverride` puts them back after the wrap-up.
 - `lib/puku-trial.ts` + `lib/puku-trial-token.ts` + `lib/puku-proxy.ts` + `app/api/puku/*`: the Puku trial; a puku thread with no Puku
   login, while you're signed in to Weft, runs through the deployed Weft's proxy on Weft's own key (signed day-long token read by puku's
   `apiKeyHelper` from `~/.weft/puku-trial-token`, per-account daily cap in `puku_trial_usage`; docs/architecture/puku-trial.md).
-- `lib/home.ts` + `lib/home-release.ts` + `components/home/*` + `app/home/page.tsx` + `app/opengraph-image.tsx` + `public/brand/board.png`: the weft.zip home
-  page, which `app/page.tsx` renders at `/` instead of the board when `isDeployed()` (`VERCEL` or `WEFT_HOME`); the home is loaded
-  through `loadHome()` (a cached dynamic import in `lib/home.ts`) so a parse error in it can't 500 the board route — the parse-error
-  companion to `lib/route-import-guard.ts`; `home.css` is plain prefixed CSS because `next.config.ts` sends every `.css` through the
-  Tailwind loader, which drops CSS-module exports.
+- `lib/home.ts` + `lib/home-release.ts` + `components/home/*` + `components/GoogleAnalytics.tsx` + `components/HomeErrorFallback.tsx` +
+  `app/home/page.tsx` + `app/opengraph-image.tsx` + `public/brand/board.png`: the weft.zip home page, which `app/page.tsx` renders at
+  `/` instead of the board when `isDeployed()` (`VERCEL` or `WEFT_HOME`); the home is loaded through `loadHome()` (a cached dynamic
+  import in `lib/home.ts`) so a parse error in it can't 500 the board route — the parse-error companion to
+  `lib/route-import-guard.ts`; `home.css` is plain prefixed CSS because `next.config.ts` sends every `.css` through the Tailwind loader,
+  which drops CSS-module exports. `GoogleAnalytics` (gated on the home being mounted, so the board route never calls home) and
+  `HomeErrorFallback` (the dark plain page both routes render when `loadHome()` returns an error) are both server components;
+  `docs/architecture/analytics.md` covers GA.
 - `lib/review.ts`, `lib/devserver.ts`: `weft-review` tour blocks and the card's dev server.
 - `plugin/skills/*`: my own skills (`/weft:done`, `/weft:commit`, `/weft:preview`, `/weft:setup-done`,
   which installs tests, docs and strict lint on a project before `/done`; `/weft:done` also keeps this file current);
@@ -120,14 +127,25 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   `lib/github-relay.ts` + `app/api/github/webhook`: instant sync, a repo webhook relayed by the deployed Weft on Vercel (→ `github_events` on Supabase → Realtime).
 - `lib/email-forward.ts` + `app/api/email/webhook` + `scripts/resend-domain.mjs`: mail to weft.zip, received by Resend (the domain's MX) and
   forwarded by the deployed Weft to one inbox (Svix-signed `email.received` → read back → send on; docs/architecture/email-forwarding.md).
-- `lib/account.ts` + `app/api/account` + `lib/use-account.ts`: the optional Weft account (Supabase Auth, PKCE; the
-  redirect target is `weft://account-callback` in the packaged app and the loopback HTTP origin in `next dev`,
-  handled by `electron/account-link.cjs` and `app/api/account/weft-callback/route.ts`; sign-in / sign-out pages
-  share `lib/account-page.ts`). Session in `~/.weft/account.json` (Keychain-sealed by `electron/account-store.cjs`),
-  drawn by `components/AccountButton.tsx` (top bar) and `components/AccountSettings.tsx`; schema in
+- `lib/account.ts` + `app/api/account` + `lib/auth/*` + `lib/use-account.ts`: the optional Weft account
+  (Supabase Auth, PKCE; the redirect target is `weft://account-callback` in the packaged app and the loopback
+  HTTP origin in `next dev`, handled by `electron/account-link.cjs` and `app/api/auth/weft-callback/route.ts`;
+  sign-in / sign-out pages share `lib/account-page.ts`). `lib/auth/` is a thin wrapper around the same
+  `lib/account.ts` whose public API mirrors `@aimhuge/auth`; `app/login/page.tsx` is the new weft.zip sign-in
+  surface (GitHub only). `lib/use-account.ts` is a board-side re-export of `useAuth` with the
+  `{ state, busy, error, waiting, signIn, sendLink, signOut }` shape the top bar expects. Session in
+  `~/.weft/account.json` (Keychain-sealed by `electron/account-store.cjs`), drawn by
+  `components/AccountButton.tsx` (top bar) and `components/AccountSettings.tsx`; schema in
   `supabase/migrations/`, MCP server in `.mcp.json`.
 - `electron/vault*.cjs` + `electron/dotenv.cjs` + `electron/device-key.cjs` + `components/VaultDrawer.tsx`: the 🔐 secrets vault
   (docs/architecture/secrets.md); decryption only in main, IPC to the board window only, `lib/vault-view.ts` + `lib/use-vault.ts` on the board side.
+  A thread that needs a key it doesn't have puts the name in as a blank right away with `mcp__secrets__add_blank` (with a hint for where
+  to get the value) — blanks sort first, the rail's badge counts them, every blank row has a visible **Fill in** button, and the user
+  fills them in when they're ready. `mcp__secrets__ask_add` is the urgent path that opens the drawer's Add form with the name filled in.
+- `lib/webhooks.ts` + `lib/webhook-tools.ts` + `app/api/webhooks` + `lib/use-webhooks.ts` + `lib/webhooks-view.ts` + `components/WebhooksDrawer.tsx`: the 🪝
+  webhooks drawer under 🔐 (each project's webhook routes in `~/.weft/webhooks.json`, blanks counted until registered; `mcp__webhooks__*`).
+  `lib/webhook-relay.ts` + `app/api/hooks/[id]` + `lib/webhook-forward.ts`: its public relay URL on the deployed Weft (→ `webhook_deliveries` on
+  Supabase → Realtime → the local target; docs/architecture/webhooks.md).
 - `electron/vercel*.cjs` (`vercel-env.cjs`: 🔐 vault → Vercel env push, Touch ID per push, also `mcp__secrets__push_to_vercel`) + `lib/vercel-view.ts` + `lib/use-vercel.ts` + `lib/use-linked-status.ts` (the three drawers' cached status hook) + `components/Vercel*.tsx`: the ▲ Vercel drawer (token sealed
   in the Keychain, link or create a project as `.vercel/project.json`, latest deploy; docs/architecture/vercel.md).
 - `electron/supabase.cjs` + `lib/supabase-view.ts` + `lib/use-supabase.ts` + `components/Supabase*.tsx`: the Supabase drawer (its bolt
@@ -157,6 +175,9 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `app/api/*` + `lib/guard.ts`: localhost-only Host check, writes need `x-threadboard: 1`.
 - `lib/restart-guard.ts`: turns away Bash that would kill or restart Weft itself (its server pid, port, `next dev`, the app)
   while other cards' turns run, since a restart cuts them all off; in every thread via `guardedCli()`.
+- `lib/restart-when-idle.ts` + `app/api/restart` + `lib/restart-tool.ts` + `electron/restart-when-idle.cjs` + `components/RestartChip.tsx`: restart when idle
+  (Weft menu, palette, updater, `mcp__board__restart_weft_when_idle`): `sendMessage` holds new turns as "after restart" scheduled
+  messages, and once no turn runs or is queued the server calls the control server's `POST /app/restart` (relaunch or install the update).
 - `lib/import-check.ts`: after each Edit/Write, tells the thread which imports it broke (a build error no boundary catches);
   in every thread via `lib/env.ts` `guardedCli()`, and in other Claude Code sessions via `.claude/settings.json`.
 - Components: `Board.tsx`, `ThreadView.tsx`, `ThreadItems.tsx`, `Markdown.tsx`, `ReviewPanel.tsx`;
@@ -224,8 +245,9 @@ in Electron main, revealed or copied only after the user's Touch ID (docs/archit
   is duplicated in `lib/account.ts:94` and `electron/account-link.cjs:6`; one should import from the other.
 - `7b1db11`, `dfdd9c7` and `0e54c6f` don't build on their own (Board.tsx imported files committed later);
   everything from `2766738` on does.
-- The overlap warning (`lib/overlap.ts`) counts a card's edits for its whole life, committed or not, and
-  shows shared files only in the reply box: the card's "+N here" tooltip and the New thread dialog don't name them.
+- The overlap warning (`lib/overlap.ts`) counts a card's edits for its whole life, committed or not. The reply box no longer
+  shows it (in a busy repo it always did); the card's "+N here" chip and the New thread dialog do, and neither names the
+  shared files. Symbol claims warn at the actual clash instead.
 - Symbol claims (`lib/claim-guard.ts`) drop on Done, archive and the commit walk-through, not when a thread runs
   `git commit` itself; those stay until the card reaches Done.
 - The copilot learns what finished or needs you only with your next message (`lib/copilot-digest.ts`);

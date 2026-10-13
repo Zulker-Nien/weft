@@ -75,7 +75,9 @@ from Alex Miller's individual membership, not Flexbike Inc's.
 - When the feed's version is newer, the feed goes to Electron's built-in `autoUpdater` (Squirrel.Mac), which downloads
   the zip in the background. No npm dependency: the app bundle ships no `node_modules`.
 - Once downloaded: a notification, and the Weft menu's item becomes **Restart to Update to X**. The update also
-  installs on the next quit. Restarting asks first when threads are running, since they stop mid-turn.
+  installs on the next quit. With threads running, restarting asks first: **Restart When Idle** (the default) arms the
+  server's drain (`lib/restart-when-idle.ts`) with `then: "update"`, and once the last turn ends the server calls the
+  control server's `POST /app/restart`, which runs `updater.installNow()`; **Restart Now** installs at once.
 - Squirrel only installs into a signed app. An unsigned build (or any Squirrel error) falls back to **Download Weft
   X…**, which opens the release page.
 - The Weft menu always has the item: **Check for Updates…** says what it found, even "You're up to date".

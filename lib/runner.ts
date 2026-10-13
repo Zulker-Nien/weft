@@ -6,10 +6,12 @@ import { showStarter } from "./glance";
 import { isOpenElsewhere } from "./import";
 import { cancelLogin, noteTrial, startLogin } from "./login";
 import { fetchTrialToken, hasOwnPukuLogin, trialJustFetched } from "./puku-trial";
+import { holdForRestart } from "./restart-when-idle";
 import { sessionRewindPoint } from "./rewind";
 import { answerPermission, settle } from "./runner-ask";
 import { adoptSpare, currentSession, open } from "./runner-session";
 import { withShellContext } from "./shell";
+import { switchSpare } from "./spare-switch";
 import { archiveAfter, CLI_NAMES, close, errorText, hooks, isBusy, loginWaiters, queued, safeUpdate, sessions, specFor } from "./runner-state";
 import { appendThread, foldThread, getCard, getThread, updateCard } from "./store";
 import type { Backend, Card, LoginTrial, PermissionMode } from "./types";
@@ -40,10 +42,20 @@ export function setPermissionMode(cardId: string, mode: PermissionMode) {
   void session.query?.setPermissionMode(mode).catch(() => {});
 }
 
+// Saves a card's model and applies it to its open CLI, so a warm thread keeps its session (BackendPicker).
+// switchSpare also signs its commits as the new model.
+export function setModel(cardId: string, model: string) {
+  updateCard(cardId, { model });
+  const session = sessions.get(cardId);
+  if (session) switchSpare(session.query, session.spec, { permissionMode: session.spec.permissionMode, model });
+}
+
 // `cli` is what the CLI gets when it differs from what the thread shows (the copilot's board digest).
 export function sendMessage(cardId: string, text: string, { echo = true, cli = text } = {}) {
   const card = getCard(cardId);
   if (!card) throw new Error("No such card.");
+  // A restart is waiting for the running turns to end, so this one waits on the card until after it.
+  if (holdForRestart(cardId, text, { echo })) return;
   const session = sessionFor(card);
   // Claude threads tag the prompt so ↑ can rewind its turn later (lib/edit-last.ts).
   const promptId = card.backend === "claude" && !session.spec.copilot ? randomUUID() : undefined;
@@ -79,6 +91,8 @@ function sessionFor(card: Card) {
 export function sendUserMessage(cardId: string, text: string, { cli = text } = {}) {
   const card = getCard(cardId);
   if (!card) throw new Error("No such card.");
+  // Held before its shell output and skills are taken, so they go with it after the restart.
+  if (holdForRestart(cardId, text)) return;
   // What your "!" commands printed since your last message goes along with it (lib/shell.ts).
   sendMessage(cardId, text, { cli: withShellContext(cardId, cli) });
   // /done files the card away when its turn ends, as a move to Done does.
@@ -135,6 +149,23 @@ export function queueMessages(cardId: string, texts: string[]) {
 export function archiveWhenIdle(cardId: string) {
   if (queued.has(cardId) || isBusy(cardId)) archiveAfter.add(cardId);
   updateCard(cardId, archiveAfter.has(cardId) ? { wrappingUp: true } : { archived: !getCard(cardId)?.starred });
+}
+
+// Restores the card's model/effort if a Done move patched them for the /weft:done turn (app/api/cards/[id]
+// moveCard applies the override from lib/automations doneOverrides). The card stores the originals as
+// preDoneModel / preDoneEffort; clearing them here returns the card to its real picks. A no-op when the
+// turn wasn't started by a Done move (e.g. the user typed /weft:done themselves).
+export function restoreDoneOverride(cardId: string) {
+  const card = getCard(cardId);
+  if (!card) return;
+  if (card.preDoneModel === undefined && card.preDoneEffort === undefined) return;
+  const patch: { preDoneModel: undefined; preDoneEffort: undefined; model?: string; effort?: typeof card.effort } = {
+    preDoneModel: undefined,
+    preDoneEffort: undefined,
+  };
+  if (card.preDoneModel !== undefined) patch.model = card.preDoneModel;
+  if (card.preDoneEffort !== undefined) patch.effort = card.preDoneEffort;
+  updateCard(cardId, patch);
 }
 
 function sendQueued(cardId: string) {

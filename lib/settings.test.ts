@@ -101,6 +101,34 @@ describe("settings", () => {
     expect((await load()).subagentModel()).toBe("choose");
   });
 
+  it("/weft:done model and effort default to empty (use the card's own), and are stored as unset", async () => {
+    let s = await load();
+    expect(s.doneModel()).toBe("");
+    expect(s.doneEffort()).toBe("");
+    expect(s.settingsView().doneModel).toBe("");
+    expect(s.settingsView().doneEffort).toBe("");
+    s.setDoneModel("claude-opus-5-5");
+    s.setDoneEffort("xhigh");
+    s = await load();
+    expect(s.doneModel()).toBe("claude-opus-5-5");
+    expect(s.doneEffort()).toBe("xhigh");
+    s.setDoneModel("");
+    s.setDoneEffort("");
+    const saved = JSON.parse(fs.readFileSync(path.join(dir, "settings.json"), "utf8")) as Record<string, unknown>;
+    expect("doneModel" in saved).toBe(false);
+    expect("doneEffort" in saved).toBe(false);
+  });
+
+  it("an unknown saved done model or effort reads as empty", async () => {
+    fs.writeFileSync(
+      path.join(dir, "settings.json"),
+      JSON.stringify({ doneModel: "gpt-7", doneEffort: "extreme" }),
+    );
+    const s = await load();
+    expect(s.doneModel()).toBe("");
+    expect(s.doneEffort()).toBe("");
+  });
+
   it("an empty automations list is kept, not replaced by the defaults", async () => {
     const s = await load();
     s.setAutomations([]);

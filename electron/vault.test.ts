@@ -22,14 +22,14 @@ function project(files: Record<string, string>) {
   return root;
 }
 
-function make({ remote = "git@github.com:Owner/Repo.git", tracked = "", allow = true } = {}) {
+function make({ remote = "git@github.com:Owner/Repo.git", tracked = "", allow = true, onChange = undefined as ((folder: string) => undefined) | undefined } = {}) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-data-"));
   const prompt = vi.fn(() => Promise.resolve(allow));
   let clip = "";
   const clipboard = { writeText: vi.fn((t: string) => (clip = t)), readText: () => clip };
   const timers: (() => void)[] = [];
   const run = vi.fn((_folder: string, args: string[]) => Promise.resolve(args[0] === "remote" ? remote : tracked));
-  const vault = createVault({ dataDir, safeStorage, sodium, prompt, clipboard, run, setTimer: ((fn: () => void) => timers.push(fn)) as unknown as typeof setTimeout });
+  const vault = createVault({ dataDir, safeStorage, sodium, prompt, clipboard, run, onChange, setTimer: ((fn: () => void) => timers.push(fn)) as unknown as typeof setTimeout });
   return { vault, dataDir, prompt, clipboard, timers, run, clip: () => clip };
 }
 
@@ -199,6 +199,21 @@ describe("createVault", () => {
     vault.lock();
     prompt.mockResolvedValue(false);
     expect(await vault.useFor(folder, "A", "development", site)).toEqual({ denied: true, label: "Owner/Repo" });
+  });
+
+  it("keeps a source on a value, and tells the board only when it has one (a pull from Vercel)", async () => {
+    const folder = project({ "README.md": "hi" });
+    const onChange = vi.fn<(folder: string) => undefined>();
+    const { vault } = make({ onChange });
+    await vault.setValue(folder, "HAND", "development", "typed");
+    expect(onChange).not.toHaveBeenCalled();
+    expect(await vault.setValue(folder, "A", "production", "two", { source: "Vercel" })).toEqual({ saved: true });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(folder);
+    const secrets = (await vault.overview([folder])).vaults[0]!.secrets as { name: string; environment: string; source?: string }[];
+    expect(secrets.find((s) => s.name === "A")).toMatchObject({ environment: "production", source: "Vercel" });
+    expect(secrets.find((s) => s.name === "HAND")?.source).toBeUndefined();
+    expect(await vault.valuesFor(folder, ["A"], "production")).toMatchObject({ values: { A: "two" } });
   });
 
   it("hands main the values a command asked for, or every development value for a dev server", async () => {

@@ -1,116 +1,95 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+// Your Weft account on the board side: the top bar's sign-in button, Settings →
+// Weft account, and the puku-trial upgrade prompt all use this. It's now a thin
+// re-export of `useAuth` from `lib/auth/hooks.ts` that adds back the bits the
+// board-specific callers need:
+//
+//   * `sendLink(email)` — the magic-link path the puku-trial prompt uses.
+//
+// The polling-while-waiting block, the cross-instance `weft:account` event,
+// and the OAuth round trip live in `useAuth` so the deployed `/login` page and
+// the in-app dialog share the same code.
+import { useCallback, useState } from "react";
 import { api } from "./client";
+import { useAuth, type AuthBusy, type AuthState, type AuthWaiting } from "./auth/hooks";
 import type { AccountProvider, AccountView } from "./types";
 
-// Your Weft account on the board side: the top bar's sign-in button and Settings → Weft account
-// both use this. Any instance that sees a change tells the others with a window event, and the board
-// fires it too when the server says the account changed (BoardEvent "account").
-
-// While sign-in finishes in the browser, check this often, for as long as a sign-in code lasts.
+// Re-export the event name so the existing tests / imports keep working.
+export { ACCOUNT_EVENT } from "./auth/hooks";
 export const POLL_MS = 2000;
 export const WAIT_MS = 5 * 60 * 1000;
-export const ACCOUNT_EVENT = "weft:account";
-
 export const PROVIDER_LABELS: Record<AccountProvider, string> = { github: "GitHub", google: "Google" };
 
-export type AccountBusy = AccountProvider | "email" | "signout" | null;
-export type AccountState = { kind: "loading" } | { kind: "error"; error: string } | { kind: "ready"; view: AccountView };
-// What the browser is finishing: a provider's name, or the address a link went to.
+// The board's call sites still expect the union of {provider, "email", "signout"}.
+// `useAuth` only knows OAuth and signout, so we extend it locally.
+export type AccountBusy = AuthBusy | "email" | null;
+export type AccountState = AuthState;
+// The board's `waiting` includes an `email: boolean` flag (the prompt says
+// "Open it on this Mac" for emails and "Finish in your browser" otherwise).
+// The hook's `AuthWaiting.what` is the provider id ("github") or, for a
+// magic link, the email address; the board's call sites expect the human
+// label ("GitHub") when it's a provider, and the raw email when it's not.
 export interface AccountWaiting {
   what: string;
   email: boolean;
   since: number;
 }
 
-function message(err: unknown) {
-  return err instanceof Error ? err.message : String(err);
-}
-
-function openUrl(url: string) {
-  if (window.threadboard) window.threadboard.openExternal(url);
-  else window.open(url, "_blank", "noopener,noreferrer");
+function toAccountWaiting(w: AuthWaiting | null, emailWaiting: string | null): AccountWaiting | null {
+  if (emailWaiting) return { what: emailWaiting, email: true, since: Date.now() };
+  if (!w) return null;
+  const label = (PROVIDER_LABELS as Record<string, string>)[w.what] ?? w.what;
+  return { what: label, email: false, since: w.since };
 }
 
 export function announceAccountChange() {
-  window.dispatchEvent(new Event(ACCOUNT_EVENT));
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("weft:account"));
 }
 
 export function useAccount() {
-  const [state, setState] = useState<AccountState>({ kind: "loading" });
-  const [busy, setBusy] = useState<AccountBusy>(null);
-  const [waiting, setWaiting] = useState<AccountWaiting | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { state: authState, busy: authBusy, error, waiting, signInWithOAuth, signOut } = useAuth();
+  const [emailBusy, setEmailBusy] = useState<"email" | null>(null);
+  const [emailWaiting, setEmailWaiting] = useState<string | null>(null);
 
-  const load = useCallback(
-    () =>
-      api.account().then(
-        (view) => {
-          setState({ kind: "ready", view });
-          if (view.user) setWaiting(null);
-          return view;
-        },
-        (err: unknown) => {
-          setState({ kind: "error", error: message(err) });
-          return null;
-        },
-      ),
+  const sendLink = useCallback(
+    (email: string) => {
+      const trimmed = email.trim();
+      setEmailBusy("email");
+      setEmailWaiting(trimmed);
+      return (async () => {
+        try {
+          await api.magicLink(email);
+          setTimeout(() => setEmailWaiting(null), WAIT_MS);
+        } finally {
+          setEmailBusy(null);
+        }
+      })();
+    },
     [],
   );
 
-  useEffect(() => {
-    void load();
-    const reload = () => void load();
-    window.addEventListener(ACCOUNT_EVENT, reload);
-    return () => window.removeEventListener(ACCOUNT_EVENT, reload);
-  }, [load]);
+  // The board's call sites pass the provider as a string; we adapt to the hook's
+  // object signature. `AccountProvider` is "github" | "google" — the only OAuth
+  // providers the auth hook knows.
+  const signIn = useCallback(
+    (provider: AccountProvider) => signInWithOAuth({ provider }),
+    [signInWithOAuth],
+  );
 
-  useEffect(() => {
-    if (!waiting) return;
-    const timer = setInterval(() => {
-      if (Date.now() - waiting.since > WAIT_MS) {
-        setWaiting(null);
-        return;
-      }
-      void load().then((view) => {
-        if (view?.user) announceAccountChange();
-      });
-    }, POLL_MS);
-    return () => clearInterval(timer);
-  }, [waiting, load]);
-
-  async function run(kind: Exclude<AccountBusy, null>, action: () => Promise<void>) {
-    setBusy(kind);
-    setError(null);
-    try {
-      await action();
-    } catch (err) {
-      setError(message(err));
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  // Opens the provider in the system browser; the sign-in comes back to this machine's server.
-  const signIn = (provider: AccountProvider) =>
-    run(provider, async () => {
-      const { url } = await api.signIn(provider);
-      openUrl(url);
-      setWaiting({ what: PROVIDER_LABELS[provider], email: false, since: Date.now() });
-    });
-
-  const sendLink = (email: string) =>
-    run("email", async () => {
-      await api.magicLink(email);
-      setWaiting({ what: email.trim(), email: true, since: Date.now() });
-    });
-
-  const signOut = () =>
-    run("signout", async () => {
-      await api.signOut();
-      announceAccountChange();
-    });
-
-  return { state, busy, waiting, error, signIn, sendLink, signOut };
+  return {
+    state: authState,
+    busy: emailBusy ?? authBusy,
+    waiting: toAccountWaiting(waiting, emailWaiting),
+    error,
+    signIn,
+    sendLink,
+    signOut,
+  };
 }
+
+// Re-export so any module that wants the raw hook can have it.
+export { useAuth };
+
+// A typed view helper for tests that want to assert against an AccountView.
+export type { AccountView };

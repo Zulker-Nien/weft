@@ -3,14 +3,22 @@ import type { Automation, Card } from "./types";
 
 // settings.ts reads ~/.weft; swap in the rules each test wants.
 let rules: Automation[] = [];
-vi.mock("./settings", () => ({ automations: () => rules }));
+let model = "";
+let effort = "";
+vi.mock("./settings", () => ({
+  automations: () => rules,
+  doneModel: () => model,
+  doneEffort: () => effort,
+}));
 
-import { firstMessage, isDoneCommand, messagesForMove, skillsForPrompt } from "./automations";
+import { doneOverrides, firstMessage, isDoneCommand, messagesForMove, skillsForPrompt } from "./automations";
 
 const card = (over: Partial<Card> = {}) => ({ id: "c1", prompt: "Fix the bug", sessionId: "s1", ...over }) as Card;
 
 beforeEach(() => {
   rules = [];
+  model = "";
+  effort = "";
 });
 
 describe("firstMessage", () => {
@@ -131,5 +139,43 @@ describe("isDoneCommand", () => {
   });
   it("ignores other messages", () => {
     for (const text of ["done", "/doner", "/weft:commit", "we're /done"]) expect(isDoneCommand(text)).toBe(false);
+  });
+});
+
+describe("doneOverrides", () => {
+  const claudeCard = (over: Partial<Card> = {}) => card({ backend: "claude", ...over });
+
+  it("returns nothing when the settings are empty", () => {
+    expect(doneOverrides(claudeCard())).toEqual({});
+  });
+
+  it("returns the model the user picked for a Claude card", () => {
+    model = "claude-opus-5-5";
+    expect(doneOverrides(claudeCard())).toEqual({ model: "claude-opus-5-5" });
+  });
+
+  it("returns the effort the user picked for a Claude card", () => {
+    effort = "max";
+    expect(doneOverrides(claudeCard())).toEqual({ effort: "max" });
+  });
+
+  it("returns both when the user picked both", () => {
+    model = "claude-opus-5-5";
+    effort = "xhigh";
+    expect(doneOverrides(claudeCard())).toEqual({ model: "claude-opus-5-5", effort: "xhigh" });
+  });
+
+  it("gives a puku card a Puku model and its effort, stepped down to what puku takes", () => {
+    model = "opus-4.8";
+    effort = "xhigh";
+    expect(doneOverrides(card({ backend: "puku" }))).toEqual({ model: "opus-4.8", effort: "high" });
+  });
+
+  it("leaves a card's model alone when the pick is the other CLI's, but still applies the effort", () => {
+    model = "claude-opus-5-5";
+    effort = "max";
+    expect(doneOverrides(card({ backend: "puku" }))).toEqual({ effort: "max" });
+    model = "opus-4.8";
+    expect(doneOverrides(claudeCard())).toEqual({ effort: "max" });
   });
 });

@@ -8,6 +8,7 @@ const { createPaneSecrets } = require("./pane-secrets.cjs");
 const { secretRunRoutes } = require("./secret-run.cjs");
 const { click, typeText } = require("./pane-actions.cjs");
 const { controlHandler } = require("./control-server.cjs");
+const { failedUrl, watchLoadFailures } = require("./pane-error.cjs");
 
 // Chrome's zoom steps, as percentages; Zoom In/Out walk them.
 const ZOOM_STEPS = [25, 33, 50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300, 400, 500];
@@ -29,9 +30,11 @@ function createBrowserPane({ getWindow, getAppView, token, onContents, pages, on
 
   function state() {
     const wc = views.get(active)?.webContents;
+    const url = wc ? wc.getURL() : "";
     return {
       visible,
-      url: wc ? wc.getURL() : "",
+      // On the error page the toolbar keeps the address that failed, so it can be fixed and reloaded.
+      url: failedUrl(url) ?? url,
       title: wc ? wc.getTitle() : "",
       loading: wc ? wc.isLoading() : false,
       canGoBack: wc ? wc.navigationHistory.canGoBack() : false,
@@ -113,8 +116,14 @@ function createBrowserPane({ getWindow, getAppView, token, onContents, pages, on
         if (key === active) sendState();
       });
     }
-    // Remembered so the card's page comes back after a restart (electron/pane-pages.cjs).
-    if (key !== BOARD) wc.on("did-navigate", () => pages?.record(key, wc.getURL(), wc.getTitle()));
+    // A failed load shows why (electron/pane-error.cjs) instead of a blank page, with the card's last page to go back to.
+    watchLoadFailures(wc, { back: (url) => (key === BOARD ? undefined : lastGoodPage(key, url)) });
+    // Remembered so the card's page comes back after a restart (electron/pane-pages.cjs); never the error page.
+    if (key !== BOARD) {
+      wc.on("did-navigate", () => {
+        if (failedUrl(wc.getURL()) === undefined) pages?.record(key, wc.getURL(), wc.getTitle());
+      });
+    }
     layout();
     return view;
   }
@@ -156,6 +165,13 @@ function createBrowserPane({ getWindow, getAppView, token, onContents, pages, on
       const fallback = pages.fallbackUrl(key);
       if (fallback && fallback !== url) open(fallback, key).catch(() => {});
     });
+  }
+
+  // Where the error page's Back goes: the card's remembered page, or its last update page when that's what failed.
+  function lastGoodPage(key, failed) {
+    const saved = pages?.restoreUrl(key);
+    if (saved && saved !== failed) return saved;
+    return pages?.fallbackUrl(key);
   }
 
   // Closes the browsers of cards that are gone.

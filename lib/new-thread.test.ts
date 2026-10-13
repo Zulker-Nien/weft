@@ -16,6 +16,7 @@ import {
   rememberPicks,
   remembered,
   runningOn,
+  modelOn,
   startButton,
 } from "./new-thread";
 
@@ -136,8 +137,29 @@ describe("modelLabel", () => {
 describe("runningOn", () => {
   it("prefers the card's own picks over what its CLI's init reported", () => {
     const runsOn = { model: "claude-opus-5-5", effort: "xhigh" as const };
-    expect(runningOn({ stats: { runsOn } })).toEqual(runsOn);
-    expect(runningOn({ model: "claude-haiku-5-5", effort: "low", stats: { runsOn } })).toEqual({ model: "claude-haiku-5-5", effort: "low" });
-    expect(runningOn({})).toEqual({ model: undefined, effort: undefined });
+    expect(runningOn({ backend: "claude", stats: { runsOn } })).toEqual(runsOn);
+    expect(runningOn({ backend: "claude", model: "claude-haiku-5-5", effort: "low", stats: { runsOn } })).toEqual({ model: "claude-haiku-5-5", effort: "low" });
+    expect(runningOn({ backend: "claude" })).toEqual({ model: undefined, effort: undefined });
+  });
+
+  it("never names a Claude model on a puku card", () => {
+    expect(runningOn({ backend: "puku", model: "claude-fable-5-1" }).model).toBe("opus-4.8");
+  });
+});
+
+describe("modelOn", () => {
+  it("keeps a model the CLI serves, [1m] suffix included", () => {
+    expect(modelOn("puku", "puku-ai-2.7")).toBe("puku-ai-2.7");
+    expect(modelOn("claude", "claude-opus-5-5[1m]")).toBe("claude-opus-5-5[1m]");
+    expect(modelOn("claude", "claude-some-older")).toBe("claude-some-older");
+  });
+
+  it("swaps the other CLI's model for this CLI's default", () => {
+    expect(modelOn("puku", "claude-fable-5-1")).toBe("opus-4.8");
+    expect(modelOn("claude", "puku-ai-2.8")).toBe("claude-opus-5-5");
+  });
+
+  it("leaves no model as no model", () => {
+    expect(modelOn("puku", undefined)).toBeUndefined();
   });
 });

@@ -7,7 +7,7 @@ runs, in every permission mode (bypass included), and the denial's reason goes b
 | Hook | File | Turns away |
 | --- | --- | --- |
 | Secret guard | `lib/secret-guard.ts` | reading `.env` files, Weft's data secrets, environment dumps (Bash, Read, Grep…) |
-| Restart guard | `lib/restart-guard.ts` | killing or restarting Weft's own server, app or port while other cards' turns run |
+| Restart guard | `lib/restart-guard.ts` | killing or restarting Weft's own server, app or port while other cards' turns run; points the thread at `mcp__board__restart_weft_when_idle` |
 | Git guard | `lib/git-guard.ts` | git commands that throw away or hide uncommitted work in the shared tree |
 | Route import guard | `lib/route-import-guard.ts` | an edit that makes a route file import a module that isn't there yet |
 | Import guard | `lib/import-check.ts` | (PostToolUse) reports an edit that breaks an import |

@@ -120,7 +120,7 @@ describe("with a key", () => {
     expect(await account.startSignIn("google", "http://127.0.0.1:3457/")).toBe("https://gh/login");
     expect(auth.signInWithOAuth).toHaveBeenCalledWith({
       provider: "google",
-      options: { redirectTo: "http://127.0.0.1:3457/api/account/callback", skipBrowserRedirect: true },
+      options: { redirectTo: "http://127.0.0.1:3457/api/auth/callback", skipBrowserRedirect: true },
     });
   });
 
@@ -161,7 +161,7 @@ describe("with a key", () => {
     await account.sendMagicLink("  a@b.co ", "http://localhost:9");
     expect(auth.signInWithOtp).toHaveBeenCalledWith({
       email: "a@b.co",
-      options: { emailRedirectTo: "http://localhost:9/api/account/callback", shouldCreateUser: true },
+      options: { emailRedirectTo: "http://localhost:9/api/auth/callback", shouldCreateUser: true },
     });
     await expect(account.sendMagicLink("nope", "http://x")).rejects.toThrow("valid email");
     auth.signInWithOtp.mockResolvedValueOnce({ error: new Error("rate limited") });

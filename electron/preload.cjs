@@ -76,6 +76,7 @@ contextBridge.exposeInMainWorld("threadboard", {
     // Vault → Vercel (electron/vercel-env.cjs): names only come back; a push asks Touch ID in main.
     envStatus: (folder) => ipcRenderer.invoke("vercel:env-status", folder),
     envPush: (folder, name, environment) => ipcRenderer.invoke("vercel:env-push", folder, name, environment),
+    envPull: (folder) => ipcRenderer.invoke("vercel:env-pull", folder),
   },
   // Supabase (electron/supabase.cjs): the token stays in main; links are supabase/.temp/project-ref. Board window only.
   supabase: {

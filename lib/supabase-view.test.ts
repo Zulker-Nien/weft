@@ -66,10 +66,11 @@ describe("supabase-view", () => {
 
   it("says how the folder's migrations stand", () => {
     expect(migrationLine({ migrations: 0 }, { pending: null })).toBeNull();
-    expect(migrationLine({ migrations: 1 }, { pending: null })).toEqual({ text: "1 migration", warn: false, names: [], more: false });
-    expect(migrationLine({ migrations: 2 }, { pending: [] })).toEqual({ text: "2 migrations, all applied", warn: false, names: [], more: false });
-    expect(migrationLine({ migrations: 4 }, { pending: ["a"] })).toEqual({ text: "1 of 4 migrations not applied", warn: true, names: ["a"], more: false });
-    expect(migrationLine({ migrations: 4 }, { pending: ["a", "b", "c"] })).toEqual({ text: "3 of 4 migrations not applied", warn: true, names: ["a", "b"], more: true });
+    expect(migrationLine({ migrations: 1 }, { pending: null })).toEqual({ text: "1 migration", warn: false, names: [], more: false, fix: false });
+    expect(migrationLine({ migrations: 2 }, { pending: [] })).toEqual({ text: "2 migrations, all applied", warn: false, names: [], more: false, fix: false });
+    expect(migrationLine({ migrations: 2 }, { pending: [], drift: [{ name: "a", local: "1", remote: "2" }] })).toEqual({ text: "2 migrations, all applied; 1 under another version", warn: true, names: [], more: false, fix: true });
+    expect(migrationLine({ migrations: 4 }, { pending: ["a"] })).toEqual({ text: "1 of 4 migrations not applied", warn: true, names: ["a"], more: false, fix: true });
+    expect(migrationLine({ migrations: 4 }, { pending: ["a", "b", "c"] })).toEqual({ text: "3 of 4 migrations not applied", warn: true, names: ["a", "b"], more: true, fix: true });
   });
 
   it("finds the latest card that wrote a migration", () => {

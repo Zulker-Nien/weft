@@ -61,8 +61,8 @@ same time; Next.js allows one dev server per project folder.
   daily cap per account (300 requests, 2M tokens); Weft's key never ships in the app. Signed out, the login pop-up
   offers **Sign in to Weft** or Puku's own login. See docs/architecture/puku-trial.md.
 - **Updates**: the packaged app checks GitHub Releases at launch and every few hours, downloads a new version in the
-  background, and the Weft menu offers **Restart to Update** (it asks first if threads are running). Weft → Check for
-  Updates… checks now. What changed is in [CHANGELOG.md](CHANGELOG.md); releasing is in docs/architecture/updates.md.
+  background, and the Weft menu offers **Restart to Update**. With threads running it asks: **Restart When Idle**
+  (the default) waits for them to finish, **Restart Now** cuts them off. Weft → Check for Updates… checks now. What changed is in [CHANGELOG.md](CHANGELOG.md); releasing is in docs/architecture/updates.md.
 - If the server crashes, it restarts on its own; its output is in `~/Library/Logs/Weft/server.log`
   (Help → Open Logs Folder).
 
@@ -208,6 +208,13 @@ can't do that behind your back: while other cards are running, a `kill`, `pkill`
 aimed at Weft's server, app or port, or a second `npm run dev` in Weft's folder, is turned away with how
 many turns it would cut off, and the thread asks you instead. Its own project's dev server is fair game.
 
+When Weft does need a restart, **Restart when idle** waits for it: Weft → Restart When Idle, the command palette, or a
+thread calling `mcp__board__restart_weft_when_idle` (you approve it). From then on nothing new starts. A message you
+send waits on its card, marked "after restart" above the reply box, and goes out once Weft is back. The header shows
+**⟳ Restart after N** (hover it for the threads it's waiting on, click it to cancel and send what waited). When the
+last running turn and any queued follow-up have ended, Weft relaunches, or installs the update if the updater armed it
+(`lib/restart-when-idle.ts`, `electron/restart-when-idle.cjs`).
+
 ## Subagents
 
 Every thread is told to hand work to subagents: broad searches across many files, independent pieces of a
@@ -223,7 +230,7 @@ keeps their file dumps out of the thread's context. Settings → Use for subagen
   the thread runs that CLI headless as the subagent (`puku-cli -p … --model opus-4.8`, or `claude -p`),
   read-only unless the task needs edits. That needs the other CLI installed and logged in.
 
-puku-cli threads get the advice to delegate but keep their own model names.
+Idle threads pick a change up on their next message.
 
 ## No waiting for CLIs to start
 
@@ -235,6 +242,8 @@ board starts them before you need them:
 - On launch, the copilot's CLI starts, plus a spare CLI in your most recent project.
 - Picking a project, opening the new-thread dialog, or opening a card starts a CLI for it in the
   background. A new card takes over the spare in its folder (up to three spares are kept).
+- puku-cli is held tighter, since each one is a whole Node process: 2 idle puku CLIs at most, closed after
+  10 idle minutes, and one puku spare, started only when the new-thread dialog has puku picked.
 
 ## Board status
 
@@ -446,9 +455,11 @@ vault); picking a project in the top bar takes it back. A vault belongs to the G
 folder), so clones of one repo share it. It lists names by Development, Preview and Production with only the last
 four characters showing.
 
-- **Add** (or ⇧S on the board, or "Add a secret" in ⌘K) types a secret in by hand (name, environment, and a value hidden unless you show it), so a project with
-  no `.env` file at all gets a vault too. The ✎ on a row, or **Change Value…** in its right-click menu, gives a
-  secret a new value; a name still missing one gets **Set Value…**.
+- **Add** (or ⇧S on the board, or "Add a secret" in ⌘K) types a secret in by hand. With no value typed, the
+  button is **Add blank / Add N blanks**: the name goes in without a value, the user fills it in from 🔐 later.
+  The ✎ on a row, or **Change Value…** in its right-click menu, gives a secret a new value; a name still
+  missing one gets a visible **Fill in** button (and **Fill In Value…** in the menu) with the hint a thread
+  added under the name. Blanks sort first within each environment so the ones to fill in sit at the top.
 - **Copy to <project>** in a secret's right-click menu copies it into another project's vault inside Electron
   main, so the value never reaches the board; a name still missing its value goes over as missing.
 
@@ -464,8 +475,11 @@ four characters showing.
 - Revealing or copying a value asks for Touch ID (or a confirmation on a Mac without it). One Touch ID covers a few
   minutes of use, the drawer hides values again after 3 idle minutes, and a copied value leaves the clipboard
   after a minute.
-- **Threads ask for a key they need.** When a key isn't in the vault yet, the thread opens 🔐 on the plain Add form
-  with the name filled in (`mcp__secrets__ask_add`); you paste the value and click Add to vault.
+- **Threads save a key they need as a blank right away.** When a key isn't in the vault yet, the thread
+  calls `mcp__secrets__add_blank` (with a hint for where to get the value) and keeps going with what
+  doesn't need it; 🔐's count goes up, the row shows **Fill in** and the hint under the name, and you
+  paste the value when you're ready. Blocked on it now, the thread calls `mcp__secrets__ask_add` and 🔐
+  opens on its Add form with the name filled in.
 - **Threads fill fields for you without seeing the value.** A thread lists the vault's names
   (`mcp__secrets__list`), opens the page in the browser pane and calls `mcp__secrets__fill_field`: Touch ID asks
   "let a thread type GITHUB_CLIENT_SECRET (aimhuge/weft) into supabase.com", then the value goes into the field,
@@ -510,7 +524,8 @@ best name match first, and **+ New project** makes one right there (name, org, r
 and keeps it in the project's 🔐 vault as `SUPABASE_DB_PASSWORD`); Weft writes `supabase/.temp/project-ref` (and keeps `.temp` out of git), just as `supabase link`
 does, so the Supabase CLI in any thread works on the right project. A folder whose `.mcp.json` already points the
 Supabase MCP server at a project shows up linked. A linked project shows its org, state (Healthy, Paused…; **Restore**
-wakes a paused one), region, API URL, which of the folder's `supabase/migrations` haven't been applied yet, and links
+wakes a paused one), region, API URL, which of the folder's `supabase/migrations` haven't been applied yet (with **Migrate**, a card that
+reviews them, applies them on your OK and lines the files up with Supabase's history), and links
 to its auth users, logs, API keys, usage and dashboard. More in
 [docs/architecture/supabase.md](docs/architecture/supabase.md).
 
@@ -643,6 +658,12 @@ shared-link picture is `app/opengraph-image.tsx`. The page is one screen, on pur
 `electron/assets/` (through `next/image`), one sentence, the download button, and a real screenshot of the board in
 `public/brand/board.png`; retake that one when the board changes a lot (`mcp__board_view__screenshot` with the thread
 panel and drawers closed).
+
+`weft.zip/login` is a real sign-in page (GitHub only) so a visitor can leave the marketing site with
+a Weft account without the desktop app first. A signed-in visit lands on a small "you're in" card at
+`/app` with the download CTA; signing out or starting over is a single click. The page is
+`app/login/page.tsx`; the form is in `lib/auth/`, a thin wrapper whose public API mirrors
+`@aimhuge/auth`.
 
 ## Contributing and license
 

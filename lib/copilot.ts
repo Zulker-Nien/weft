@@ -1,8 +1,11 @@
 import os from "node:os";
+import { reapStrayClis } from "./cli-reaper";
 import { startSessionSync } from "./import";
 import { startSearchIndex } from "./search";
 import { boardDigest, lastSeen, rememberSeen, snapshot, withDigest } from "./copilot-digest";
 import { startHookListener } from "./github-hooks";
+import { startVercelListener } from "./vercel-hooks";
+import { startWebhookRelay } from "./webhook-forward";
 import { startIssueSync } from "./github-issues";
 import { startPukuTrial } from "./puku-trial";
 import { endSession, ensureSpare, retryPukuWithTrial, sendUserMessage, warmUp } from "./runner";
@@ -63,6 +66,9 @@ const g = globalThis as unknown as { __threadboardPrewarmed?: boolean };
 export function prewarm() {
   if (g.__threadboardPrewarmed) return;
   g.__threadboardPrewarmed = true;
+  // End the thread CLIs a server that died without cleaning up left orphaned (lib/cli-reaper.ts).
+  const folders = [...new Set([...listProjects().map((p) => p.path), ...listCards().map((c) => c.cwd)].filter(Boolean))];
+  reapStrayClis(folders).catch((err: unknown) => console.error("[weft] stray CLI check failed:", err));
   // Pick up the user's existing Claude Code sessions as cards, and keep them in sync.
   startSessionSync();
   startSearchIndex();
@@ -72,6 +78,10 @@ export function prewarm() {
   startIssueSync();
   // Hear webhook-relayed issue events within seconds, while you're signed in to Weft (lib/github-hooks.ts).
   startHookListener();
+  // Pull new Vercel env variables into the 🔐 vault as their webhook events arrive (lib/vercel-hooks.ts).
+  startVercelListener();
+  // Forward what providers post to your webhooks' relay URLs to their local targets (lib/webhook-forward.ts).
+  startWebhookRelay();
   // Keep Weft's Puku trial token fresh, and give puku threads waiting on a login the trial when you sign in to Weft.
   startPukuTrial(() => void retryPukuWithTrial());
   // Carry on the turns the last quit cut off (lib/resume.ts).

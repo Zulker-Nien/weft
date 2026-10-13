@@ -7,6 +7,7 @@ import type { SupabaseBridge } from "./supabase-view";
 import type { BlastcpBridge } from "./blastcp-view";
 import type { CloudflareBridge } from "./cloudflare-view";
 import type { GithubStatus } from "./github-view";
+import type { Webhook, WebhookInput, WebhookPatch } from "./webhooks";
 import type { SubagentModel } from "./subagents";
 import type {
   AccountProvider,
@@ -23,6 +24,7 @@ import type {
   LoginView,
   PermissionMode,
   Project,
+  RestartStatus,
   SettingsView,
   SkillInfo,
   ThreadItem,
@@ -41,7 +43,7 @@ export interface BrowserState {
 
 // What the app menu, dock, tray, global shortcuts and weft:// links ask a window to do.
 // open-card carries an id.
-export type MenuAction = "new-thread" | "settings" | "open-card" | "find" | "terminal" | "add-secret";
+export type MenuAction = "new-thread" | "settings" | "open-card" | "find" | "terminal" | "add-secret" | "add-webhook";
 
 // Exposed by electron/preload.cjs; absent when the board runs in a normal browser tab.
 export interface ShellBridge {
@@ -240,9 +242,9 @@ export const api = {
   shell: (id: string, command: string) => call<{ ok: true }>("POST", `/api/cards/${id}/shell`, { command }),
   // Stops the Claude CLI that has a picked-up session open in another app.
   release: (id: string) => call<{ stopped: number }>("POST", `/api/cards/${id}/release`),
-  // Flips a card's CLI. replay=true re-sends the last user message (the rate-limit escape hatch).
-  switchBackend: (id: string, backend: Backend, replay = false) =>
-    call<{ card: Card }>("POST", `/api/cards/${id}/switch-backend`, { backend, replay }),
+  // Flips a card's CLI, or with model picks one of its models (same CLI: no new session). replay=true re-sends the last user message (the rate-limit escape hatch).
+  switchBackend: (id: string, backend: Backend, replay = false, model?: string) =>
+    call<{ card: Card }>("POST", `/api/cards/${id}/switch-backend`, { backend, replay, model }),
   // Column-level "Switch all to <other>". Busy cards come back in `pending` so the column can
   // confirm with the user before retrying.
   switchBackends: (ids: string[], backend: Backend) =>
@@ -256,6 +258,10 @@ export const api = {
     call<{ status: DevServerStatus }>("POST", `/api/cards/${id}/dev`, { action }),
   copilot: () => call<{ card: Card }>("GET", "/api/copilot"),
   resetCopilot: () => call<{ card: Card }>("POST", "/api/copilot/reset"),
+  // Restart when idle (lib/restart-when-idle.ts): nothing new starts, and Weft restarts once the running turns end.
+  restartStatus: () => call<RestartStatus>("GET", "/api/restart"),
+  restartWhenIdle: () => call<RestartStatus>("POST", "/api/restart", {}),
+  cancelRestart: () => call<RestartStatus>("DELETE", "/api/restart"),
   settings: () => call<SettingsView>("GET", "/api/settings"),
   saveSettings: (patch: {
     threadPrompt?: string;
@@ -265,6 +271,8 @@ export const api = {
     automations?: Automation[];
     pushOnDone?: boolean;
     subagentModel?: SubagentModel;
+    doneModel?: string;
+    doneEffort?: Effort | "";
   }) =>
     call<SettingsView>("PATCH", "/api/settings", patch),
   addProject: (path: string) => call<{ path: string; projects: Project[] }>("POST", "/api/projects", { path }),
@@ -292,7 +300,8 @@ export const api = {
   githubRepos: (fresh = false) => call<{ repos: GithubRepo[] }>("GET", `/api/repos/github${fresh ? "?fresh=1" : ""}`),
   // Your Weft account (lib/account.ts). signIn returns the provider's page to open in the system browser.
   account: () => call<AccountView>("GET", "/api/account"),
-  signIn: (provider: AccountProvider) => call<{ url: string }>("POST", "/api/account", { action: "oauth", provider }),
+  signIn: (provider: AccountProvider, next?: string) =>
+    call<{ url: string }>("POST", "/api/account", { action: "oauth", provider, ...(next ? { next } : {}) }),
   magicLink: (email: string) => call<{ ok: true }>("POST", "/api/account", { action: "email", email }),
   signOut: () => call<{ ok: true }>("POST", "/api/account", { action: "signout" }),
   cloneRepo: (fullName: string) => call<{ path: string; projects: Project[] }>("POST", "/api/repos/clone", { fullName }),
@@ -303,8 +312,19 @@ export const api = {
   // A webhook on the folder's repo, relayed by Weft's Supabase, so its issues sync within seconds (lib/github-hooks.ts).
   addHook: (folder: string) => call<{ repo: string }>("POST", "/api/github/hooks", { folder }),
   removeHook: (folder: string) => call<{ ok: true }>("DELETE", "/api/github/hooks", { folder }),
+  // Live pull from Vercel: a team webhook relayed by Weft's Supabase pulls new env variables into the vault (lib/vercel-hooks.ts).
+  vercelHooks: () => call<{ signedIn: boolean; teams: string[] }>("GET", "/api/vercel/hooks"),
+  addVercelHook: (folder: string) => call<{ team: string }>("POST", "/api/vercel/hooks", { folder }),
+  removeVercelHook: (folder: string) => call<{ ok: true }>("DELETE", "/api/vercel/hooks", { folder }),
   // The GitHub drawer: who gh is signed in as, and each folder's repo and issue sync (lib/github-status.ts).
   github: (folders: string[]) => call<GithubStatus>("GET", `/api/github?${new URLSearchParams(folders.map((f) => ["folder", f]))}`),
+  // The 🪝 drawer: each folder's webhooks, and a public relay URL for one (lib/webhooks.ts; signedIn: the relay needs a Weft account).
+  webhooks: (folders: string[]) => call<{ hooks: Webhook[]; signedIn: boolean }>("GET", `/api/webhooks?${new URLSearchParams(folders.map((f) => ["folder", f]))}`),
+  addWebhook: (input: WebhookInput) => call<{ hook: Webhook; existed: boolean }>("POST", "/api/webhooks", input),
+  updateWebhook: (id: string, patch: WebhookPatch) => call<{ hook: Webhook }>("PATCH", `/api/webhooks/${id}`, patch),
+  removeWebhook: (id: string) => call<{ ok: true }>("DELETE", `/api/webhooks/${id}`),
+  relayWebhook: (id: string) => call<{ hook: Webhook }>("POST", `/api/webhooks/${id}/relay`),
+  unrelayWebhook: (id: string) => call<{ hook: Webhook }>("DELETE", `/api/webhooks/${id}/relay`),
 };
 
 // A thread snapshot with the live items that arrived while it loaded, which are newer than it.

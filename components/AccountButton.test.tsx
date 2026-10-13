@@ -43,7 +43,7 @@ describe("AccountButton", () => {
     const button = await screen.findByRole("button", { name: "Sign in with GitHub" });
     expect(button).toHaveTextContent("Sign in");
     await userEvent.click(button);
-    expect(api.signIn).toHaveBeenCalledWith("github");
+    expect(api.signIn).toHaveBeenCalledWith("github", "/");
     expect(openExternal).toHaveBeenCalledWith("https://github.com/login/oauth");
     expect(button).toHaveTextContent("Signing in…");
     expect(button).toHaveAttribute("title", "Finish signing in with GitHub in your browser");

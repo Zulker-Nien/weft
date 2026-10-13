@@ -1,7 +1,6 @@
 # Supabase
 
-Status: linking built 2026-10-12, and making a project in place the same day. Migrations push,
-types, keys into the 🔐 vault and agent tools are next.
+Status: linking built 2026-10-12, and making a project in place the same day. The Migrate card 2026-10-13. Types, keys into the 🔐 vault and agent tools are next.
 
 Supabase's green bolt on the left rail (under ▲, in `components/LibraryRail.tsx`) opens a drawer that links each
 board project to a Supabase project, the same way ▲ links one to Vercel (docs/architecture/vercel.md).
@@ -43,7 +42,7 @@ up linked in the drawer.
 For a linked folder: project and org, its state (Healthy, Paused, Restoring…; `projectState`), region, the API URL
 (click to open the project's dashboard in the browser pane), the folder's migrations against the ones Supabase has
 applied (`GET /v1/projects/:ref/database/migrations`, matched by the version before `_` in
-`supabase/migrations/<version>_<name>.sql`; "2 of 5 migrations not applied: …" in amber; each name links to the card that wrote its file, the latest card whose
+`supabase/migrations/<version>_<name>.sql`, then by the name after it; "2 of 5 migrations not applied: …" in amber; each name links to the card that wrote its file, the latest card whose
 `touchedFiles` hold it, `migrationOwner`), and links into the
 dashboard on one line: Auth, Logs, Keys, Usage and Dash (`supabaseActions`). A paused project (free
 projects pause after a week) gets **Restore** (`POST /v1/projects/:ref/restore`).
@@ -62,11 +61,21 @@ Restart Weft (`needsRestart`).
   `components/SupabaseNewProject.tsx` (its New project form), `components/supabase-ui.ts` (shared button style),
   `components/SupabaseLogo.tsx`.
 
+### Migrate
+
+The Supabase MCP's `apply_migration` stamps its own version (the time it ran), not the local file's, so a migration a
+thread applied that way looked unapplied forever. `linkedStatus` in `electron/supabase.cjs` now counts a name match as
+applied and reports it as `drift` (`{ name, local, remote }`); the line reads "… all applied; N under another version".
+
+When anything is pending or drifted, **Migrate** sits at the end of the line (`migrationLine().fix`). It starts a card in
+the folder (`lib/supabase-migrate.ts`, through the rail's `onStartCard`, Board's `improveQuality`) whose prompt lists the
+pending migrations with the card that wrote each, and the drifted files. The card reads the history and the live schema,
+writes a page with a risk badge per migration, and on your OK applies them oldest first (the MCP, or `supabase db push`
+for a CLI link), then `git mv`s each local file to the version Supabase recorded, so the two histories match.
+
 ## Next
 
-1. **Push migrations**: a button on "N not applied" that starts a card running `supabase db push` (the link is
-   already there for the CLI; the token goes in through `mcp__secrets__run`, never the thread).
-2. **Keys into the vault**: copy the project's URL and publishable key into the 🔐 vault as
+1. **Keys into the vault**: copy the project's URL and publishable key into the 🔐 vault as
    `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and the service role key behind Touch ID.
 3. **MCP for threads**: offer to add the Supabase MCP server for the linked project to `.mcp.json`.
 4. **Usage and advisors**: security and performance advisors, and a badge when a project is paused or unhealthy.

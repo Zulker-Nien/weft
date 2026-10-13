@@ -1,12 +1,14 @@
 import type { PermissionResult, Query, SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { messageContent } from "./attachments";
 import type { BoardActions } from "./board-tools";
+import type { CliProcess } from "./cli-process";
 import { keepAliveMinutes } from "./settings";
 import type { BoardStatus } from "./status";
 import { getCard, updateCard } from "./store";
 import type { Backend, CacheState, Card, Effort, PermissionMode, Question } from "./types";
 import { globalSingleton } from "./global-singleton";
-import { effortFor } from "./new-thread";
+import { effortFor, modelOn } from "./new-thread";
+import { idleToClose, keepAliveFor } from "./puku-idle";
 
 // What every part of the runner shares: a thread's CLI session, the maps that hold them, and the small
 // helpers around them. lib/runner.ts is the front door; lib/runner-session.ts opens and drives sessions,
@@ -75,6 +77,8 @@ export interface Session {
   cardId: string | null;
   spec: Spec;
   query?: Query;
+  // The CLI process, in a process group of its own (lib/cli-process.ts).
+  process?: CliProcess;
   inbox: Inbox;
   abort: AbortController;
   // True from a sent message until that turn's result.
@@ -137,6 +141,11 @@ export function isBusy(cardId: string) {
   return sessions.get(cardId)?.busy ?? false;
 }
 
+// The cards whose turn is running now.
+export function busyCards(): string[] {
+  return [...sessions].filter(([, session]) => session.busy).map(([cardId]) => cardId);
+}
+
 // The card may be deleted while its thread is still running.
 export function safeUpdate(id: string, patch: Partial<Card>) {
   if (getCard(id)) updateCard(id, patch);
@@ -148,13 +157,14 @@ export function errorText(err: unknown) {
 
 // The card's stored effort may be one the backend can't take (e.g. xhigh on puku), so we normalize
 // through effortFor at the point we build the spec the CLI actually runs with. A card left over
-// from before switchBackend's xhigh guard is caught here on the next turn.
+// from before switchBackend's xhigh guard is caught here on the next turn. Same for a Claude model id
+// left on a puku card (modelOn).
 export function specFor(card: Card): Spec {
   return {
     cwd: card.cwd,
     backend: card.backend,
     permissionMode: card.permissionMode,
-    model: card.model,
+    model: modelOn(card.backend, card.model),
     effort: effortFor(card.backend, card.effort),
     sessionId: card.sessionId,
     copilot: card.role === "copilot",
@@ -166,16 +176,15 @@ export function specFor(card: Card): Spec {
 export const MAX_IDLE_SESSIONS = 8;
 
 // Closes a card's CLI after the keep-alive time without messages (never, if that's 0), and the least
-// recently used idle CLIs past MAX_IDLE_SESSIONS. A closed card resumes its session on the next message.
+// recently used idle CLIs past MAX_IDLE_SESSIONS (MAX_IDLE_PUKU for puku, lib/puku-idle.ts). A closed card resumes its session on the next message.
 export function scheduleIdle(session: Session) {
   clearTimeout(session.idle);
   session.lastUsed = Date.now();
   trimIdle();
   const cardId = session.cardId;
-  const settingMinutes = keepAliveMinutes();
-  // A picked-up session's CLI closes after 10 idle minutes at most, for the same reason.
+  // A picked-up session's CLI, or a puku one, closes after 10 idle minutes at most, for the same reason.
   const imported = getCard(cardId ?? "")?.source === "claude-code";
-  const minutes = imported ? Math.min(settingMinutes || 10, 10) : settingMinutes;
+  const minutes = keepAliveFor(session.spec.backend, imported, keepAliveMinutes());
   if (!cardId || minutes <= 0) return;
   session.idle = setTimeout(() => closeWhenIdle(cardId, session), Math.min(minutes * 60_000, MAX_TIMER_MS));
 }
@@ -184,7 +193,9 @@ function trimIdle() {
   const idle = [...sessions.entries()]
     .filter(([, s]) => !s.busy && !s.spec.copilot && s.pending.length === 0 && !s.ended)
     .sort(([, a], [, b]) => (a.lastUsed ?? 0) - (b.lastUsed ?? 0));
-  for (const [cardId, s] of idle.slice(0, Math.max(0, idle.length - MAX_IDLE_SESSIONS))) {
+  const toClose = new Set(idleToClose(idle.map(([, s]) => s), MAX_IDLE_SESSIONS));
+  for (const [cardId, s] of idle) {
+    if (!toClose.has(s)) continue;
     clearTimeout(s.idle);
     closeWhenIdle(cardId, s);
   }

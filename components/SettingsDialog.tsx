@@ -9,6 +9,7 @@ import type { Automation, Backend, CliStatus, PermissionMode, SettingsView } fro
 import AccountSettings from "./AccountSettings";
 import AppearancePicker from "./AppearancePicker";
 import AutomationSettings from "./AutomationSettings";
+import DonePicker from "./DonePicker";
 import Icon, { Spinner } from "./Icon";
 import Modal from "./Modal";
 import ModePicker from "./ModePicker";
@@ -395,25 +396,16 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
 
                 <section className="flex items-center justify-between gap-4">
                   <SectionHeader titleClass={sectionTitle} hintClass={sectionHint} title="Default CLI" hint="What new threads start on. You can still switch mid-flight from a card&apos;s menu." />
-                  <select value={defaultBackend} aria-label="Default CLI" onChange={(e) => { setDefaultBackend(e.target.value as Backend); setSaveError(null); }}
-                    className="rounded-md border border-line-strong bg-canvas px-2.5 py-[7px] text-[12.5px] text-ink outline-none focus:border-accent">
+                  <select value={defaultBackend} aria-label="Default CLI" onChange={(e) => { setDefaultBackend(e.target.value as Backend); setSaveError(null); }} className="rounded-md border border-line-strong bg-canvas px-2.5 py-[7px] text-[12.5px] text-ink outline-none focus:border-accent">
                     <option value="claude">Claude Code</option> <option value="puku">puku-cli</option>
                   </select>
                 </section>
 
-                <SubagentPicker value={settings.subagentModel} />
+                <section className="flex flex-col gap-3"><SubagentPicker value={settings.subagentModel} /><DonePicker model={settings.doneModel} effort={settings.doneEffort} /></section>
 
                 <section className="flex flex-col gap-2">
                   <SectionHeader titleClass={sectionTitle} hintClass={sectionHint} title="Keep conversations open" hint={`A thread's CLI stays open between messages so replies start right away.`} />
-                  <select
-                    value={keepAlive}
-                    aria-label="Keep conversations open"
-                    onChange={(e) => {
-                      setKeepAlive(Number(e.target.value));
-                      setSaveError(null);
-                    }}
-                    className="w-fit rounded-md border border-line-strong bg-canvas px-2.5 py-[7px] text-[12.5px] text-ink outline-none focus:border-accent"
-                  >
+                  <select value={keepAlive} aria-label="Keep conversations open" onChange={(e) => { setKeepAlive(Number(e.target.value)); setSaveError(null); }} className="w-fit rounded-md border border-line-strong bg-canvas px-2.5 py-[7px] text-[12.5px] text-ink outline-none focus:border-accent">
                     {keepAliveOptions.map((o) => (
                       <option key={o.minutes} value={o.minutes}>
                         {o.label}
@@ -517,3 +509,4 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
     </Modal>
   );
 }
+

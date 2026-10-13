@@ -3,12 +3,15 @@ import { connection } from "next/server";
 import { patternRegex } from "@/lib/automations";
 import { asText } from "@/lib/format";
 import { fail, guard } from "@/lib/guard";
-import { setAutomations, setDefaultBackend, setDefaultPermissionMode, setKeepAliveMinutes, setPushOnDone, setSubagentModel, setThreadPrompt, settingsView } from "@/lib/settings";
+import { EFFORTS, MODELS } from "@/lib/new-thread";
+import { setAutomations, setDefaultBackend, setDefaultPermissionMode, setDoneEffort, setDoneModel, setKeepAliveMinutes, setPushOnDone, setSubagentModel, setThreadPrompt, settingsView } from "@/lib/settings";
 import { SKILL_NAME } from "@/lib/skills";
 import { isSubagentModel } from "@/lib/subagents";
 import { AUTOMATION_TRIGGERS, MODES, type Automation, type Backend, type PermissionMode } from "@/lib/types";
 
 const BACKENDS: Backend[] = ["claude", "puku"];
+const DONE_MODEL_IDS = new Set<string>(Object.values(MODELS).flat().map((m) => m.id));
+const DONE_EFFORT_IDS = new Set<string>(EFFORTS.map((e) => e.id));
 
 // The rules as sent, checked; a leading slash on a skill name is dropped.
 function readAutomations(value: unknown): Automation[] {
@@ -35,6 +38,15 @@ export async function GET(req: Request) {
   return Response.json(settingsView());
 }
 
+function validateDone(field: "doneModel" | "doneEffort", value: unknown) {
+  const allowed = field === "doneModel" ? DONE_MODEL_IDS : DONE_EFFORT_IDS;
+  const names = field === "doneModel" ? [...DONE_MODEL_IDS] : EFFORTS.map((e) => e.id);
+  if (value === undefined) return;
+  if (typeof value !== "string" || !allowed.has(value)) {
+    throw new Error(`${field} must be one of ${names.join(", ")}, or "" for the card's own.`);
+  }
+}
+
 function validate(body: {
   threadPrompt?: unknown;
   keepAliveMinutes?: unknown;
@@ -43,6 +55,8 @@ function validate(body: {
   automations?: unknown;
   pushOnDone?: unknown;
   subagentModel?: unknown;
+  doneModel?: unknown;
+  doneEffort?: unknown;
 }): Automation[] | undefined {
   if (body.threadPrompt !== undefined && typeof body.threadPrompt !== "string") {
     throw new Error("threadPrompt must be text.");
@@ -63,6 +77,8 @@ function validate(body: {
   if (body.subagentModel !== undefined && !isSubagentModel(body.subagentModel)) {
     throw new Error("subagentModel must be choose, inherit, or a model id one of the CLIs serves.");
   }
+  validateDone("doneModel", body.doneModel);
+  validateDone("doneEffort", body.doneEffort);
   // Validate automations now so a bad rule 400s before any settings setter runs.
   return body.automations === undefined ? undefined : readAutomations(body.automations);
 }
@@ -74,6 +90,8 @@ function commit(body: {
   defaultBackend?: unknown;
   pushOnDone?: unknown;
   subagentModel?: unknown;
+  doneModel?: unknown;
+  doneEffort?: unknown;
 }, rules: Automation[] | undefined) {
   if (typeof body.threadPrompt === "string") setThreadPrompt(body.threadPrompt);
   if (typeof body.keepAliveMinutes === "number") setKeepAliveMinutes(body.keepAliveMinutes);
@@ -81,6 +99,8 @@ function commit(body: {
   if (body.defaultBackend !== undefined) setDefaultBackend(body.defaultBackend as Backend);
   if (typeof body.pushOnDone === "boolean") setPushOnDone(body.pushOnDone);
   if (isSubagentModel(body.subagentModel)) setSubagentModel(body.subagentModel);
+  if (typeof body.doneModel === "string") setDoneModel(body.doneModel);
+  if (typeof body.doneEffort === "string") setDoneEffort(body.doneEffort as "" | "low" | "medium" | "high" | "xhigh" | "max");
   if (rules) setAutomations(rules);
 }
 

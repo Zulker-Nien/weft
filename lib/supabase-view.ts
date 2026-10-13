@@ -18,6 +18,15 @@ export interface SupabaseLink {
   url?: string;
   // The folder's migrations Supabase hasn't applied, or null when it can't say.
   pending?: string[] | null;
+  // Migrations Supabase applied under another version than the local file's (the MCP's apply_migration stamps
+  // its own), matched by name: applied, but `supabase db push` would run them again until the file is renamed.
+  drift?: MigrationDrift[];
+}
+
+export interface MigrationDrift {
+  name: string;
+  local: string;
+  remote: string;
 }
 
 export interface SupabaseFolder {
@@ -168,17 +177,22 @@ export function projectState(status: string) {
 }
 
 // The line about the folder's migrations: none, all applied, or how many Supabase hasn't run yet, with the first two
-// names apart from the text so the drawer can link each to the card that wrote it (migrationOwner).
+// names apart from the text so the drawer can link each to the card that wrote it (migrationOwner). `fix` is
+// whether there's work for the Migrate card (lib/supabase-migrate.ts): something to apply, or a file out of step.
 export function migrationLine(
   f: Pick<SupabaseFolder, "migrations">,
-  link: Pick<SupabaseLink, "pending">,
-): { text: string; warn: boolean; names: string[]; more: boolean } | null {
+  link: Pick<SupabaseLink, "pending" | "drift">,
+): { text: string; warn: boolean; names: string[]; more: boolean; fix: boolean } | null {
   if (!f.migrations) return null;
   const all = `${f.migrations} migration${f.migrations === 1 ? "" : "s"}`;
-  if (!link.pending) return { text: all, warn: false, names: [], more: false };
-  if (!link.pending.length) return { text: `${all}, all applied`, warn: false, names: [], more: false };
+  const drift = link.drift?.length ?? 0;
+  if (!link.pending) return { text: all, warn: false, names: [], more: false, fix: false };
+  if (!link.pending.length) {
+    if (!drift) return { text: `${all}, all applied`, warn: false, names: [], more: false, fix: false };
+    return { text: `${all}, all applied; ${drift} under another version`, warn: true, names: [], more: false, fix: true };
+  }
   const n = link.pending.length;
-  return { text: `${n} of ${all} not applied`, warn: true, names: link.pending.slice(0, 2), more: n > 2 };
+  return { text: `${n} of ${all} not applied`, warn: true, names: link.pending.slice(0, 2), more: n > 2, fix: true };
 }
 
 // The card that wrote a migration: the latest one whose edited files (Card.touchedFiles) hold the folder's

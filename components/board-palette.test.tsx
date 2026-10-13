@@ -1,9 +1,20 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { makeCard } from "./test-utils";
 import { boardPaletteItems, promptItems, type PaletteActions, type PaletteState } from "./board-palette";
 
 vi.mock("@/lib/theme", () => ({ THEMES: [{ id: "dark", label: "Dark" }], SCENES: [{ id: "canyon", label: "Canyon" }], setTheme: vi.fn() }));
+
+const client = vi.hoisted(() => ({ restartWhenIdle: vi.fn(), cancelRestart: vi.fn() }));
+vi.mock("@/lib/client", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/lib/client")>();
+  return { ...original, api: { ...original.api, ...client } };
+});
+
+beforeEach(() => {
+  client.restartWhenIdle.mockReset();
+  client.cancelRestart.mockReset();
+});
 
 function actions(): PaletteActions {
   const names = [
@@ -43,6 +54,38 @@ describe("boardPaletteItems", () => {
     expect(ids(items)).not.toContain("cmd-archive-done");
     expect(ids(items)).not.toContain("cmd-archive-undo");
     expect(ids(items)).not.toContain("cmd-toggle-archived");
+  });
+
+  it("offers Restart Weft when idle, which arms the restart", () => {
+    client.restartWhenIdle.mockResolvedValue({ armed: true, waiting: [] });
+    const items = boardPaletteItems(state(), actions());
+    const byId = new Map(items.map((i) => [i.id, i]));
+    expect(byId.get("cmd-restart")?.label).toBe("Restart Weft when idle");
+    expect(byId.has("cmd-restart-cancel")).toBe(false);
+    byId.get("cmd-restart")?.run();
+    expect(client.restartWhenIdle).toHaveBeenCalledTimes(1);
+    expect(client.cancelRestart).not.toHaveBeenCalled();
+  });
+
+  it("offers Cancel the restart instead once one is armed", () => {
+    client.cancelRestart.mockResolvedValue({ armed: false, waiting: [] });
+    const items = boardPaletteItems(state({ restartArmed: true }), actions());
+    const byId = new Map(items.map((i) => [i.id, i]));
+    expect(byId.get("cmd-restart-cancel")?.label).toBe("Cancel the restart");
+    expect(byId.has("cmd-restart")).toBe(false);
+    byId.get("cmd-restart-cancel")?.run();
+    expect(client.cancelRestart).toHaveBeenCalledTimes(1);
+    expect(client.restartWhenIdle).not.toHaveBeenCalled();
+  });
+
+  it("toasts the reason when arming or cancelling fails, whether an Error or not", async () => {
+    const a = { ...actions(), toast: vi.fn() };
+    client.restartWhenIdle.mockRejectedValue(new Error("Restarting Weft needs the desktop app."));
+    new Map(boardPaletteItems(state(), a).map((i) => [i.id, i])).get("cmd-restart")?.run();
+    await vi.waitFor(() => expect(a.toast).toHaveBeenCalledWith("Restarting Weft needs the desktop app."));
+    client.cancelRestart.mockRejectedValue("offline");
+    new Map(boardPaletteItems(state({ restartArmed: true }), a).map((i) => [i.id, i])).get("cmd-restart-cancel")?.run();
+    await vi.waitFor(() => expect(a.toast).toHaveBeenCalledWith("offline"));
   });
 
   it("offers archive commands when there is something to archive, undo or show", () => {

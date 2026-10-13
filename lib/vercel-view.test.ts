@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
-import { createdText, deployState, ENV_SHORT, envLine, pushText, toPush, vercelActions, gitLine, matchScore, pickerList, projectNameFor, shownFolders, startScope, validProjectName, vercelBridge, vercelTitle, type VercelEnvironment, type VercelEnvRow, type VercelFolder, type VercelProject, type VercelStatus } from "./vercel-view";
+import { createdText, deployState, ENV_SHORT, envLine, pushText, toPush, vercelActions, gitLine, matchScore, pickerList, projectNameFor, pullText, shownFolders, startScope, toPull, validProjectName, vercelBridge, vercelTitle, type VercelEnvironment, type VercelEnvRow, type VercelFolder, type VercelProject, type VercelStatus } from "./vercel-view";
 
 const project = (name: string, over: Partial<VercelProject> = {}): VercelProject => ({ id: name, name, orgId: "team_1", team: "Acme", teamSlug: "acme", git: null, framework: null, updatedAt: 0, ...over });
 const folder = (path: string, repo: string | null = null, over: Partial<VercelFolder> = {}): VercelFolder => ({ folder: path, repo, link: null, error: null, ...over });
@@ -145,5 +145,20 @@ describe("vault → Vercel env", () => {
     expect(pushText("K", "preview", { pushed: true, label: "a/b" })).toBe("Pushed K to Vercel (preview). It's live from the next deploy");
     expect(pushText("K", "production", { denied: true, label: "a/b" })).toBe("K stayed in the vault: Touch ID wasn't approved");
     expect(pushText("K", "development", { missing: true, label: "a/b" })).toBe("K has no development value in the a/b vault");
+  });
+
+  it("counts what Pull would bring down", () => {
+    const rows = [{ ...row("A", "production", false, true), pullable: true }, row("B", "production", false, true), { ...row("C", "preview", true, true), pullable: false }];
+    expect(toPull(rows)).toEqual([rows[0]]);
+    expect(toPull([])).toEqual([]);
+  });
+
+  it("words a pull: names once each, nothing new, and what's left to add by hand", () => {
+    const e = (name: string, environment: VercelEnvironment) => ({ name, environment });
+    const base = { label: "a/b", project: "weft" };
+    expect(pullText({ ...base, pulled: [e("A", "development"), e("A", "production"), e("B", "preview")], skipped: [] })).toBe("Pulled A, B into the a/b vault");
+    expect(pullText({ ...base, pulled: [], skipped: [] })).toBe("Nothing new to pull from weft");
+    expect(pullText({ ...base, pulled: [e("A", "production")], skipped: [e("S", "production"), e("S", "preview"), e("T", "preview")] })).toBe("Pulled A into the a/b vault. Sensitive on Vercel, add by hand: S, T");
+    expect(pullText({ ...base, pulled: [], skipped: [e("S", "production")] })).toBe("Nothing new to pull from weft. Sensitive on Vercel, add by hand: S");
   });
 });

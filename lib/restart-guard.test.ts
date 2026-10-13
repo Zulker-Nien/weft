@@ -196,8 +196,8 @@ describe("weftProcess", () => {
 });
 
 describe("RESTART_PROMPT", () => {
-  it("tells threads to ask the user instead", () => {
+  it("sends threads to restart when idle instead", () => {
     expect(RESTART_PROMPT).toMatch(/Never restart Weft/);
-    expect(RESTART_PROMPT).toMatch(/ask the user/);
+    expect(RESTART_PROMPT).toMatch(/mcp__board__restart_weft_when_idle/);
   });
 });

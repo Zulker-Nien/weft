@@ -63,6 +63,16 @@ export function modelFor(backend: Backend) {
     : DEFAULT_MODEL[backend];
 }
 
+// The model a card runs on this CLI: its own when the CLI serves it, else the CLI's default. A Claude id
+// on puku isn't refused, the gateway quietly answers it as puku-ai-2.8, so the chip would lie.
+// undefined stays undefined (the CLI's own default).
+export function modelOn(backend: Backend, model: string | undefined): string | undefined {
+  if (!model) return undefined;
+  const bare = model.replace(/\[[^\]]*\]$/, "");
+  const onPuku = MODELS.puku.some((m) => m.id === bare);
+  return (backend === "puku") === onPuku ? model : DEFAULT_MODEL[backend];
+}
+
 // "" leaves it to the model's own default. A new thread uses the last card's choice, High at first.
 const DEFAULT_EFFORT: Effort = "high";
 export const EFFORTS: { id: Effort | ""; label: string }[] = [
@@ -142,6 +152,6 @@ export function modelLabel(id: string) {
 }
 
 // The model and effort a card runs on: its own picks, else what its CLI's init reported (lib/cli-defaults.ts).
-export function runningOn(card: Pick<Card, "model" | "effort" | "stats">): { model?: string; effort?: Effort } {
-  return { model: card.model ?? card.stats?.runsOn?.model, effort: card.effort ?? card.stats?.runsOn?.effort };
+export function runningOn(card: Pick<Card, "backend" | "model" | "effort" | "stats">): { model?: string; effort?: Effort } {
+  return { model: modelOn(card.backend, card.model) ?? card.stats?.runsOn?.model, effort: card.effort ?? card.stats?.runsOn?.effort };
 }

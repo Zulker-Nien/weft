@@ -35,6 +35,7 @@ vi.mock("./runner", () => ({
   isBusy: vi.fn((id: string) => busyIds.has(id)),
   endSession: vi.fn(),
   sendMessage: vi.fn(),
+  setModel: vi.fn((id: string, model: string) => Object.assign(store.cards.get(id)!, { model })),
 }));
 
 const busyIds = new Set<string>();
@@ -83,6 +84,34 @@ describe("switchBackend", () => {
     await switchBackend(card.id, "puku");
     expect(runner.endSession).not.toHaveBeenCalled();
     expect(store.updateCalls.length).toBe(0);
+  });
+
+  it("swaps a Claude model for puku's default on a switch to puku", async () => {
+    const card = addCard({ backend: "claude", model: "claude-fable-5-1" });
+    await switchBackend(card.id, "puku");
+    expect(store.cards.get(card.id)!.model).toBe("opus-4.8");
+  });
+
+  it("takes the picked model with the switch", async () => {
+    const card = addCard({ backend: "claude", model: "claude-fable-5-1" });
+    await switchBackend(card.id, "puku", { model: "puku-ai-2.7" });
+    expect(store.cards.get(card.id)!.model).toBe("puku-ai-2.7");
+  });
+
+  it("leaves a card with no model on the new CLI's own default", async () => {
+    const card = addCard({ backend: "claude" });
+    await switchBackend(card.id, "puku");
+    expect(store.cards.get(card.id)!.model).toBeUndefined();
+  });
+
+  it("on the same CLI, only changes the model, busy or not", async () => {
+    const card = addCard({ backend: "puku", model: "opus-4.8" });
+    busyIds.add(card.id);
+    await switchBackend(card.id, "puku", { model: "puku-ai-2.8" });
+    expect(runner.setModel).toHaveBeenCalledWith(card.id, "puku-ai-2.8");
+    expect(runner.endSession).not.toHaveBeenCalled();
+    await switchBackend(card.id, "puku", { model: "puku-ai-2.8" });
+    expect(runner.setModel).toHaveBeenCalledTimes(1);
   });
 
   it("refuses to switch a busy card", async () => {

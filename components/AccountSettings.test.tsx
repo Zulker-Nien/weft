@@ -43,7 +43,7 @@ describe("AccountSettings", () => {
     api.account.mockResolvedValue({ configured: true, user: null });
     setup();
     await userEvent.click(await screen.findByRole("button", { name: "Continue with GitHub" }));
-    expect(api.signIn).toHaveBeenCalledWith("github");
+    expect(api.signIn).toHaveBeenCalledWith("github", "/");
     expect(openExternal).toHaveBeenCalledWith("https://github.com/login/oauth");
     expect(screen.getByText(/Finish signing in with GitHub/)).toBeInTheDocument();
 

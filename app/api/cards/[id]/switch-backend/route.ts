@@ -2,12 +2,14 @@ import { connection } from "next/server";
 import { fail, guard } from "@/lib/guard";
 import { switchBackend } from "@/lib/runner";
 import { getCard } from "@/lib/store";
+import { MODELS } from "@/lib/new-thread";
 import type { Backend } from "@/lib/types";
 
 const BACKENDS: Backend[] = ["claude", "puku"];
 
 // One-click "switch this card's CLI" — used by the right-click menu and the rate-limit banner.
 // replay=true re-sends the last user message, which is what the rate-limit escape hatch wants.
+// model (the thread header's picker) is one of that CLI's MODELS; on the card's own CLI it only changes the model.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const denied = guard(req);
   if (denied) return denied;
@@ -21,7 +23,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (typeof backend !== "string" || !BACKENDS.includes(backend as Backend)) {
       throw new Error(`backend must be one of ${BACKENDS.join(", ")}.`);
     }
-    await switchBackend(id, backend as Backend, { replay: body.replay === true });
+    const model = body.model;
+    if (model !== undefined && (typeof model !== "string" || !MODELS[backend as Backend].some((m) => m.id === model))) {
+      throw new Error(`${typeof model === "string" ? model : "That"} isn't a ${backend} model.`);
+    }
+    await switchBackend(id, backend as Backend, { replay: body.replay === true, model });
     return Response.json({ card: getCard(id) });
   } catch (err) {
     return fail(err);

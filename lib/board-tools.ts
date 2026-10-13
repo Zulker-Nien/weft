@@ -3,6 +3,7 @@ import { z } from "zod";
 import { firstMessage } from "./automations";
 import { markSeen } from "./copilot-digest";
 import { resolveFolder } from "./folders";
+import { restartTool } from "./restart-tool";
 import { asText, clip, firstLine, shortToolName, titleFromPrompt } from "./format";
 import { defaultPermissionMode, touchProject } from "./settings";
 import { createCard, getCard, getThread, listCards, updateCard } from "./store";
@@ -34,8 +35,9 @@ export const SAFE_BOARD_TOOLS = new Set(["list_cards", "read_thread", "create_ca
 export function isTrustedTool(toolName: string, source?: string) {
   if (source !== "sdk") return false;
   // The secrets tools ask for Touch ID themselves, so a permission prompt first would be a second yes.
+  // The webhooks tools only record names and URLs (lib/webhooks.ts); a relay needs the user's own signed-in Weft account.
   // The board view runs a fixed set of operations and never hands back a secret (electron/board-view.cjs).
-  if (["mcp__browser__", "mcp__secrets__", "mcp__board_view__"].some((p) => toolName.startsWith(p))) return true;
+  if (["mcp__browser__", "mcp__secrets__", "mcp__webhooks__", "mcp__board_view__"].some((p) => toolName.startsWith(p))) return true;
   return toolName.startsWith("mcp__board__") && SAFE_BOARD_TOOLS.has(toolName.slice("mcp__board__".length));
 }
 
@@ -95,6 +97,8 @@ export function describeBoardTool(toolName: string, input: Record<string, unknow
       return `Reply to ${label}: ${clip(asText(input.text), 140)}`;
     case "answer_permission":
       return `${input.allow ? "Allow" : "Deny"} ${card?.pending?.title ?? "its request"} on ${label}`;
+    case "restart_weft_when_idle":
+      return "Restart Weft once the running threads finish";
     default:
       return null;
   }
@@ -233,6 +237,7 @@ export function threadBoardMcpServer(
             return `Created and started ${card.id}: ${card.title}`;
           }),
       ),
+      restartTool(),
     ],
   });
 }

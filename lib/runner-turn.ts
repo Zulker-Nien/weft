@@ -9,6 +9,7 @@ import { editedPath, touchFile } from "./overlap";
 import { hitRateLimit } from "./rate-limit";
 import { extractReview } from "./review";
 import { archiveAfter, hooks, queued, safeUpdate, scheduleIdle, type Session } from "./runner-state";
+import { restoreDoneOverride } from "./runner";
 import { withRedacted } from "./secret-run";
 import { extractStatus, type BoardStatus } from "./status";
 import { appendThread, getCard, getThread, replaceThreadItem } from "./store";
@@ -183,6 +184,10 @@ function finishResult(id: string, status: BoardStatus | undefined, stopped: bool
     // A stopped or failed wrap-up isn't filed away; a starred card stays on the board too.
     safeUpdate(id, failed ? { wrappingUp: false } : { column: "done", archived: !getCard(id)?.starred, wrappingUp: false });
   }
+  // Whether the wrap-up succeeded, failed, or was stopped: the /weft:done turn is over, so the model's
+  // and effort's snapshot (if a Done move applied one) is no longer needed. Safe on a card that was
+  // moved to Done by a /weft:done the user typed themselves, where there's no snapshot.
+  restoreDoneOverride(id);
   if (queued.has(id)) {
     if (failed) queued.delete(id);
     // Once the drive loop has handled this result, so the next turn starts on a settled card.

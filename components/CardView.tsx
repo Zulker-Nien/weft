@@ -20,12 +20,17 @@ function FooterMeta({ card, now, alsoHere, marks }: { card: Card; now: number; a
   const copilot = card.role === "copilot";
   const scheduled = card.scheduled ?? [];
   const nextSend = scheduled[0];
+  const puku = card.backend === "puku";
+  const { model, effort } = runningOn(card);
+  const cliTip = `${puku ? "puku-cli" : "Claude Code"}${model ? ` on ${model}${effort ? ` · ${effort} effort` : ""}` : ""}${card.source === "claude-code" ? " · picked up from Claude Code" : ""}`;
   return (
     <span className="flex min-w-0 items-center gap-1.5">
-      <span
-        className={`size-1.5 shrink-0 rounded-full ${card.backend === "puku" ? "bg-puku" : "bg-claude"}`}
-        title={`${card.backend === "puku" ? "puku" : "claude"}${card.source === "claude-code" ? " · picked up from Claude Code" : ""}`}
-      />
+      <span className={`size-1.5 shrink-0 rounded-full ${puku ? "bg-puku" : "bg-claude"}`} title={cliTip} />
+      {model && (
+        <span className={`shrink-0 whitespace-nowrap font-medium ${puku ? "text-puku" : "text-claude"}`} title={cliTip}>
+          {modelLabel(model)}
+        </span>
+      )}
       {copilot ? (
         <span className="flex shrink-0 items-center gap-1 font-medium text-accent" title="The copilot runs the whole board">
           <Icon name="sparkles" size={10} />
@@ -50,10 +55,10 @@ function FooterMeta({ card, now, alsoHere, marks }: { card: Card; now: number; a
       {nextSend ? (
         <span
           className="flex shrink-0 items-center gap-0.5 text-accent"
-          title={`${scheduled.length} message${scheduled.length > 1 ? "s" : ""} scheduled; the next sends ${formatAt(nextSend.at, now)}`}
+          title={`${scheduled.length} message${scheduled.length > 1 ? "s" : ""} scheduled; the next sends ${nextSend.afterRestart ? "after Weft restarts" : formatAt(nextSend.at, now)}`}
         >
-          <Icon name="clock" size={10} />
-          {formatAt(nextSend.at, now)}
+          <Icon name={nextSend.afterRestart ? "reload" : "clock"} size={10} />
+          {nextSend.afterRestart ? "after restart" : formatAt(nextSend.at, now)}
         </span>
       ) : null}
       {card.openElsewhere && (

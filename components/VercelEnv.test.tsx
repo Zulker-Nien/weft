@@ -1,10 +1,23 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { VercelBridge, VercelEnvStatus } from "@/lib/vercel-view";
 import "./test-utils";
-import VercelEnv from "./VercelEnv";
+
+const api = vi.hoisted(() => ({
+  vercelHooks: vi.fn(() => Promise.resolve({ signedIn: true, teams: [] as string[] })),
+  addVercelHook: vi.fn(() => Promise.resolve({ team: "team_a" })),
+  removeVercelHook: vi.fn(() => Promise.resolve({ ok: true as const })),
+}));
+vi.mock("@/lib/client", () => ({ api }));
+
+const { default: VercelEnv } = await import("./VercelEnv");
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  api.vercelHooks.mockResolvedValue({ signedIn: true, teams: [] });
+});
 
 const STATUS: VercelEnvStatus = {
   label: "aimhuge/weft",
@@ -17,14 +30,19 @@ const STATUS: VercelEnvStatus = {
   ],
 };
 
-function setup(over: Partial<VercelBridge> = {}) {
+const PULL_STATUS: VercelEnvStatus = {
+  ...STATUS,
+  rows: [STATUS.rows[1]!, { name: "FROM_VERCEL", environment: "preview", inVault: false, onVercel: true, pullable: true }, { name: "SENSITIVE", environment: "production", inVault: false, onVercel: true }],
+};
+
+function setup(over: Partial<VercelBridge> = {}, team: string | null = null) {
   const bridge = {
     envStatus: vi.fn(() => Promise.resolve(STATUS)),
     envPush: vi.fn(() => Promise.resolve({ pushed: true, project: "weft", label: "aimhuge/weft" })),
     ...over,
   } as unknown as VercelBridge;
   const notify = vi.fn();
-  render(<VercelEnv folder="/dev/weft" bridge={bridge} notify={notify} />);
+  render(<VercelEnv folder="/dev/weft" team={team} bridge={bridge} notify={notify} />);
   return { bridge, notify };
 }
 
@@ -69,5 +87,125 @@ describe("VercelEnv", () => {
     setup({ envStatus: vi.fn(() => Promise.resolve({ ...STATUS, rows: [STATUS.rows[1]!] })) });
     expect(await screen.findByText("All 1 vault secret is on Vercel")).toBeInTheDocument();
     expect(screen.queryByText("GITHUB_CLIENT_ID")).not.toBeInTheDocument();
+  });
+
+  describe("pull", () => {
+    const pullBridge = (result = { label: "aimhuge/weft", project: "weft", pulled: [{ name: "FROM_VERCEL", environment: "preview" as const }], skipped: [] as { name: string; environment: "production" }[] }) => ({
+      envStatus: vi.fn(() => Promise.resolve(PULL_STATUS)),
+      envPull: vi.fn(() => Promise.resolve(result)),
+    });
+
+    it("offers a pull only on a Vercel-only row Vercel will hand back, open by itself", async () => {
+      setup(pullBridge());
+      expect(await screen.findByRole("button", { name: "Vercel only · pull" })).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: "Vercel only · pull" })).toHaveLength(1);
+      expect(screen.getByText("Vercel only")).toBeInTheDocument();
+      expect(screen.getByText("FROM_VERCEL")).toBeInTheDocument();
+    });
+
+    it("shows a plain Vercel only label when this main can't pull", async () => {
+      setup({ envPull: undefined, envStatus: vi.fn(() => Promise.resolve(PULL_STATUS)) });
+      await screen.findByText("FROM_VERCEL");
+      expect(screen.queryByRole("button", { name: "Vercel only · pull" })).not.toBeInTheDocument();
+      expect(screen.getAllByText("Vercel only")).toHaveLength(2);
+    });
+
+    it("pulls, toasts what came down, and reloads", async () => {
+      const bridge = pullBridge();
+      const { notify } = setup(bridge);
+      await userEvent.click(await screen.findByRole("button", { name: "Vercel only · pull" }));
+      await waitFor(() => expect(notify).toHaveBeenCalledWith("Pulled FROM_VERCEL into the aimhuge/weft vault"));
+      expect(bridge.envPull).toHaveBeenCalledWith("/dev/weft");
+      expect(bridge.envStatus).toHaveBeenCalledTimes(2);
+    });
+
+    it("toasts nothing new and the sensitive names left to add by hand", async () => {
+      const { notify } = setup(pullBridge({ label: "aimhuge/weft", project: "weft", pulled: [], skipped: [{ name: "SENSITIVE", environment: "production" }] }));
+      await userEvent.click(await screen.findByRole("button", { name: "Vercel only · pull" }));
+      await waitFor(() => expect(notify).toHaveBeenCalledWith("Nothing new to pull from weft. Sensitive on Vercel, add by hand: SENSITIVE"));
+    });
+
+    it("shows Pulling… while it works, then toasts a failure", async () => {
+      let fail: (e: Error) => void = () => undefined;
+      const bridge = { ...pullBridge(), envPull: vi.fn(() => new Promise<never>((_, reject) => (fail = reject))) };
+      const { notify } = setup(bridge);
+      await userEvent.click(await screen.findByRole("button", { name: "Vercel only · pull" }));
+      expect(await screen.findByRole("button", { name: "Pulling…" })).toBeDisabled();
+      fail(new Error("Vercel answered 500."));
+      await waitFor(() => expect(notify).toHaveBeenCalledWith(new Error("Vercel answered 500.")));
+      expect(await screen.findByRole("button", { name: "Vercel only · pull" })).toBeEnabled();
+    });
+  });
+
+  describe("live pull", () => {
+    const bridge = () => ({ envStatus: vi.fn(() => Promise.resolve(PULL_STATUS)), envPull: vi.fn() });
+
+    it("is off the list for a personal account, or a main that can't pull, without asking", async () => {
+      setup(bridge(), "u_1");
+      await screen.findByText("FROM_VERCEL");
+      setup({ envStatus: vi.fn(() => Promise.resolve(PULL_STATUS)), envPull: undefined }, "team_a");
+      await screen.findAllByText("FROM_VERCEL");
+      expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+      expect(api.vercelHooks).not.toHaveBeenCalled();
+    });
+
+    it("is hidden when there's no Weft account to relay it, or the lookup fails", async () => {
+      api.vercelHooks.mockResolvedValueOnce({ signedIn: false, teams: [] });
+      setup(bridge(), "team_a");
+      await screen.findByText("FROM_VERCEL");
+      await waitFor(() => expect(api.vercelHooks).toHaveBeenCalledTimes(1));
+      expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+    });
+
+    it("stays hidden when the hook lookup fails", async () => {
+      api.vercelHooks.mockRejectedValueOnce(new Error("down"));
+      setup(bridge(), "team_a");
+      await screen.findByText("FROM_VERCEL");
+      await waitFor(() => expect(api.vercelHooks).toHaveBeenCalledTimes(1));
+      expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+    });
+
+    it("shows off for a team with no hook, and turns it on, then reloads", async () => {
+      const b = bridge();
+      const { notify } = setup(b, "team_a");
+      const toggle = await screen.findByRole("switch");
+      expect(screen.getByText("Live pull from Vercel")).toBeInTheDocument();
+      expect(toggle).toHaveAttribute("aria-checked", "false");
+      expect(toggle).toHaveTextContent("off");
+      await userEvent.click(toggle);
+      await waitFor(() => expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "true"));
+      expect(api.addVercelHook).toHaveBeenCalledWith("/dev/weft");
+      expect(screen.getByRole("switch")).toHaveTextContent("on");
+      expect(notify).toHaveBeenCalledWith("Live pull is on: new plain Vercel variables come into the vault as they're added");
+      expect(b.envStatus).toHaveBeenCalledTimes(2);
+    });
+
+    it("shows on for a team that has a hook, and turns it off", async () => {
+      api.vercelHooks.mockResolvedValue({ signedIn: true, teams: ["team_a"] });
+      const { notify } = setup(bridge(), "team_a");
+      const toggle = await screen.findByRole("switch");
+      await waitFor(() => expect(toggle).toHaveAttribute("aria-checked", "true"));
+      await userEvent.click(toggle);
+      await waitFor(() => expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "false"));
+      expect(api.removeVercelHook).toHaveBeenCalledWith("/dev/weft");
+      expect(api.addVercelHook).not.toHaveBeenCalled();
+      expect(notify).toHaveBeenCalledWith("Live pull is off: pull new Vercel variables by hand");
+    });
+
+    it("toasts a failure and leaves the switch where it was", async () => {
+      api.addVercelHook.mockRejectedValueOnce(new Error("Sign in to Weft first"));
+      const { notify } = setup(bridge(), "team_a");
+      await userEvent.click(await screen.findByRole("switch"));
+      await waitFor(() => expect(notify).toHaveBeenCalledWith(new Error("Sign in to Weft first")));
+      expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "false");
+      expect(screen.getByRole("switch")).toBeEnabled();
+    });
+
+    it("is hidden while the list is closed", async () => {
+      setup({ envStatus: vi.fn(() => Promise.resolve({ ...STATUS, rows: [STATUS.rows[1]!] })), envPull: vi.fn() }, "team_a");
+      await screen.findByText("All 1 vault secret is on Vercel");
+      await waitFor(() => expect(api.vercelHooks).toHaveBeenCalled());
+      expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+    });
   });
 });

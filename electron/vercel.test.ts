@@ -296,9 +296,13 @@ describe("registerVercel", () => {
     const handlers = new Map<string, (event: { sender: unknown }, ...args: unknown[]) => unknown>();
     const ipcMain = { handle: (channel: string, fn: (event: { sender: unknown }, ...args: unknown[]) => unknown) => handlers.set(channel, fn) };
     const board = {};
-    const env = { status: vi.fn(), push: vi.fn() };
+    const env = { status: vi.fn(), push: vi.fn(), pull: vi.fn() };
     registerVercel(ipcMain, { vercel: {}, env, isBoard: (s: unknown) => s === board });
     await handlers.get("vercel:env-status")!({ sender: board }, "/a");
+    await handlers.get("vercel:env-pull")!({ sender: board }, "/a");
+    await expect(handlers.get("vercel:env-pull")!({ sender: {} }, "/a")).rejects.toThrow("board window");
+    expect(env.pull).toHaveBeenCalledTimes(1);
+    expect(env.pull).toHaveBeenCalledWith("/a");
     await handlers.get("vercel:env-push")!({ sender: board }, "/a", "KEY", "production");
     await expect(handlers.get("vercel:env-push")!({ sender: {} }, "/a", "KEY", "production")).rejects.toThrow("board window");
     expect(env.status).toHaveBeenCalledWith("/a");

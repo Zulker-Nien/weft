@@ -45,11 +45,12 @@ function setup(status: SupabaseStatus | null, project: string | null = null, err
   const notify = vi.fn();
   const onOpenUrl = vi.fn();
   const onOpenCard = vi.fn();
+  const onStart = vi.fn((): Promise<string | undefined> => Promise.resolve("card-1"));
   const openExternal = vi.fn();
   const splashAction = vi.fn();
   (window as unknown as { threadboard: unknown }).threadboard = { openExternal, splashAction };
-  render(<SupabaseDrawer bridge={b as unknown as SupabaseBridge} status={status} error={error} reload={reload} project={project} cards={cards} onOpenCard={onOpenCard} onOpenUrl={onOpenUrl} notify={notify} />);
-  return { b, reload, notify, onOpenUrl, onOpenCard, openExternal, splashAction };
+  render(<SupabaseDrawer bridge={b as unknown as SupabaseBridge} status={status} error={error} reload={reload} project={project} cards={cards} onOpenCard={onOpenCard} onStart={onStart} onOpenUrl={onOpenUrl} notify={notify} />);
+  return { b, reload, notify, onOpenUrl, onOpenCard, onStart, openExternal, splashAction };
 }
 
 afterEach(() => {
@@ -58,12 +59,12 @@ afterEach(() => {
 
 describe("SupabaseDrawer", () => {
   it("explains itself outside the desktop app, while loading, and on an error", () => {
-    const { rerender } = render(<SupabaseDrawer bridge={null} status={null} error={null} reload={vi.fn()} project={null} cards={[]} onOpenCard={vi.fn()} onOpenUrl={vi.fn()} notify={vi.fn()} />);
+    const { rerender } = render(<SupabaseDrawer bridge={null} status={null} error={null} reload={vi.fn()} project={null} cards={[]} onOpenCard={vi.fn()} onStart={vi.fn()} onOpenUrl={vi.fn()} notify={vi.fn()} />);
     expect(screen.getByText(/desktop app/)).toBeInTheDocument();
     const b = bridge() as unknown as SupabaseBridge;
-    rerender(<SupabaseDrawer bridge={b} status={null} error={null} reload={vi.fn()} project={null} cards={[]} onOpenCard={vi.fn()} onOpenUrl={vi.fn()} notify={vi.fn()} />);
+    rerender(<SupabaseDrawer bridge={b} status={null} error={null} reload={vi.fn()} project={null} cards={[]} onOpenCard={vi.fn()} onStart={vi.fn()} onOpenUrl={vi.fn()} notify={vi.fn()} />);
     expect(screen.getByText("Asking Supabase…")).toBeInTheDocument();
-    rerender(<SupabaseDrawer bridge={b} status={null} error="offline" reload={vi.fn()} project={null} cards={[]} onOpenCard={vi.fn()} onOpenUrl={vi.fn()} notify={vi.fn()} />);
+    rerender(<SupabaseDrawer bridge={b} status={null} error="offline" reload={vi.fn()} project={null} cards={[]} onOpenCard={vi.fn()} onStart={vi.fn()} onOpenUrl={vi.fn()} notify={vi.fn()} />);
     expect(screen.getByText("offline")).toBeInTheDocument();
   });
 
@@ -109,12 +110,22 @@ describe("SupabaseDrawer", () => {
     const owner = { id: "c1", title: "Profiles table", touchedFiles: ["/dev/web/supabase/migrations/20261011_add_profiles.sql"], updatedAt: 2 } as Card;
     const pending = ["add_profiles", "add_notes", "add_tags"];
     const { onOpenCard } = setup(signedIn([{ ...LINKED, link: { ...LINKED.link!, pending } }]), "/dev/web", null, [owner]);
-    expect(para("3 of 3 migrations not applied: add_profiles, add_notes, …")).toHaveClass("text-warn");
+    expect(para("3 of 3 migrations not applied: add_profiles, add_notes, …Migrate")).toHaveClass("text-warn");
     expect(screen.queryByRole("button", { name: "add_notes" })).not.toBeInTheDocument();
     const link = screen.getByRole("button", { name: "add_profiles" });
     expect(link).toHaveAttribute("title", "Open the card that wrote it: Profiles table");
     await userEvent.click(link);
     expect(onOpenCard).toHaveBeenCalledWith(owner);
+  });
+
+  it("starts a Migrate card for pending or drifted migrations, and reports one that fails to start", async () => {
+    const drift = [{ name: "hooks", local: "1", remote: "2" }];
+    const { onStart, notify } = setup(signedIn([{ ...LINKED, link: { ...LINKED.link!, pending: [], drift } }]), "/dev/web");
+    expect(para("3 migrations, all applied; 1 under another versionMigrate")).toHaveClass("text-warn");
+    onStart.mockRejectedValueOnce(new Error("busy"));
+    await userEvent.click(screen.getByRole("button", { name: "Migrate" }));
+    expect(onStart).toHaveBeenCalledWith("/dev/web", expect.stringContaining("- hooks: local file 1_hooks.sql, applied as 2"), "Migrate web's Supabase");
+    await waitFor(() => expect(notify).toHaveBeenCalledWith(new Error("busy")));
   });
 
   it("shows a linked project: its state, API URL, migrations and dashboard links", async () => {
@@ -124,7 +135,7 @@ describe("SupabaseDrawer", () => {
     expect(screen.getByText("Healthy")).toBeInTheDocument();
     expect(screen.getByText("us-east-1")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Restore" })).not.toBeInTheDocument();
-    expect(para("1 of 3 migrations not applied: add_profiles")).toHaveClass("text-warn");
+    expect(para("1 of 3 migrations not applied: add_profilesMigrate")).toHaveClass("text-warn");
     expect(screen.queryByRole("button", { name: "add_profiles" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: `${REF}.supabase.co` }));
     expect(onOpenUrl).toHaveBeenCalledWith(`https://supabase.com/dashboard/project/${REF}`);

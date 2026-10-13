@@ -2,7 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { publish } from "./bus";
 import { DATA_DIR } from "./store";
-import { MODES, type Automation, type Backend, type PermissionMode, type Project, type SettingsView } from "./types";
+import { backendFor, EFFORTS } from "./new-thread";
+import { MODES, type Automation, type Backend, type Effort, type PermissionMode, type Project, type SettingsView } from "./types";
 import { globalSingleton } from "./global-singleton";
 import { isSubagentModel, type SubagentModel } from "./subagents";
 
@@ -39,6 +40,11 @@ interface Settings {
   pushOnDone?: boolean;
   // The model board threads' subagents run on; unset means the thread picks per subagent (lib/subagents.ts).
   subagentModel?: SubagentModel;
+  // The model /weft:done runs on; "" means use the card's own model. Applies to cards on the CLI that serves it
+  // (the done skill's puku-agent fan-out is unchanged). See lib/automations.ts doneOverrides.
+  doneModel?: string;
+  // The effort /weft:done runs on; "" means use the card's own effort.
+  doneEffort?: Effort;
   projects: Project[];
   // Claude Code sessions whose cards were deleted, so syncing doesn't bring them back.
   dismissedSessions?: string[];
@@ -58,6 +64,8 @@ function settings(): Settings {
       automations: saved.automations,
       pushOnDone: saved.pushOnDone,
       subagentModel: saved.subagentModel,
+      doneModel: saved.doneModel,
+      doneEffort: saved.doneEffort,
       projects: saved.projects ?? [],
       dismissedSessions: saved.dismissedSessions ?? [],
       issueFolders: saved.issueFolders ?? [],
@@ -139,6 +147,40 @@ export function setSubagentModel(model: SubagentModel) {
   save();
 }
 
+// Any model either CLI serves; it applies to cards on that CLI (lib/automations.ts doneOverrides).
+// "" means use the card's own model.
+function isDoneModel(value: unknown): value is string {
+  return value === "" || (typeof value === "string" && backendFor(value) !== undefined);
+}
+
+// "" is the default, so the setting reads as "use the card's own model".
+export function doneModel(): string {
+  const saved = settings().doneModel;
+  return isDoneModel(saved) ? saved : "";
+}
+
+// Empty string restores the default (no override).
+export function setDoneModel(model: string) {
+  settings().doneModel = model === "" ? undefined : model;
+  save();
+}
+
+function isDoneEffort(value: unknown): value is Effort | "" {
+  if (value === "") return true;
+  return EFFORTS.some((e) => e.id === value);
+}
+
+// "" is the default ("use the card's own effort").
+export function doneEffort(): Effort | "" {
+  const saved = settings().doneEffort;
+  return isDoneEffort(saved) ? saved : "";
+}
+
+export function setDoneEffort(effort: Effort | "") {
+  settings().doneEffort = effort === "" ? undefined : effort;
+  save();
+}
+
 export function dismissedSessions(): string[] {
   return settings().dismissedSessions ?? [];
 }
@@ -193,6 +235,8 @@ export function settingsView(): SettingsView {
     automations: automations(),
     pushOnDone: pushOnDone(),
     subagentModel: subagentModel(),
+    doneModel: doneModel(),
+    doneEffort: doneEffort(),
     projects: listProjects(),
   };
 }

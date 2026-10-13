@@ -109,17 +109,24 @@ function createSupabase({ dataDir, safeStorage, vault = null, fetch: fetchImpl =
     return orgs;
   }
 
-  // A linked project, and its local migrations Supabase hasn't applied (null when it can't say).
+  // A linked project, and its local migrations Supabase hasn't applied (null when it can't say). A migration
+  // applied under another version (the MCP's apply_migration stamps its own) counts as applied, by name, and
+  // lands in drift so the local file can be renamed to match.
   async function linkedStatus(link, local) {
     const project = projectRow(await call(`/v1/projects/${link.ref}`), await organizations());
     let pending = null;
+    let drift = [];
     if (local.length) {
       try {
-        const applied = new Set((await call(`/v1/projects/${link.ref}/database/migrations`)).map((m) => String(m.version)));
-        pending = local.filter((m) => !applied.has(m.version)).map((m) => m.name);
+        const remote = (await call(`/v1/projects/${link.ref}/database/migrations`)).map((m) => ({ version: String(m.version), name: m.name }));
+        const versions = new Set(remote.map((m) => m.version));
+        const byName = new Map(remote.map((m) => [m.name, m.version]));
+        const unmatched = local.filter((m) => !versions.has(m.version));
+        drift = unmatched.filter((m) => byName.has(m.name)).map((m) => ({ name: m.name, local: m.version, remote: byName.get(m.name) }));
+        pending = unmatched.filter((m) => !byName.has(m.name)).map((m) => m.name);
       } catch {}
     }
-    return { ...project, source: link.source, url: `https://${link.ref}.supabase.co`, pending };
+    return { ...project, source: link.source, url: `https://${link.ref}.supabase.co`, pending, drift };
   }
 
   return {
