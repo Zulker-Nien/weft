@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Review-stack triage</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+         margin: 0; padding: 24px; max-width: 880px; margin-inline: auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: #666; margin: 0 0 24px; }
+  h2 { font-size: 16px; margin: 28px 0 8px; padding-top: 8px; border-top: 1px solid #ddd; }
+  h2:first-of-type { border-top: 0; padding-top: 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+  th { background: #f5f5f7; }
+  code { font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; background: #f0f0f3; padding: 1px 5px; border-radius: 3px; }
+  .ok { color: #18794e; }
+  .warn { color: #b54708; }
+  .pill { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .p-green { background: #d1f4d8; color: #14532d; }
+  .p-yellow { background: #fef0c7; color: #7a4f01; }
+  .p-blue { background: #dbeafe; color: #1e3a8a; }
+  .p-stale { background: #f3f4f6; color: #374151; }
+  .p-other { background: #fae8ff; color: #6b21a8; }
+  footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #ddd; color: #888; font-size: 12px; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #15131a; color: #e6e1ea; }
+    th { background: #1f1d24; }
+    th, td { border-bottom-color: #2a2730; }
+    code { background: #2a2730; }
+    h2 { border-top-color: #2a2730; }
+  }
+</style>
+</head>
+<body>
+  <h1>Review-stack triage</h1>
+  <p class="sub">47 cards in Review, walked once and grouped by what they need. Nothing on the board was changed.</p>
+
+  <h2><span class="pill p-green">Green</span> Archive-ready (6) — work committed &amp; pushed, just sitting in Review</h2>
+  <table>
+    <thead><tr><th>ID</th><th>Card</th><th>Project</th><th>Evidence</th></tr></thead>
+    <tbody>
+      <tr><td><code>8a5454f3</code></td><td>🛑 Stopped before continuing the task</td><td>weft</td><td><span class="ok">committed <code>8553e25</code> and pushed</span></td></tr>
+      <tr><td><code>0a6c5944</code></td><td>🐛 Fix fable→puku switch crashing on xhigh effort</td><td>weft</td><td><span class="ok">3130/3130, lint clean</span></td></tr>
+      <tr><td><code>419a051b</code></td><td>🐙 GitHub drawer and issue sync in left rail</td><td>weft</td><td><span class="ok">committed and pushed as <code>8e5f357</code></span></td></tr>
+      <tr><td><code>a4db482f</code></td><td>Test the weft-callback route (coverage hole)</td><td>weft</td><td><span class="ok">stage already says Done</span></td></tr>
+      <tr><td><code>5a73b757</code></td><td>🏷️ Show model and effort in thread header chip</td><td>weft</td><td><span class="warn">borderline — no remaining work, but a one-look check is worth it</span></td></tr>
+      <tr><td><code>e1c232af</code></td><td>🔀 Clarify card folder selection and cross-repo friction</td><td>weft</td><td><span class="ok">design sketch, no remaining</span></td></tr>
+    </tbody>
+  </table>
+  <p><strong>To close:</strong> drag each row to Done in the board. Weft queues <code>weft:done</code> on each (intentional close-out, not silent archive).</p>
+
+  <h2><span class="pill p-yellow">Yellow</span> Needs your input (8) — real decisions, not work</h2>
+  <ul>
+    <li><code>696286f7</code> 🔐 Set up GitHub sign-in for Weft Prod</li>
+    <li><code>14986617</code> 🎟️ Puku trial — blocked on which running card to continue</li>
+    <li><code>37c9b89b</code> 📧 Forward weft.zip mail — needs the Full access Resend key</li>
+    <li><code>865f8e9e</code> 🗂️ Route Co-Pilot cards — your review + ⌘J decision</li>
+    <li><code>fca7d8a0</code> 📦 Build signed arm64 DMG — try the DMG, git/gh decision</li>
+    <li><code>b0c04b42</code> 🔒 Symbol claims — live two-card check</li>
+    <li><code>5348020f</code> 🌐 Weft domain — pick domain, name conflict</li>
+    <li><code>5d8f4f70</code> Hosting 1000+ lead generation sites — no project folder, just a question</li>
+  </ul>
+  <p>Left in Review where you'll see them. None of them were touched.</p>
+
+  <h2><span class="pill p-blue">Blue</span> Needs a commit (work done, not committed)</h2>
+  <p>Cross-repo, which is why I asked before acting:</p>
+  <ul>
+    <li><strong>weft</strong>: Import guard, busy-folder trim, Prefill Add-key form, Supabase-project-from-screenshot, Cloudflare drawer, Supabase migrations link, Weft home page, Subagent settings</li>
+    <li><strong>blastcp</strong>: Extract teams/invites, Set up test coverage, plus several small commit-pile-style cards</li>
+    <li><strong>groovenfill</strong>: full-screen tab mode, brand voice, and others</li>
+  </ul>
+  <p>Suggested pattern: a "Walk the Review commit pile" card per repo. Safer than committing cross-repo from one Weft card.</p>
+
+  <h2><span class="pill p-stale">Stale</span> / blocked</h2>
+  <ul>
+    <li><code>8f229974</code> triplet and swing drum charts — session limit, in a worktree not reachable from here</li>
+    <li><code>31529127</code> Drumming channel — points at a scratch-workspace path</li>
+    <li><code>ef5b34ac</code> 🔗 Verify aimhuge auth wiring (deckcp) — Stopped</li>
+    <li><code>e80df1</code> check out @aimhuge/components (weft) — Stopped</li>
+    <li><code>e2dd0e43</code>, <code>81f3eebf</code> — two "how do I switch models" cards, already answered</li>
+  </ul>
+  <p>Left alone per your call.</p>
+
+  <h2><span class="pill p-other">Other-project questions</span> (no code change)</h2>
+  <p>~12 blastcp research/planning cards (LinkedIn Pages, X/Bluesky, Hootsuite gap, Buffer gap, etc.) — pure research, no commits possible.</p>
+
+  <h2>Why I didn't move any cards</h2>
+  <ol>
+    <li><code>mcp__board__*</code> exposes only <code>list_cards</code> and <code>create_card</code> to a card. No move tool.</li>
+    <li>The Bash pre-tool hook denies <code>curl</code> to localhost. Deliberate: the Weft API can start turns, so the guard blocks card-driven API calls. I should not bypass it.</li>
+  </ol>
+  <p>Doing it through the UI (drag to Done) is the right path — the <code>weft:done</code> automation runs on each card as it lands, which is the intended close-out flow.</p>
+
+  <footer>Card <code>c91e2942</code> · turn ended without state changes.</footer>
+</body>
+</html>
