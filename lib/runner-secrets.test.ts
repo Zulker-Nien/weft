@@ -80,3 +80,23 @@ describe("tool results of a card that used vault secrets", () => {
     expect(fetchMock.mock.calls.map(([url]) => url)).not.toContain(REDACT_URL);
   });
 });
+
+describe("a thread's ask for a key", () => {
+  it("is marked on its tool item, so the thread draws an input there", async () => {
+    makeCard(h, cwd, { id: "c3" });
+    const q = await send("c3");
+    q.emit(assistant(toolUse("t3", "mcp__secrets__ask_add", { name: "SUPABASE_SECRET_KEY", environment: "preview" })));
+    q.emit(toolResultMsg("t3", "ok"));
+    await flush(3);
+    expect(toolItem("c3")).toMatchObject({ id: "t3", result: "ok", ask: { folder: cwd, name: "SUPABASE_SECRET_KEY", environment: "preview" } });
+  });
+
+  it("isn't marked when the name can't be a secret's", async () => {
+    makeCard(h, cwd, { id: "c4" });
+    const q = await send("c4");
+    q.emit(assistant(toolUse("t4", "mcp__secrets__ask_add", { name: "1 bad" })));
+    await flush();
+    expect(toolItem("c4")).toMatchObject({ id: "t4" });
+    expect(toolItem("c4")).not.toHaveProperty("ask");
+  });
+});

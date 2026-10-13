@@ -7,6 +7,7 @@ import CrashGuard from "./CrashGuard";
 import Icon, { Spinner } from "./Icon";
 import Markdown from "./Markdown";
 import MediaView from "./MediaView";
+import SecretAskInput from "./SecretAskInput";
 
 type ToolCall = Extract<ThreadItem, { kind: "tool" }>;
 type Permission = Extract<ThreadItem, { kind: "permission" }>;
@@ -24,7 +25,8 @@ export function groupThread(items: readonly (ThreadItem | null | undefined)[]): 
   const entries: Entry[] = [];
   items.forEach((item, key) => {
     if (!item) return;
-    const folds = item.kind === "tool" || (item.kind === "permission" && !item.answer);
+    // A thread's ask for a key stays out too: it's an input the user fills in (SecretAskInput).
+    const folds = (item.kind === "tool" && !item.ask) || (item.kind === "permission" && !item.answer);
     const last = entries[entries.length - 1];
     if (!folds) entries.push({ kind: "item", item, key });
     else if (last?.kind === "tools") last.calls.push(item);
@@ -238,17 +240,20 @@ function seconds(ms: number) {
 }
 
 // A thread's messages and tool runs, then the reply streaming in. While ↑ edits a message (editFrom is
-// its index), that message is outlined and the turn it will replace, everything after it, fades.
+// its index), that message is outlined and the turn it will replace, everything after it, fades. onSend lets
+// a key the thread asked for tell it once the key is in the vault.
 export function ThreadEntries({
   entries,
   live,
   streaming,
   editFrom,
+  onSend,
 }: {
   entries: Entry[];
   live: boolean;
   streaming: string;
   editFrom?: number;
+  onSend?: (text: string) => Promise<void>;
 }) {
   return (
     <>
@@ -256,7 +261,13 @@ export function ThreadEntries({
         // One message that fails to draw is a chip in its place; the rest of the thread and the reply box stay.
         const row = (
           <CrashGuard key={entry.key} inline what={entry.kind === "tools" ? "tool run" : "message"} className="self-start">
-            {entry.kind === "tools" ? <ToolRun calls={entry.calls} live={live} /> : <ThreadMessage item={entry.item} />}
+            {entry.kind === "tools" ? (
+              <ToolRun calls={entry.calls} live={live} />
+            ) : entry.item.kind === "tool" && entry.item.ask ? (
+              <SecretAskInput ask={entry.item.ask} onAdded={onSend} />
+            ) : (
+              <ThreadMessage item={entry.item} />
+            )}
           </CrashGuard>
         );
         if (editFrom === undefined || entry.key < editFrom) return row;

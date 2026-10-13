@@ -92,7 +92,7 @@ export default function ThreadView({
         className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4"
       >
         {entries.length === 0 && !live && empty}
-        <ThreadEntries entries={entries} live={live} streaming={streaming} editFrom={editFrom} />
+        <ThreadEntries entries={entries} live={live} streaming={streaming} editFrom={editFrom} onSend={send} />
         {card.column === "running" && !streaming && (
           <div className="flex items-center gap-2 text-[12px] text-muted">
             <Spinner size={12} /> Working…

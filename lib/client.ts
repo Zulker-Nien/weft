@@ -43,7 +43,7 @@ export interface BrowserState {
 
 // What the app menu, dock, tray, global shortcuts and weft:// links ask a window to do.
 // open-card carries an id.
-export type MenuAction = "new-thread" | "settings" | "open-card" | "find" | "terminal" | "add-secret" | "add-webhook";
+export type MenuAction = "new-thread" | "settings" | "open-card" | "find" | "terminal" | "add-webhook";
 
 // Exposed by electron/preload.cjs; absent when the board runs in a normal browser tab.
 export interface ShellBridge {

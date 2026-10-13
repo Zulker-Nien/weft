@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  askedVault,
-  parseSecretAsk,
+  askAnswered,
+  secretAskOf,
   blankTitle,
   canManage,
   manageOffer,
@@ -217,21 +217,25 @@ describe("vault view", () => {
     ]);
   });
 
-  it("reads a thread's ask for a secret, and opens it in the asked folder's vault", () => {
-    expect(parseSecretAsk(JSON.stringify({ folder: "/a", name: "SUPABASE_SECRET_KEY", environment: "preview" }))).toEqual({
-      folder: "/a",
+  it("reads a thread's ask_add call, and whether its folder's vault has the value", () => {
+    expect(secretAskOf("mcp__secrets__ask_add", { name: "SUPABASE_SECRET_KEY", environment: "preview" }, "/cwd")).toEqual({
+      folder: "/cwd",
       name: "SUPABASE_SECRET_KEY",
       environment: "preview",
     });
-    expect(parseSecretAsk(JSON.stringify({ folder: "/a", name: "K", environment: "staging" }))?.environment).toBe("development");
-    for (const bad of [undefined, "", "{nope", "null", JSON.stringify({ folder: "/a", name: "1BAD" }), JSON.stringify({ name: "K" })]) expect(parseSecretAsk(bad)).toBeUndefined();
+    expect(secretAskOf("mcp__secrets__ask_add", { name: "K", environment: "staging", project: "/other" }, "/cwd")).toEqual({ folder: "/other", name: "K", environment: "development" });
+    expect(secretAskOf("mcp__secrets__ask_add", { name: "K", project: "" }, "/cwd")?.folder).toBe("/cwd");
+    expect(secretAskOf("mcp__secrets__ask_add", { name: "1BAD" }, "/cwd")).toBeUndefined();
+    expect(secretAskOf("mcp__secrets__ask_add", {}, "/cwd")).toBeUndefined();
+    expect(secretAskOf("Bash", { name: "K" }, "/cwd")).toBeUndefined();
 
-    const a = vault({ id: "a", folder: "/a", folders: ["/a"] });
-    const b = vault({ id: "b", folder: "/b", folders: ["/b"] });
-    expect(askedVault([a, b], [a], "/b")).toBe(b);
-    expect(askedVault([a, b], [a], "/nope")).toBe(a);
-    expect(askedVault([a, b], [b])).toBe(b);
-    expect(askedVault([a, b], [])).toBeUndefined();
+    const secret = (name: string, environment: VaultSecret["environment"], missing: boolean): VaultSecret => ({ name, environment, missing, tail: "", updatedAt: "" });
+    const a = vault({ id: "a", folder: "/a", folders: ["/a", "/a2"], secrets: [secret("K", "development", false), secret("B", "development", true)] });
+    const ask = { folder: "/a2", name: "K", environment: "development" as const };
+    expect(askAnswered([a], ask)).toBe(true);
+    expect(askAnswered([a], { ...ask, environment: "production" })).toBe(false);
+    expect(askAnswered([a], { ...ask, name: "B" })).toBe(false);
+    expect(askAnswered([a], { ...ask, folder: "/nope" })).toBe(false);
   });
 
   it("says whether a copy added or replaced", () => {

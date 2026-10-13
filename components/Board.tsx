@@ -40,7 +40,6 @@ import type { PaletteItem } from "./CommandPalette";
 import { boardPaletteItems, promptItems } from "./board-palette";
 import { boardShortcuts } from "./board-shortcuts";
 import { addSecret } from "@/lib/use-vault";
-import { parseSecretAsk } from "@/lib/vault-view";
 import { addWebhookAsk } from "@/lib/use-webhooks";
 import { parseWebhookAsk } from "@/lib/webhooks-view";
 import Icon from "./Icon";
@@ -379,10 +378,6 @@ export default function Board() {
           break;
         case "terminal":
           toggleTerminal();
-          break;
-        // A thread asked for a key the vault doesn't have: the 🔐 Add form with its name filled in.
-        case "add-secret":
-          addSecret(setLibraryOpen, parseSecretAsk(payload));
           break;
         // A thread added a webhook for you to register: the 🪝 drawer opens on its row.
         case "add-webhook":

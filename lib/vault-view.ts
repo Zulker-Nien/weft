@@ -253,31 +253,26 @@ export function filterVaults(vaults: VaultSummary[], folder: string | null) {
   return vaults.filter((v) => v.folders.includes(folder));
 }
 
-// A thread asking for a secret it needs (mcp__secrets__ask_add, or a fill or run that found it missing): the
-// plain Add form opens with the name filled in, in the card's project's vault.
+// A thread asking for a key it's blocked on (mcp__secrets__ask_add): the thread shows an input for it in place of
+// the tool call (components/SecretAskInput.tsx), so the user pastes the value where they're already reading.
 export interface SecretAsk {
   folder: string;
   name: string;
   environment: VaultEnvironment;
 }
 
-// The ask in main's "add-secret" message; undefined when there's none or it's malformed (the empty form opens).
-export function parseSecretAsk(payload: string | undefined): SecretAsk | undefined {
-  if (!payload) return undefined;
-  let ask: Partial<SecretAsk> | null;
-  try {
-    ask = JSON.parse(payload) as Partial<SecretAsk> | null;
-  } catch {
-    return undefined;
-  }
-  if (typeof ask?.folder !== "string" || typeof ask.name !== "string" || !validName(ask.name)) return undefined;
-  const environment = ENVIRONMENTS.find((e) => e.id === ask.environment)?.id ?? "development";
-  return { folder: ask.folder, name: ask.name, environment };
+// The ask in an mcp__secrets__ask_add call, read by lib/runner-turn.ts as the call arrives; folder is the
+// card's own unless the call names another project. undefined for any other tool or a malformed call.
+export function secretAskOf(tool: string, input: Record<string, unknown>, cwd: string): SecretAsk | undefined {
+  if (tool !== "mcp__secrets__ask_add" || typeof input.name !== "string" || !validName(input.name)) return undefined;
+  const environment = ENVIRONMENTS.find((e) => e.id === input.environment)?.id ?? "development";
+  return { folder: typeof input.project === "string" && input.project ? input.project : cwd, name: input.name, environment };
 }
 
-// The vault an Add form opens in: the asked folder's, else the first one the filter shows.
-export function askedVault(vaults: VaultSummary[], shown: VaultSummary[], folder?: string): VaultSummary | undefined {
-  return (folder ? vaults.find((v) => v.folders.includes(folder)) : undefined) ?? shown[0];
+// Whether the ask's name has a value in its folder's vault, for that environment.
+export function askAnswered(vaults: VaultSummary[], ask: SecretAsk): boolean {
+  const v = vaults.find((x) => x.folders.includes(ask.folder));
+  return Boolean(v?.secrets.some((s) => s.name === ask.name && s.environment === ask.environment && !s.missing));
 }
 
 // The filter's choices: every project's vault by name, after "All projects".

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { attempt, shell, text } from "./browser-tools";
 import { asText } from "./format";
 import { globalSingleton } from "./global-singleton";
-import { askToAdd, missingText } from "./secret-ask";
+import { addMissingBlank, missingText } from "./secret-ask";
 import { checkCommand, checkNames, packageScript, resolveCwd } from "./secret-command";
 import { shellToken } from "./shell-token";
 
@@ -110,10 +110,10 @@ export function runTool(cardId: () => string | undefined, folder: () => string, 
           timeoutMs,
         })) as RunReply;
         const missing = r.missing ?? [];
-        const [first] = missing;
-        if (first) {
+        if (missing.length) {
           const env = environment ?? "development";
-          return text(missingText(missing, env, asText(r.label, "this"), await askToAdd(root, first, env)), true);
+          const added = await Promise.all(missing.map((name) => addMissingBlank(root, name, env)));
+          return text(missingText(missing, env, asText(r.label, "this"), added.every(Boolean)), true);
         }
         if (!r.denied) markInUse(key);
         const { said, failed } = describeRun(command.trim(), r);

@@ -79,13 +79,11 @@ const pane = createBrowserPane({
     ...require("./account-store.cjs").accountRoutesFor(dataDir()),
     // mcp__secrets__add_blank and set_value: blanks into the card's vault, and a value a thread generated into one.
     ...require("./vault-routes.cjs").vaultRoutes(() => vault),
-    // mcp__secrets__ask_add, and a fill or run that found a key missing: the name goes in as a blank, then the
-    // 🔐 drawer opens on its Add form with the name filled in (lib/secret-ask.ts); the board checks the ask
-    // (lib/vault-view.ts parseSecretAsk).
+    // mcp__secrets__ask_add, and a fill or run that found a key missing: the name goes in as a blank
+    // (lib/secret-ask.ts). The ask's input shows in the thread itself (components/SecretAskInput.tsx).
     "POST /secrets/ask-add": async ({ folder, name, environment }) => {
       await vault?.addBlanks(String(folder), [String(name)], [String(environment || "development")], { source: "a thread" }).catch(() => null);
-      sendMenu("add-secret", JSON.stringify({ folder, name, environment }));
-      return { opened: true };
+      return { added: true };
     },
     "POST /app/restart": ({ then }) => require("./restart-when-idle.cjs").restartFor({ then, updater: menus.updater, app }), // the server's restart when idle, once nothing runs
     "POST /webhooks/ask-add": ({ folder, id }) => (sendMenu("add-webhook", JSON.stringify({ folder, id })), { ok: true }), // mcp__webhooks__ask_add: the board opens 🪝 on a recorded webhook

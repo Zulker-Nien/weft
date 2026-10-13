@@ -88,18 +88,21 @@ describe("runTool", () => {
     reply({ denied: true, label: "o/r" });
     const r = await run.handler({ command: "npm run job", names: ["K"] });
     expect([r.isError, said(r)]).toEqual([true, "The user didn't approve running npm run job with secrets. Ask before trying again."]);
-    // Missing names open the 🔐 Add form on the first; if the board can't, the thread is told where to add them.
+    // Missing names go in as blanks, and the thread is told ask_add asks for them in the thread; if main can't be
+    // reached, it's told where the user adds them.
     reply({ missing: ["A"], label: "o/r" });
-    reply({ opened: true });
+    reply({ added: true });
     expect(said(await run.handler({ command: "npm run job", names: ["A"], environment: "preview" }))).toBe(
-      "A has no value in the o/r vault (preview). Weft opened the 🔐 Add form with A filled in: ask the user to paste its value there and click Add to vault, then try again.",
+      "A has no value in the o/r vault (preview). It's a blank there now. If you're blocked on it, call mcp__secrets__ask_add for A and end your turn: the user gets an input for it in this thread and tells you once it's in.",
     );
     expect(sent(2)).toEqual({ url: "http://127.0.0.1:4567/secrets/ask-add", body: { folder: proj, name: "A", environment: "preview" } });
     reply({ missing: ["A", "B"] });
-    reply({ opened: true });
-    expect(said(await run.handler({ command: "npm run job", names: ["A", "B"] }))).toMatch(/with A filled in: .* After that, call mcp__secrets__ask_add for B\.$/);
+    reply({ added: true });
+    reply({ added: true });
+    expect(said(await run.handler({ command: "npm run job", names: ["A", "B"] }))).toMatch(/They're blanks there now\. .*ask_add for each/);
     reply({ missing: ["A", "B"] });
     reply({ error: "no board" }, false);
+    reply({ added: true });
     expect(said(await run.handler({ command: "npm run job", names: ["A", "B"] }))).toBe(
       "A, B have no value in the this vault (development). Ask the user to add them with 🔐 on the left rail.",
     );

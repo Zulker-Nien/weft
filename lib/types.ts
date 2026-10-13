@@ -1,4 +1,5 @@
 import type { SubagentModel } from "./subagents";
+import type { SecretAsk } from "./vault-view";
 
 export const COLUMNS = [
   { id: "backlog", label: "Backlog" },
@@ -241,6 +242,8 @@ export type ThreadItem =
       // URLs of images the tool returned, like a screenshot.
       images?: string[];
       isError?: boolean;
+      // An mcp__secrets__ask_add call: the thread shows an input for this key in its place (lib/vault-view.ts).
+      ask?: SecretAsk;
     }
   | {
       kind: "permission";

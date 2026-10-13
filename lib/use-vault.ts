@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { IDLE_LOCK_MS, vaultBridge, type SecretAsk, type VaultOverview } from "./vault-view";
+import { IDLE_LOCK_MS, vaultBridge, type VaultOverview } from "./vault-view";
 
 // The vaults of the board's folders, from Electron main. Loads again when the folders change and when
 // the window comes back into focus, so the rail's nudge notices a .env.local edited in another app.
@@ -29,22 +29,20 @@ export function useVault(folders: string[]) {
   return { bridge, overview, error, reload };
 }
 
-// ⇧S, the palette's Add a secret, and a thread asking for a key (ask: the name to fill in, from main's
-// "add-secret" message): open the 🔐 drawer and ask it for its Add form. The drawer may not be open yet, or
-// still loading its vaults, so the ask waits for a taker (onSecretAsk) that can serve it.
-type Taker = (ask?: SecretAsk) => boolean;
-let pending: { ask?: SecretAsk } | null = null;
-let secretTaker: Taker | null = null;
+// ⇧S and the palette's Add a secret: open the 🔐 drawer and ask it for its Add form. The drawer may not be
+// open yet, or still loading its vaults, so the ask waits for a taker (onSecretAsk) that can serve it.
+let secretAsked = false;
+let secretTaker: (() => boolean) | null = null;
 
-export function addSecret(openDrawer: (panel: "vault") => void, ask?: SecretAsk) {
+export function addSecret(openDrawer: (panel: "vault") => void) {
   openDrawer("vault");
-  pending = secretTaker?.(ask) ? null : { ask };
+  secretAsked = !secretTaker?.();
 }
 
 // The drawer's taker opens its Add form and says whether it could; the returned function unsubscribes.
-export function onSecretAsk(take: Taker): () => void {
+export function onSecretAsk(take: () => boolean): () => void {
   secretTaker = take;
-  if (pending && take(pending.ask)) pending = null;
+  if (secretAsked) secretAsked = !take();
   return () => {
     if (secretTaker === take) secretTaker = null;
   };

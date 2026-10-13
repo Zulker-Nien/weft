@@ -5,19 +5,19 @@ import { asText } from "./format";
 
 // A key a thread needs that isn't in the 🔐 vault yet (docs/architecture/secrets.md). By default the thread
 // puts its name in as a blank (mcp__secrets__add_blank): the rail's 🔐 counts it and the user fills it in when
-// they're ready. Blocked on it now, the thread asks (mcp__secrets__ask_add): Electron main adds the blank and
-// opens the drawer on its Add form with the name filled in (the board's "add-secret" message, lib/use-vault.ts),
-// so the user only pastes the value. The value never comes back to the thread.
+// they're ready. Blocked on it now, the thread asks (mcp__secrets__ask_add): Electron main adds the blank, and the
+// thread shows an input for that key in place of the call (components/SecretAskInput.tsx), so the user pastes the
+// value where they're already reading. The value goes from that input to Electron main, never back to the thread.
 
-export const ASK_PROMPT = `When the work needs a secret that isn't in the vault yet (code reads process.env.SOMETHING, an SDK or service wants a key, a dashboard step needs a client secret), put each name in the 🔐 vault as a blank right away with mcp__secrets__add_blank, with a hint for where to get its value. Do it as soon as you know the name, before you need the value, and keep going with what doesn't need it: the user sees the blanks counted on 🔐 and fills them in when they're ready. Never make up placeholder values or write keys into files. Only when you're blocked on a value right now, call mcp__secrets__ask_add with its name: it adds the blank too and opens the 🔐 Add form with the name filled in, so the user just pastes the value. Don't walk them through the drawer yourself.`;
+export const ASK_PROMPT = `When the work needs a secret that isn't in the vault yet (code reads process.env.SOMETHING, an SDK or service wants a key, a dashboard step needs a client secret), put each name in the 🔐 vault as a blank right away with mcp__secrets__add_blank, with a hint for where to get its value. Do it as soon as you know the name, before you need the value, and keep going with what doesn't need it: the user sees the blanks counted on 🔐 and fills them in when they're ready. Never make up placeholder values or write keys into files. Only when you're blocked on a value right now, call mcp__secrets__ask_add with its name, then end your turn: the user gets an input for it right in this thread, and tells you once it's in. Don't walk them through the drawer yourself.`;
 
 const ENVIRONMENTS = ["development", "preview", "production"] as const;
 type Environment = (typeof ENVIRONMENTS)[number];
 const NAME = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, "Letters, digits and _, not starting with a digit");
 const PROJECT = z.string().optional().describe("Absolute path of the project whose vault to use; defaults to this thread's folder");
 
-// Opens the Add form for name; false when the board can't be reached (only the desktop app has one).
-export async function askToAdd(folder: string, name: string, environment: Environment = "development"): Promise<boolean> {
+// Puts a missing name in as a blank; false when Electron main can't be reached (only the desktop app has it).
+export async function addMissingBlank(folder: string, name: string, environment: Environment = "development"): Promise<boolean> {
   try {
     await shell("/secrets/ask-add", { folder, name, environment });
     return true;
@@ -26,21 +26,20 @@ export async function askToAdd(folder: string, name: string, environment: Enviro
   }
 }
 
-// What a thread hears when names have no value: the Add form is open on the first of them, or, when it
-// couldn't open, where the user adds them by hand.
-export function missingText(names: string[], environment: string, vault: string, opened: boolean): string {
-  const [first] = names;
-  const lack = `${names.join(", ")} ${names.length > 1 ? "have" : "has"} no value in the ${vault} vault (${environment}).`;
-  if (!opened) return `${lack} Ask the user to add ${names.length > 1 ? "them" : "it"} with 🔐 on the left rail.`;
-  const rest = names.length > 1 ? ` After that, call mcp__secrets__ask_add for ${names.slice(1).join(", ")}.` : "";
-  return `${lack} Weft opened the 🔐 Add form with ${first} filled in: ask the user to paste its value there and click Add to vault, then try again.${rest}`;
+// What a thread hears when names have no value: they're blanks now and ask_add asks for one in the thread, or,
+// when main couldn't be reached, where the user adds them by hand.
+export function missingText(names: string[], environment: string, vault: string, added: boolean): string {
+  const many = names.length > 1;
+  const lack = `${names.join(", ")} ${many ? "have" : "has"} no value in the ${vault} vault (${environment}).`;
+  if (!added) return `${lack} Ask the user to add ${many ? "them" : "it"} with 🔐 on the left rail.`;
+  return `${lack} ${many ? "They're blanks" : "It's a blank"} there now. If you're blocked on ${many ? "them" : "it"}, call mcp__secrets__ask_add for ${many ? "each" : names[0]} and end your turn: the user gets an input for it in this thread and tells you once it's in.`;
 }
 
 /** mcp__secrets__ask_add. folder is the card's project, read when the tool runs. */
 export function askAddTool(folder: () => string) {
   return tool(
     "ask_add",
-    "Add a secret's name to the 🔐 vault as a blank and open the Add form with it filled in, for a key you're blocked on right now. The user pastes the value there; you never see it. When you can carry on without the value, use add_blank instead.",
+    "Ask the user for a key you're blocked on right now: its name goes in the 🔐 vault as a blank and this thread shows an input for it, where the user pastes the value; you never see it. End your turn after calling it; the user tells you once it's in. When you can carry on without the value, use add_blank instead.",
     {
       name: NAME.describe("The secret's name, e.g. SUPABASE_SECRET_KEY"),
       environment: z.enum(ENVIRONMENTS).optional().describe("Which environment it's for; defaults to development"),
@@ -49,7 +48,7 @@ export function askAddTool(folder: () => string) {
     ({ name, environment, project }) =>
       attempt(async () => {
         await shell("/secrets/ask-add", { folder: project ?? folder(), name, environment: environment ?? "development" });
-        return text(`Opened the 🔐 Add form with ${name} (${environment ?? "development"}) filled in. Ask the user to paste its value there and click Add to vault; mcp__secrets__list shows it once it's in.`);
+        return text(`${name} (${environment ?? "development"}) is a blank in the 🔐 vault, and this thread shows the user an input for it. End your turn now; they'll tell you once it's in.`);
       }),
   );
 }

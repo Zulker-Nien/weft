@@ -481,8 +481,8 @@ four characters showing.
 - **Threads save a key they need as a blank right away.** When a key isn't in the vault yet, the thread
   calls `mcp__secrets__add_blank` (with a hint for where to get the value) and keeps going with what
   doesn't need it; 🔐's count goes up, the row shows **Fill in** and the hint under the name, and you
-  paste the value when you're ready. Blocked on it now, the thread calls `mcp__secrets__ask_add` and 🔐
-  opens on its Add form with the name filled in.
+  paste the value when you're ready. Blocked on it now, the thread calls `mcp__secrets__ask_add` and shows
+  an input for the key right in the thread: paste the value, click **Add to vault**, and the thread carries on.
 - **Threads fill fields for you without seeing the value.** A thread lists the vault's names
   (`mcp__secrets__list`), opens the page in the browser pane and calls `mcp__secrets__fill_field`: Touch ID asks
   "let a thread type GITHUB_CLIENT_SECRET (aimhuge/weft) into supabase.com", then the value goes into the field,

@@ -109,15 +109,4 @@ describe("addSecret", () => {
     expect(later).toHaveBeenCalledOnce();
   });
 
-  it("carries a thread's ask to the taker, now or once one can serve it", () => {
-    const ask = { folder: "/p", name: "K", environment: "preview" as const };
-    const busy = vi.fn(() => false);
-    const stopBusy = onSecretAsk(busy);
-    addSecret(vi.fn(), ask);
-    expect(busy).toHaveBeenCalledWith(ask);
-    stopBusy();
-    const ready = vi.fn(() => true);
-    onSecretAsk(ready)();
-    expect(ready).toHaveBeenCalledWith(ask);
-  });
 });

@@ -3,7 +3,6 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { VaultBridge, VaultOverview, VaultSummary } from "@/lib/vault-view";
-import { addSecret } from "@/lib/use-vault";
 import "./test-utils";
 import VaultDrawer from "./VaultDrawer";
 
@@ -140,21 +139,6 @@ describe("VaultDrawer", () => {
     const github = screen.getByRole("button", { name: "Fill in GITHUB_TOKEN" });
     expect(github).toHaveAttribute("title", "Fill in GITHUB_TOKEN");
     expect(screen.getByText("STRIPE_SECRET_KEY").title).toContain("added by a thread");
-  });
-
-  it("opens the plain Add form with a thread's key name filled in, in its project's vault", async () => {
-    const { b } = setup("/dev/notes");
-    act(() => addSecret(vi.fn(), { folder: "/dev/web", name: "SUPABASE_SECRET_KEY", environment: "preview" }));
-    // The filter moves to the asked project, and the cursor waits in the value.
-    expect(screen.getByRole("combobox", { name: "Filter by project" })).toHaveValue("/dev/web");
-    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("SUPABASE_SECRET_KEY");
-    expect(screen.getByRole("button", { name: "Preview" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "Development" })).toHaveAttribute("aria-pressed", "false");
-    const value = screen.getByLabelText("Value");
-    expect(value).toHaveFocus();
-    await userEvent.type(value, "sb_secret_x");
-    await userEvent.click(screen.getByRole("button", { name: "Add to vault" }));
-    expect(b.set).toHaveBeenCalledWith("/dev/web", "SUPABASE_SECRET_KEY", "preview", "sb_secret_x");
   });
 
   it("adds one secret to several environments at once, and needs at least one", async () => {

@@ -2,7 +2,7 @@ import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { attempt, shell, text } from "./browser-tools";
 import { asText } from "./format";
-import { addBlankTool, ASK_PROMPT, askAddTool, askToAdd, missingText } from "./secret-ask";
+import { addBlankTool, ASK_PROMPT, askAddTool, addMissingBlank, missingText } from "./secret-ask";
 import { markInUse, RUN_PROMPT, runTool } from "./secret-run";
 
 // The vault for threads (docs/architecture/secrets.md): names only, and values typed into a pane field by
@@ -53,7 +53,7 @@ export function secretsMcpServer(cardId: () => string | undefined, folder: () =>
             if (r.denied) return text(`The user didn't approve ${name}. Ask before trying again.`, true);
             if (r.missing) {
               const env = environment ?? "development";
-              return text(missingText([name], env, vault, await askToAdd(p ?? folder(), name, env)), true);
+              return text(missingText([name], env, vault, await addMissingBlank(p ?? folder(), name, env)), true);
             }
             if (!r.found) return text(`No element matches ${selector}`, true);
             markInUse(cardId());
@@ -74,7 +74,7 @@ export function secretsMcpServer(cardId: () => string | undefined, folder: () =>
             const r = await shell("/vercel/env-push", { folder: p ?? folder(), name, environment: env });
             const vault = asText(r.label, "this");
             if (r.denied) return text(`The user didn't approve pushing ${name}. Ask before trying again.`, true);
-            if (r.missing) return text(missingText([name], env, vault, await askToAdd(p ?? folder(), name, env)), true);
+            if (r.missing) return text(missingText([name], env, vault, await addMissingBlank(p ?? folder(), name, env)), true);
             return text(`Pushed ${name} (${env}) from the ${vault} vault to Vercel project ${asText(r.project, "the linked project")}. It takes effect on the next deploy.`);
           }),
       ),

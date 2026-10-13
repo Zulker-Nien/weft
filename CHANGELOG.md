@@ -127,8 +127,8 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 - Vault → Vercel env push: the ▲ drawer lines each linked project's 🔐 secrets up with its Vercel variables per
   environment and pushes one with **Push** (sensitive, Touch ID per push); threads can do it with
   `mcp__secrets__push_to_vercel`.
-- A thread that needs a key the 🔐 vault doesn't hold opens the plain Add form with the name filled in
-  (`mcp__secrets__ask_add`, and `fill_field` or `run` on a missing name), so you only paste the value.
+- A thread blocked on a key the 🔐 vault doesn't hold (`mcp__secrets__ask_add`) shows an input for it right in the
+  thread, name filled in: paste the value, **Add to vault**, and the thread is told it's in. The value never reaches it.
 - GitHub on the left rail: its mark opens a drawer with the `gh` CLI's sign-in (or how to sign in) and, per project, its
   repo, an **Issues → Backlog cards** switch, the last sync and **Sync now**.
 - Instant GitHub issue sync: **Instant, by webhook** in the GitHub drawer adds a repo webhook relayed by the deployed

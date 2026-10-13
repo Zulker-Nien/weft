@@ -5,7 +5,6 @@ import { keyLabel } from "@/lib/hotkeys";
 import { useEscape } from "@/lib/use-escape";
 import { onSecretAsk, useIdle } from "@/lib/use-vault";
 import {
-  askedVault,
   copiedText,
   defaultPicks,
   environmentsOf,
@@ -75,18 +74,13 @@ export default function VaultDrawer({
   };
   useIdle(unlocked || revealed.size > 0 || Boolean(editing?.value), lock);
   useEscape(Boolean(editing), () => setEditing(null));
-  // ⇧S (lib/use-vault.ts): the Add form opens on the first vault shown, once there is one. A thread's ask
-  // opens it in its project's vault, shown by the filter, with the name and environment filled in.
+  // ⇧S (lib/use-vault.ts): the Add form opens on the first vault shown, once there is one.
   useEffect(
     () =>
-      onSecretAsk((ask) => {
-        if (!overview) return false;
-        const shown = filterVaults(overview.vaults, vaultFilter(project, pick));
-        const v = askedVault(overview.vaults, shown, ask?.folder);
-        if (!v) return false;
-        if (!shown.includes(v)) setPick({ top: project, folder: v.folder });
-        setEditing({ ...newSecret(v), ...(ask && { name: ask.name, environments: [ask.environment] }) });
-        return true;
+      onSecretAsk(() => {
+        const first = overview && filterVaults(overview.vaults, vaultFilter(project, pick))[0];
+        if (first) setEditing(newSecret(first));
+        return Boolean(first);
       }),
     [overview, project, pick],
   );

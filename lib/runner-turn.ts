@@ -11,6 +11,7 @@ import { extractReview } from "./review";
 import { archiveAfter, hooks, queued, safeUpdate, scheduleIdle, type Session } from "./runner-state";
 import { restoreDoneOverride } from "./runner";
 import { withRedacted } from "./secret-run";
+import { secretAskOf } from "./vault-view";
 import { extractStatus, type BoardStatus } from "./status";
 import { appendThread, getCard, getThread, replaceThreadItem } from "./store";
 import { adoptLocalMedia, toolResult } from "./thread-media";
@@ -102,7 +103,8 @@ function handleAssistant(id: string, session: Session, msg: Extract<SDKMessage, 
       const action = toolAction(block.name, input);
       if (block.name === "mcp__browser__open_url") session.openedPane = true;
       recordEdit(id, block.name, input);
-      const index = appendThread(id, { kind: "tool", id: block.id, name: block.name, summary, action, at: Date.now() });
+      const ask = secretAskOf(block.name, input, session.spec.cwd);
+      const index = appendThread(id, { kind: "tool", id: block.id, name: block.name, summary, action, at: Date.now(), ...(ask && { ask }) });
       session.toolIndex.set(block.id, index);
       safeUpdate(id, { lastLine: `${shortToolName(block.name)} ${summary}`.trim() });
     }

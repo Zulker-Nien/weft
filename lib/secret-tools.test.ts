@@ -67,11 +67,11 @@ describe("secretsMcpServer", () => {
   it("reports a no, a missing value, a missing field and a shell error", async () => {
     reply({ denied: true });
     expect(said(await run("fill_field", { name: "K", selector: "#k" }))).toBe("The user didn't approve K. Ask before trying again.");
-    // A missing value opens the 🔐 Add form with the name filled in; if the board can't, the thread is told where to add it.
+    // A missing value goes in as a blank and the thread hears about ask_add; if main can't be reached, where to add it.
     reply({ missing: true, label: "x" });
-    reply({ opened: true });
+    reply({ added: true });
     expect(said(await run("fill_field", { name: "K", selector: "#k", environment: "production", project: "/x" }))).toBe(
-      "K has no value in the x vault (production). Weft opened the 🔐 Add form with K filled in: ask the user to paste its value there and click Add to vault, then try again.",
+      "K has no value in the x vault (production). It's a blank there now. If you're blocked on it, call mcp__secrets__ask_add for K and end your turn: the user gets an input for it in this thread and tells you once it's in.",
     );
     const [url, init] = fetchMock.mock.calls[2] as [string, RequestInit];
     expect([url, JSON.parse(init.body as string)]).toEqual(["http://127.0.0.1:4567/secrets/ask-add", { folder: "/x", name: "K", environment: "production" }]);
@@ -87,16 +87,16 @@ describe("secretsMcpServer", () => {
     expect(said(await run("fill_field", { name: "K", selector: "#k" }))).toBe("Secrets only go into https pages");
   });
 
-  it("opens the 🔐 Add form for a key the task needs", async () => {
-    reply({ opened: true });
+  it("asks for a key the task is blocked on, as an input in the thread", async () => {
+    reply({ added: true });
     const r = await run("ask_add", { name: "SUPABASE_SECRET_KEY" });
     expect(sent()).toEqual({ url: "http://127.0.0.1:4567/secrets/ask-add", body: { folder: "/proj", name: "SUPABASE_SECRET_KEY", environment: "development" } });
     expect([r.isError, said(r)]).toEqual([
       false,
-      "Opened the 🔐 Add form with SUPABASE_SECRET_KEY (development) filled in. Ask the user to paste its value there and click Add to vault; mcp__secrets__list shows it once it's in.",
+      "SUPABASE_SECRET_KEY (development) is a blank in the 🔐 vault, and this thread shows the user an input for it. End your turn now; they'll tell you once it's in.",
     ]);
     fetchMock.mockReset();
-    reply({ opened: true });
+    reply({ added: true });
     await run("ask_add", { name: "K", environment: "production", project: "/other" });
     expect(sent().body).toEqual({ folder: "/other", name: "K", environment: "production" });
   });

@@ -141,12 +141,16 @@ denied). A file watcher notices hand edits and offers "Import changes", so editi
   - The tools are trusted (`isTrustedTool`): Touch ID is the one yes, with no permission prompt before it.
   - Limits: a page's own script can still read a field it was given (that's what the field is for), so the https rule
     and the site in the Touch ID prompt are the guard against a thread filling a page it controls.
-- `mcp__secrets__ask_add(name, environment?, project?)` (built): a key the task needs that isn't in the vault yet. The
-  🔐 drawer opens on its plain Add form with the name and environment filled in and the cursor in the value, so the user
-  only pastes it. `fill_field` and `run` do the same when main reports a name missing (the first one, for `run`).
-  `lib/secret-ask.ts` posts `POST /secrets/ask-add`; `electron/main.cjs` sends the board an `add-secret` menu message,
-  `lib/vault-view.ts` `parseSecretAsk` checks it and `addSecret` (`lib/use-vault.ts`) hands it to the drawer, which
-  moves its project filter to that vault if needed. No value passes through it either way.
+- `mcp__secrets__ask_add(name, environment?, project?)` (built): a key the thread is blocked on right now. The name goes
+  in as a blank, and the thread shows an input for it in place of the tool call (`components/SecretAskInput.tsx`): the
+  name, its environments and a hidden value field with the cursor in it, so the user pastes the value where they're
+  already reading (a drawer would open behind the thread panel). **Add to vault** hands the value to main through the
+  board's own `vault.set` IPC, then sends the thread "I added NAME (env) to the 🔐 vault." as the user's message; once
+  the vault holds it the input folds to a ✓. The thread is told to end its turn after the call and wait for that message.
+  `lib/runner-turn.ts` marks the tool item with `ask` (`secretAskOf` in `lib/vault-view.ts`), `groupThread` keeps it out
+  of the folded tool run, and `ThreadEntries` draws it. `fill_field` and `run` put every missing name in as a blank and
+  point the thread at `ask_add`. `lib/secret-ask.ts` posts `POST /secrets/ask-add`, which only adds the blank. Outside
+  the board window (no vault bridge) the input says to use 🔐 on the rail. No value passes through the thread either way.
 - `mcp__secrets__add_blank(names[], hint?, environment?, project?)` (built): the default for a key a thread needs
   but isn't blocked on. The thread calls this as soon as it knows the name (with a hint for where to get the
   value), keeps going with what doesn't need the value, and the user fills the blanks in from 🔐 on the rail
