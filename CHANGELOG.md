@@ -153,6 +153,9 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 - Builder card: the Thrift attribute (cost per shipped card) is gone; seven attributes remain.
 
 ### Fixed
+- Threads, a card's dev server and `!` commands no longer inherit Weft's own `next dev` env (`NODE_ENV=development`,
+  `PORT`, `__NEXT_*`, `NEXT_PRIVATE_*`, `NEXT_PUBLIC_*`, `TURBOPACK*`), so `next build` in another project prerenders
+  again instead of failing on `/_global-error` (`lib/env.ts`).
 - The "Couldn't sign in to Weft" dialog shows plain text (it showed `Couldn&#39;t`) and no longer repeats its title in
   the message (`electron/account-link.cjs`).
 - A card waiting on you (a question with Answer, or Allow/Deny) can be dragged to Backlog, Review or Done to park

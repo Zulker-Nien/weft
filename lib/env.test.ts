@@ -38,6 +38,19 @@ describe("cliEnv", () => {
     expect(env.THREADBOARD_DATA).toBe("/tmp/weft");
   });
 
+  it("strips what Weft's own next dev set, so a thread's next build runs in production mode", () => {
+    const strip = { NODE_ENV: "development", PORT: "1000", NEXT_RUNTIME: "nodejs", NEXT_DEPLOYMENT_ID: "d", __NEXT_DEV_SERVER: "1",
+      __NEXT_PRIVATE_ORIGIN: "http://127.0.0.1:1000", NEXT_PRIVATE_WORKER: "1", NEXT_PUBLIC_SUPABASE_URL: "https://x.supabase.co",
+      NEXT_CPU_PROF_DIR: "/p", NEXT_TURBOPACK_TRACING: "1", TURBOPACK: "1", TURBOPACK_TRACING: "1", WATCHPACK_WATCHER_LIMIT: "20" };
+    const keep = { NEXT_TELEMETRY_DISABLED: "1", NODE_EXTRA_CA_CERTS: "/ca.pem", PORTAL: "x", MY_PORT: "3000", NODE_ENVIRONMENT: "x" };
+    for (const [k, v] of Object.entries({ ...strip, ...keep })) vi.stubEnv(k, v);
+
+    const env = cliEnv();
+
+    for (const k of Object.keys(strip)) expect(env, k).not.toHaveProperty(k);
+    for (const [k, v] of Object.entries(keep)) expect(env[k], k).toBe(v);
+  });
+
   // Built from pieces so this file never holds a whole key for a scanner to flag.
   const STRIPE_SHAPED = ["sk", "live", "51Habcdefghijklmnopqrstuv"].join("_");
   const ANTHROPIC_SHAPED = ["sk-ant", "api03", "abcdefghijklmnopqrstuvwxyz"].join("-");

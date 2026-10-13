@@ -15,6 +15,11 @@ const INHERITED = /^(CLAUDECODE$|CLAUDE_CODE_|CLAUDE_AGENT_SDK_|CLAUDE_PID$|CLAU
 // nothing secret may live in the server's environment unless it's stripped here
 // (docs/architecture/secrets.md).
 const INTERNAL = /^THREADBOARD_SHELL_/;
+// What Weft's own `next dev` sets in its process, and the NEXT_PUBLIC_ values it loads from Weft's .env:
+// a thread's shell should look like your terminal. NODE_ENV=development breaks `next build` in any other
+// project (its prerender fails), and PORT would point a thread's dev server at Weft's own port. Your own
+// Next settings, like NEXT_TELEMETRY_DISABLED, stay.
+const NEXT_SERVER = /^(NODE_ENV|PORT|NEXT_RUNTIME|NEXT_DEPLOYMENT_ID)$|^(__NEXT_|NEXT_PRIVATE_|NEXT_PUBLIC_|NEXT_CPU_PROF|NEXT_TURBOPACK_|TURBOPACK|WATCHPACK_)/;
 // Your own secrets: Weft starts from your login shell's env, so a key exported in ~/.zshrc would reach
 // every thread, where `node -e` can print it past the guard. A name that sounds secret goes, and so does
 // any value that looks like a key (lib/secret-detect.ts), except what the CLIs sign in with. A command
@@ -30,7 +35,7 @@ function isSecretVar(key: string, value: string | undefined): boolean {
 export function cliEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
   const insideClaude = Boolean(env.CLAUDECODE || env.CLAUDE_CODE_DESKTOP_APP_VERSION);
-  for (const [key, value] of Object.entries(env)) if (INHERITED.test(key) || INTERNAL.test(key) || isSecretVar(key, value)) Reflect.deleteProperty(env, key);
+  for (const [key, value] of Object.entries(env)) if (INHERITED.test(key) || INTERNAL.test(key) || NEXT_SERVER.test(key) || isSecretVar(key, value)) Reflect.deleteProperty(env, key);
   // The Claude app routes its own sessions through a local proxy; that address isn't ours to use.
   if (insideClaude) delete env.ANTHROPIC_BASE_URL;
   env.CLAUDE_CODE_ENTRYPOINT = "sdk-ts";
