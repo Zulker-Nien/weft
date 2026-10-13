@@ -1,56 +1,58 @@
 "use client";
 
 // The invite-a-teammate form on the Team page. A single email + role pair
-// posts to lib/team-actions.ts inviteMember, which returns { ok, message }.
+// goes through actions.invite, which returns { ok, message }.
 //
 // The role <select> shows the actor's assignable roles (server-filtered
 // before the form is rendered), and the description of whichever role is
 // currently picked shows underneath so the inviter doesn't have to guess.
 // On submit the action runs, the message renders inline (red on !ok,
-// green on ok), the input keeps its value (so a typo is obvious in the
-// same spot), and on success the email field is cleared.
+// green on ok), and on success the email field is cleared (the role
+// sticks so a second invite reuses it).
 //
-// useActionState wires the form's action to the server action; the action
-// is bound to orgSlug here on the client (inviteMember.bind(null, orgSlug))
-// so the slug doesn't need to be a hidden field and the page doesn't have
-// to pass a closure across the server → client boundary.
-import { startTransition, useActionState, useState, type SubmitEvent } from "react";
-import { inviteMember } from "@/lib/team-actions";
+// The actions object comes in as a prop (lib/team-types.ts's
+// TeamClientActions) so this component is shared by the weft.zip server
+// page and the desktop's Settings → Team. useTransition owns the pending
+// state — onSubmit + e.preventDefault() because React 19 resets a form
+// after its <form action>, which would throw away the picked role along
+// with the email.
+import { useState, useTransition, type SubmitEvent } from "react";
+import type { RoleOption as RoleOptionBase, TeamClientActions, TeamRole } from "@/lib/team-types";
 
-export type RoleOption = { role: string; label: string; description: string };
+export type RoleOption = RoleOptionBase;
 
 export type InviteActionState = { ok: boolean; message?: string };
 
-const INITIAL: InviteActionState = { ok: false };
-
-export function InviteForm({ orgSlug, roleOptions, defaultRole }: { orgSlug: string; roleOptions: RoleOption[]; defaultRole?: string }) {
-  // useActionState (React 19) wires the form's action to the server, gives
-  // back the current state and a pending flag. The bound action closes over
-  // orgSlug here on the client; the slug never needs to leave the page
-  // hidden-field. We wrap it so a successful invite clears the email field
-  // synchronously in the action's handler — no effect needed.
+export function InviteForm({
+  roleOptions,
+  defaultRole,
+  actions,
+}: {
+  roleOptions: RoleOption[];
+  defaultRole?: TeamRole;
+  actions: TeamClientActions;
+}) {
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<string>(defaultRole ?? roleOptions[0]?.role ?? "member");
-  const action = async (prev: InviteActionState, formData: FormData) => {
-    const next = await inviteMember(orgSlug, prev, formData);
-    if (next.ok) setEmail("");
-    return next;
-  };
-  const [state, formAction, pending] = useActionState<InviteActionState, FormData>(action, INITIAL);
+  const [role, setRole] = useState<TeamRole>(defaultRole ?? roleOptions[0]?.role ?? "member");
+  const [pending, startTransition] = useTransition();
+  const [message, setMessage] = useState<InviteActionState>({ ok: false });
 
-  // Submitted through onSubmit rather than <form action>: React 19 resets a form after its action runs, which
-  // would throw away the picked role along with the email.
-  const submit = (e: SubmitEvent<HTMLFormElement>) => {
+  function handleSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
-    const data = new FormData(e.currentTarget);
-    startTransition(() => formAction(data));
-  };
+    const trimmed = email.trim();
+    if (!trimmed) return;
+    startTransition(async () => {
+      const result = await actions.invite(trimmed, role);
+      setMessage({ ok: result.ok, message: result.message });
+      if (result.ok) setEmail("");
+    });
+  }
 
   const currentRole = roleOptions.find((o) => o.role === role) ?? roleOptions[0];
-  const message = state.message;
+  const text = message.message;
 
   return (
-    <form onSubmit={submit} className="wz-inviteForm" noValidate>
+    <form onSubmit={handleSubmit} className="wz-inviteForm" noValidate>
       <div className="wz-inviteRow">
         <div className="wz-inviteField">
           <label htmlFor="invite-email">Email</label>
@@ -74,7 +76,7 @@ export function InviteForm({ orgSlug, roleOptions, defaultRole }: { orgSlug: str
             name="role"
             className="wz-inviteSelect"
             value={role}
-            onChange={(e) => setRole(e.target.value)}
+            onChange={(e) => setRole(e.target.value as TeamRole)}
             disabled={pending || roleOptions.length === 0}
             aria-describedby="invite-role-description"
           >
@@ -96,12 +98,12 @@ export function InviteForm({ orgSlug, roleOptions, defaultRole }: { orgSlug: str
           {pending ? "Sending…" : "Send invite"}
         </button>
       </div>
-      {message ? (
+      {text ? (
         <p
-          className={`wz-inviteMessage ${state.ok ? "wz-inviteMessageOk" : "wz-inviteMessageError"}`}
-          role={state.ok ? "status" : "alert"}
+          className={`wz-inviteMessage ${message.ok ? "wz-inviteMessageOk" : "wz-inviteMessageError"}`}
+          role={message.ok ? "status" : "alert"}
         >
-          {message}
+          {text}
         </p>
       ) : null}
     </form>

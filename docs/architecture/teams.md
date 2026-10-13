@@ -62,6 +62,29 @@ cannot dot into a temporary client reference"; reproduced 2026-10-13 on Next 16.
   Team and Billing), `app/[orgSlug]/team`, `app/invite/[token]` (a Join button, so link-preview bots can't accept an
   invite), `components/team/*`.
 
+## In the desktop's Settings
+
+Settings → Team (`components/TeamSettings.tsx`) shows the same roster, invite form and pending invites inside the
+app. The desktop has neither weft.zip's cookie nor the service key, so it goes through weft.zip's JSON API:
+
+```
+board ── useTeam() ──▶ /api/account/team (local, guarded) ──Bearer <desktop JWT>──▶ weft.zip /api/teams ──▶ Supabase
+```
+
+- `app/api/teams` (weft.zip, no localhost guard; the bearer token is the check, `bearerUser` in `lib/web-session.ts`):
+  GET a `TeamSnapshot`, POST a `TeamOp`. 401 signed out, 404 not a member, 503 not configured.
+- `lib/team-ops.ts`: one core for that API and the server actions, so both enforce the same rules.
+- `app/api/account/team` + `lib/team-remote.ts`: the desktop's forwarder (`WEFT_TEAMS_URL`, default weft.zip).
+- `lib/use-team.ts`: the board hook; `lib/team-types.ts`: the shapes the board may import.
+- `components/team/*` take their actions as a prop (`TeamClientActions`): server actions on weft.zip
+  (`components/team/WebTeam.tsx`), the forwarder in the desktop.
+
+## Row-level security
+
+`20261013171000_teams_rls.sql`: members read their workspaces and memberships, owners and admins read pending invites
+(never the token column), everyone reads the profiles of people they share a workspace with. Writes stay with the
+service role. The checks are security-definer helpers in `private` (`is_org_member`, `org_role`, `shares_org`).
+
 ## Roles
 
 | role | can |

@@ -44,7 +44,7 @@ vi.mock("./web-session", () => ({
 }));
 vi.mock("next/navigation", () => navMock);
 
-import { ALL_ROLES, currentWorkspaceSlug, inviteMailer, requireTeam, roleOptions, setActiveWorkspace, teamAccess } from "./teams";
+import { requireTeam, teamAccess, teamAccessFor } from "./teams";
 
 const USER = { id: "u1", email: "jane@example.com", name: "Jane", avatar: null };
 const ORG = { id: "o1", slug: "acme", name: "Acme" };
@@ -157,6 +157,47 @@ describe("teamAccess", () => {
   });
 });
 
+describe("teamAccessFor", () => {
+  it("is unconfigured when SUPABASE_KEY is empty", async () => {
+    sessionMock.SUPABASE_KEY = "";
+    expect(await teamAccessFor(USER, "acme")).toEqual({ kind: "unconfigured" });
+    expect(sessionMock.serviceClient).not.toHaveBeenCalled();
+  });
+
+  it("is unconfigured when the service client is null", async () => {
+    sessionMock.serviceClient.mockReturnValue(null);
+    expect(await teamAccessFor(USER, "acme")).toEqual({ kind: "unconfigured" });
+  });
+
+  it("is signed-out when the user is null (no cookie, no bearer)", async () => {
+    expect(await teamAccessFor(null, "acme")).toEqual({ kind: "signed-out" });
+    expect(teamsMock.listUserOrgs).not.toHaveBeenCalled();
+  });
+
+  it("uses the user argument directly without reading the cookie session", async () => {
+    const svc = makeService({ orgs: [ORG], org_memberships: [{ role: "admin" }] });
+    sessionMock.serviceClient.mockReturnValue(svc.client);
+    const bearerUser = { id: "u-bearer", email: "bearer@x.co", name: "Bearer", avatar: null };
+    await teamAccessFor(bearerUser, "acme");
+    // The cookie path must not be hit; the bearer user is the source of truth.
+    expect(sessionMock.webUser).not.toHaveBeenCalled();
+  });
+
+  it("is ok with the supplied user as the ctx.user", async () => {
+    const svc = makeService({ orgs: [ORG], org_memberships: [{ role: "admin" }] });
+    sessionMock.serviceClient.mockReturnValue(svc.client);
+    const bearerUser = { id: "u-bearer", email: "bearer@x.co", name: "Bearer", avatar: null };
+    const result = await teamAccessFor(bearerUser, "acme");
+    expect(result).toMatchObject({ kind: "ok", ctx: { user: bearerUser, org: ORG, role: "admin" } });
+  });
+
+  it("is denied for a non-member (same answer as a missing org)", async () => {
+    const svc = makeService({ orgs: [ORG], org_memberships: [] });
+    sessionMock.serviceClient.mockReturnValue(svc.client);
+    expect(await teamAccessFor(USER, "acme")).toEqual({ kind: "denied" });
+  });
+});
+
 describe("requireTeam", () => {
   it("redirects to /login with the return path when signed out", async () => {
     sessionMock.webUser.mockResolvedValue(null);
@@ -202,139 +243,5 @@ describe("requireTeam", () => {
     expect(ctx.role).toBe("owner");
     expect(ctx.org).toEqual(ORG);
     expect(ctx.user).toBe(USER);
-  });
-});
-
-describe("currentWorkspaceSlug", () => {
-  it("is { kind: 'none' } when unconfigured", async () => {
-    sessionMock.SUPABASE_KEY = "";
-    expect(await currentWorkspaceSlug()).toEqual({ kind: "none" });
-  });
-
-  it("is { kind: 'none' } when the service client is missing", async () => {
-    sessionMock.serviceClient.mockReturnValue(null);
-    expect(await currentWorkspaceSlug()).toEqual({ kind: "none" });
-  });
-
-  it("is { kind: 'signed-out' } when there is no web user", async () => {
-    sessionMock.webUser.mockResolvedValue(null);
-    expect(await currentWorkspaceSlug()).toEqual({ kind: "signed-out" });
-  });
-
-  it("is { kind: 'none' } when the user has no memberships at all", async () => {
-    teamsMock.listUserOrgs.mockResolvedValue([]);
-    expect(await currentWorkspaceSlug()).toEqual({ kind: "none" });
-  });
-
-  it("returns the slug the profile points at when the pointer is current", async () => {
-    const svc = makeService({ profiles: [{ current_org_id: ORG.id }] });
-    sessionMock.serviceClient.mockReturnValue(svc.client);
-    expect(await currentWorkspaceSlug()).toEqual({ kind: "ok", slug: "acme" });
-    expect(teamsMock.setCurrentOrg).not.toHaveBeenCalled();
-  });
-
-  it("heals a stale pointer by setting it to the oldest membership", async () => {
-    const newer = { id: "o2", slug: "newer", name: "Newer" };
-    teamsMock.listUserOrgs.mockResolvedValue([{ org: ORG, role: "owner" }, { org: newer, role: "member" }]);
-    const svc = makeService({ profiles: [{ current_org_id: "stale" }] });
-    sessionMock.serviceClient.mockReturnValue(svc.client);
-    expect(await currentWorkspaceSlug()).toEqual({ kind: "ok", slug: "acme" });
-    expect(teamsMock.setCurrentOrg).toHaveBeenCalledWith(svc.client, USER.id, ORG.id);
-  });
-
-  it("heals a null pointer", async () => {
-    const svc = makeService({ profiles: [{ current_org_id: null }] });
-    sessionMock.serviceClient.mockReturnValue(svc.client);
-    expect(await currentWorkspaceSlug()).toEqual({ kind: "ok", slug: "acme" });
-    expect(teamsMock.setCurrentOrg).toHaveBeenCalledWith(svc.client, USER.id, ORG.id);
-  });
-
-  it("heals when the profile row is missing entirely", async () => {
-    const svc = makeService({ profiles: [] });
-    sessionMock.serviceClient.mockReturnValue(svc.client);
-    expect(await currentWorkspaceSlug()).toEqual({ kind: "ok", slug: "acme" });
-    expect(teamsMock.setCurrentOrg).toHaveBeenCalled();
-  });
-});
-
-describe("setActiveWorkspace", () => {
-  it("requires the team (membership) and writes the new active org", async () => {
-    const svc = makeService({ orgs: [ORG], org_memberships: [{ role: "admin" }] });
-    sessionMock.serviceClient.mockReturnValue(svc.client);
-    const out = await setActiveWorkspace("acme");
-    expect(out).toEqual({ org: ORG });
-    expect(teamsMock.setCurrentOrg).toHaveBeenCalledWith(svc.client, USER.id, ORG.id);
-  });
-
-  it("notFound()s when the visitor isn't a member", async () => {
-    const svc = makeService({ orgs: [ORG], org_memberships: [] });
-    sessionMock.serviceClient.mockReturnValue(svc.client);
-    await expect(setActiveWorkspace("acme")).rejects.toThrow("NEXT_NOT_FOUND");
-    expect(teamsMock.setCurrentOrg).not.toHaveBeenCalled();
-  });
-});
-
-describe("roleOptions", () => {
-  it("returns the assignable roles for an owner (all three)", () => {
-    teamsMock.assignableRoles.mockReturnValue(["owner", "admin", "member"]);
-    teamsMock.roleLabel.mockImplementation((r: string) => r.charAt(0).toUpperCase() + r.slice(1));
-    teamsMock.roleDescription.mockImplementation((r: string) => `${r} desc`);
-    expect(roleOptions("owner")).toEqual([
-      { role: "owner", label: "Owner", description: "owner desc" },
-      { role: "admin", label: "Admin", description: "admin desc" },
-      { role: "member", label: "Member", description: "member desc" },
-    ]);
-  });
-
-  it("returns admin+member for an admin", () => {
-    teamsMock.assignableRoles.mockReturnValue(["admin", "member"]);
-    teamsMock.roleLabel.mockImplementation((r: string) => r.charAt(0).toUpperCase() + r.slice(1));
-    teamsMock.roleDescription.mockImplementation((r: string) => `${r} desc`);
-    expect(roleOptions("admin")).toEqual([
-      { role: "admin", label: "Admin", description: "admin desc" },
-      { role: "member", label: "Member", description: "member desc" },
-    ]);
-  });
-
-  it("is an empty list for a member", () => {
-    teamsMock.assignableRoles.mockReturnValue([]);
-    expect(roleOptions("member")).toEqual([]);
-  });
-});
-
-describe("ALL_ROLES", () => {
-  it("lists every role the package ships, in order, with label and description", () => {
-    expect(ALL_ROLES).toEqual([
-      { role: "owner", label: "Owner", description: "owner desc" },
-      { role: "admin", label: "Admin", description: "admin desc" },
-      { role: "member", label: "Member", description: "member desc" },
-    ]);
-  });
-});
-
-describe("inviteMailer", () => {
-  it("is null without RESEND_API_KEY", () => {
-    expect(inviteMailer({})).toBeNull();
-  });
-
-  it("POSTs to Resend with the Weft from address and the supplied body", async () => {
-    const fetchFn = vi.fn(() => Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve("") }));
-    const mailer = inviteMailer({ RESEND_API_KEY: "re_test" }, fetchFn as unknown as typeof fetch);
-    if (!mailer) throw new Error("expected mailer");
-    await mailer.send({ to: "jane@example.com", subject: "Hi", text: "Body" });
-    expect(fetchFn).toHaveBeenCalledWith("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { authorization: "Bearer re_test", "content-type": "application/json" },
-      body: JSON.stringify({ from: "Weft <team@weft.zip>", to: ["jane@example.com"], subject: "Hi", text: "Body" }),
-    });
-  });
-
-  it("throws with the status and a body excerpt on a non-2xx response", async () => {
-    const body = "bad address: too long; not a real value";
-    const fetchFn = vi.fn(() => Promise.resolve({ ok: false, status: 422, text: () => Promise.resolve(body) }));
-    const mailer = inviteMailer({ RESEND_API_KEY: "re_test" }, fetchFn as unknown as typeof fetch);
-    if (!mailer) throw new Error("expected mailer");
-    await expect(mailer.send({ to: "x@y", subject: "S", text: "T" })).rejects.toThrow(/Resend 422/);
-    await expect(mailer.send({ to: "x@y", subject: "S", text: "T" })).rejects.toThrow(/bad address/);
   });
 });

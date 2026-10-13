@@ -3,43 +3,48 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LeaveButton } from "./LeaveButton";
+import type { TeamClientActions } from "@/lib/team-types";
 import "../test-utils";
 
-vi.mock("@/lib/team-actions", () => ({
-  removeMember: vi.fn(),
-}));
+function makeActions(): TeamClientActions & {
+  remove: ReturnType<typeof vi.fn>;
+} {
+  return {
+    invite: vi.fn().mockResolvedValue({ ok: true }),
+    changeRole: vi.fn().mockResolvedValue({ ok: true }),
+    remove: vi.fn().mockResolvedValue({ ok: true, message: "Left." }),
+    revoke: vi.fn().mockResolvedValue({ ok: true }),
+  };
+}
 
-import { removeMember } from "@/lib/team-actions";
-
-const mockRemoveMember = vi.mocked(removeMember);
+let actions: ReturnType<typeof makeActions>;
 
 beforeEach(() => {
-  vi.clearAllMocks();
-  mockRemoveMember.mockResolvedValue({ ok: true, message: "Left." });
+  actions = makeActions();
 });
 
 describe("LeaveButton", () => {
   it("asks for confirmation before calling the action", async () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    render(<LeaveButton orgSlug="acme" userId="u1" />);
+    render(<LeaveButton userId="u1" actions={actions} />);
     await userEvent.click(screen.getByRole("button", { name: "Leave workspace" }));
     expect(confirm).toHaveBeenCalled();
-    expect(mockRemoveMember).not.toHaveBeenCalled();
+    expect(actions.remove).not.toHaveBeenCalled();
   });
 
   it("calls the action when the visitor confirms and shows the success message", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
-    render(<LeaveButton orgSlug="acme" userId="u1" />);
+    render(<LeaveButton userId="u1" actions={actions} />);
     await userEvent.click(screen.getByRole("button", { name: "Leave workspace" }));
-    await waitFor(() => expect(mockRemoveMember).toHaveBeenCalled());
-    expect(mockRemoveMember).toHaveBeenCalledWith("acme", "u1");
+    await waitFor(() => expect(actions.remove).toHaveBeenCalled());
+    expect(actions.remove).toHaveBeenCalledWith("u1");
     expect(await screen.findByText("Left.")).toBeInTheDocument();
   });
 
   it("shows the action's error message when leave fails", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
-    mockRemoveMember.mockResolvedValueOnce({ ok: false, message: "Owner can't leave." });
-    render(<LeaveButton orgSlug="acme" userId="u1" />);
+    actions.remove.mockResolvedValueOnce({ ok: false, message: "Owner can't leave." });
+    render(<LeaveButton userId="u1" actions={actions} />);
     await userEvent.click(screen.getByRole("button", { name: "Leave workspace" }));
     expect(await screen.findByText("Owner can't leave.")).toBeInTheDocument();
   });
@@ -47,8 +52,8 @@ describe("LeaveButton", () => {
   it("disables the button while the action is in flight", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     let resolve!: (value: { ok: boolean; message?: string }) => void;
-    mockRemoveMember.mockImplementationOnce(() => new Promise<{ ok: boolean; message?: string }>((r) => (resolve = r)));
-    render(<LeaveButton orgSlug="acme" userId="u1" />);
+    actions.remove.mockImplementationOnce(() => new Promise<{ ok: boolean; message?: string }>((r) => (resolve = r)));
+    render(<LeaveButton userId="u1" actions={actions} />);
     await userEvent.click(screen.getByRole("button", { name: /Leave|Leaving/ }));
     expect(screen.getByRole("button", { name: /Leaving|Leave/ })).toBeDisabled();
     resolve({ ok: true });

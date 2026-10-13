@@ -1,7 +1,9 @@
 // Who's signed in on weft.zip: a cookie session per visitor through @supabase/ssr. The desktop's own session
 // (lib/account.ts) is a sealed file on your machine, so it can't stand for a visitor on the deployed site; the
 // team pages (app/[orgSlug]/team, app/invite) and /login read this one instead. proxy.ts refreshes it on each
-// request; Server Components only read it (they can't write cookies).
+// request; Server Components only read it (they can't write cookies). /api/teams is a public JSON API; its
+// caller hands a bearer token (the desktop's own Supabase access token) and bearerUser verifies it against
+// the project's publishable key — same auth model, different transport.
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
@@ -39,20 +41,52 @@ export async function webClient(): Promise<WebClient> {
 
 export type WebUser = { id: string; email: string | null; name: string | null; avatar: string | null };
 
+// Pick the first non-empty string out of a list, used for the optional name/avatar/email fields. A Supabase
+// claims payload puts them in `email` and `user_metadata.{full_name,name,user_name,avatar_url,picture}` — we
+// try the most specific name first and fall back, so an OAuth provider that only fills `name` still shows.
+function pickText(...values: unknown[]): string | null {
+  return values.find((v): v is string => typeof v === "string" && v !== "") ?? null;
+}
+
+// Map a Supabase Auth claims shape to the plain WebUser the rest of Weft passes around. The cookie session
+// and the bearer path both go through this; keeping it in one place means a new claim goes everywhere.
+function claimsToUser(claims: Record<string, unknown>): WebUser | null {
+  if (typeof claims.sub !== "string" || !claims.sub) return null;
+  const meta = (claims.user_metadata ?? {}) as Record<string, unknown>;
+  return {
+    id: claims.sub,
+    email: pickText(claims.email),
+    name: pickText(meta.full_name, meta.name, meta.user_name),
+    avatar: pickText(meta.avatar_url, meta.picture),
+  };
+}
+
+// A stateless Supabase client — no session storage, no auto-refresh — used to verify a JWT the caller sent
+// in `Authorization: Bearer <jwt>`. Each call builds a fresh client so no per-request state lives across calls.
+function bearerClient() {
+  return createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+
 // The signed-in visitor, from the cookie's JWT (verified against the project's keys), or null.
 export async function webUser(client?: WebClient): Promise<WebUser | null> {
   const supabase = client ?? (await webClient());
   const { data, error } = await supabase.auth.getClaims();
   if (error || !data?.claims.sub) return null;
-  const claims = data.claims as Record<string, unknown>;
-  const meta = (claims.user_metadata ?? {}) as Record<string, unknown>;
-  const text = (...values: unknown[]) => values.find((v): v is string => typeof v === "string" && v !== "") ?? null;
-  return {
-    id: String(claims.sub),
-    email: text(claims.email),
-    name: text(meta.full_name, meta.name, meta.user_name),
-    avatar: text(meta.avatar_url, meta.picture),
-  };
+  return claimsToUser(data.claims);
+}
+
+// The visitor the request's `Authorization: Bearer <jwt>` says they are. Used by /api/teams so the
+// desktop's local board can call the deployed Weft's team API on the user's behalf without that machine
+// ever holding a cookie for weft.zip. Returns null for a missing, malformed or unverifiable token.
+export async function bearerUser(req: Request): Promise<WebUser | null> {
+  const header = req.headers.get("authorization") ?? "";
+  const match = /^Bearer\s+(.+)$/i.exec(header);
+  if (!match) return null;
+  const jwt = match[1]?.trim() ?? "";
+  if (!jwt) return null;
+  const { data, error } = await bearerClient().auth.getClaims(jwt);
+  if (error || !data?.claims.sub) return null;
+  return claimsToUser(data.claims);
 }
 
 // The service-role client for the deployed Weft's own writes (orgs, memberships, invites). The key is set on

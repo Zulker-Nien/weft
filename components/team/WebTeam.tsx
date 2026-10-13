@@ -1,0 +1,92 @@
+"use client";
+
+// The client-side wrapper app/[orgSlug]/team/page.tsx renders. A server
+// page can't hand a function to a client component, so the page passes
+// the org slug and the snapshot pieces; this file builds the TeamClient
+// actions from the slug and passes the result down. The team components
+// (Roster, InviteForm, PendingInvites, LeaveButton) take `actions` as a
+// prop and never import from lib/team-actions.ts.
+
+import type { TeamClientActions, TeamMember, TeamOrg, TeamRole, TeamSnapshot } from "@/lib/team-types";
+import type { RoleOption } from "./InviteForm";
+import type { PendingInviteRow } from "./PendingInvites";
+import type { RosterMember } from "./Roster";
+import { InviteForm } from "./InviteForm";
+import { LeaveButton } from "./LeaveButton";
+import { PendingInvites, inviteRow } from "./PendingInvites";
+import { Roster } from "./Roster";
+import { webTeamActions } from "./web-actions";
+
+export function WebTeam({
+  orgSlug,
+  snapshot,
+}: {
+  orgSlug: string;
+  snapshot: TeamSnapshot;
+}) {
+  const actions: TeamClientActions = webTeamActions(orgSlug);
+  const roster: RosterMember[] = snapshot.members.map((m) => ({
+    userId: m.userId,
+    email: m.email,
+    displayName: m.name,
+    role: m.role,
+    roleLabel: snapshot.roleLabels[m.role],
+    joinedAt: m.joinedAt,
+    isYou: m.userId === snapshot.user.id,
+  }));
+  const roleOptions: RoleOption[] = snapshot.roleOptions.map((o) => ({ role: o.role, label: o.label, description: o.description }));
+  const pending: PendingInviteRow[] = snapshot.pending.map((i) => inviteRow(i, snapshot.roleLabels));
+  const isOwner = snapshot.role === "owner";
+  return (
+    <div className="wz-teamPage">
+      <header className="wz-teamHeader">
+        <h1 className="wz-teamTitle">Team</h1>
+        <p className="wz-teamSub">
+          {roster.length} {roster.length === 1 ? "person" : "people"} in <strong>{snapshot.org.name}</strong>. You&apos;re signed in as a {snapshot.roleLabels[snapshot.role].toLowerCase()}.
+        </p>
+      </header>
+
+      <section className="wz-teamSection">
+        <h2 className="wz-teamSectionTitle">Members</h2>
+        <Roster
+          members={snapshot.members}
+          canManage={snapshot.canManage}
+          roleOptions={roleOptions}
+          currentUserId={snapshot.user.id}
+          actions={actions}
+        />
+      </section>
+
+      {snapshot.canManage ? (
+        <section className="wz-teamSection">
+          <h2 className="wz-teamSectionTitle">Invite a teammate</h2>
+          <InviteForm roleOptions={roleOptions} actions={actions} />
+        </section>
+      ) : null}
+
+      {snapshot.canManage && pending.length > 0 ? (
+        <section className="wz-teamSection">
+          <h2 className="wz-teamSectionTitle">Pending invites</h2>
+          <PendingInvites invites={pending} roleLabels={snapshot.roleLabels} actions={actions} />
+        </section>
+      ) : null}
+
+      {!isOwner ? (
+        <section className="wz-teamSection">
+          <h2 className="wz-teamSectionTitle">Leave this workspace</h2>
+          <p className="wz-teamSub">
+            You&apos;ll lose access to its boards, billing and shared vaults. You can be re-invited later.
+          </p>
+          <LeaveButton userId={snapshot.user.id} actions={actions} />
+        </section>
+      ) : null}
+
+      <footer className="wz-teamFooter">
+        Shared vaults for this workspace are coming next: secrets your teammates&apos; Weft can use without ever seeing them on our servers.
+      </footer>
+    </div>
+  );
+}
+
+// We re-export the page's prop type so the server page can pass typed data.
+export type { TeamOrg, TeamRole, TeamSnapshot, TeamMember };

@@ -3,15 +3,10 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PendingInvites, type PendingInviteRow } from "./PendingInvites";
+import type { TeamClientActions, TeamRole } from "@/lib/team-types";
 import "../test-utils";
 
-vi.mock("@/lib/team-actions", () => ({
-  revokeInvite: vi.fn(),
-}));
-
-import { revokeInvite } from "@/lib/team-actions";
-
-const mockRevokeInvite = vi.mocked(revokeInvite);
+const roleLabels: Record<TeamRole, string> = { owner: "Owner", admin: "Admin", member: "Member" };
 
 const ada: PendingInviteRow = {
   id: "i1",
@@ -30,19 +25,31 @@ const grace: PendingInviteRow = {
   expiresAt: "2026-10-19T00:00:00.000Z",
 };
 
+function makeActions(): TeamClientActions & {
+  revoke: ReturnType<typeof vi.fn>;
+} {
+  return {
+    invite: vi.fn().mockResolvedValue({ ok: true }),
+    changeRole: vi.fn().mockResolvedValue({ ok: true }),
+    remove: vi.fn().mockResolvedValue({ ok: true }),
+    revoke: vi.fn().mockResolvedValue({ ok: true, message: "Revoked." }),
+  };
+}
+
+let actions: ReturnType<typeof makeActions>;
+
 beforeEach(() => {
-  vi.clearAllMocks();
-  mockRevokeInvite.mockResolvedValue({ ok: true, message: "Revoked." });
+  actions = makeActions();
 });
 
 describe("PendingInvites", () => {
   it("renders nothing when there are no invites", () => {
-    const { container } = render(<PendingInvites orgSlug="acme" invites={[]} />);
+    const { container } = render(<PendingInvites invites={[]} roleLabels={roleLabels} actions={actions} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it("shows every invite with email, role and expiry", () => {
-    render(<PendingInvites orgSlug="acme" invites={[ada, grace]} />);
+    render(<PendingInvites invites={[ada, grace]} roleLabels={roleLabels} actions={actions} />);
     expect(screen.getByText("ada@b.co")).toBeInTheDocument();
     expect(screen.getByText("grace@b.co")).toBeInTheDocument();
     expect(screen.getByText("Admin")).toBeInTheDocument();
@@ -50,24 +57,24 @@ describe("PendingInvites", () => {
   });
 
   it("revokes an invite and shows a success message", async () => {
-    render(<PendingInvites orgSlug="acme" invites={[ada]} />);
+    render(<PendingInvites invites={[ada]} roleLabels={roleLabels} actions={actions} />);
     await userEvent.click(screen.getByRole("button", { name: "Revoke invite for ada@b.co" }));
-    await waitFor(() => expect(mockRevokeInvite).toHaveBeenCalled());
-    expect(mockRevokeInvite).toHaveBeenCalledWith("acme", "i1");
+    await waitFor(() => expect(actions.revoke).toHaveBeenCalled());
+    expect(actions.revoke).toHaveBeenCalledWith("i1");
     expect(await screen.findByText("Revoked.")).toBeInTheDocument();
   });
 
   it("shows the action's error message when revoke fails", async () => {
-    mockRevokeInvite.mockResolvedValueOnce({ ok: false, message: "Already accepted." });
-    render(<PendingInvites orgSlug="acme" invites={[ada]} />);
+    actions.revoke.mockResolvedValueOnce({ ok: false, message: "Already accepted." });
+    render(<PendingInvites invites={[ada]} roleLabels={roleLabels} actions={actions} />);
     await userEvent.click(screen.getByRole("button", { name: "Revoke invite for ada@b.co" }));
     expect(await screen.findByText("Already accepted.")).toBeInTheDocument();
   });
 
   it("disables the revoke button while the action is in flight", async () => {
     let resolve!: (value: { ok: boolean; message?: string }) => void;
-    mockRevokeInvite.mockImplementationOnce(() => new Promise<{ ok: boolean; message?: string }>((r) => (resolve = r)));
-    render(<PendingInvites orgSlug="acme" invites={[ada]} />);
+    actions.revoke.mockImplementationOnce(() => new Promise<{ ok: boolean; message?: string }>((r) => (resolve = r)));
+    render(<PendingInvites invites={[ada]} roleLabels={roleLabels} actions={actions} />);
     await userEvent.click(screen.getByRole("button", { name: "Revoke invite for ada@b.co" }));
     expect(screen.getByRole("button", { name: /Working|Revoke/ })).toBeDisabled();
     resolve({ ok: true, message: "Revoked." });

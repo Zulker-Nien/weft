@@ -156,6 +156,67 @@ describe("webUser", () => {
   });
 });
 
+describe("bearerUser", () => {
+  function bearerWith(claims: unknown, error: unknown = null) {
+    const getClaims = vi.fn().mockResolvedValue({ data: claims === undefined ? null : { claims }, error });
+    createClient.mockReturnValueOnce({ auth: { getClaims } });
+    return getClaims;
+  }
+
+  function req(header: string | null) {
+    return new Request("https://weft.example/api/teams", { headers: header ? { authorization: header } : {} });
+  }
+
+  it("returns null when the Authorization header is missing", async () => {
+    const { bearerUser } = await load();
+    expect(await bearerUser(req(null))).toBeNull();
+    expect(createClient).not.toHaveBeenCalled();
+  });
+
+  it("returns null for a header that isn't a Bearer", async () => {
+    const { bearerUser } = await load();
+    expect(await bearerUser(req("Basic abc"))).toBeNull();
+    expect(createClient).not.toHaveBeenCalled();
+  });
+
+  it("returns null for a bearer with an empty token", async () => {
+    const { bearerUser } = await load();
+    expect(await bearerUser(req("Bearer    "))).toBeNull();
+    expect(createClient).not.toHaveBeenCalled();
+  });
+
+  it("verifies a JWT with a stateless Supabase client and maps the claims", async () => {
+    const { bearerUser } = await load();
+    const getClaims = bearerWith({ sub: "u1", email: "ada@b.co", user_metadata: { full_name: "Ada" } });
+    const out = await bearerUser(req("Bearer jwt.tok.en"));
+    expect(out).toEqual({ id: "u1", email: "ada@b.co", name: "Ada", avatar: null });
+    // A stateless client (no session storage, no auto-refresh) is what bearer paths expect.
+    const [url, key, opts] = createClient.mock.calls[0] as [string, string, { auth: Record<string, unknown> }];
+    expect(url).toBe("https://test.supabase.co");
+    expect(key).toBe("sb_publishable_test");
+    expect(opts.auth).toEqual({ persistSession: false, autoRefreshToken: false });
+    expect(getClaims).toHaveBeenCalledWith("jwt.tok.en");
+  });
+
+  it("returns null on an error, missing sub, or absent claims", async () => {
+    const { bearerUser } = await load();
+    bearerWith({ sub: "u1" }, { message: "expired" });
+    expect(await bearerUser(req("Bearer x"))).toBeNull();
+    bearerWith(undefined);
+    expect(await bearerUser(req("Bearer x"))).toBeNull();
+    bearerWith({});
+    expect(await bearerUser(req("Bearer x"))).toBeNull();
+    bearerWith({ sub: "" });
+    expect(await bearerUser(req("Bearer x"))).toBeNull();
+  });
+
+  it("accepts a lowercase 'bearer' scheme", async () => {
+    const { bearerUser } = await load();
+    bearerWith({ sub: "u1", user_metadata: {} });
+    expect(await bearerUser(req("bearer x.y.z"))).toMatchObject({ id: "u1" });
+  });
+});
+
 describe("serviceClient", () => {
   it("is null when SUPABASE_SECRET_KEY is unset", async () => {
     const { serviceClient } = await load();

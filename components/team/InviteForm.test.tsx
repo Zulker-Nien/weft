@@ -2,16 +2,9 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { InviteForm, type RoleOption, type InviteActionState } from "./InviteForm";
+import { InviteForm, type RoleOption } from "./InviteForm";
+import type { TeamClientActions } from "@/lib/team-types";
 import "../test-utils";
-
-vi.mock("@/lib/team-actions", () => ({
-  inviteMember: vi.fn(),
-}));
-
-import { inviteMember } from "@/lib/team-actions";
-
-const mockInviteMember = vi.mocked(inviteMember);
 
 const roleOptions: RoleOption[] = [
   { role: "owner", label: "Owner", description: "Full control." },
@@ -19,52 +12,59 @@ const roleOptions: RoleOption[] = [
   { role: "member", label: "Member", description: "View and publish." },
 ];
 
+function makeActions(): TeamClientActions & {
+  invite: ReturnType<typeof vi.fn>;
+} {
+  return {
+    invite: vi.fn().mockResolvedValue({ ok: true, message: "ok" }),
+    changeRole: vi.fn().mockResolvedValue({ ok: true }),
+    remove: vi.fn().mockResolvedValue({ ok: true }),
+    revoke: vi.fn().mockResolvedValue({ ok: true }),
+  };
+}
+
+let actions: ReturnType<typeof makeActions>;
+
 beforeEach(() => {
-  vi.clearAllMocks();
-  mockInviteMember.mockResolvedValue({ ok: true, message: "ok" });
+  actions = makeActions();
 });
 
 describe("InviteForm", () => {
   it("shows the role select with the first option pre-picked, plus its description", () => {
-    render(<InviteForm orgSlug="acme" roleOptions={roleOptions} />);
+    render(<InviteForm roleOptions={roleOptions} actions={actions} />);
     expect(screen.getByRole("combobox", { name: "Role" })).toHaveValue("owner");
     expect(screen.getByText("Full control.")).toBeInTheDocument();
   });
 
   it("updates the description when the role select changes", async () => {
-    render(<InviteForm orgSlug="acme" roleOptions={roleOptions} />);
+    render(<InviteForm roleOptions={roleOptions} actions={actions} />);
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Role" }), "admin");
     expect(screen.getByText("Manage the workspace.")).toBeInTheDocument();
   });
 
   it("disables the submit button until an email is entered", async () => {
-    render(<InviteForm orgSlug="acme" roleOptions={roleOptions} />);
+    render(<InviteForm roleOptions={roleOptions} actions={actions} />);
     expect(screen.getByRole("button", { name: "Send invite" })).toBeDisabled();
     await userEvent.type(screen.getByRole("textbox", { name: "Email" }), "ada@b.co");
     expect(screen.getByRole("button", { name: "Send invite" })).toBeEnabled();
   });
 
-  it("submits the email and role through inviteMember bound to orgSlug and shows a success message", async () => {
-    mockInviteMember.mockImplementationOnce((_orgSlug: string, _prev: InviteActionState, formData: FormData) => {
-      const email = formData.get("email");
-      return Promise.resolve({ ok: true, message: "Invite sent to " + (typeof email === "string" ? email : "") });
-    });
-    render(<InviteForm orgSlug="acme" roleOptions={roleOptions} />);
+  it("submits the email and role through actions.invite and shows a success message", async () => {
+    actions.invite.mockImplementationOnce((email: string) =>
+      Promise.resolve({ ok: true, message: `Invite sent to ${email}` }),
+    );
+    render(<InviteForm roleOptions={roleOptions} actions={actions} />);
     await userEvent.type(screen.getByRole("textbox", { name: "Email" }), "ada@b.co");
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Role" }), "admin");
     await userEvent.click(screen.getByRole("button", { name: "Send invite" }));
-    await waitFor(() => expect(mockInviteMember).toHaveBeenCalled());
-    const [orgSlug, , formData] = mockInviteMember.mock.calls[0]!;
-    expect(orgSlug).toBe("acme");
-    expect(formData).toBeInstanceOf(FormData);
-    expect(formData.get("email")).toBe("ada@b.co");
-    expect(formData.get("role")).toBe("admin");
+    await waitFor(() => expect(actions.invite).toHaveBeenCalled());
+    expect(actions.invite).toHaveBeenCalledWith("ada@b.co", "admin");
     expect(await screen.findByText("Invite sent to ada@b.co")).toBeInTheDocument();
   });
 
   it("clears the email after a successful invite but keeps the role", async () => {
-    mockInviteMember.mockResolvedValueOnce({ ok: true, message: "Sent." });
-    render(<InviteForm orgSlug="acme" roleOptions={roleOptions} />);
+    actions.invite.mockResolvedValueOnce({ ok: true, message: "Sent." });
+    render(<InviteForm roleOptions={roleOptions} actions={actions} />);
     await userEvent.type(screen.getByRole("textbox", { name: "Email" }), "ada@b.co");
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Role" }), "admin");
     await userEvent.click(screen.getByRole("button", { name: "Send invite" }));
@@ -74,17 +74,17 @@ describe("InviteForm", () => {
   });
 
   it("shows the action's error message when the email is invalid", async () => {
-    mockInviteMember.mockResolvedValueOnce({ ok: false, message: "Enter a valid email address." });
-    render(<InviteForm orgSlug="acme" roleOptions={roleOptions} />);
+    actions.invite.mockResolvedValueOnce({ ok: false, message: "Enter a valid email address." });
+    render(<InviteForm roleOptions={roleOptions} actions={actions} />);
     await userEvent.type(screen.getByRole("textbox", { name: "Email" }), "not-an-email");
     await userEvent.click(screen.getByRole("button", { name: "Send invite" }));
     expect(await screen.findByText("Enter a valid email address.")).toBeInTheDocument();
   });
 
   it("disables both inputs and the submit while pending", async () => {
-    let resolve!: (value: InviteActionState) => void;
-    mockInviteMember.mockImplementationOnce(() => new Promise<InviteActionState>((r) => (resolve = r)));
-    render(<InviteForm orgSlug="acme" roleOptions={roleOptions} />);
+    let resolve!: (value: { ok: boolean; message?: string }) => void;
+    actions.invite.mockImplementationOnce(() => new Promise<{ ok: boolean; message?: string }>((r) => (resolve = r)));
+    render(<InviteForm roleOptions={roleOptions} actions={actions} />);
     await userEvent.type(screen.getByRole("textbox", { name: "Email" }), "ada@b.co");
     await userEvent.click(screen.getByRole("button", { name: "Send invite" }));
     expect(screen.getByRole("button", { name: /Sending|Send invite/ })).toBeDisabled();

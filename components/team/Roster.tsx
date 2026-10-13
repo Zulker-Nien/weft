@@ -3,43 +3,52 @@
 // The workspace roster. For every member: display name (or email, or a
 // "—" placeholder when neither is set), role, joined date, and a "you" pill
 // on the visitor's own row. Managers also get a role <select> (calling
-// changeMemberRole) and a Remove button (calling removeMember). Non-managers
-// see the same table without the controls.
+// actions.changeRole) and a Remove button (calling actions.remove). Non-
+// managers see the same table without the controls.
 //
-// Each row imports its actions from @/lib/team-actions, so the page only
-// hands the component the orgSlug (a plain string). The action result shows
-// inline below the row so a manager who runs into a permission change mid-
-// rotation sees it without navigating away. The change-role select fires
-// the action on change with a tiny FormData; remove uses a button + confirm
-// because removing is a one-way door.
+// The actions object comes in as a prop so the same component is shared by
+// the weft.zip server-page path (where actions wrap lib/team-actions.ts
+// server actions) and the desktop's Settings → Team path (where actions
+// post through lib/use-team.ts to the local forwarder). No server-only
+// imports here, so the bundle stays browser-safe. The action result shows
+// inline below the row so a manager who runs into a permission change
+// mid-rotation sees it without navigating away.
 //
 // A row's controls are disabled while its action is in flight, so a
 // double-click can't double-fire. The role <select> only shows roles the
 // actor can assign (the server bakes that into the options list passed in
 // as `roleOptions`); the table here doesn't decide who's assignable.
 import { useState, useTransition } from "react";
-import { changeMemberRole, removeMember } from "@/lib/team-actions";
+import type { TeamClientActions, TeamMember, TeamRole } from "@/lib/team-types";
 
-// The shape the server hands down. We don't import `OrgRole` from
-// @aimhuge/teams here — that package's root pulls node:crypto and breaks
-// the "use client" boundary, even for a type-only import that the bundler
-// may still evaluate. `role` is a string; the type union lives in the
-// server's domain.
+// The role <select>'s options. The server filters the list to the roles
+// the actor can assign (an owner sees all three, an admin sees admin +
+// member, a member is never shown the select because canManage is false).
+// roleLabels is the canonical "Owner/Admin/Member" map for the read-only
+// case where no select is shown.
+export type RoleOption = { role: TeamRole; label: string };
 
 export type RosterMember = {
   userId: string;
   email: string | null;
   displayName: string | null;
-  role: string;
+  role: TeamRole;
   roleLabel: string;
   joinedAt: string;
   isYou: boolean;
 };
 
-// The role <select>'s options. The server filters the list to the roles
-// the actor can assign (an owner sees all three, an admin sees admin +
-// member, a member is never shown the select because canManage is false).
-export type RoleOption = { role: string; label: string };
+function RosterMemberProps(member: TeamMember, isYou: boolean): RosterMember {
+  return {
+    userId: member.userId,
+    email: member.email,
+    displayName: member.name,
+    role: member.role,
+    roleLabel: member.role,
+    joinedAt: member.joinedAt,
+    isYou,
+  };
+}
 
 function formatJoined(iso: string): string {
   // A short, locale-agnostic "Mon DD, YYYY" — the table is a list, not a
@@ -55,15 +64,15 @@ function displayName(member: RosterMember): string {
 }
 
 function RosterRow({
-  orgSlug,
   member,
   canManage,
   roleOptions,
+  actions,
 }: {
-  orgSlug: string;
   member: RosterMember;
   canManage: boolean;
   roleOptions: RoleOption[];
+  actions: TeamClientActions;
 }) {
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -74,13 +83,12 @@ function RosterRow({
   // same value. A small "Saving…" label on the right is enough feedback.
   function handleChangeRole(e: React.ChangeEvent<HTMLSelectElement>) {
     if (!canManage) return;
-    const formData = new FormData();
-    formData.set("role", e.target.value);
+    const next = e.target.value as TeamRole;
     startTransition(async () => {
-      const result = await changeMemberRole(orgSlug, member.userId, formData);
+      const result = await actions.changeRole(member.userId, next);
       setMessage({
         kind: result.ok ? "ok" : "err",
-        text: result.message ?? (result.ok ? "Saved." : "Couldn\u2019t save."),
+        text: result.message ?? (result.ok ? "Saved." : "Couldn’t save."),
       });
     });
   }
@@ -90,10 +98,10 @@ function RosterRow({
     const display = member.displayName?.trim() || member.email || "this member";
     if (typeof window !== "undefined" && !window.confirm(`Remove ${display} from this workspace?`)) return;
     startTransition(async () => {
-      const result = await removeMember(orgSlug, member.userId);
+      const result = await actions.remove(member.userId);
       setMessage({
         kind: result.ok ? "ok" : "err",
-        text: result.message ?? (result.ok ? "Removed." : "Couldn\u2019t remove."),
+        text: result.message ?? (result.ok ? "Removed." : "Couldn’t remove."),
       });
     });
   }
@@ -140,7 +148,7 @@ function RosterRow({
               onClick={handleRemove}
               disabled={pending || member.isYou}
               aria-label={`Remove ${displayName(member)}`}
-              title={member.isYou ? "You can\u2019t remove yourself; use Leave instead" : `Remove ${displayName(member)}`}
+              title={member.isYou ? "You can’t remove yourself; use Leave instead" : `Remove ${displayName(member)}`}
             >
               {pending ? "Working…" : "Remove"}
             </button>
@@ -163,19 +171,25 @@ function RosterRow({
 }
 
 export function Roster({
-  orgSlug,
   members,
   canManage,
   roleOptions,
   currentUserId,
+  actions,
 }: {
-  orgSlug: string;
-  members: RosterMember[];
+  members: TeamMember[];
   canManage: boolean;
   roleOptions: RoleOption[];
   currentUserId: string;
+  actions: TeamClientActions;
 }) {
-  if (members.length === 0) {
+  // RosterMember is the row shape the page builds; TeamMember from
+  // lib/team-types is what callers pass in (a snapshot's members list). The
+  // page computes isYou against currentUserId; the component only needs the
+  // precomputed flag, but it derives one here too so callers can hand in a
+  // raw snapshot without pre-processing.
+  const rows: RosterMember[] = members.map((m) => RosterMemberProps(m, m.userId === currentUserId));
+  if (rows.length === 0) {
     return <p className="wz-teamSub">No members yet. Invite the first teammate below.</p>;
   }
 
@@ -190,13 +204,14 @@ export function Roster({
         </tr>
       </thead>
       <tbody>
-        {members.map((m) => (
+        {rows.map((m) => (
           <RosterRow
             key={m.userId}
-            orgSlug={orgSlug}
             member={m}
+            // A manager can't remove themselves — Leave workspace is the path off the roster.
             canManage={canManage && m.userId !== currentUserId}
             roleOptions={roleOptions}
+            actions={actions}
           />
         ))}
       </tbody>

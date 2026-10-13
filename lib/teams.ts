@@ -4,7 +4,9 @@
 // package's pure helpers and re-implements the gate in this file. Plain queries per request are fine —
 // cacheComponents is on in next.config.ts, but a "use cache" function may not close over a Supabase
 // client, so caching happens at a different layer (the proxy refreshes the session cookie; membership
-// writes invalidate via revalidatePath in the server actions).
+// writes invalidate via revalidatePath in the server actions). The /api/teams JSON API and the desktop's
+// local forwarder share the same gate through `teamAccessFor(user, slug)`: the cookie path's
+// `teamAccess` is just `teamAccessFor(await webUser(), slug)`.
 import "server-only";
 import type { Org, OrgRole } from "@aimhuge/teams";
 import { ORG_ROLES, assignableRoles, createInvite, isPlausibleEmail, listUserOrgs, normalizeEmail, revokeInvite, roleDescription, roleLabel, setCurrentOrg } from "@aimhuge/teams";
@@ -33,16 +35,15 @@ function safeReturnPath(raw: string | undefined, fallback: string): string {
   return raw;
 }
 
-// Reads the four pieces of state teamAccess needs: unconfigured, signed-out, denied, or ok. The two
-// unconfigured cases come first so a Weft without a service key or without a publishable key is
-// indistinguishable from "the deployed project isn't set up" (a 404 from /[orgSlug] is the right
-// outcome either way, but we still want the distinct kind for the "Email isn't set up" branch in the
-// invite action).
-export async function teamAccess(orgSlug: string): Promise<TeamAccess> {
+// The membership gate, parameterized by the user. Server pages call this with the cookie's user
+// (teamAccess does the lookup for them); /api/teams calls it with the bearer-token user. The
+// unconfigured cases come first so a Weft without a service key is indistinguishable from "the
+// deployed project isn't set up" (a 404 from /[orgSlug] is the right outcome either way, but we still
+// want the distinct kind for the "Email isn't set up" branch in the invite action).
+export async function teamAccessFor(user: WebUser | null, orgSlug: string): Promise<TeamAccess> {
   if (!SUPABASE_KEY) return { kind: "unconfigured" };
   const service = serviceClient();
   if (!service) return { kind: "unconfigured" };
-  const user = await webUser();
   if (!user) return { kind: "signed-out" };
   // Look up the org by slug and the membership for this user in one round trip each. `orgs` has RLS
   // on with no policies, so the publishable key can't read it; the service client is required. The
@@ -78,6 +79,12 @@ export async function teamAccess(orgSlug: string): Promise<TeamAccess> {
   };
 }
 
+// The cookie path's wrapper around teamAccessFor: pulls the user from the request's cookies. Pages and
+// server actions call this; /api/teams calls teamAccessFor directly with the bearer user.
+export async function teamAccess(orgSlug: string): Promise<TeamAccess> {
+  return teamAccessFor(await webUser(), orgSlug);
+}
+
 // The version server components and server actions call: signed-out → redirect to /login, denied or
 // unconfigured → notFound(). `returnPath` is the URL to come back to after sign-in; it must be a same-
 // origin path (the open-redirect guard above).
@@ -95,11 +102,12 @@ export async function requireTeam(orgSlug: string, returnPath?: string): Promise
 // caller branches on `kind` without "did they mean signed-out or null" string-comparisons.
 export type CurrentWorkspace = { kind: "signed-out" } | { kind: "none" } | { kind: "ok"; slug: string };
 
-export async function currentWorkspaceSlug(): Promise<CurrentWorkspace> {
+// The active-workspace resolver, parameterized by the user. /api/teams and the cookie path both reach
+// in here: the cookie path uses currentWorkspaceSlug() so it doesn't have to fetch the user twice.
+export async function currentWorkspaceFor(user: WebUser | null): Promise<CurrentWorkspace> {
   if (!SUPABASE_KEY) return { kind: "none" };
   const service = serviceClient();
   if (!service) return { kind: "none" };
-  const user = await webUser();
   if (!user) return { kind: "signed-out" };
   const memberships = await listUserOrgs(service, user.id);
   const oldest = memberships[0];
@@ -117,6 +125,10 @@ export async function currentWorkspaceSlug(): Promise<CurrentWorkspace> {
   // first to keep the round-trip down.
   await setCurrentOrg(service, user.id, oldest.org.id);
   return { kind: "ok", slug: oldest.org.slug };
+}
+
+export async function currentWorkspaceSlug(): Promise<CurrentWorkspace> {
+  return currentWorkspaceFor(await webUser());
 }
 
 // Switch the active workspace from a workspace switcher. `requireTeam` re-verifies membership, so a
