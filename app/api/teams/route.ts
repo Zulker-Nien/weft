@@ -22,8 +22,8 @@ import { currentWorkspaceFor, teamAccessFor } from "@/lib/teams";
 import { TEAM_ROLES, type TeamOp, type TeamRole } from "@/lib/team-types";
 import { bearerUser } from "@/lib/web-session";
 
-// The route reads the request — cacheComponents is on, so we mark it dynamic.
-export const dynamic = "force-dynamic";
+// It reads the request, so each handler awaits connection(); route segment config like `dynamic` isn't allowed
+// with cacheComponents.
 
 // 503 is the right answer for "the deployment isn't set up" so callers
 // (the desktop, an integration test) can distinguish from 401/404.

@@ -111,8 +111,8 @@ describe("GET /api/teams", () => {
     expect(await res.json()).toEqual({ error: "unconfigured" });
   });
 
-  it("exports the same dynamic marker Next needs for a request-reading route", () => {
-    expect(route.dynamic).toBe("force-dynamic");
+  it("exports no route segment config, which cacheComponents refuses at build", () => {
+    expect("dynamic" in route).toBe(false);
   });
 });
 
