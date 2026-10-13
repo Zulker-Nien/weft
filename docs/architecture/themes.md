@@ -18,6 +18,8 @@ one of Weft's own pictures behind the board, with a palette drawn from it and cl
   `savedTheme()` reads the `weft-theme` cookie, `setTheme()` writes it and applies it, `applyTheme()` sets
   `<html data-theme>` (the base, light or dark) and `<html data-scene>` (the scene, if any).
   `THEME_SCRIPT` is the same logic inlined into `<head>` so the first paint is right.
+- The weft.zip home page's third-party tracking (Google Analytics, mounted only on the marketing page)
+  lives in `docs/architecture/analytics.md`.
 - `app/globals.css`: the light palette on `:root` and the dark one on `:root[data-theme="dark"]`; each scene is a
   `:root[data-scene="<id>"]` block that overrides the colors and sets `--scene` (its picture) and `--scrim`
   (a gradient that keeps text readable). `:root[data-scene] body` paints scrim, picture, then canvas;

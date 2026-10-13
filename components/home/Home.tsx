@@ -20,46 +20,49 @@ export default async function Home() {
     <>
       <GoogleAnalytics />
       <div className={`${fraunces.variable} ${instrument.variable} wz-root`}>
-      <nav className="wz-wrap wz-nav">
-        <span className="wz-brand">
-          <Image src={emblem} alt="" width={28} height={28} className="wz-emblem" /> Weft
-        </span>
-        <a href={REPO}>GitHub</a>
-      </nav>
-
-      <header className="wz-hero">
-        <Image src={twinSuns} alt="" fill priority sizes="100vw" className="wz-photo" />
-        <div className="wz-scrim" />
-        <div className="wz-wrap wz-heroInner">
-          <h1 className="wz-h1 wz-rise">
-            A board for <em>your AI.</em>
-          </h1>
-          <p className="wz-lede wz-rise wz-d1">
-            A Mac kanban board where every card is a Claude Code thread. You bring the idea; Weft plans it, builds it and shows it to you.
-          </p>
-          <div className="wz-ctas wz-rise wz-d2">
-            <a className="wz-btn wz-btnPrimary" href={download.href}>
-              {download.label}
-            </a>
+        <nav className="wz-wrap wz-nav">
+          <span className="wz-brand">
+            <Image src={emblem} alt="" width={28} height={28} className="wz-emblem" /> Weft
+          </span>
+          <div className="flex items-center gap-5">
+            <a href="/login">Sign in</a>
+            <a href={REPO}>GitHub</a>
           </div>
-          <p className="wz-note wz-rise wz-d2">{download.note}</p>
-        </div>
-      </header>
+        </nav>
 
-      <div className="wz-wrap wz-shotWrap wz-rise wz-d3">
-        <div className="wz-shot">
-          <Image src={board} alt="The Weft board: Backlog, Running, Needs you, Review and Done, each card a thread" priority sizes="(max-width: 1216px) 100vw, 1104px" />
+        <header className="wz-hero">
+          <Image src={twinSuns} alt="" fill priority sizes="100vw" className="wz-photo" />
+          <div className="wz-scrim" />
+          <div className="wz-wrap wz-heroInner">
+            <h1 className="wz-h1 wz-rise">
+              A board for <em>your AI.</em>
+            </h1>
+            <p className="wz-lede wz-rise wz-d1">
+              A Mac kanban board where every card is a Claude Code thread. You bring the idea; Weft plans it, builds it and shows it to you.
+            </p>
+            <div className="wz-ctas wz-rise wz-d2">
+              <a className="wz-btn wz-btnPrimary" href={download.href}>
+                {download.label}
+              </a>
+            </div>
+            <p className="wz-note wz-rise wz-d2">{download.note}</p>
+          </div>
+        </header>
+
+        <div className="wz-wrap wz-shotWrap wz-rise wz-d3">
+          <div className="wz-shot">
+            <Image src={board} alt="The Weft board: Backlog, Running, Needs you, Review and Done, each card a thread" priority sizes="(max-width: 1216px) 100vw, 1104px" />
+          </div>
         </div>
+
+        <footer className="wz-wrap wz-footer">
+          Made with{" "}
+          <a href={COFFEE} title="Buy me a coffee">
+            ☕
+          </a>{" "}
+          by <a href={AIMHUGE}>aimhuge.com</a> · Free and open source on <a href={REPO}>GitHub</a>
+        </footer>
       </div>
-
-      <footer className="wz-wrap wz-footer">
-        Made with{" "}
-        <a href={COFFEE} title="Buy me a coffee">
-          ☕
-        </a>{" "}
-        by <a href={AIMHUGE}>aimhuge.com</a> · Free and open source on <a href={REPO}>GitHub</a>
-      </footer>
-    </div>
     </>
   );
 }

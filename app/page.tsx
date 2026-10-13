@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Board from "@/components/Board";
+import HomeErrorFallback from "@/components/HomeErrorFallback";
 import { homeMetadata, isDeployed, loadHome } from "@/lib/home";
 
 // The board on your Mac; the weft.zip home page on the deployed Weft (Vercel), which has no CLIs to run
@@ -17,19 +18,7 @@ export default async function Page() {
     }
     // In prod (Vercel) the build fails before this runs; in dev the build error bar (lib/build-error.ts) shows
     // the real error. Render a small marker so the page is still a page.
-    return <BuildErrorPlaceholder message={result.error.message} file={result.error.file} />;
+    return <HomeErrorFallback message={result.error.message} file={result.error.file} />;
   }
   return <Board />;
-}
-
-function BuildErrorPlaceholder({ message, file }: { message: string; file: string | null }) {
-  return (
-    <div style={{ padding: 32, fontFamily: "system-ui", color: "#ddd", background: "#0b0b0b", minHeight: "100vh" }}>
-      <h1 style={{ fontSize: 24, marginBottom: 12 }}>Home page failed to build</h1>
-      <p style={{ marginBottom: 8 }}>The weft.zip page won&apos;t load right now. The rest of the app is unaffected.</p>
-      <pre style={{ background: "#1a1a1a", padding: 12, borderRadius: 6, overflow: "auto" }}>
-{file ? `${file}\n${message}` : message}
-      </pre>
-    </div>
-  );
 }
