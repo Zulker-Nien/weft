@@ -323,7 +323,7 @@ runner.ts"), so improving code quality becomes a stream of small cards.
 Beside it, **+1262/-832** counts the uncommitted pile in that project's repo: every line in the working
 tree that differs from HEAD (hover for the file count and how many Review cards it belongs to). Review
 cards pile up with working code nobody committed, so several cards' edits end up mixed in one tree. Click
-the counter to start a card that walks you through committing it (`lib/commit-pile.ts`): it lists the
+the counter, or **Review all** at the top of the Review column, to start a card that walks you through committing it (`lib/commit-pile.ts`): it lists the
 Review cards with the files each touched and its last status, flags files several cards share, files
 only busy cards touched and files no card claims, then goes card by card in the browser pane with a
 checklist page written for non-engineers (each change as its card picture or emoji, a plain sentence on what it

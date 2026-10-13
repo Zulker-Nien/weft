@@ -5,6 +5,7 @@ import { showBacklog, subscribeBoardPrefs } from "@/lib/board-prefs";
 import { api, mergeThread, type BrowserState, type MenuAction, type NewCardInput } from "@/lib/client";
 import { worktreeParent } from "@/lib/format";
 import { busyHere } from "@/lib/overlap";
+import { fetchPileReview } from "@/lib/pile-review";
 import { planResets } from "@/lib/schedule";
 import { COLUMNS, COPILOT_ID, type BoardEvent, type Card, type Column, type LoginView, type Project, type ThreadItem } from "@/lib/types";
 import { useShortcutHint, useShortcutListener, useShortcuts } from "@/lib/hotkeys";
@@ -719,6 +720,18 @@ export default function Board() {
     });
   }
 
+  // "Review all" on the Review column: the same commit walk-through card the pile counter starts.
+  async function reviewAll() {
+    const cwd = selected?.cwd ?? project ?? latest?.cwd;
+    if (!cwd) return;
+    try {
+      const { prompt, title } = await fetchPileReview(cwd);
+      await improveQuality(cwd, prompt, title);
+    } catch (err) {
+      notify(err);
+    }
+  }
+
   // A new card lands in its column without opening, so after ⌘↵ the keyboard is back on the board
   // (opening it moved focus where Escape couldn't reach).
   async function create(input: NewCardInput) {
@@ -858,6 +871,7 @@ export default function Board() {
                   onArchiveAll={() => archiveCards(doneToArchive)}
                   resumeAll={column.id === "review" ? resumeAll : undefined}
                   onSwitchAll={column.id === "running" || column.id === "needs_you" ? () => switchAll(column.id) : undefined}
+                  onReviewAll={column.id === "review" ? reviewAll : undefined}
                 />
                 <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
                   {pilot && (

@@ -1,11 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import type { Column } from "@/lib/types";
 import Icon from "./Icon";
 import { SwitchAllButton } from "./switch-all-button";
 import Tip from "./Tip";
 
-// A column's name and count. Running and Needs you get "Switch all" to move their threads to the other CLI. Review gets "▶ Resume N" when turns there were cut off or failed (lib/card-resume.ts). Done also gets "Show N archived" and an archive-all button (Shift+E) for the cards it shows.
+// A column's name and count. Running and Needs you get "Switch all" to move their threads to the other CLI. Review gets "Review all", which starts the commit walk-through card (lib/pile-review.ts), and "▶ Resume N" when turns there were cut off or failed (lib/card-resume.ts). Done also gets "Show N archived" and an archive-all button (Shift+E) for the cards it shows.
 export default function ColumnHeader({
   column,
   count,
@@ -18,6 +19,7 @@ export default function ColumnHeader({
   onArchiveAll,
   resumeAll,
   onSwitchAll,
+  onReviewAll,
 }: {
   column: { id: Column; label: string };
   count: number | null;
@@ -30,13 +32,36 @@ export default function ColumnHeader({
   onArchiveAll: () => void;
   resumeAll?: { count: number; run: () => void };
   onSwitchAll?: () => void | Promise<void>;
+  onReviewAll?: () => Promise<void>;
 }) {
   const done = column.id === "done";
+  const [reviewing, setReviewing] = useState(false);
+  async function reviewAll() {
+    if (!onReviewAll || reviewing) return;
+    setReviewing(true);
+    try {
+      await onReviewAll();
+    } finally {
+      setReviewing(false);
+    }
+  }
   return (
     <div className="flex items-center justify-between px-3 pb-1.5 pt-2.5">
       <h2 className={`text-[12.5px] font-medium ${needsYou ? "text-warn" : "text-ink"}`}>{column.label}</h2>
       <span className="flex items-center gap-2 text-[11.5px] text-faint">
         {onSwitchAll && count ? <SwitchAllButton onClick={() => void onSwitchAll()} /> : null}
+        {onReviewAll && count ? (
+          <Tip text="Walk through the Review cards one at a time: what each changed, its checks, then commit it" className="inline-flex">
+            <button
+              onClick={() => void reviewAll()}
+              disabled={reviewing}
+              className="flex items-center gap-1 font-medium text-accent hover:opacity-80 disabled:opacity-50"
+            >
+              <Icon name="check" size={11} />
+              {reviewing ? "Starting…" : "Review all"}
+            </button>
+          </Tip>
+        ) : null}
         {resumeAll && (
           <Tip text={`Carry on the ${resumeAll.count} turn${resumeAll.count > 1 ? "s" : ""} here that a restart cut off or that failed`} className="inline-flex">
             <button onClick={resumeAll.run} className="flex items-center gap-1 font-medium text-accent hover:opacity-80">

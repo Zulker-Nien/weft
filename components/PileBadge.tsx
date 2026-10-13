@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { fetchPileReview } from "@/lib/pile-review";
 import Tip from "./Tip";
 
 type PileSummary = { root: string; files: number; added: number; removed: number; cards: number };
@@ -64,10 +65,8 @@ export default function PileBadge({
     if (busy || !cwd) return;
     setBusy(true);
     try {
-      const r = await fetch(`/api/pile?cwd=${encodeURIComponent(cwd)}&prompt=1`);
-      const d = (await r.json()) as { prompt?: string; title?: string; error?: string };
-      if (!d.prompt) throw new Error(d.error ?? "Nothing uncommitted to walk through.");
-      await onStart(cwd, d.prompt, d.title ?? "Commit the uncommitted pile");
+      const { prompt, title } = await fetchPileReview(cwd);
+      await onStart(cwd, prompt, title);
     } finally {
       setBusy(false);
     }

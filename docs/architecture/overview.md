@@ -41,7 +41,9 @@ Electron shell (electron/*.cjs)
   by the SSE route.
 - `lib/types.ts` — `Card`, `ThreadItem`, `Question`, `Backend`, `BoardEvent` union.
 - `components/Board.tsx` — the board UI; consumes `useBoardEvents` to stay live, with
-  `CardView`, `ThreadPanel`, `BrowserPane`, `ProjectBar`, `SettingsDialog`, `LoginDialog`.
+  `CardView`, `ThreadPanel`, `BrowserPane`, `ProjectBar`, `SettingsDialog`, `LoginDialog`,
+  and `ColumnHeader` (Running/Needs you get "Switch all", Review gets "Review all"
+  — the commit walk-through card — plus "Resume N" for cut-off turns, Done gets archive controls).
 
 ## Data flow
 

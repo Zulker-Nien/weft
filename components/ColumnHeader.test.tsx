@@ -49,4 +49,20 @@ describe("ColumnHeader", () => {
     expect(screen.queryAllByRole("button")).toHaveLength(0);
     expect(screen.getByText("3")).toBeTruthy();
   });
+
+  it("starts the review walk-through from Review, and holds the button while it starts", async () => {
+    let finish = () => {};
+    const onReviewAll = vi.fn(() => new Promise<void>((r) => (finish = r)));
+    setup({ column: { id: "review", label: "Review" }, onReviewAll });
+    await userEvent.click(screen.getByRole("button", { name: "Review all" }));
+    expect(onReviewAll).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "Starting…" })).toHaveProperty("disabled", true);
+    finish();
+    expect(await screen.findByRole("button", { name: "Review all" })).toBeTruthy();
+  });
+
+  it("shows no Review all on an empty column", () => {
+    setup({ column: { id: "review", label: "Review" }, count: 0, onReviewAll: vi.fn() });
+    expect(screen.queryByRole("button", { name: "Review all" })).toBeNull();
+  });
 });
