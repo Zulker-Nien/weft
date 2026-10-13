@@ -17,7 +17,7 @@ const OVERSIZE = {
   "components/Composer.tsx": 556,
   "lib/board-tools.test.ts": 536,
   "lib/library.test.ts": 510,
-  "lib/board-view.test.ts": 506,
+  "lib/board-view.test.ts": 520,
   "components/SettingsDialog.tsx": 471,
   "lib/use-dictation.test.ts": 425,
   "electron/main.cjs": 399,

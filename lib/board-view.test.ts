@@ -3,6 +3,7 @@ import {
   activeAt,
   cardChangeEffects,
   groupByColumn,
+  hitPlanLimit,
   latestLimits,
   OWN_MOVE_MS,
   SORTERS,
@@ -203,6 +204,20 @@ describe("summarizeProjects", () => {
     const c = card({ id: "c", cwd: "/p", lastActivity: 5_000 });
     const rows = summarizeProjects([p], [c], identity);
     expect(rows[0]!.lastActivity).toBe(10_000);
+  });
+});
+
+describe("hitPlanLimit", () => {
+  it("is false when no card hit its plan limit", () => {
+    expect(hitPlanLimit([card(), card({ rateLimitHit: false })])).toBe(false);
+  });
+
+  it("is true when a card on the board hit its plan limit", () => {
+    expect(hitPlanLimit([card(), card({ rateLimitHit: true })])).toBe(true);
+  });
+
+  it("ignores archived cards", () => {
+    expect(hitPlanLimit([card({ rateLimitHit: true, archived: true })])).toBe(false);
   });
 });
 
