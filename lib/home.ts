@@ -9,6 +9,9 @@ export const SITE = "https://weft.zip";
 export const REPO = "https://github.com/aimhuge/weft";
 export const RELEASES = `${REPO}/releases`;
 export const FEED = `${RELEASES}/latest/download/update.json`;
+// The footer's credits, as on the board's footer (components/BoardFooter.tsx).
+export const COFFEE = "https://buymeacoffee.com/alexmiller";
+export const AIMHUGE = "https://aimhuge.com";
 export const TAGLINE = "A board for your AI";
 export const DESCRIPTION =
   "Weft is a Mac kanban board where every card is a Claude Code thread, with a browser pane beside it. " +

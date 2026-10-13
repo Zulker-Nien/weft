@@ -2,7 +2,7 @@ import Image from "next/image";
 import { Fraunces, Instrument_Sans } from "next/font/google";
 import emblem from "@/electron/assets/emblem.png";
 import twinSuns from "@/electron/assets/splash-speeder.jpg";
-import { REPO, downloadLink } from "@/lib/home";
+import { AIMHUGE, COFFEE, REPO, downloadLink } from "@/lib/home";
 import { latestRelease } from "@/lib/home-release";
 import board from "@/public/brand/board.png";
 import "./home.css";
@@ -50,7 +50,11 @@ export default async function Home() {
       </div>
 
       <footer className="wz-wrap wz-footer">
-        Free and open source · <a href={REPO}>github.com/aimhuge/weft</a>
+        Made with{" "}
+        <a href={COFFEE} title="Buy me a coffee">
+          ☕
+        </a>{" "}
+        by <a href={AIMHUGE}>aimhuge.com</a> · Free and open source on <a href={REPO}>GitHub</a>
       </footer>
     </div>
   );
