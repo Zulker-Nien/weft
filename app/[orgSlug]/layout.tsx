@@ -44,20 +44,27 @@ async function WorkspaceShellBody({ orgSlug, children }: { orgSlug: string; chil
   );
 }
 
-function WorkspaceShellFallback({ orgSlug }: { orgSlug: string }) {
+function WorkspaceShellFallback() {
   return (
     <div className="wz-root wz-workspace">
       <header className="wz-workspaceHeader">
         <div className="wz-workspaceBrand">Loading workspace…</div>
       </header>
       <main className="wz-workspaceMain">
-        <div className="wz-workspaceLoading">Resolving {orgSlug}…</div>
+        <div className="wz-workspaceLoading">Loading…</div>
       </main>
     </div>
   );
 }
 
-export default async function WorkspaceLayout({
+// The route params are request data under cacheComponents, so they're read inside the <Suspense>, not before it.
+async function WorkspaceShell({ params, children }: { params: Promise<{ orgSlug: string }>; children: React.ReactNode }) {
+  const { orgSlug } = await params;
+  if (!isDeployed()) return <NotDeployedCard slug={orgSlug} />;
+  return <WorkspaceShellBody orgSlug={orgSlug}>{children}</WorkspaceShellBody>;
+}
+
+export default function WorkspaceLayout({
   children,
   params,
 }: {
@@ -66,11 +73,9 @@ export default async function WorkspaceLayout({
   // node_modules/next/dist/docs/01-app/03-api-reference/01-directives/use-cache.md.
   params: Promise<{ orgSlug: string }>;
 }) {
-  const { orgSlug } = await params;
-  if (!isDeployed()) return <NotDeployedCard slug={orgSlug} />;
   return (
-    <Suspense fallback={<WorkspaceShellFallback orgSlug={orgSlug} />}>
-      <WorkspaceShellBody orgSlug={orgSlug}>{children}</WorkspaceShellBody>
+    <Suspense fallback={<WorkspaceShellFallback />}>
+      <WorkspaceShell params={params}>{children}</WorkspaceShell>
     </Suspense>
   );
 }

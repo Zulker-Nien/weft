@@ -112,12 +112,17 @@ function TeamPageFallback() {
   );
 }
 
-export default async function Page({ params }: { params: Promise<{ orgSlug: string }> }) {
+// The route params are request data under cacheComponents, so they're read inside the <Suspense>, not before it.
+async function TeamPageFor({ params }: { params: Promise<{ orgSlug: string }> }) {
   const { orgSlug } = await params;
   if (!isDeployed()) return <NotDeployedCard slug={orgSlug} />;
+  return <TeamPageBody orgSlug={orgSlug} />;
+}
+
+export default function Page({ params }: { params: Promise<{ orgSlug: string }> }) {
   return (
     <Suspense fallback={<TeamPageFallback />}>
-      <TeamPageBody orgSlug={orgSlug} />
+      <TeamPageFor params={params} />
     </Suspense>
   );
 }

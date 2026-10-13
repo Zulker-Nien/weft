@@ -118,12 +118,17 @@ function InviteFallback() {
   );
 }
 
-export default async function Page({ params }: { params: Promise<{ token: string }> }) {
+// The route params are request data under cacheComponents, so they're read inside the <Suspense>, not before it.
+async function InviteFor({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   if (!isDeployed()) return <NotDeployedCard />;
+  return <InviteBody token={token} />;
+}
+
+export default function Page({ params }: { params: Promise<{ token: string }> }) {
   return (
     <Suspense fallback={<InviteFallback />}>
-      <InviteBody token={token} />
+      <InviteFor params={params} />
     </Suspense>
   );
 }
