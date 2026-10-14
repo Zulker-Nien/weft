@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/client";
 import { isLive } from "@/lib/format";
-import { BACKENDS, MODELS, runningOn } from "@/lib/new-thread";
+import { BACKENDS, CODEX_DEFAULT_MODEL, MODELS, runningOn } from "@/lib/new-thread";
 import { BACKEND_LABELS, type Backend, type Card } from "@/lib/types";
 import { useEscape } from "@/lib/use-escape";
 import { BackendBadge } from "./CardView";
@@ -16,6 +16,7 @@ import Icon from "./Icon";
 export default function BackendPicker({ card }: { card: Card }) {
   // Without a "[1m]" context suffix, so it matches a MODELS id.
   const model = runningOn(card).model?.replace(/\[[^\]]*\]$/, "");
+  const selectedModel = card.backend === "codex" && (!model || model === "Codex") ? CODEX_DEFAULT_MODEL : model;
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const live = isLive(card);
@@ -33,7 +34,7 @@ export default function BackendPicker({ card }: { card: Card }) {
 
   function pick(next: Backend, id: string) {
     setOpen(false);
-    if (next === card.backend && id === model) return;
+    if (next === card.backend && id === selectedModel) return;
     void api.switchBackend(card.id, next, false, id).catch(() => {});
   }
 
@@ -58,7 +59,7 @@ export default function BackendPicker({ card }: { card: Card }) {
             <div key={b.id} role="group" aria-label={b.label}>
               <p className="px-2 pb-0.5 pt-1.5 text-[11px] font-medium text-faint">{b.label}</p>
               {MODELS[b.id].map((m) => {
-                const on = card.backend === b.id && model === m.id;
+                const on = card.backend === b.id && selectedModel === m.id;
                 return (
                   <button
                     key={m.id}

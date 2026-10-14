@@ -13,7 +13,7 @@ import type { Backend } from "./types";
 // "choose", "inherit", or a model id from MODELS (lib/new-thread.ts); isSubagentModel checks one.
 export type SubagentModel = string;
 
-const COMMAND: Record<Backend, string> = { claude: "claude", puku: "puku-cli" };
+const COMMAND: Record<Backend, string> = { claude: "claude", puku: "puku-cli", codex: "codex" };
 
 // The CLI that serves a model id, or undefined for "choose", "inherit" and ids neither serves.
 export const subagentBackend = backendFor;
@@ -27,7 +27,7 @@ export function subagentLabel(model: SubagentModel): string {
   if (model === "inherit") return "Same model as the thread";
   const backend = subagentBackend(model);
   const label = backend && MODELS[backend].find((m) => m.id === model)?.label;
-  return label ? `${label} (${backend === "claude" ? "Claude" : "Puku"})` : model;
+  return label ? `${label} (${backend === "claude" ? "Claude" : backend === "puku" ? "Puku" : "Codex"})` : model;
 }
 
 const DELEGATE = `Use subagents (the Agent tool) more than you'd think: their file reads and long outputs stay out of this thread's context, and several run at once. Delegate when answering means reading across many files (the Explore agent), when the task splits into independent pieces (send them in one message so they run in parallel), for a test, lint or typecheck run where you only need the failures, and for a second-opinion review of a change you made. Do a single known lookup (one file, one grep) yourself. Give each subagent a self-contained prompt that says what to report back, and relay what matters: the user doesn't see its report.`;

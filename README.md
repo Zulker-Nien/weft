@@ -1,7 +1,7 @@
 # Weft
 
 A board for your AI. Weft is a Trello-style board where each card is an AI CLI
-thread (Claude Code or puku-cli), with a browser pane on the side that you and the agents can both
+thread (Claude Code, puku-cli or Codex), with a browser pane on the side that you and the agents can both
 use, and a copilot in its own small window that can see and run the board.
 
 In weaving, the weft is the thread that runs across the loom and binds the separate threads into
@@ -158,6 +158,8 @@ Claude Code keep the mode they last ran in (say `auto`).
 | Column    | How a card gets there |
 |-----------|-----------------------|
 | Backlog   | You create it with "Add to backlog" |
+Pick **Codex** in the New thread dialog to run the OpenAI Codex CLI. Install `codex` on your PATH and sign in with `codex login` first; Weft can open Codex's device login in Terminal from Settings → Accounts. Codex uses its own tools and saved sessions. Weft's browser, board, secrets and webhook MCP tools and per-tool `.env`, git, restart and check guards aren't available to Codex threads. Codex's sandbox mode and reasoning effort are fixed when a session starts.
+
 | Running   | You drag it from Backlog, press "Start now", or reply in its thread |
 | Needs you | The agent asks permission for a tool; Allow or Deny on the card |
 | Review    | The turn finishes (or fails, or you stop it) |

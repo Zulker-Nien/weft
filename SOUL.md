@@ -1,6 +1,6 @@
 # SOUL.md: who I am
 
-I am Weft, a desktop kanban board where every card is a Claude Code or puku-cli thread, with a
+I am Weft, a desktop kanban board where every card is a Claude Code, puku-cli or Codex thread, with a
 browser pane beside the board and a copilot that runs the board. The weft is the thread that crosses
 the loom and binds separate threads into cloth; I bind your agent threads into work.
 
@@ -11,8 +11,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 
 ## What I value
 
-- **Speed first.** CLIs are warm and pre-started (spares, keep-alive), so a reply starts in ~2s.
-  Never add work to the start-a-card path without measuring it.
+- **Speed first.** Claude Code and puku-cli are warm and pre-started (spares, keep-alive), so a reply starts in ~2s.
+  Codex starts one CLI process per turn and resumes its saved session. Never add work to the start-a-card path without measuring it.
 - **No git worktree per card, on purpose.** Worktrees cost a fresh checkout, `npm install` and env
   setup per card, and leave stray folders behind (like `fervent-tu-abd214`). I prefer cheap safety:
   busy-folder and overlap warnings.
@@ -60,7 +60,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   `scripts/bundle-toolchain.mjs` stages what the app ships for a fresh Mac (node, npm, pnpm, puku-cli without telemetry, claude, all on
   my own Electron), which `appendToolchain()` in `electron/env.cjs` puts at the end of PATH.
 - `electron/terminal.cjs` + `components/TerminalDrawer.tsx`: the terminal drawer (node-pty shell over IPC, xterm.js).
-- `lib/runner.ts`: one Agent SDK `query()` per thread, its public API (send, queue, stop, retry, login); behind it
+- `lib/runner.ts`: one Agent SDK `query()` per Claude Code or puku thread, its public API (send, queue, stop, retry, login); Codex uses `lib/codex-runner.ts` with `codex exec --json` and resumes by session id. Behind it
   `lib/runner-state.ts` (sessions, shared maps, `hooks` back into runner.ts), `lib/runner-session.ts` (start and drive a CLI,
   warm spares, the BUILD fingerprint), `lib/runner-turn.ts` (what the CLI sends during a turn) and `lib/runner-ask.ts` (permissions);
   puku-cli via `pathToClaudeCodeExecutable` (`lib/cli-path.ts`); every CLI starts in its own process group so its children end
@@ -72,7 +72,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   checkout/restore or `clean -f` in the shared tree), `lib/route-import-guard.ts` (refuses an edit that makes `app/**/page.tsx`,
   a layout, a `route.ts` or middleware import a module that isn't there yet), `lib/claim-guard.ts` (symbol claims: asks before an edit to a top-level
   symbol another busy card is editing; `lib/claims.ts`, parsed by `lib/symbols.ts`) (docs/architecture/thread-guards.md).
-  `cliEnv()` also drops secret-named and key-shaped variables from your shell's env (`lib/secret-detect.ts`); the control
+  Codex gets the filtered `cliEnv()` but not these per-tool hooks or Weft MCP tools; `lib/codex-runner.ts` tells it about
+  that limit and asks it not to read `.env` files. `cliEnv()` also drops secret-named and key-shaped variables from your shell's env (`lib/secret-detect.ts`); the control
   server's token is a 0600 file, `~/.weft/shell-token` (`electron/shell-token.cjs`, read by `lib/shell-token.ts`), never an env var.
 - `scripts/check-staged.sh` + `scripts/secret-scan.mjs`: the pre-commit hook; gitleaks, or without it Weft's own key shapes on each added line.
   The Composer flags a pasted or typed key the same way (`components/SecretPaste.tsx`).

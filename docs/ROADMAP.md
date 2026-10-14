@@ -1,6 +1,6 @@
 # Weft roadmap
 
-Weft is a desktop kanban board where every card is a Claude Code or puku-cli thread, with a shared browser pane and a copilot that can run the board.
+Weft is a desktop kanban board where every card is a Claude Code, puku-cli or Codex thread, with a shared browser pane and a copilot that can run the board.
 This file lists the features we still need, grouped by area, one line each, so we can pick work and argue about priority in one place.
 Tags: `Now` is being built this session; `P1` is next and high value; `P2` is clearly useful; `P3` is later or speculative.
 
@@ -45,6 +45,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 
 ## Cards and threads
 
+- `Done` **Codex CLI backend** — new threads can run and resume Codex sessions, with Codex sandbox and reasoning effort settings, backend switching, and login status. Weft's custom MCP tools and per-tool guards are not available to Codex threads.
 - `Now` **Auto-retitle cards** — after a turn, a card named "Image attachment", "Untitled thread" or just its prompt's first line gets a Haiku title with an emoji (`lib/retitle.ts`, hooked in `lib/glance.ts`); `titleBy` marks a card named by you or by Weft so neither it nor Claude Code's sync renames it again. Still open: retitling when the thread's topic drifts, and a "rename with AI" card menu item.
 - `Now` **Summary-first cards with a picture** — the card leads with the thread's last line in plain text, a 52 px thumbnail of its latest picture (thread screenshots and images, or a pane capture after each turn; hover to enlarge), an 8-dot stage bar with what's left, and a one-line footer. No picture yet: a Haiku emoji tile, or the folder's initial. Still open: emoji for cards that haven't had a turn since, and a setting to hide thumbnails.
 
@@ -114,7 +115,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `P2` **Role presets** — reviewer, tester, docs writer: short instruction add-ons you can pick per card.
 - `P2` **Environment per card** — extra env vars per card or project (feature flags, test database URL).
 - `P2` **Switch CLI mid-card** — hand a thread's summary to the other CLI when one is rate-limited or logged out.
-- `P3` **Other CLI adapters** — a backend interface so CLIs outside the Agent SDK (Codex, Gemini CLI) can be cards with the same thread view.
+- `P3` **Other CLI adapters** — a backend interface for additional CLIs outside the Agent SDK, such as Gemini CLI, to use the same thread view.
 - `P3` **Cheap model for chores** — use a small model for titles, summaries, and digests instead of a full CLI thread.
 
 ## Copilot and orchestration

@@ -8,12 +8,18 @@ const EFFORTS: Effort[] = ["low", "medium", "high", "xhigh", "max"];
 
 function settingsFile(backend: Backend) {
   if (backend === "puku") return PUKU_SETTINGS;
+  if (backend === "codex") return path.join(process.env.CODEX_HOME || path.join(os.homedir(), ".codex"), "config.toml");
   return path.join(process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude"), "settings.json");
 }
 
 // The effort a CLI runs at when the card picks none: `effortLevel` in its user settings, if set.
 export function defaultEffort(backend: Backend): Effort | undefined {
   try {
+    if (backend === "codex") {
+      const content = fs.readFileSync(settingsFile(backend), "utf8");
+      const level = /^\s*model_reasoning_effort\s*=\s*["']([^"']+)["']/m.exec(content)?.[1];
+      return EFFORTS.find((e) => e === level);
+    }
     const level = (JSON.parse(fs.readFileSync(settingsFile(backend), "utf8")) as { effortLevel?: unknown } | null)?.effortLevel;
     return EFFORTS.find((e) => e === level);
   } catch {

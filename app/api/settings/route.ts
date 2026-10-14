@@ -9,8 +9,8 @@ import { SKILL_NAME } from "@/lib/skills";
 import { isSubagentModel } from "@/lib/subagents";
 import { AUTOMATION_TRIGGERS, MODES, type Automation, type Backend, type PermissionMode } from "@/lib/types";
 
-const BACKENDS: Backend[] = ["claude", "puku"];
-const DONE_MODEL_IDS = new Set<string>(Object.values(MODELS).flat().map((m) => m.id));
+const BACKENDS: Backend[] = ["claude", "puku", "codex"];
+const DONE_MODEL_IDS = new Set<string>([...MODELS.claude, ...MODELS.puku].map((m) => m.id));
 const DONE_EFFORT_IDS = new Set<string>(EFFORTS.map((e) => e.id));
 
 // The rules as sent, checked; a leading slash on a skill name is dropped.

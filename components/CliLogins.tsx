@@ -8,6 +8,7 @@ import Icon, { Spinner } from "./Icon";
 const CLIS: { id: Backend; label: string }[] = [
   { id: "claude", label: "Claude Code" },
   { id: "puku", label: "puku-cli" },
+  { id: "codex", label: "Codex" },
 ];
 
 // How long "Login started" shows after clicking Log in.

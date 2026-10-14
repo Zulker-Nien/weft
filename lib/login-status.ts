@@ -24,6 +24,15 @@ function parseStatus(stdout: string): CliStatus | null {
   }
 }
 
+function parseCodexStatus(stdout: string, stderr: string): CliStatus | null {
+  const text = clean(`${stdout}\n${stderr}`).trim();
+  if (/not logged in|not authenticated|no auth(?:entication)? (?:data|credentials)|logged out/i.test(text)) {
+    return { loggedIn: false };
+  }
+  if (/logged in|authenticated/i.test(text)) return { loggedIn: true };
+  return null;
+}
+
 export async function authStatus(backend: Backend): Promise<CliStatus> {
   let bin: string;
   try {
@@ -33,12 +42,17 @@ export async function authStatus(backend: Backend): Promise<CliStatus> {
   }
   return new Promise((resolve) => {
     // A logged-out CLI can exit non-zero and still print its status JSON.
+    const args = backend === "codex" ? ["login", "status"] : ["auth", "status", "--json"];
+    const env = cliEnv();
+    if (backend === "codex") delete env.CLAUDE_CODE_ENTRYPOINT;
     execFile(
       bin,
-      ["auth", "status", "--json"],
-      { env: cliEnv(), timeout: STATUS_TIMEOUT_MS, maxBuffer: 1024 * 1024 },
+      args,
+      { env, timeout: STATUS_TIMEOUT_MS, maxBuffer: 1024 * 1024 },
       (err, stdout: string | undefined, stderr: string | undefined) => {
-        const status = parseStatus(stdout ?? "");
+        const status = backend === "codex"
+          ? parseCodexStatus(stdout ?? "", stderr ?? "")
+          : parseStatus(stdout ?? "");
         if (status) {
           resolve(status);
           return;

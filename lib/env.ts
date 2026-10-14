@@ -27,7 +27,7 @@ const NEXT_SERVER = /^(NODE_ENV|PORT|NEXT_RUNTIME|NEXT_DEPLOYMENT_ID)$|^(__NEXT_
 // any value that looks like a key (lib/secret-detect.ts), except what the CLIs sign in with. A command
 // that needs one gets it from the vault through mcp__secrets__run.
 const SECRET_NAME = /(^|_)(KEYS?|TOKENS?|SECRETS?|PASSWORD|PASSWD|PASSPHRASE|CREDENTIALS?|PRIVATE|PAT|DSN)(_|$)|(^|_)DATABASE_URL$/i;
-const CLI_SIGN_IN = /^(ANTHROPIC_|PUKU_)/;
+const CLI_SIGN_IN = /^(ANTHROPIC_|PUKU_)|^CODEX_API_KEY$/;
 
 function isSecretVar(key: string, value: string | undefined): boolean {
   if (CLI_SIGN_IN.test(key)) return false;

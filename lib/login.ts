@@ -10,7 +10,7 @@ import { authStatus } from "./login-status";
 // CLI's output to the board's login pop-up, and falls back to a Terminal window when the CLI
 // needs a real TTY (the macOS Terminal path lives in ./login-terminal).
 
-const COMMANDS: Record<Backend, string> = { claude: "claude", puku: "puku-cli" };
+const COMMANDS: Record<Backend, string> = { claude: "claude", puku: "puku-cli", codex: "codex" };
 const OUTPUT_BYTES = 8 * 1024;
 // Raw output kept for re-cleaning, so escape codes split across chunks still strip cleanly.
 const RAW_BYTES = 32 * 1024;
@@ -222,7 +222,7 @@ async function onExit(run: LoginRun, child: ChildProcess, code: number | null, s
 }
 
 export function isNotLoggedInError(text: string): boolean {
-  return /not logged in|please run \/login|invalid api key|oauth token has expired|authentication_error/i.test(text);
+  return /not logged in|not authenticated|please run (?:\/login|codex login)|invalid api key|oauth token has expired|authentication_error/i.test(text);
 }
 
 // Distinct from a transient error or a not-logged-in: when the CLI's last turn hit the
@@ -236,6 +236,9 @@ export function startLogin(backend: Backend, onDone?: () => void): LoginView {
   if (existing && (existing.view.state === "running" || existing.view.state === "terminal")) {
     return addCallback(existing, onDone);
   }
+
+  // Codex login requires an interactive terminal for browser/device authorization.
+  if (backend === "codex") return openLoginInTerminal(backend, onDone);
 
   const bin = binary(backend);
   const run = newRun(backend, "running", onDone);

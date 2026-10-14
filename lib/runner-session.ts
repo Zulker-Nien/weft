@@ -24,6 +24,7 @@ import { PLUGIN_DIR } from "./skills";
 import { switchSpare } from "./spare-switch";
 import { backendEnv, refillsSpare } from "./puku-idle";
 import { subagentEnv, subagentPrompt } from "./subagents";
+import { CODEX_CODE, driveCodex } from "./codex-runner";
 import { getCard, updateCard } from "./store";
 import * as turnRules from "./turn";
 import type { Backend, Card } from "./types";
@@ -39,7 +40,7 @@ const MAX_SPARES = 3;
 // the code (not random) because each API route can load its own copy of these modules. The pure turn
 // rules in turn.ts count too: a session started before they changed would still run the old ones.
 const BUILD = createHash("sha1")
-  .update([drive, queryOptions, threadEnv, ...TURN_CODE, askUser, settle, ...Object.values(turnRules)].map(String).join("\n"))
+  .update([drive, driveCodex, queryOptions, threadEnv, ...CODEX_CODE, ...TURN_CODE, askUser, settle, ...Object.values(turnRules)].map(String).join("\n"))
   .digest("hex");
 
 // The code fingerprint plus the settings a CLI only reads when it starts (the thread prompt, the subagent
@@ -102,6 +103,7 @@ export function warmUp(cardId: string) {
 
 // Keeps a spare CLI open in a project folder for the next new card there.
 export function ensureSpare(cwd: string, backend: Backend = "claude") {
+  if (backend === "codex") return;
   const key = spareKey(backend, cwd);
   const existing = spares.get(key);
   if (existing && !isStale(existing)) return;
@@ -213,6 +215,11 @@ async function drive(session: Session, executable: string | undefined) {
   // Let open() finish registering the session before anything below can fail and clean it up.
   await Promise.resolve();
   try {
+    if (session.spec.backend === "codex") {
+      if (!executable) throw new Error("Codex CLI isn't on this app's PATH.");
+      await driveCodex(session, executable);
+      return;
+    }
     session.query = query({ prompt: session.inbox, options: queryOptions(session, executable) });
     if (session.cardId) safeUpdate(session.cardId, { warm: true });
     for await (const msg of session.query) {

@@ -1,13 +1,15 @@
 # Threads and sessions
 
-The runner is the heart of Weft. Each active card has a long-lived CLI subprocess that
-the SDK drives through a streaming `Inbox`. It's five modules, each under 300 lines:
+The runner is the heart of Weft. Each active card has a persistent CLI conversation. Claude Code and
+puku-cli keep a process open through the Agent SDK's streaming `Inbox`; Codex starts one `codex exec`
+process per turn and resumes its saved session id. The runner is split into small modules:
 
 - `lib/runner.ts`: the public API the board and routes call (send, queue, ↑ edit, stop, retry, login, permission mode)
 - `lib/runner-state.ts`: the `Session` and `Inbox` types, the shared maps on `globalThis`, the idle timer, and `hooks`
 - `lib/runner-session.ts`: starting and driving a CLI, warm spares, the `BUILD` fingerprint
 - `lib/runner-turn.ts`: what the CLI sends during a turn, through the result that ends it
 - `lib/runner-ask.ts`: permission requests and answers
+- `lib/codex-runner.ts`: Codex JSONL events, session resume, and the adapter into the shared turn handling
 
 The turn loop runs from `sendMessage()` in `runner.ts` through the session and turn modules and back to
 the turn queue (`sendQueued`, `needLogin`). The modules below `runner.ts` reach those through `hooks`
@@ -23,6 +25,22 @@ Code sessions lives in `lib/import.ts` and `lib/transcript.ts` (see the end of t
 SDK's `query()` consumes it as the prompt, so a single CLI process keeps running
 between turns and each user message is a new `SDKUserMessage` on the same iterator.
 `close()` ends the input and lets the process exit.
+
+### Codex CLI sessions
+
+Codex is driven separately by `lib/codex-runner.ts`. A turn starts with `codex exec --json`; Weft reads
+JSONL events for assistant text, command output, file changes and completion, and saves the `thread_id`
+on the card. Later turns use `codex exec resume --json <thread_id> -`, so the conversation survives the
+short-lived CLI process. The initial command receives the card folder, sandbox mode, model and reasoning
+effort. The resume command supports a model override but no sandbox or reasoning-effort flags; Codex
+keeps the original sandbox and effort for that saved session. Starting a fresh Codex session is required
+to change either. Weft maps its
+permission choices to Codex sandbox settings and uses Codex's own approval flow.
+
+Codex threads do not receive Weft's custom MCP tools, Claude plugins or Weft's per-tool guards. The prompt
+tells the agent about the missing integrations and asks it not to read `.env` files; Codex's own sandbox
+and rules apply. `/weft:<skill>` text is expanded from the local skill file for that turn. The shared turn
+handler still records assistant messages, command output, `BOARD STATUS`, changed files and turn completion.
 
 ### The CLI process and its children
 

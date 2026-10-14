@@ -1,5 +1,6 @@
 import { isLive } from "./format";
-import { MODE_OPTIONS, type Backend, type Card, type Column, type DevServerStatus, type PermissionMode } from "./types";
+import { permissionOptions, type Backend, type Card, type Column, type DevServerStatus, type PermissionMode } from "./types";
+import { BACKENDS } from "./new-thread";
 
 // The right-click menus on the board, as plain data: the board builds them, the desktop shell
 // shows them natively (electron/main.cjs) and hands back the id of the item picked.
@@ -63,7 +64,8 @@ const MENU_KEYS: Record<string, string> = {
   "mode:acceptEdits": "E",
   "mode:default": "M",
   "switch:claude": "J",
-  "switch:puku": "J",
+  "switch:puku": "Shift+J",
+  "switch:codex": "Alt+J",
   "new-here": "N",
   reveal: "F",
   "copy-path": "C",
@@ -100,13 +102,12 @@ export function cardMenu(card: Card, dev?: DevServerStatus | null): MenuItem[] {
   }
   items.push(SEPARATOR);
 
-  // Applies mid-turn too. Only Claude Code board threads can skip every prompt (YOLO).
-  for (const m of MODE_OPTIONS) {
-    if (m.id === "bypassPermissions" && card.backend !== "claude") continue;
+  // Applies mid-turn too; Codex maps these choices to its sandbox modes.
+  for (const m of permissionOptions(card.backend)) {
     items.push({ id: `mode:${m.id}`, label: `Permissions: ${m.label}`, checked: card.permissionMode === m.id });
   }
   items.push(SEPARATOR);
-  items.push(switchItem(card, live));
+  items.push(...switchItems(card, live));
   items.push(SEPARATOR);
 
   items.push({ id: "new-here", label: "New Thread in This Folder" }, { id: "reveal", label: "Reveal Folder in Finder" });
@@ -121,13 +122,12 @@ export function cardMenu(card: Card, dev?: DevServerStatus | null): MenuItem[] {
 }
 
 // The "Run on <other>" menu item. Extracted to keep cardMenu's complexity in check.
-function switchItem(card: Card, live: boolean): MenuItem {
-  const other: Backend = card.backend === "puku" ? "claude" : "puku";
-  return {
-    id: `switch:${other}`,
-    label: `Run on ${other === "puku" ? "puku-cli" : "Claude Code"}${card.rateLimitHit ? " (hit plan limit)" : ""}`,
+function switchItems(card: Card, live: boolean): MenuItem[] {
+  return BACKENDS.filter((backend) => backend.id !== card.backend).map((backend) => ({
+    id: `switch:${backend.id}`,
+    label: `Run on ${backend.label}${card.rateLimitHit ? " (hit plan limit)" : ""}`,
     enabled: !live,
-  };
+  }));
 }
 
 // A starred card is never auto-archived. Tags are the card's own, or ones Weft picked (lib/tags.ts).

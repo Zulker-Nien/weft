@@ -57,7 +57,7 @@ export function openLoginInTerminal(backend: Backend, onDone?: () => void): Logi
     return snapshot(run);
   }
 
-  const command = `${shellQuote(bin)} auth login`;
+  const command = backend === "codex" ? `${shellQuote(bin)} login --device-auth` : `${shellQuote(bin)} auth login`;
   const script = ["tell application \"Terminal\"", `do script ${appleScriptString(command)}`, "activate", "end tell"];
   append(run, `\nOpened Terminal to run: ${command}\n`);
   execFile(

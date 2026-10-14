@@ -4,7 +4,7 @@ import { isBusy, switchBackend } from "@/lib/runner";
 import { getCard } from "@/lib/store";
 import type { Backend } from "@/lib/types";
 
-const BACKENDS: Backend[] = ["claude", "puku"];
+const BACKENDS: Backend[] = ["claude", "puku", "codex"];
 
 // Flip every in-flight card in a list to the other backend. Cards that are still running
 // (busy) are returned in `pending` so the column button can confirm with the user before

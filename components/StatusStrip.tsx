@@ -2,12 +2,27 @@
 
 import Tip from "./Tip";
 import { cacheMinutesLeft, folderName, formatReset, formatTokens } from "@/lib/format";
-import type { Backend, CacheState, CardStats, LimitWindow } from "@/lib/types";
+import { BACKEND_LABELS, type Backend, type CacheState, type CardStats, type LimitWindow } from "@/lib/types";
 import { useNow } from "@/lib/use-now";
 
 // Green while plenty is left, then warn, then danger (same cut-offs as the terminal statusline).
 function tone(left: number) {
   return left >= 60 ? "text-ok" : left >= 30 ? "text-warn" : "text-danger";
+}
+
+function modelTone(backend?: Backend) {
+  if (backend === "puku") return "text-puku";
+  if (backend === "codex") return "text-accent";
+  return "text-warn";
+}
+
+function BackendFallback({ backend }: { backend: Backend }) {
+  const name = backend === "puku" ? "puku" : "Codex";
+  return (
+    <Tip text={`Backend: ${BACKEND_LABELS[backend]}`}>
+      <span className={modelTone(backend)}>[{name}]</span>
+    </Tip>
+  );
 }
 
 function Limit({
@@ -89,16 +104,10 @@ export default function StatusStrip({
         )}
         {stats.model && (
           <Tip text={`Model: ${stats.model}`}>
-            <span className={backend === "puku" ? "text-puku" : "text-warn"}>[{stats.model.replace(/^claude-/, "")}]</span>
+            <span className={modelTone(backend)}>[{stats.model.replace(/^claude-/, "")}]</span>
           </Tip>
         )}
-        {/* Puku forwards a model name through the SDK only on some turns; when it doesn't, show
-            the backend so the strip isn't blank. */}
-        {backend === "puku" && !stats.model && (
-          <Tip text="Backend: puku-cli">
-            <span className="text-puku">[puku]</span>
-          </Tip>
-        )}
+        {backend && !stats.model && backend !== "claude" && <BackendFallback backend={backend} />}
         {left !== undefined && (
           <Tip text={`Context window: ${left}% left (${stats.contextUsed}% filled by the last request). Near zero the thread is compacted or loses detail.`}>
             ctx:<span className={tone(left)}>{left}%</span>

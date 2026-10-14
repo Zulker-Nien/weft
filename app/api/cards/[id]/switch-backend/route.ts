@@ -5,7 +5,7 @@ import { getCard } from "@/lib/store";
 import { MODELS } from "@/lib/new-thread";
 import type { Backend } from "@/lib/types";
 
-const BACKENDS: Backend[] = ["claude", "puku"];
+const BACKENDS: Backend[] = ["claude", "puku", "codex"];
 
 // One-click "switch this card's CLI" — used by the right-click menu and the rate-limit banner.
 // replay=true re-sends the last user message, which is what the rate-limit escape hatch wants.

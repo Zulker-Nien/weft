@@ -14,7 +14,7 @@ import { idleToClose, keepAliveFor } from "./puku-idle";
 // helpers around them. lib/runner.ts is the front door; lib/runner-session.ts opens and drives sessions,
 // lib/runner-turn.ts handles what the CLI sends, lib/runner-ask.ts the permission requests.
 
-export const CLI_NAMES: Record<Backend, string> = { claude: "Claude Code", puku: "puku-cli" };
+export const CLI_NAMES: Record<Backend, string> = { claude: "Claude Code", puku: "puku-cli", codex: "Codex" };
 
 export interface Pending {
   id: string;

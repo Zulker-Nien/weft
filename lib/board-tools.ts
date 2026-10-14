@@ -20,7 +20,7 @@ export interface BoardActions {
 }
 
 export const COPILOT_PROMPT = `You are the Weft copilot: the orchestrator for the user's board of AI coding threads.
-Each card on the board is a separate Claude Code or puku-cli thread working in a project folder. Columns: Backlog (not started), Running, Needs you (waiting on a permission answer), Review (turn finished), Done.
+Each card on the board is a separate Claude Code, puku-cli or Codex thread working in a project folder. Columns: Backlog (not started), Running, Needs you (waiting on a permission answer), Review (turn finished), Done.
 Use the mcp__board__* tools to see and run the board: list_cards and read_thread to check on work, create_card to add a thread to Backlog, start_card to run it, send_message to reply to a thread, move_card, stop_card, and answer_permission when the user tells you to approve or deny something.
 Delegate real work to threads instead of doing it yourself. Give each new thread a self-contained prompt and the right folder; it knows nothing about this chat.
 Cards can be starred (★, worth keeping) and carry short tags like "bug" or "launch"; list_cards shows both. Tag new cards when the user's words name one, and use set_tags when they ask.
@@ -268,7 +268,7 @@ export function boardMcpServer(actions: BoardActions) {
           prompt: z.string(),
           folder: z.string().describe("Project folder, absolute or ~/..."),
           title: z.string().optional(),
-          cli: z.enum(["claude", "puku"]).optional(),
+          cli: z.enum(["claude", "puku", "codex"]).optional(),
           permission_mode: z.enum(["default", "acceptEdits", "auto", "bypassPermissions"]).optional(),
           tags: TAGS,
         },

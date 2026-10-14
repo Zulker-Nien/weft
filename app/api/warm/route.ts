@@ -11,7 +11,7 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as { cardId?: string; cwd?: string; backend?: Backend };
     if (body.cardId) warmUp(body.cardId);
-    else if (body.cwd) ensureSpare(resolveFolder(body.cwd), body.backend === "puku" ? "puku" : "claude");
+    else if (body.cwd && body.backend !== "codex") ensureSpare(resolveFolder(body.cwd), body.backend === "puku" ? "puku" : "claude");
     return Response.json({ ok: true });
   } catch (err) {
     return fail(err);

@@ -22,12 +22,12 @@ function FooterMeta({ card, now, alsoHere, marks }: { card: Card; now: number; a
   const nextSend = scheduled[0];
   const puku = card.backend === "puku";
   const { model, effort } = runningOn(card);
-  const cliTip = `${puku ? "puku-cli" : "Claude Code"}${model ? ` on ${model}${effort ? ` · ${effort} effort` : ""}` : ""}${card.source === "claude-code" ? " · picked up from Claude Code" : ""}`;
+  const cliTip = `${puku ? "puku-cli" : card.backend === "codex" ? "Codex" : "Claude Code"}${model ? ` on ${model}${effort ? ` · ${effort} effort` : ""}` : ""}${card.source === "claude-code" ? " · picked up from Claude Code" : ""}`;
   return (
     <span className="flex min-w-0 items-center gap-1.5">
-      <span className={`size-1.5 shrink-0 rounded-full ${puku ? "bg-puku" : "bg-claude"}`} title={cliTip} />
+      <span className={`size-1.5 shrink-0 rounded-full ${puku ? "bg-puku" : card.backend === "codex" ? "bg-accent" : "bg-claude"}`} title={cliTip} />
       {model && (
-        <span className={`shrink-0 whitespace-nowrap font-medium ${puku ? "text-puku" : "text-claude"}`} title={cliTip}>
+        <span className={`shrink-0 whitespace-nowrap font-medium ${puku ? "text-puku" : card.backend === "codex" ? "text-accent" : "text-claude"}`} title={cliTip}>
           {modelLabel(model)}
         </span>
       )}
@@ -77,11 +77,11 @@ function FooterMeta({ card, now, alsoHere, marks }: { card: Card; now: number; a
 // The CLI's chip, coloured by CLI; given a card, it names the model and effort the thread runs on instead.
 export function BackendBadge({ backend, card }: { backend: Card["backend"]; card?: Card }) {
   const { model, effort } = card ? runningOn(card) : {};
-  const label = model ? [modelLabel(model), effort].filter(Boolean).join(" · ") : backend;
-  const tone = backend === "puku" ? "bg-puku-soft text-puku" : "bg-claude-soft text-claude";
+  const label = model ? [modelLabel(model), effort].filter(Boolean).join(" · ") : backend === "codex" ? "Codex" : backend;
+  const tone = backend === "puku" ? "bg-puku-soft text-puku" : backend === "codex" ? "bg-accent-soft text-accent" : "bg-claude-soft text-claude";
   const badge = <span className={`shrink-0 whitespace-nowrap rounded px-1.5 py-px text-[11px] font-medium ${tone}`}>{label}</span>;
   if (!model) return badge;
-  const cli = backend === "puku" ? "puku-cli" : "Claude Code";
+  const cli = backend === "puku" ? "puku-cli" : backend === "codex" ? "Codex" : "Claude Code";
   const how = card?.effort ? "" : " (the CLI's default)";
   return <Tip text={`${cli} · ${model}${effort ? ` · ${effort} effort${how}` : ""}`}>{badge}</Tip>;
 }

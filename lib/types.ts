@@ -13,8 +13,8 @@ export const COLUMNS = [
 export const COPILOT_ID = "copilot";
 
 export type Column = (typeof COLUMNS)[number]["id"];
-export type Backend = "claude" | "puku";
-export const BACKEND_LABELS: Record<Backend, string> = { claude: "Claude Code", puku: "puku-cli" };
+export type Backend = "claude" | "puku" | "codex";
+export const BACKEND_LABELS: Record<Backend, string> = { claude: "Claude Code", puku: "puku-cli", codex: "Codex" };
 // bypassPermissions is "YOLO": every tool runs without asking.
 export type PermissionMode = "default" | "acceptEdits" | "auto" | "bypassPermissions";
 export const MODES: PermissionMode[] = ["default", "acceptEdits", "auto", "bypassPermissions"];
@@ -26,6 +26,16 @@ export const MODE_OPTIONS: { id: PermissionMode; label: string; hint: string }[]
   { id: "acceptEdits", label: "Accept edits", hint: "Edits files freely, asks before commands" },
   { id: "default", label: "Ask me", hint: "Asks before each tool" },
 ];
+
+export function permissionOptions(backend: Backend) {
+  if (backend !== "codex") return MODE_OPTIONS.filter((m) => backend === "claude" || m.id !== "bypassPermissions");
+  return [
+    { id: "bypassPermissions", label: "Full access", hint: "Runs commands and writes outside the project without approval" },
+    { id: "auto", label: "Auto review", hint: "Codex reviews command approvals inside the project" },
+    { id: "acceptEdits", label: "Workspace write", hint: "Can edit this project; Codex commands stay sandboxed" },
+    { id: "default", label: "Read only", hint: "Can inspect files without changing them" },
+  ] satisfies { id: PermissionMode; label: string; hint: string }[];
+}
 
 // A mode Claude Code recorded (or a setting) as the closest one Weft runs; undefined if unknown.
 // "plan" only reads, so it maps to "default", the mode that asks before anything changes.

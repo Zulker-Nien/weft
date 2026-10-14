@@ -33,8 +33,8 @@ export function idleToClose<T extends { spec: { backend: Backend } }>(idleOldest
   return idleOldestFirst.filter((s) => close.has(s));
 }
 
-// A spare is only worth keeping warm for Claude Code, or for puku when the New thread dialog has puku
-// picked (it asks with the backend). Refilling a spare after a card adopts one is Claude-only.
+// A spare is only worth keeping warm for Claude Code and puku, which keep a CLI process open between turns.
+// Codex starts a fresh `exec` process for each turn, so it has no spare process to refill.
 export function refillsSpare(backend: Backend) {
   return backend !== "puku";
 }

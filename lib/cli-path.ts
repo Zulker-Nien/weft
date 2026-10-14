@@ -1,17 +1,18 @@
 import { execFileSync } from "node:child_process";
 import type { Backend } from "./types";
 
-let pukuPath: string | undefined;
+const paths: Partial<Record<Backend, string>> = {};
 
-// The CLI binary a thread's backend runs: the SDK's own Claude Code, or puku-cli found on the PATH once.
+// Claude Code comes from the Agent SDK; puku-cli and Codex come from the user's PATH.
 export function executableFor(backend: Backend) {
-  if (backend !== "puku") return undefined;
-  if (!pukuPath) {
+  if (backend === "claude") return undefined;
+  if (!paths[backend]) {
+    const command = backend === "puku" ? "puku-cli" : "codex";
     try {
-      pukuPath = execFileSync("/usr/bin/which", ["puku-cli"], { encoding: "utf8" }).trim();
+      paths[backend] = execFileSync("/usr/bin/which", [command], { encoding: "utf8" }).trim();
     } catch {
-      throw new Error("puku-cli isn't on this app's PATH.");
+      throw new Error(`${command} isn't on this app's PATH.`);
     }
   }
-  return pukuPath;
+  return paths[backend];
 }

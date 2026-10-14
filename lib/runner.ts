@@ -214,6 +214,11 @@ export async function stop(cardId: string) {
   while (session.pending.length) settle(cardId, false);
   if (!session.busy) return;
   session.stopping = true;
+  if (session.spec.backend === "codex") {
+    session.abort.abort();
+    await session.done;
+    return;
+  }
   // If the CLI doesn't end the turn (it may still be starting, or stuck), end the process.
   setTimeout(() => {
     if (session.busy && session.stopping) session.abort.abort();

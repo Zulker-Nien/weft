@@ -22,6 +22,7 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 - Vercel drawer: pull plain env variables the 🔐 vault has no value for (never replacing one), and **Live pull from Vercel**,
   a team webhook relayed by the deployed Weft and Supabase that pulls them as they're added (`lib/vercel-hooks.ts`,
   `lib/vercel-relay.ts`; docs/architecture/vercel.md).
+- **Codex CLI backend**: choose Codex for a new thread, resume its saved session between turns, set its sandbox mode and reasoning effort, switch cards between Claude Code, puku-cli and Codex, and check its login status. Codex uses its own CLI tools; Weft's browser, board, secrets and webhook MCP tools and per-tool guards aren't available in Codex threads.
 - **Cloudflare setup token**: the Cloudflare drawer asks for a setup token ("Create additional tokens" template); Weft
   makes its own narrower token with it (account settings, Workers, Pages), keeps that in the Keychain and deletes the
   setup token. The token form is bigger, with numbered steps. A token you made yourself still works as before.

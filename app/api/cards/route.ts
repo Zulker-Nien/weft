@@ -14,7 +14,7 @@ import { normalizeTags } from "@/lib/tags";
 import { MODES, type Backend, type Effort, type PermissionMode } from "@/lib/types";
 import { effortFor } from "@/lib/new-thread";
 
-const BACKENDS: Backend[] = ["claude", "puku"];
+const BACKENDS: Backend[] = ["claude", "puku", "codex"];
 
 const MODEL_ID = /^[\w.\-\[\]]{1,60}$/;
 

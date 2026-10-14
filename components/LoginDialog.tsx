@@ -7,7 +7,7 @@ import { useAccount } from "@/lib/use-account";
 import Icon, { Spinner } from "./Icon";
 import Modal from "./Modal";
 
-const NAMES: Record<Backend, string> = { claude: "Claude Code", puku: "puku-cli" };
+const NAMES: Record<Backend, string> = { claude: "Claude Code", puku: "puku-cli", codex: "Codex" };
 
 // How long "Logged in" shows before the pop-up closes itself.
 const DONE_MS = 2000;

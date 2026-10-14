@@ -28,7 +28,11 @@ export function remember(key: string, value: string | null) {
 export const BACKENDS: { id: Backend; label: string }[] = [
   { id: "claude", label: "Claude Code" },
   { id: "puku", label: "puku-cli" },
+  { id: "codex", label: "Codex" },
 ];
+
+// Picker sentinel: Codex's own default model, so the runner omits `--model`.
+export const CODEX_DEFAULT_MODEL = "codex-default";
 
 // The Puku gateway serves these three and answers any other id as puku-ai-2.8.
 export const MODELS: Record<Backend, { id: string; label: string }[]> = {
@@ -43,16 +47,19 @@ export const MODELS: Record<Backend, { id: string; label: string }[]> = {
     { id: "puku-ai-2.8", label: "Puku AI 2.8" },
     { id: "puku-ai-2.7", label: "Puku AI 2.7" },
   ],
+  codex: [{ id: CODEX_DEFAULT_MODEL, label: "Codex default" }],
 };
 
 // The CLI that serves a model id, or undefined for an id neither serves.
 export function backendFor(model: string): Backend | undefined {
+  if (model === CODEX_DEFAULT_MODEL) return undefined;
   return (Object.keys(MODELS) as Backend[]).find((b) => MODELS[b].some((m) => m.id === model));
 }
 
 const DEFAULT_MODEL: Record<Backend, string> = {
   claude: "claude-opus-5-5",
   puku: "opus-4.8",
+  codex: CODEX_DEFAULT_MODEL,
 };
 
 // The last model picked for this CLI, or its default.
@@ -68,6 +75,8 @@ export function modelFor(backend: Backend) {
 // undefined stays undefined (the CLI's own default).
 export function modelOn(backend: Backend, model: string | undefined): string | undefined {
   if (!model) return undefined;
+  if (model === CODEX_DEFAULT_MODEL) return backend === "codex" ? undefined : DEFAULT_MODEL[backend];
+  if (backend === "codex") return undefined;
   const bare = model.replace(/\[[^\]]*\]$/, "");
   const onPuku = MODELS.puku.some((m) => m.id === bare);
   return (backend === "puku") === onPuku ? model : DEFAULT_MODEL[backend];
@@ -89,6 +98,7 @@ export const EFFORTS: { id: Effort | ""; label: string }[] = [
 const EFFORT_BY_BACKEND: Record<Backend, Effort[]> = {
   claude: ["low", "medium", "high", "xhigh", "max"],
   puku: ["low", "medium", "high", "max"],
+  codex: ["low", "medium", "high", "xhigh", "max"],
 };
 
 // The closest effort a backend accepts. Drops xhigh to high for puku. "" / undefined pass through

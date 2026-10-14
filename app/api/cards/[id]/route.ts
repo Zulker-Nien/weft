@@ -96,8 +96,11 @@ export async function PATCH(req: Request, { params }: Ctx) {
     // Takes effect mid-turn too: the open CLI switches modes right away.
     if (body.permissionMode !== undefined) {
       if (!MODES.includes(body.permissionMode)) throw new Error("Unknown permission mode.");
+      if (card.backend === "codex" && card.sessionId && body.permissionMode !== card.permissionMode) {
+        throw new Error("Codex keeps its sandbox mode for the life of a session. Start a new Codex thread to change it.");
+      }
       // Only board threads on Claude Code start with the flag that lets them skip every prompt.
-      if (body.permissionMode === "bypassPermissions" && (card.role === "copilot" || card.backend !== "claude")) {
+      if (body.permissionMode === "bypassPermissions" && (card.role === "copilot" || card.backend === "puku")) {
         throw new Error("This thread can't skip permission prompts.");
       }
       setPermissionMode(id, body.permissionMode);

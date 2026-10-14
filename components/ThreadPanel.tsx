@@ -180,7 +180,7 @@ function HeaderMeta({ card, pilot, onMode, onTags }: {
   return (
     <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted">
       <BackendPicker card={card} />
-      <CrashGuard inline what="mode picker"><ModePicker small value={card.permissionMode} onChange={onMode} yolo={card.backend === "claude" && !pilot} /></CrashGuard>
+      <CrashGuard inline what="mode picker"><ModePicker small backend={card.backend} value={card.permissionMode} onChange={onMode} yolo={card.backend !== "puku" && !pilot} disabled={card.backend === "codex" && Boolean(card.sessionId)} /></CrashGuard>
       <span className="min-w-[3rem] truncate" title={card.cwd}>{pilot ? "✨ whole board" : folderName(card.cwd)}</span>
       {card.sessionId && (
         <span className="shrink-0 whitespace-nowrap font-mono text-faint" title={card.sessionId}>· {card.sessionId.slice(0, 8)}</span>

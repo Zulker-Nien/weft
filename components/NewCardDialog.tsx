@@ -88,7 +88,10 @@ export default function NewCardDialog({
     api.settings().then(
       (s) => {
         if (!pickedMode.current) setPermissionMode(s.defaultPermissionMode);
-        if (!pickedBackend.current) setBackend(s.defaultBackend);
+        if (!pickedBackend.current) {
+          setBackend(s.defaultBackend);
+          setModel(modelFor(s.defaultBackend));
+        }
       },
       () => {},
     );
@@ -218,7 +221,7 @@ export default function NewCardDialog({
           />
         </label>
 
-        {backend === "claude" && (
+        {backend !== "puku" && (
           <label
             className="relative flex items-center gap-1.5 rounded-md border border-line-strong py-1.5 pl-2.5 pr-1.5 text-[12px] text-ink"
             title="How hard the model thinks before answering"
@@ -244,6 +247,7 @@ export default function NewCardDialog({
         )}
 
         <ModePicker
+          backend={backend}
           value={permissionMode}
           onChange={(mode) => {
             pickedMode.current = true;
@@ -262,6 +266,7 @@ export default function NewCardDialog({
             <button
               key={b.id}
               type="button"
+              title={b.id === "codex" ? "Requires Codex CLI and login. Weft's browser, board, secrets and webhook tools are unavailable." : undefined}
               onClick={() => {
                 pickedBackend.current = true;
                 setBackend(b.id);
