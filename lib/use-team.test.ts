@@ -26,10 +26,11 @@ const team: TeamSnapshot = {
   roleLabels: { owner: "Owner", admin: "Admin", member: "Member" },
 };
 
-const { useTeam } = await import("./use-team");
+const { clearTeamCache, prefetchTeam, useTeam, useTeamPrefetch } = await import("./use-team");
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clearTeamCache();
   fetchMock.mockResolvedValue(jsonResponse(200, team));
   // happy-dom doesn't ship a default fetch; the tests install one for the duration of the suite.
   vi.stubGlobal("fetch", fetchMock);
@@ -38,6 +39,59 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+});
+
+describe("prefetchTeam", () => {
+  it("opens already loaded after a prefetch, then checks again in the background", async () => {
+    prefetchTeam("acme");
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await Promise.resolve();
+    await new Promise((r) => setTimeout(r, 0));
+    const { result } = renderHook(() => useTeam("acme"));
+    expect(result.current.state).toMatchObject({ kind: "ok", team: { org: { slug: "acme" } } });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  });
+
+  it("joins a prefetch still on its way instead of asking twice", async () => {
+    prefetchTeam();
+    const { result } = renderHook(() => useTeam());
+    await waitFor(() => expect(result.current.state.kind).toBe("ok"));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("doesn't fetch again once a team is loaded, but retries after a failed answer", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(502, { error: "offline" }));
+    prefetchTeam();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 0));
+    prefetchTeam();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await new Promise((r) => setTimeout(r, 0));
+    prefetchTeam();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("useTeamPrefetch loads the team for a signed-in user and forgets it on sign-out", async () => {
+    const initialProps: { id?: string } = { id: "u1" };
+    const { rerender } = renderHook(({ id }) => useTeamPrefetch(id), { initialProps });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 0));
+    rerender({ id: undefined });
+    const { result } = renderHook(() => useTeam());
+    expect(result.current.state).toEqual({ kind: "loading" });
+    await waitFor(() => expect(result.current.state.kind).toBe("ok"));
+  });
+
+  it("clearTeamCache forgets the loaded team", async () => {
+    prefetchTeam();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 0));
+    clearTeamCache();
+    const { result } = renderHook(() => useTeam());
+    expect(result.current.state).toEqual({ kind: "loading" });
+    await waitFor(() => expect(result.current.state.kind).toBe("ok"));
+  });
 });
 
 describe("useTeam", () => {

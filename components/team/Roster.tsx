@@ -38,13 +38,18 @@ export type RosterMember = {
   isYou: boolean;
 };
 
-function RosterMemberProps(member: TeamMember, isYou: boolean): RosterMember {
+// "Owner", not "owner": the label from the options, else the role capitalized (an admin's options leave Owner out).
+function roleLabelOf(role: TeamRole, roleOptions: RoleOption[]): string {
+  return roleOptions.find((o) => o.role === role)?.label ?? role.charAt(0).toUpperCase() + role.slice(1);
+}
+
+function RosterMemberProps(member: TeamMember, isYou: boolean, roleLabel: string): RosterMember {
   return {
     userId: member.userId,
     email: member.email,
     displayName: member.name,
     role: member.role,
-    roleLabel: member.role,
+    roleLabel,
     joinedAt: member.joinedAt,
     isYou,
   };
@@ -188,7 +193,9 @@ export function Roster({
   // page computes isYou against currentUserId; the component only needs the
   // precomputed flag, but it derives one here too so callers can hand in a
   // raw snapshot without pre-processing.
-  const rows: RosterMember[] = members.map((m) => RosterMemberProps(m, m.userId === currentUserId));
+  const rows: RosterMember[] = members.map((m) =>
+    RosterMemberProps(m, m.userId === currentUserId, roleLabelOf(m.role, roleOptions)),
+  );
   if (rows.length === 0) {
     return <p className="wz-teamSub">No members yet. Invite the first teammate below.</p>;
   }

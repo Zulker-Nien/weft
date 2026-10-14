@@ -8,6 +8,10 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ## [Unreleased]
 
+### Changed
+
+- Settings → Team looks like the rest of Settings (one card per section, a role pill and member count, email, role and Send invite on one line) and opens already loaded: the team is fetched as soon as you sign in. Invites default to Member instead of Owner, and the roster says "Owner", not "owner".
+
 ### Added
 
 - Weft teams on weft.zip: every account gets a workspace; owners and admins invite people by email, change roles and remove

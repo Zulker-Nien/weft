@@ -90,6 +90,9 @@ describe("TeamSettings", () => {
     // The invite form, the pending list, the Open-on-weft.zip link.
     expect(screen.getByRole("button", { name: "Send invite" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open on weft.zip" })).toBeInTheDocument();
+    // The header says your role as a pill and counts the people, not "you're a owner".
+    expect(screen.queryByText(/you're a/)).not.toBeInTheDocument();
+    expect(screen.getByText(/invited/)).toBeInTheDocument();
   });
 
   it("hides the invite form and pending list when the user can't manage", () => {
@@ -119,12 +122,12 @@ describe("TeamSettings", () => {
     expect(screen.getByRole("combobox", { name: "Switch workspace" })).toBeInTheDocument();
   });
 
-  it("inviting through the form calls actions.invite", async () => {
+  it("inviting through the form calls actions.invite, as a Member unless you pick another role", async () => {
     const a = actions();
     useTeamMock.mockReturnValue({ state: { kind: "ok", team }, refresh: vi.fn(), actions: a });
     render(<TeamSettings />);
     await userEvent.type(screen.getByLabelText("Email"), "linus@b.co");
     await userEvent.click(screen.getByRole("button", { name: "Send invite" }));
-    await waitFor(() => expect(a.invite).toHaveBeenCalledWith("linus@b.co", "owner"));
+    await waitFor(() => expect(a.invite).toHaveBeenCalledWith("linus@b.co", "member"));
   });
 });

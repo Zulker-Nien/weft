@@ -1,0 +1,258 @@
+/* Settings → Team on the board. The team components (components/team/*) carry weft.zip's wz-* classes,
+   whose look lives in team.css and is only loaded on weft.zip. Here the same classes take the board's
+   own tokens, scoped under .wz-board, so the page follows Light, Dark and every scene. */
+
+.wz-board .wz-roster {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.wz-board .wz-roster th {
+  padding: 0 10px 8px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+  border-bottom: 1px solid var(--line);
+}
+
+.wz-board .wz-roster td {
+  padding: 10px;
+  font-size: 13px;
+  color: var(--ink);
+  vertical-align: middle;
+}
+
+.wz-board .wz-roster tr + tr td {
+  border-top: 1px solid var(--line);
+}
+
+.wz-board .wz-roster th:first-child,
+.wz-board .wz-roster td:first-child {
+  padding-left: 0;
+}
+
+.wz-board .wz-roster th:last-child,
+.wz-board .wz-roster td:last-child {
+  padding-right: 0;
+  text-align: right;
+}
+
+.wz-board .wz-rosterName {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.wz-board .wz-rosterNamePrimary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.wz-board .wz-rosterNameSecondary {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.wz-board .wz-rosterYou {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.wz-board .wz-rosterDate {
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.wz-board .wz-rosterDash {
+  color: var(--faint);
+}
+
+/* Fields: the same bordered canvas inputs as the other Settings pages. */
+.wz-board .wz-rosterSelect,
+.wz-board .wz-inviteInput,
+.wz-board .wz-inviteSelect {
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--canvas);
+  color: var(--ink);
+  font-size: 13px;
+  outline: none;
+}
+
+.wz-board .wz-rosterSelect {
+  padding: 3px 6px;
+  font-size: 12.5px;
+}
+
+.wz-board .wz-inviteInput,
+.wz-board .wz-inviteSelect {
+  width: 100%;
+  padding: 6px 10px;
+}
+
+.wz-board .wz-rosterSelect:focus,
+.wz-board .wz-inviteInput:focus,
+.wz-board .wz-inviteSelect:focus {
+  border-color: var(--accent);
+}
+
+.wz-board .wz-inviteInput::placeholder {
+  color: var(--faint);
+}
+
+/* Quiet bordered buttons; the destructive ones turn red on hover. */
+.wz-board .wz-rosterButton,
+.wz-board .wz-pendingRevoke,
+.wz-board .wz-leaveButton {
+  padding: 4px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.wz-board .wz-rosterButton:hover:not(:disabled),
+.wz-board .wz-pendingRevoke:hover:not(:disabled),
+.wz-board .wz-leaveButton:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.wz-board .wz-rosterButton:disabled,
+.wz-board .wz-pendingRevoke:disabled,
+.wz-board .wz-leaveButton:disabled,
+.wz-board .wz-inviteSubmit:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.wz-board .wz-rosterMessage,
+.wz-board .wz-inviteMessage,
+.wz-board .wz-leaveMessage {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.wz-board .wz-rosterMessageError,
+.wz-board .wz-inviteMessageError,
+.wz-board .wz-leaveMessageError {
+  color: var(--danger);
+}
+
+.wz-board .wz-rosterMessageOk,
+.wz-board .wz-inviteMessageOk {
+  color: var(--ok);
+}
+
+/* Invite: email and role on one line with Send invite at its end, the role's description under them. */
+.wz-board .wz-inviteForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  column-gap: 8px;
+  row-gap: 6px;
+}
+
+.wz-board .wz-inviteRow {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  gap: 8px;
+}
+
+.wz-board .wz-inviteForm > div:has(> .wz-inviteSubmit) {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.wz-board .wz-inviteRoleDescription,
+.wz-board .wz-inviteMessage {
+  grid-column: 1 / -1;
+}
+
+.wz-board .wz-inviteRoleDescription {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.wz-board .wz-inviteField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Email gets the room; the role picker needs only its longest label. */
+.wz-board .wz-inviteRow > .wz-inviteField + .wz-inviteField {
+  flex: 0 0 132px !important;
+}
+
+.wz-board .wz-inviteField label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.wz-board .wz-inviteSubmit {
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.wz-board .wz-inviteSubmit:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+/* Pending invites: email, role, expiry, Revoke. */
+.wz-board .wz-pendingRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  font-size: 13px;
+}
+
+.wz-board .wz-pendingRow + .wz-pendingRow {
+  border-top: 1px solid var(--line);
+}
+
+.wz-board .wz-pendingEmail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.wz-board .wz-pendingRole,
+.wz-board .wz-pendingExpiry {
+  font-size: 12.5px;
+  color: var(--muted);
+}

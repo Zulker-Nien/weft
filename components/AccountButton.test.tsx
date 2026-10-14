@@ -14,6 +14,9 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/client", () => ({ api }));
 
+const useTeamPrefetch = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/use-team", () => ({ useTeamPrefetch }));
+
 const openExternal = vi.fn();
 const browserOpen = vi.fn(() => Promise.resolve());
 const ada = { id: "u1", email: "ada@b.co", name: "Ada", avatar: "https://img/ada.png", provider: "github" };
@@ -32,6 +35,19 @@ beforeEach(() => {
 });
 
 describe("AccountButton", () => {
+  it("prefetches the team once you're signed in, so Settings → Team opens loaded", async () => {
+    api.account.mockResolvedValue({ configured: true, user: ada });
+    setup();
+    await vi.waitFor(() => expect(useTeamPrefetch).toHaveBeenLastCalledWith("u1"));
+  });
+
+  it("doesn't prefetch a team while signed out", async () => {
+    api.account.mockResolvedValue({ configured: true, user: null });
+    setup();
+    await screen.findByRole("button", { name: "Sign in with GitHub" });
+    expect(useTeamPrefetch).toHaveBeenLastCalledWith(undefined);
+  });
+
   it("takes no room until it knows, or when accounts aren't set up", async () => {
     api.account.mockResolvedValue({ configured: false, user: null });
     const { container } = setup();

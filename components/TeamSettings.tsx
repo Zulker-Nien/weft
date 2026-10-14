@@ -10,11 +10,13 @@
 //
 // The dialog page header ("Team / Your Weft workspace and the people in
 // it.") is rendered by SettingsDialog from lib/settings-nav.ts, so this
-// component opens straight on the content. The loading, signed-out and
-// error states still need a line on their own, because there's no
-// workspace to show yet — a "Loading your team" line is enough for that
-// state, and a "Sign in to your Weft account" hint for signed-out.
-import { useState } from "react";
+// component opens straight on its own cards, one per section. The team is
+// usually there already: the top bar prefetches it once you're signed in
+// (prefetchTeam in lib/use-team.ts), so "Loading your team" shows only on
+// a cold start. The shared components' wz-* classes take the board's
+// tokens from team/team-board.css under .wz-board.
+import { useState, type ReactNode } from "react";
+import "./team/team-board.css";
 import { openTeamPage } from "./board-palette";
 import { Spinner } from "./Icon";
 import { InviteForm, type RoleOption } from "./team/InviteForm";
@@ -24,18 +26,30 @@ import { Roster } from "./team/Roster";
 import { useTeam } from "@/lib/use-team";
 import type { TeamRole } from "@/lib/team-types";
 
-// Match the look of the other Settings pages: cards holding the roster,
-// invite form, etc. The wz-* classes belong to weft.zip's stylesheet; we
-// override the bits that need to match the board's Settings card style
-// (rounded border, panel/85 background, the same text colours).
-const CARD = "rounded-xl border border-line-strong bg-panel/85 p-5 shadow-lg backdrop-blur-xl";
-const SECTION_TITLE = "text-[12.5px] font-semibold uppercase tracking-[0.16em] text-muted";
+// The same card as the other Settings pages (SettingsDialog's Card).
+const CARD = "wz-board rounded-xl border border-line-strong bg-panel/85 p-5 shadow-lg backdrop-blur-xl";
+const SECTION_TITLE = "mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-faint";
 const SUBTLE = "text-[12.5px] text-muted";
+const BUTTON = "rounded-md border border-line-strong px-2.5 py-1 text-[12.5px] text-ink hover:bg-sunken";
+
+function Section({ title, children }: { title?: string; children: ReactNode }) {
+  return (
+    <section className={CARD} onMouseDown={(e) => e.stopPropagation()}>
+      {title ? <h4 className={SECTION_TITLE}>{title}</h4> : null}
+      {children}
+    </section>
+  );
+}
 
 // The role <select> in the roster only needs {role, label}. We hand the
 // invite form the full RoleOption list (with descriptions).
 function compactRoleOptions(opts: { role: TeamRole; label: string }[]): RoleOption[] {
   return opts.map((o) => ({ role: o.role, label: o.label, description: "" }));
+}
+
+// Invite as Member unless the list doesn't offer it; the list leads with Owner, too much to hand out by default.
+function defaultInviteRole(opts: RoleOption[]): TeamRole | undefined {
+  return opts.some((o) => o.role === "member") ? "member" : opts[0]?.role;
 }
 
 export default function TeamSettings() {
@@ -44,48 +58,42 @@ export default function TeamSettings() {
 
   if (state.kind === "loading") {
     return (
-      <div className={`flex items-center gap-2 ${SUBTLE}`}>
-        <Spinner size={12} /> Loading your team
-      </div>
+      <Section>
+        <div className={`flex items-center gap-2 ${SUBTLE}`}>
+          <Spinner size={12} /> Loading your team
+        </div>
+      </Section>
     );
   }
 
   if (state.kind === "signed-out") {
     return (
-      <div className="flex flex-col gap-2">
-        <p className="text-[13px] text-ink">
-          Sign in to your Weft account to see your team.
-        </p>
-        <p className={SUBTLE}>
-          The sign-in lives in Settings → Accounts.
-        </p>
-        <div>
-          <button
-            type="button"
-            onClick={openTeamPage}
-            className="rounded-md border border-line-strong bg-panel/80 px-3 py-1.5 text-[12.5px] text-ink hover:bg-sunken"
-          >
-            Open on weft.zip
-          </button>
+      <Section>
+        <div className="flex flex-col gap-2">
+          <p className="text-[13px] text-ink">Sign in to your Weft account to see your team.</p>
+          <p className={SUBTLE}>The sign-in lives in Settings → Accounts.</p>
+          <div>
+            <button type="button" onClick={openTeamPage} className={BUTTON}>
+              Open on weft.zip
+            </button>
+          </div>
         </div>
-      </div>
+      </Section>
     );
   }
 
   if (state.kind === "error") {
     return (
-      <div className="flex flex-col gap-2">
-        <p className="break-words text-[12.5px] text-danger">Couldn&apos;t load your team: {state.message}</p>
-        <div>
-          <button
-            type="button"
-            onClick={refresh}
-            className="rounded-md border border-line-strong bg-panel/80 px-3 py-1.5 text-[12.5px] text-ink hover:bg-sunken"
-          >
-            Try again
-          </button>
+      <Section>
+        <div className="flex flex-col gap-2">
+          <p className="break-words text-[12.5px] text-danger">Couldn&apos;t load your team: {state.message}</p>
+          <div>
+            <button type="button" onClick={refresh} className={BUTTON}>
+              Try again
+            </button>
+          </div>
         </div>
-      </div>
+      </Section>
     );
   }
 
@@ -95,14 +103,31 @@ export default function TeamSettings() {
   const roleOptions: RoleOption[] = team.roleOptions.map((o) => ({ role: o.role, label: o.label, description: o.description }));
   const compact = compactRoleOptions(roleOptions);
   const pending = team.pending.map((i) => inviteRow(i, team.roleLabels));
+  const count = team.members.length;
 
   return (
     <div className="flex flex-col gap-4">
-      <div className={CARD}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-[15px] font-medium text-ink">{team.org.name}</span>
-            <span className={SUBTLE}>· you&apos;re a {team.roleLabels[team.role].toLowerCase()}</span>
+      <Section>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span
+              aria-hidden
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-[15px] font-semibold text-accent"
+            >
+              {team.org.name.trim().charAt(0).toUpperCase() || "W"}
+            </span>
+            <div className="flex min-w-0 flex-col">
+              <span className="flex items-center gap-2">
+                <span className="truncate text-[15px] font-medium text-ink">{team.org.name}</span>
+                <span className="rounded-full border border-line-strong px-2 py-px text-[11px] text-muted">
+                  {team.roleLabels[team.role]}
+                </span>
+              </span>
+              <span className={SUBTLE}>
+                {count} {count === 1 ? "member" : "members"}
+                {pending.length > 0 ? ` · ${pending.length} invited` : ""}
+              </span>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {team.orgs.length > 1 ? (
@@ -119,19 +144,14 @@ export default function TeamSettings() {
                 ))}
               </select>
             ) : null}
-            <button
-              type="button"
-              onClick={openTeamPage}
-              className="rounded-md border border-line-strong bg-panel/80 px-2.5 py-1 text-[12.5px] text-ink hover:bg-sunken"
-            >
+            <button type="button" onClick={openTeamPage} className={BUTTON}>
               Open on weft.zip
             </button>
           </div>
         </div>
-      </div>
+      </Section>
 
-      <div className={CARD}>
-        <h4 className={`${SECTION_TITLE} mb-3`}>Members</h4>
+      <Section title="Members">
         <Roster
           members={team.members}
           canManage={team.canManage}
@@ -139,30 +159,27 @@ export default function TeamSettings() {
           currentUserId={team.user.id}
           actions={actions}
         />
-      </div>
+      </Section>
 
       {team.canManage ? (
-        <div className={CARD}>
-          <h4 className={`${SECTION_TITLE} mb-3`}>Invite a teammate</h4>
-          <InviteForm roleOptions={roleOptions} actions={actions} />
-        </div>
+        <Section title="Invite a teammate">
+          <InviteForm roleOptions={roleOptions} defaultRole={defaultInviteRole(roleOptions)} actions={actions} />
+        </Section>
       ) : null}
 
       {team.canManage && pending.length > 0 ? (
-        <div className={CARD}>
-          <h4 className={`${SECTION_TITLE} mb-3`}>Pending invites</h4>
+        <Section title="Pending invites">
           <PendingInvites invites={pending} roleLabels={team.roleLabels} actions={actions} />
-        </div>
+        </Section>
       ) : null}
 
       {!isOwner ? (
-        <div className={CARD}>
-          <h4 className={`${SECTION_TITLE} mb-3`}>Leave this workspace</h4>
+        <Section title="Leave this workspace">
           <p className={`${SUBTLE} mb-3`}>
             You&apos;ll lose access to its boards, billing and shared vaults. You can be re-invited later.
           </p>
           <LeaveButton userId={team.user.id} actions={actions} />
-        </div>
+        </Section>
       ) : null}
     </div>
   );

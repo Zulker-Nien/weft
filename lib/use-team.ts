@@ -48,6 +48,51 @@ async function fetchTeam(org: string | undefined): Promise<{ state: Exclude<Team
   return { state: { kind: "ok", team: body as TeamSnapshot } };
 }
 
+type Loaded = Exclude<TeamHookState, { kind: "loading" }>;
+
+// The last answer per workspace ("" is your default one), so Settings → Team opens on it while a fresh one
+// loads. prefetchTeam fills it before the page is ever opened: the top bar calls it once you're signed in.
+const cache = new Map<string, Loaded>();
+const inflight = new Map<string, Promise<Loaded>>();
+
+// A fetch that lands in the cache. A first load joins a prefetch already on its way; a refresh (after an
+// action, a sign-in) always asks again, so it can't come back with an answer from before the change.
+function load(org: string | undefined, fresh: boolean): Promise<Loaded> {
+  const key = org ?? "";
+  const running = inflight.get(key);
+  if (running && !fresh) return running;
+  const next = fetchTeam(org).then(({ state }) => {
+    cache.set(key, state);
+    return state;
+  });
+  inflight.set(key, next);
+  void next.finally(() => {
+    if (inflight.get(key) === next) inflight.delete(key);
+  });
+  return next;
+}
+
+// Load a workspace's team ahead of time, unless it's already loaded or loading.
+export function prefetchTeam(org?: string): void {
+  if (cache.get(org ?? "")?.kind === "ok") return;
+  void load(org, false);
+}
+
+// Forget every loaded team: on sign-out, or a switch to another account.
+export function clearTeamCache(): void {
+  cache.clear();
+  inflight.clear();
+}
+
+// Have the signed-in account's team ready before anyone opens Settings → Team: prefetch it for this
+// user id, and forget the cache on sign-out or a switch to another account. The top bar calls it.
+export function useTeamPrefetch(userId: string | undefined): void {
+  useEffect(() => {
+    clearTeamCache();
+    if (userId) prefetchTeam();
+  }, [userId]);
+}
+
 // One action: POST a TeamOp with the loaded org's slug, then refresh. Called from the team UI, so a
 // failure with a clear message is what the form shows. A 401 inside an action means the user signed
 // out between the load and the click; we return an error so the form can say so.
@@ -82,7 +127,7 @@ export function useTeam(org?: string): TeamHook {
   // a burst of refreshes (sign-in events, actions) can't keep a slow load from ever finishing.
   const orgKey = org ?? "";
   const [loaded, setLoaded] = useState<{ org: string; state: TeamHookState } | null>(null);
-  const state: TeamHookState = loaded?.org === orgKey ? loaded.state : { kind: "loading" };
+  const state: TeamHookState = loaded?.org === orgKey ? loaded.state : (cache.get(orgKey) ?? { kind: "loading" });
 
   const current = useRef(orgKey);
   useEffect(() => {
@@ -90,9 +135,9 @@ export function useTeam(org?: string): TeamHook {
   }, [orgKey]);
 
   useEffect(() => {
-    void fetchTeam(org).then((next) => {
+    void load(org, reload > 0).then((next) => {
       // An answer for a workspace you've since switched away from is dropped; any answer for this one is kept.
-      if (current.current === orgKey) setLoaded({ org: orgKey, state: next.state });
+      if (current.current === orgKey) setLoaded({ org: orgKey, state: next });
     });
   }, [org, orgKey, reload]);
 

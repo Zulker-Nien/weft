@@ -3,9 +3,14 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useAccount } from "@/lib/use-account";
 import { useEscape } from "@/lib/use-escape";
+import { useTeamPrefetch } from "@/lib/use-team";
 import { openTeamPage } from "./board-palette";
 import Avatar from "./Avatar";
 import Icon, { Spinner } from "./Icon";
+
+function signedInId(state: ReturnType<typeof useAccount>["state"]): string | undefined {
+  return state.kind === "ready" ? state.view.user?.id : undefined;
+}
 
 // The top bar's account control, right of Copilot. Signed out: "Sign in" with GitHub, which finishes in
 // your browser. Signed in: just your avatar, which opens a tiny menu (Settings, Your team). Hidden while
@@ -16,6 +21,7 @@ export default function AccountButton({ onOpenSettings }: { onOpenSettings: () =
   const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
   useEscape(menuOpen, () => setMenuOpen(false));
+  useTeamPrefetch(signedInId(state));
   useEffect(() => {
     if (!menuOpen) return;
     const onDown = (e: MouseEvent) => {

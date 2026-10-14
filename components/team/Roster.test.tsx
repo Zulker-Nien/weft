@@ -74,6 +74,14 @@ describe("Roster", () => {
     expect(dates.length).toBeGreaterThanOrEqual(2);
   });
 
+  it("shows role labels, capitalizing a role the options leave out", () => {
+    // An admin's options have no Owner; the owner's row still reads "Owner", not "owner".
+    render(<Roster members={[ada, grace]} canManage={false} roleOptions={options.slice(1)} currentUserId="u2" actions={actions} />);
+    expect(screen.getByText("Owner")).toBeInTheDocument();
+    expect(screen.getByText("Admin")).toBeInTheDocument();
+    expect(screen.queryByText("owner")).not.toBeInTheDocument();
+  });
+
   it("shows the secondary email line when name and email differ", () => {
     render(<Roster members={[ada, grace]} canManage={false} roleOptions={options} currentUserId="u1" actions={actions} />);
     expect(screen.getByText("ada@b.co")).toBeInTheDocument();
