@@ -5,6 +5,7 @@ import type { EventEmitter } from "node:events";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { spawnCli } from "./cli-process";
 import { CODEX_INPUT_CODE, codexInput, writeImages } from "./codex-input";
+import { permissionArgs } from "./codex-permissions";
 import { CODEX_DEFAULT_MODEL } from "./new-thread";
 import { cliEnv } from "./env";
 import { subagentModel, threadPrompt } from "./settings";
@@ -152,15 +153,6 @@ function skillPrompt(text: string) {
 function promptFor(session: Session, text: string) {
   const weftInstructions = `You are a Codex CLI thread managed by Weft. Work in the card's project folder using Codex's native tools. Weft-specific MCP tools are unavailable in this backend; do not claim to use the board, browser, secrets or webhook tools. Never read .env files, credential stores or environment dumps. Never restart or kill Weft. Codex's sandbox enforces this card's permission mode.\n\n${subagentPrompt(subagentModel(), "codex")}\n\n${threadPrompt()}`;
   return `${weftInstructions}\n\n${skillPrompt(text)}`;
-}
-
-function permissionArgs(mode: Session["spec"]["permissionMode"]) {
-  switch (mode) {
-    case "bypassPermissions": return ["--sandbox", "danger-full-access", "--dangerously-bypass-approvals-and-sandbox"];
-    case "auto": return ["--sandbox", "workspace-write", "--approve-for-me"];
-    case "acceptEdits": return ["--sandbox", "workspace-write", "--config", 'approval_policy="never"'];
-    default: return ["--sandbox", "read-only", "--config", 'approval_policy="never"'];
-  }
 }
 
 function modelArgs(model: string | undefined) {
