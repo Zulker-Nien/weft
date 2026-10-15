@@ -36,6 +36,11 @@ same time; Next.js allows one dev server per project folder.
 - **Board view for threads**: a thread can screenshot, click, hover, type into and read Weft's own board window
   (`mcp__board_view__*`), so a thread changing a drawer or dialog tests it in the real app instead of asking you to click
   through. Revealed secrets read as ‹secret› and are blanked in its screenshots (docs/architecture/board-view.md).
+- **Glance rail**: a 72 px column right of the page in the browser pane, one mini per turn of the open thread
+  (status dot, its first words, how long ago) and per page the pane showed, newest at the bottom like the chat. Every message keeps the page on
+  screen as you sent it. Click any mini and the chat
+  scrolls to that turn while the pane goes back to the page it showed then; scroll the
+  chat and the turn at its top lights up. Hidden in windows under 980 px (docs/architecture/glance-rail.md).
 - **Browser pane zoom**: the % button in the pane's toolbar zooms the page (Chrome's steps, plus
   50–200% presets); ⌘+ / ⌘− / ⌘0 and ⌘+scroll work on the page too, and a trackpad pinch magnifies.
 - **Failed loads say why**: a page that won't load in the browser pane (say a card's dev server stopped) shows Weft's

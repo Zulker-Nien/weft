@@ -183,7 +183,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   are `@container`s that drop thumbnails and header extras.
 - `lib/browser-tools.ts`: `mcp__browser__*` tools every thread gets.
 - Browser pane: `components/BrowserPane.tsx` draws the toolbar and the placeholder the native view (`electron/browser-pane.cjs`)
-  lies over; `components/GlanceRail.tsx` + `lib/glance-rail.ts` + `lib/glance-events.ts` are the 72 px glance rail right of the page,
+  lies over; `components/GlanceRail.tsx` + `lib/glance-rail.ts` + `lib/glance-events.ts` + `lib/pane-page.ts` (stamps each sent message with the pane's page) are the 72 px glance rail right of the page,
   one mini per turn and per page the pane showed (the thread's `open_url` calls plus pages opened by hand, in memory), synced with the chat by two window events (`glance:scroll-to`, `glance:pulse`) on rows tagged `data-turn` (docs/architecture/glance-rail.md).
 - `lib/board-view-tools.ts` + `electron/board-view.cjs` + `electron/control-server.cjs`: `mcp__board_view__*`, a thread's eyes and hands
   on the board window itself (screenshot, click, hover, type, read; fixed scripts, no arbitrary JS; `data-secret` reads as ‹secret›,

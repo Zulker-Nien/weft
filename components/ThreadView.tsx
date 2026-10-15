@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "@/lib/client";
 import { isLive } from "@/lib/format";
+import { onScrollToTurn, pulse, reportTopTurn, topmostTurn, turnRow, PULSE_MS } from "@/lib/glance-events";
 import type { PlanResets } from "@/lib/schedule";
 import type { Card, ThreadItem } from "@/lib/types";
 import { useEditLast } from "@/lib/use-edit-last";
@@ -70,6 +71,39 @@ export default function ThreadView({
     return () => el.removeEventListener("load", follow, true);
   }, []);
 
+  // The glance rail (components/GlanceRail.tsx): a clicked mini scrolls here, and a scroll of our own
+  // tells the rail which turn is now on top, at most once per 80 ms. A rail-driven scroll doesn't echo back.
+  const railScroll = useRef(0);
+  const reportTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const lastTop = useRef<string>(undefined);
+  useEffect(() => {
+    const off = onScrollToTurn((id) => {
+      const el = scroller.current;
+      const row = el && turnRow(el, id);
+      if (!row) return;
+      stick.current = false;
+      lastTop.current = id;
+      railScroll.current = Date.now() + PULSE_MS + 200;
+      row.scrollIntoView({ block: "start", behavior: "smooth" });
+      pulse(row);
+    });
+    return () => {
+      off();
+      clearTimeout(reportTimer.current);
+    };
+  }, []);
+
+  function reportTop(el: HTMLElement) {
+    clearTimeout(reportTimer.current);
+    reportTimer.current = setTimeout(() => {
+      if (Date.now() < railScroll.current) return;
+      const id = topmostTurn(el);
+      if (!id || id === lastTop.current) return;
+      lastTop.current = id;
+      reportTopTurn(id);
+    }, 80);
+  }
+
   function answer(allow: boolean) {
     if (!card.pending || answered) return;
     setAnsweredId(card.pending.id);
@@ -88,6 +122,7 @@ export default function ThreadView({
         onScroll={(e) => {
           const el = e.currentTarget;
           stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+          reportTop(el);
         }}
         className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4"
       >

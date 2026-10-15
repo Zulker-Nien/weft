@@ -72,6 +72,7 @@ const ShortcutsDialog = guarded(() => import("./ShortcutsDialog"), { what: "shor
 const TerminalDrawer = guarded(() => import("./TerminalDrawer"), { what: "terminal", className: "m-3" });
 const ThreadPanel = guarded(() => import("./ThreadPanel"), { what: "thread", className: "m-3 w-[360px] self-start" });
 const CommandPalette = guarded(() => import("./CommandPalette"), { what: "command palette", className: "fixed left-4 top-16 z-50" });
+const GlanceRail = guarded(() => import("./GlanceRail"), { what: "glance rail", className: "w-[72px] shrink-0" });
 
 // The browser pane's page beside the New thread dialog (not a card's).
 const NEW_THREAD_PANE = "new-thread";
@@ -983,6 +984,7 @@ export default function Board() {
         {browserOpen && (
           <BrowserPane
             desktop={desktop}
+            rail={<GlanceRail card={selected} hidden={showNew} items={thread} pageUrl={browser.url} />}
             state={browser}
             obscured={showSettings || showPalette || showHelp || Boolean(login) || menuOpen}
             width={browserWidth}

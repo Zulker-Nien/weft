@@ -238,7 +238,8 @@ export interface CardIssue {
 
 export type ThreadItem =
   // id is the uuid Weft sent the prompt to the CLI with, so ↑ can rewind its turn (lib/edit-last.ts).
-  | { kind: "user"; text: string; at: number; id?: string }
+  // page is what the card's browser pane showed as it was sent (lib/pane-page.ts), for the glance rail.
+  | { kind: "user"; text: string; at: number; id?: string; page?: string }
   | { kind: "assistant"; text: string; at: number }
   | {
       kind: "tool";

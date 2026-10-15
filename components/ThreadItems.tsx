@@ -2,6 +2,7 @@
 
 import { memo, useState } from "react";
 import { describeToolRun, shortToolName, toolAction } from "@/lib/format";
+import { turnId } from "@/lib/glance-rail";
 import type { ThreadItem } from "@/lib/types";
 import CrashGuard from "./CrashGuard";
 import Icon, { Spinner } from "./Icon";
@@ -270,10 +271,15 @@ export function ThreadEntries({
             )}
           </CrashGuard>
         );
-        if (editFrom === undefined || entry.key < editFrom) return row;
-        const mark = entry.key === editFrom ? "rounded-lg outline-1 outline-offset-2 outline-warn outline-dashed" : "opacity-40";
+        // data-turn ties the row to its mini in the glance rail (lib/glance-rail.ts).
+        const mark =
+          editFrom === undefined || entry.key < editFrom
+            ? ""
+            : entry.key === editFrom
+              ? " outline-1 outline-offset-2 outline-warn outline-dashed"
+              : " opacity-40";
         return (
-          <div key={entry.key} className={mark}>
+          <div key={entry.key} data-turn={turnId(entry.key)} className={`flex flex-col gap-3 rounded-lg${mark}`}>
             {row}
           </div>
         );

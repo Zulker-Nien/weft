@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { BrowserState } from "@/lib/client";
 import { setPaneBox } from "@/lib/float-place";
 import { useAnyOverlay } from "@/lib/overlay";
@@ -18,6 +18,7 @@ export default function BrowserPane({
   width,
   onWidth,
   onClose,
+  rail,
 }: {
   desktop: boolean;
   state: BrowserState;
@@ -27,6 +28,8 @@ export default function BrowserPane({
   onWidth: (width: number) => void;
   // Beside an open card this closes the card too: the card and its browser are one window.
   onClose: () => void;
+  // The glance rail (components/GlanceRail.tsx), right of the page; the native view keeps clear of it.
+  rail?: ReactNode;
 }) {
   const holder = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState<string | null>(null);
@@ -129,7 +132,8 @@ export default function BrowserPane({
           <Icon name="x" size={15} />
         </button>
       </div>
-      <div ref={holder} className="relative min-h-0 flex-1 bg-canvas">
+      <div className="flex min-h-0 flex-1">
+      <div ref={holder} className="relative min-w-0 flex-1 bg-canvas">
         {!desktop ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-8 text-center">
             <Icon name="globe" size={28} className="text-faint" />
@@ -143,6 +147,8 @@ export default function BrowserPane({
             </div>
           )
         )}
+      </div>
+      {rail}
       </div>
     </section>
   );

@@ -14,6 +14,7 @@ import { adoptSpare, currentSession, open } from "./runner-session";
 import { withShellContext } from "./shell";
 import { switchSpare } from "./spare-switch";
 import { archiveAfter, CLI_NAMES, close, errorText, hooks, isBusy, loginWaiters, queued, safeUpdate, sessions, specFor } from "./runner-state";
+import { panePage } from "./pane-page";
 import { appendThread, foldThread, getCard, getThread, updateCard } from "./store";
 import type { Backend, Card, LoginTrial, PermissionMode } from "./types";
 
@@ -60,7 +61,10 @@ export function sendMessage(cardId: string, text: string, { echo = true, cli = t
   const session = sessionFor(card);
   // Claude threads tag the prompt so ↑ can rewind its turn later (lib/edit-last.ts).
   const promptId = card.backend === "claude" && !session.spec.copilot ? randomUUID() : undefined;
-  if (echo) appendThread(cardId, { kind: "user", text, at: Date.now(), ...(promptId && { id: promptId }) });
+  if (echo) {
+    const page = panePage(cardId);
+    appendThread(cardId, { kind: "user", text, at: Date.now(), ...(promptId && { id: promptId }), ...(page && { page }) });
+  }
   const fresh = { error: undefined, suggestion: undefined, pending: null, interrupted: undefined, resumes: undefined };
   updateCard(cardId, { column: "running", archived: false, wrappingUp: archiveAfter.has(cardId), ...fresh, lastLine: "Thinking…" });
   clearTimeout(session.idle);

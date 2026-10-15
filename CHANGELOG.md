@@ -33,7 +33,7 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 - **Migrate** in the Supabase drawer: starts a card that reviews the pending migrations, applies them on your OK and
   renames local files to the versions Supabase recorded.
 
-- A glance rail beside the browser pane's page: one small card per turn of the open thread (a status dot, its first words, how long ago) and per page the pane showed, newest on top. Click one to scroll the chat to that turn and put the pane back on the page it showed then; scroll the chat and the turn at its top lights up. It hides in windows narrower than 980 px.
+- A glance rail beside the browser pane's page: one small card per turn of the open thread (a status dot, its first words, how long ago) and per page the pane showed, newest at the bottom like the chat. Each message you send remembers the page on screen then. Click one to scroll the chat to that turn and put the pane back on the page it showed then; scroll the chat and the turn at its top lights up. It hides in windows narrower than 980 px.
 - **Codex CLI backend**: choose Codex for a new thread, resume its saved session between turns, set its sandbox mode and reasoning effort, switch cards between Claude Code, puku-cli and Codex, and check its login status. Codex uses its own CLI tools; Weft's browser, board, secrets and webhook MCP tools and per-tool guards aren't available in Codex threads.
 - **Shortcuts discoverability**: Settings → Shortcuts now lists every shortcut in the app, grouped by
   what they do, in addition to the rebindable dictation row; users landing here for help see the full
