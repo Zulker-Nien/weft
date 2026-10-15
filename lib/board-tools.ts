@@ -4,7 +4,7 @@ import { firstMessage } from "./automations";
 import { markSeen } from "./copilot-digest";
 import { resolveFolder } from "./folders";
 import { restartTool } from "./restart-tool";
-import { asText, clip, firstLine, shortToolName, titleFromPrompt } from "./format";
+import { asText, clip, firstLine, shortTitle, shortToolName, titleFromPrompt } from "./format";
 import { defaultPermissionMode, touchProject } from "./settings";
 import { createCard, getCard, getThread, listCards, updateCard } from "./store";
 import { rememberTags } from "./tag-store";
@@ -129,7 +129,7 @@ interface NewBoardCard {
 // The one place a card is made on behalf of a thread, whether it is the copilot's or a board thread's.
 export function createBoardCard(args: NewBoardCard): Card {
   const card = createCard({
-    title: args.title?.trim() || titleFromPrompt(args.prompt),
+    title: shortTitle(args.title ?? "") || titleFromPrompt(args.prompt),
     prompt: args.prompt,
     cwd: resolveFolder(args.folder),
     backend: args.cli ?? "claude",

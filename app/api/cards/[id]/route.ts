@@ -1,8 +1,11 @@
 import { firstMessage, messagesForMove, doneOverrides } from "@/lib/automations";
+import { randomUUID } from "node:crypto";
 import { resolveFolder } from "@/lib/folders";
-import { asText } from "@/lib/format";
+import { asText, shortTitle } from "@/lib/format";
 import { fail, guard } from "@/lib/guard";
+import { withReadScope } from "@/lib/read-scope";
 import { archiveWhenIdle, endSession, isBusy, queueMessages, sendMessage, setPermissionMode } from "@/lib/runner";
+import { addScheduled } from "@/lib/schedule";
 import { dismissSession } from "@/lib/settings";
 import { deleteCard, getCard, updateCard } from "@/lib/store";
 import { rememberTags } from "@/lib/tag-store";
@@ -13,6 +16,16 @@ type Ctx = { params: Promise<{ id: string }> };
 
 // Running and Needs you follow the thread's live state, so they can't be set by hand.
 const MANUAL: Column[] = ["backlog", "review", "done"];
+
+function validatePermissionMode(card: Card, value: unknown) {
+  if (!MODES.includes(value as PermissionMode)) throw new Error("Unknown permission mode.");
+  if (card.backend === "codex" && card.sessionId && value !== card.permissionMode) {
+    throw new Error("Codex keeps its sandbox mode for the life of a session. Start a new Codex thread to change it.");
+  }
+  if (value === "bypassPermissions" && (card.role === "copilot" || card.backend === "puku")) {
+    throw new Error("This thread can't skip permission prompts.");
+  }
+}
 
 // ★ (a starred card is never auto-archived) and tags. Tags you set stay yours: retitle stops picking them (lib/tags.ts).
 function setMarks(id: string, body: { starred?: unknown; tags?: unknown }) {
@@ -79,10 +92,15 @@ export async function PATCH(req: Request, { params }: Ctx) {
       starred?: unknown;
       tags?: unknown;
       permissionMode?: PermissionMode;
+      // The user clicked "Read from <path>" on a question. The directory is added to the card's
+      // read scope (Card.readScope) so the next session starts with it as additionalDirectories.
+      // The live session also gets a /add-dir slash command via the inbox so the in-flight turn
+      // can keep reading.
+      readScope?: unknown;
     };
 
     if (body.title !== undefined) {
-      const title = asText(body.title).trim();
+      const title = shortTitle(asText(body.title));
       if (title) updateCard(id, { title, titleBy: "user" });
     }
 
@@ -93,16 +111,26 @@ export async function PATCH(req: Request, { params }: Ctx) {
 
     setMarks(id, body);
 
-    // Takes effect mid-turn too: the open CLI switches modes right away.
+    // Read-scope grant: the agent's question named a path outside the project, the user picked
+    // "Read from <path>". Persist it (the next session will start with it as additionalDirectories)
+    // and schedule a /add-dir slash command for after the current turn, so the in-flight session
+    // picks it up too.
+    if (body.readScope !== undefined) {
+      if (typeof body.readScope !== "string" || !body.readScope) throw new Error("readScope must be a non-empty path.");
+      if (card.role === "copilot") throw new Error("The copilot doesn't read from project folders.");
+      const next = withReadScope(card.readScope, body.readScope, card.cwd);
+      const update: Partial<Card> = { readScope: next };
+      // The slash command runs as a follow-up turn when the current one ends. The card's UI shows
+      // it in the reply box's queue so the user can pull it back if they change their mind.
+      if (isBusy(id)) {
+        update.scheduled = addScheduled(card.scheduled, { id: randomUUID(), text: `/add-dir ${body.readScope}`, at: Date.now(), afterTurn: true });
+      }
+      updateCard(id, update);
+    }
+
+    // Claude and puku can switch modes mid-turn; Codex fixes its sandbox for the saved session.
     if (body.permissionMode !== undefined) {
-      if (!MODES.includes(body.permissionMode)) throw new Error("Unknown permission mode.");
-      if (card.backend === "codex" && card.sessionId && body.permissionMode !== card.permissionMode) {
-        throw new Error("Codex keeps its sandbox mode for the life of a session. Start a new Codex thread to change it.");
-      }
-      // Only board threads on Claude Code start with the flag that lets them skip every prompt.
-      if (body.permissionMode === "bypassPermissions" && (card.role === "copilot" || card.backend === "puku")) {
-        throw new Error("This thread can't skip permission prompts.");
-      }
+      validatePermissionMode(card, body.permissionMode);
       setPermissionMode(id, body.permissionMode);
     }
 

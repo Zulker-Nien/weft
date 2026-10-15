@@ -12,6 +12,7 @@ import {
   formatTokens,
   isLive,
   shortToolName,
+  shortTitle,
   STAGES,
   stageStep,
   summarizeInput,
@@ -136,14 +137,18 @@ describe("describeToolRun", () => {
 });
 
 describe("titleFromPrompt", () => {
-  it("uses the first line with words, minus markdown", () => {
+  it("uses the first line with words, minus markdown, clipped to four words", () => {
     expect(titleFromPrompt("# Fix the **login** bug\nmore")).toBe("Fix the login bug");
     expect(titleFromPrompt("- [ ] add [docs](http://x) now")).toBe("add docs now");
     expect(titleFromPrompt("```\n---\n\nreal line")).toBe("real line");
   });
 
-  it("truncates long titles", () => {
-    const title = titleFromPrompt("word ".repeat(40), 20);
+  it("ends in an ellipsis when the first line had more than four words", () => {
+    expect(titleFromPrompt("Fix the build so tests pass cleanly")).toBe("Fix the build so…");
+  });
+
+  it("truncates a long title to its byte cap", () => {
+    const title = titleFromPrompt("🐞 " + "word ".repeat(40), 20);
     expect(title.length).toBe(20);
     expect(title.endsWith("…")).toBe(true);
   });
@@ -151,6 +156,25 @@ describe("titleFromPrompt", () => {
   it("names a media-only prompt after its file, else a default", () => {
     expect(titleFromPrompt("![shot.png](/tmp/shot.png)")).toBe("Look at shot.png");
     expect(titleFromPrompt("   \n")).toBe("New thread");
+  });
+});
+
+describe("shortTitle", () => {
+  it("keeps a four-word title untouched", () => {
+    expect(shortTitle("Add dark mode toggle")).toBe("Add dark mode toggle");
+  });
+
+  it("ends in an ellipsis when longer than four words", () => {
+    expect(shortTitle("Fix the build so tests pass cleanly")).toBe("Fix the build so…");
+  });
+
+  it("keeps a leading emoji and clips the words after it", () => {
+    expect(shortTitle("🐞 Compile Error: missing CoverageBadge import")).toBe("🐞 Compile Error: missing CoverageBadge…");
+  });
+
+  it("returns an empty string for empty input", () => {
+    expect(shortTitle("")).toBe("");
+    expect(shortTitle("   ")).toBe("");
   });
 });
 

@@ -11,13 +11,13 @@ cloth.
 
 ```bash
 git clone https://github.com/aimhuge/weft.git && cd weft
-npm install
-npm run desktop     # Electron app: board + side browser
-npm run dev         # board only, in a normal browser at http://127.0.0.1:1024 (no browser pane)
-npm test            # unit tests (Vitest), about a second; npm run lint for ESLint
+pnpm install
+pnpm desktop        # Electron app: board + side browser
+pnpm dev            # board only, in a normal browser at http://127.0.0.1:1024 (no browser pane)
+pnpm test           # unit tests (Vitest), about a second; pnpm lint for ESLint
 ```
 
-The first `npm run desktop` downloads the Electron binary. Don't run `dev` and `desktop` at the
+The first `pnpm desktop` downloads the Electron binary. Don't run `dev` and `desktop` at the
 same time; Next.js allows one dev server per project folder.
 
 ## The desktop app
@@ -46,7 +46,7 @@ same time; Next.js allows one dev server per project folder.
 - **Failed loads say why**: a page that won't load in the browser pane (say a card's dev server stopped) shows Weft's
   error page instead of a blank white one: the URL, the reason, **Try again**, **Back to the last page**, and an
   automatic reload when a local dev server comes back (`electron/pane-error.cjs`).
-- **Themes**: Settings → Appearance (or ⌘K "Theme: …") picks System, Light or Dark, or a scene: Twin Suns,
+- **Themes**: Settings → General (or ⌘K "Theme: …") picks System, Light or Dark, or a scene: Twin Suns,
   Canyon, Coast Road, Neon City, Snow Pass or Salt Flats puts that picture behind the board with a palette drawn
   from it and clear columns (`lib/theme.ts`, colors in `app/globals.css`; docs/architecture/themes.md).
 - **Menu bar icon**: shows how many cards need you and lists them; click one to open it.
@@ -68,6 +68,11 @@ same time; Next.js allows one dev server per project folder.
   puku-cli has no login of its own, Weft runs it on Weft's own Puku key through a proxy on the deployed Weft, with a
   daily cap per account (300 requests, 2M tokens); Weft's key never ships in the app. Signed out, the login pop-up
   offers **Sign in to Weft** or Puku's own login. See docs/architecture/puku-trial.md.
+- **Weft Pro**: every workspace has a plan. **Free** keeps the Puku trial's daily cap. **Pro** ($20/month or
+  $200/year) replaces it with a 300M Puku token allowance, refreshed every billing period. Settings → Accounts
+  shows your plan, workspace and the meter; **Manage billing** opens the workspace's billing page on weft.zip
+  (Stripe Checkout to upgrade, the Stripe-hosted portal to manage). Billing is per workspace, not per seat;
+  owner or admin manages. See docs/architecture/billing.md.
 - **Updates**: the packaged app checks GitHub Releases at launch and every few hours, downloads a new version in the
   background, and the Weft menu offers **Restart to Update**. With threads running it asks: **Restart When Idle**
   (the default) waits for them to finish, **Restart Now** cuts them off. Weft → Check for Updates… checks now. What changed is in [CHANGELOG.md](CHANGELOG.md); releasing is in docs/architecture/updates.md.
@@ -138,7 +143,7 @@ The new-thread dialog (⌘N) and every card's reply box use the same editor:
   text goes out. Files the replaced turn changed stay as they are (the box says how many), and Esc
   leaves everything as it was. Threads that can't rewind (picked-up sessions, puku-cli) send the
   edit as a new message instead, and say so before you press Enter.
-- **`!` runs a shell command.** Start a reply with `!` (`!git status`, `!npm test -- lib/x`) and the box
+- **`!` runs a shell command.** Start a reply with `!` (`!git status`, `!pnpm test -- lib/x`) and the box
   turns amber and Send becomes Run: Enter runs it in the card's folder, right away even mid-turn, and the
   thread shows the command and its output. What it printed goes to Claude with your next message, as in
   Claude Code's bash mode. It's for quick looks: no input, killed after 2 minutes, the last 20,000
@@ -151,20 +156,20 @@ The new-thread dialog (⌘N) and every card's reply box use the same editor:
 
 The folder picker lists your recent projects, the git repos in `~/dev` and other usual code folders
 (with their branch), and your GitHub repos from `gh`. Picking a GitHub repo that isn't on this Mac
-clones it into `~/dev`. **New project…** names an empty folder in `~/dev` and starts the thread there. You can also paste a path or browse for a folder. Cards are titled from the
+clones it into `~/dev`. **New project…** names an empty folder in `~/dev` and starts the thread there. You can also paste a path or browse for a folder. A new thread starts on the CLI, model and effort set in Settings → Models (the dialog remembers your last pick the same way). Cards are titled from the
 prompt's first line (click the title in the open thread to rename it), and new threads start in the default permission mode from Settings (Auto at first: a classifier
 approves or asks); the menu next to the CLI switch changes that per thread. Effort starts at High and
 then follows whatever the last new thread used. To change it later, even mid-turn,
 use the mode menu in the open thread's header or the card's right-click menu. Sessions picked up from
 Claude Code keep the mode they last ran in (say `auto`).
 
+Pick **Codex** in the New thread dialog to run the OpenAI Codex CLI. Install `codex` on your PATH and sign in with `codex login` first; Weft can open Codex's device login in Terminal from Settings → Accounts. Codex uses its own tools and saved sessions. Weft's browser, board, secrets and webhook MCP tools and per-tool `.env`, git, restart and check guards aren't available to Codex threads. Codex's sandbox mode and reasoning effort are fixed when a session starts.
+
 ## How cards move
 
 | Column    | How a card gets there |
 |-----------|-----------------------|
 | Backlog   | You create it with "Add to backlog" |
-Pick **Codex** in the New thread dialog to run the OpenAI Codex CLI. Install `codex` on your PATH and sign in with `codex login` first; Weft can open Codex's device login in Terminal from Settings → Accounts. Codex uses its own tools and saved sessions. Weft's browser, board, secrets and webhook MCP tools and per-tool `.env`, git, restart and check guards aren't available to Codex threads. Codex's sandbox mode and reasoning effort are fixed when a session starts.
-
 | Running   | You drag it from Backlog, press "Start now", or reply in its thread |
 | Needs you | The agent asks permission for a tool; Allow or Deny on the card |
 | Review    | The turn finishes (or fails, or you stop it) |
@@ -180,7 +185,7 @@ Any card that isn't running and has a session shows a ▶ in its footer: it send
 the model gave up too early. A card whose turn you stopped or that failed also shows **Restart**, which runs your last
 message again in a fresh CLI.
 
-The Backlog column is hidden by default. Turn it on with Settings → Show backlog. It also shows
+The Backlog column is hidden by default. Turn it on with Settings → General → Show backlog. It also shows
 whenever cards are waiting in it.
 
 Replying to a card continues the same CLI session, so the agent keeps its context.
@@ -215,7 +220,7 @@ claims drop when it reaches Done or is archived, and a file's when the commit wa
 
 Every thread runs inside Weft's own server, so restarting Weft cuts off every running turn. A thread
 can't do that behind your back: while other cards are running, a `kill`, `pkill`, `killall` or port-freeing
-aimed at Weft's server, app or port, or a second `npm run dev` in Weft's folder, is turned away with how
+aimed at Weft's server, app or port, or a second `pnpm dev` in Weft's folder, is turned away with how
 many turns it would cut off, and the thread asks you instead. Its own project's dev server is fair game.
 
 When Weft does need a restart, **Restart when idle** waits for it: Weft → Restart When Idle, the command palette, or a
@@ -229,7 +234,7 @@ last running turn and any queued follow-up have ended, Weft relaunches, or insta
 
 Every thread is told to hand work to subagents: broad searches across many files, independent pieces of a
 task (several at once), test and lint runs where only the failures matter, and a second-opinion review. That
-keeps their file dumps out of the thread's context. Settings → Use for subagents picks their model:
+keeps their file dumps out of the thread's context. Settings → Models → Use for subagents picks their model:
 
 - **Let the model choose** (the default): the thread picks per subagent, Haiku for searches and lookups,
   Sonnet for most coding, Opus for hard reasoning where a mistake is costly.
@@ -248,7 +253,7 @@ A CLI takes 12–50s to start with a full Claude Code setup (MCP servers, plugin
 board starts them before you need them:
 
 - Each thread's CLI stays open between turns, so a reply starts in about two seconds. By default
-  it stays open until the app quits (Settings → Keep conversations open).
+  it stays open until the app quits (Settings → Threads → Keep conversations open).
 - On launch, the copilot's CLI starts, plus a spare CLI in your most recent project.
 - Picking a project, opening the new-thread dialog, or opening a card starts a CLI for it in the
   background. A new card takes over the spare in its folder (up to three spares are kept).
@@ -257,11 +262,17 @@ board starts them before you need them:
 
 ## Board status
 
-Every thread's system prompt (editable in Settings → Thread instructions) asks it to end each
+Every thread's system prompt (editable in Settings → Threads → Thread instructions) asks it to end each
 reply with a line like `BOARD STATUS: column=review | stage=First shot | remaining=add a test`.
 The board strips that line, moves the card to the column the thread reports (Needs you, Review, or
 Done), and shows the stage and what's left on the card. When a thread asks a question with its
 AskUserQuestion tool, the card shows the question and its options instead of Allow and Deny.
+The thread asks it the way Claude Code does, above the reply box: numbered options you move with ↑/↓
+and pick by number or Enter, checkboxes for multi-select, a tab per question with a Submit tab to
+review (whatever you type there goes with the answers as a note on all of them). The reply box is the one place to type: your
+own answer when nothing is picked, a note on your pick when something is, and text you were already
+writing carries over. An option's preview (a mockup or snippet) shows in the card's browser pane as you
+highlight it.
 
 A card leads with what the thread last said, under its title, beside its latest picture: a
 screenshot or image from the thread, or a capture of its browser pane taken after each turn (hover
@@ -282,7 +293,7 @@ loads, so they run as `/weft:<name>`:
 
 - `/weft:done` wraps up a thread: architecture docs, lint, tests, then a commit of the files the
   thread changed, then a push of the branch. A copy of the `done` skill from `fotoflo/claude-skills`.
-  **Push on Done** in Settings (on by default) controls the push: it's a plain `git push` (`-u origin`
+  **Push on Done** in Settings → Automations (on by default) controls the push: it's a plain `git push` (`-u origin`
   for a branch's first), never forced, so a rejected push leaves the commit local and the card in Review.
 - `/weft:commit` commits the thread's changes with a conventional message (the `commit` skill,
   without its Vercel preview deploy).
@@ -290,7 +301,7 @@ loads, so they run as `/weft:<name>`:
 A board thread's commits are co-authored by "Claude Opus 5.5 on Weft" (whichever model the card runs)
 and its PRs say "Generated with Claude Code on Weft".
 
-Settings → Skills and automations holds rules of the form "When … run …":
+Settings → Automations holds rules of the form "When … run …":
 
 - **a thread starts**: the skill is named in the thread's first message ("Start by using the /x
   skill"), so it runs with the task in view.
@@ -325,7 +336,7 @@ The header shows the code quality ("87% code quality") of the project in view: t
 folder, else the selected project, else your latest card's. It never reaches 100%, because there's always
 another refactor, a stricter lint rule or a better type:
 
-- **The checklist earns 90 points**: test coverage (`coverage/coverage-summary.json` from `npm run coverage`),
+- **The checklist earns 90 points**: test coverage (`coverage/coverage-summary.json` from `pnpm coverage`),
   file size, lint lockdown, type safety, guardrails (pre-commit hook and CI) and documentation (README, agent guide,
   architecture docs, a CHANGELOG, files that open with a comment, no stale paths in the docs), averaged (`lib/quality.ts`).
 - **The refactor scout earns the last 10.** A read-only Sonnet run (Read, Grep, Glob) reads the project and
@@ -368,7 +379,7 @@ answer the thread through `weft://reply` links. It starts a sprint's cards, or a
 
 ## Progress: streaks, badges and your wefter card
 
-Beside the code quality badge, **🔥 25 · Lv 15** is your streak and level (Settings > Show progress turns it
+Beside the code quality badge, **🔥 25 · Lv 15** is your streak and level (Settings → General → Show progress turns it
 off). Hover it for today's numbers; click it for **Your loom**:
 
 - **XP and levels.** Starting a card earns 2 XP, a turn 1, and taking a card to Done 10, or 15 when its
@@ -412,7 +423,7 @@ Review or Done without you keeps an accent tint and a pulsing dot until you open
 ### Weft account (optional)
 
 **Sign in** in the top bar (right of Copilot) signs you in with GitHub; once you're in it shows your
-avatar, which opens Settings. Settings → Weft account also offers Google and an email link, and Sign out. The board works the same
+avatar, which opens Settings. Settings → Accounts → Weft account also offers Google and an email link, and Sign out. The board works the same
 signed out; the account is for cloud features (page sync, share links) as they land. Sign-in opens
 your default browser and comes back to Weft through a `weft://account-callback` link, so the board
 shows you signed in a moment later. The session is kept in `~/.weft/account.json`, readable only by you
@@ -502,7 +513,7 @@ four characters showing.
   "let a thread type GITHUB_CLIENT_SECRET (aimhuge/weft) into supabase.com", then the value goes into the field,
   masked, and reads back to the thread as `‹GITHUB_CLIENT_SECRET›`. One yes covers that card on that site for 3
   minutes; https pages only; the drawer being unlocked never lets a thread in.
-- **Threads run commands with secrets without seeing them.** `mcp__secrets__run("npm run job", ["DATABASE_URL"])`
+- **Threads run commands with secrets without seeing them.** `mcp__secrets__run("pnpm run job", ["DATABASE_URL"])`
   shows you the exact command, the `package.json` script behind it and the names, with **Allow once** or **Always
   allow**, then Touch ID. Electron main runs it with no shell and the values in its env only, and the thread gets the
   exit code and output with every value (raw, URL-encoded, JSON-escaped or base64) shown as `‹DATABASE_URL›`. Pipes,
@@ -528,8 +539,12 @@ folder's GitHub repo so every push deploys. Either way Weft writes `.vercel/proj
 project shows its team, production URL, latest deploy (Ready, Building, Failed; click to open it in the browser
 pane), whether it deploys from this folder's repo, and links to the latest deploy's page, logs, env vars, domains and
 the Vercel dashboard. Its 🔐 line lines up the project's vault secrets with its Vercel variables per environment:
-**Push** sends a value from the vault to Vercel (as sensitive, after Touch ID), and a thread can do the same with
-`mcp__secrets__push_to_vercel`, so a key never goes through the dashboard or a thread. More in
+**Push** sends a value from the vault to Vercel (as sensitive, after Touch ID), **Push all** sends every one
+behind a single Touch ID, and a thread can do the same with
+`mcp__secrets__push_to_vercel`, so a key never goes through the dashboard or a thread. The other way, **pull** brings
+a plain Vercel variable the vault has no value for into it (sensitive ones can't be read back), and **Live pull from
+Vercel** does it the moment one is added, through a team webhook relayed by the deployed Weft (Pro or Enterprise teams,
+signed in to Weft). More in
 [docs/architecture/vercel.md](docs/architecture/vercel.md).
 
 ## Supabase
@@ -549,9 +564,10 @@ to its auth users, logs, API keys, usage and dashboard. More in
 ## Cloudflare
 
 Cloudflare's orange cloud under Supabase's bolt links each board project to a Cloudflare Worker or Pages project. Paste
-an API token from [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens) once (the
-"Edit Cloudflare Workers" template covers it); Weft checks it with Cloudflare and keeps it in your Keychain, and threads
-never see it. **Link…** lists every Worker and Pages project across the accounts the token reaches, best fit first: the
+a setup token from [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens) once (the
+"Create additional tokens" template): Weft makes its own narrower token with it ("Weft on <your Mac>": account
+settings, Workers and Pages, in every account), keeps that in your Keychain and deletes the setup token. A token you
+made for Workers and Pages yourself works too, kept as it is. Threads never see either. **Link…** lists every Worker and Pages project across the accounts the token reaches, best fit first: the
 one the folder's `wrangler.toml` / `wrangler.json(c)` names, then the one built from its GitHub repo, then its name.
 Cloudflare has no link file of its own, so Weft keeps links in `~/.weft/cloudflare-links.json`. A linked project shows
 its account, address (custom domain, else `pages.dev` or `workers.dev`; click to open it in the browser pane), latest
@@ -603,7 +619,7 @@ with xterm.js (`components/TerminalDrawer.tsx`). Desktop app only.
 Mail to any address at weft.zip (hello@, support@, you name it) lands in one inbox. Resend receives it (the domain's
 MX record) and posts an `email.received` event to the deployed Weft, whose `/api/email/webhook` checks the signature,
 reads the mail back and sends it on from `forward@weft.zip`, named "<sender> via <alias>" and replying to the sender.
-Nothing runs on your Mac. `npm run resend -- create|verify|webhook` sets up the Resend side through the vault. More in
+Nothing runs on your Mac. `pnpm resend -- create|verify|webhook` sets up the Resend side through the vault. More in
 [docs/architecture/email-forwarding.md](docs/architecture/email-forwarding.md).
 
 ## How it fits together
@@ -702,7 +718,7 @@ Weft is released under the [Apache License 2.0](LICENSE).
 - Only Claude Code sessions are picked up; puku-cli sessions (`~/.puku-cli/projects`) aren't yet.
 - Picked-up cards open with the last 400 items of the conversation, and show the conversation as
   it was last read from disk, not live, until you reply in Weft.
-- Automated tests are thin: `npm test` runs a Vitest suite over `lib/` (status parser, review tour,
+- Automated tests are thin: `pnpm test` runs a Vitest suite over `lib/` (status parser, review tour,
   API guard, automations, formatting, settings, store, board tools) and over the API routes, with the
   runner and store mocked, and over the runner's SDK loop with a fake `query()`. UI tests have only started: the card, the reply box and the new-thread dialog (`components/*.test.tsx`, jsdom + Testing Library); the board and thread view have none. CI runs lint, typecheck and tests; a pre-commit hook type-checks what's staged.
 - The packaged app's terminal drawer (`node-pty` now ships in the Electron bundle) hasn't been tried on a fresh Mac yet.

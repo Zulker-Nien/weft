@@ -11,6 +11,7 @@ const api = vi.hoisted(() => ({
   signIn: vi.fn(() => Promise.resolve({ url: "https://github.com/login/oauth" })),
   magicLink: vi.fn(() => Promise.resolve({ ok: true })),
   signOut: vi.fn(() => Promise.resolve({ ok: true })),
+  billingStatus: vi.fn(() => Promise.resolve(null)),
 }));
 vi.mock("@/lib/client", () => ({ api }));
 

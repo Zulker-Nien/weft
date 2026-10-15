@@ -37,7 +37,7 @@ that fixes the checklist, weakest area first.
 
 1. Board picks the folder in view: the open card's `cwd`, else the selected project, else the latest card's.
 2. The badge fetches `/api/quality` for that folder, and again when the window regains focus, so a
-   fresh `npm run coverage` or a split file shows up without a reload. Results are keyed by folder,
+   fresh `pnpm coverage` or a split file shows up without a reload. Results are keyed by folder,
    so switching projects never shows the previous project's numbers.
 3. The scout runs on its own only for a project with no report yet. After that, `/weft:done`'s scout
    (`scout-save.mjs`) and the menu's **Re-scout** refresh it. It never runs on the start-a-card path,

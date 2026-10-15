@@ -74,7 +74,7 @@ describe("SecretAskInput", () => {
     const entries = groupThread(items);
     expect(entries.map((e) => e.kind)).toEqual(["tools", "item", "tools"]);
     const onSend = vi.fn(() => Promise.resolve());
-    render(<ThreadEntries entries={entries} live={false} streaming="" onSend={onSend} />);
+    render(<ThreadEntries entries={entries} live={false} streaming="" onSend={onSend} cardId="x" />);
     await waitFor(() => expect(screen.getByRole("form", { name: "Add SUPABASE_SECRET_KEY to the vault" })).toBeInTheDocument());
   });
 });

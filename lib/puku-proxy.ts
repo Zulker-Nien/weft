@@ -24,6 +24,16 @@ export interface UsageStore {
   add: (userId: string, day: string, usage: Usage) => Promise<Usage>;
 }
 
+// The workspace paying for a user's Puku use and what's left of its allowance this period. `check` returning
+// null is "no Pro allowance" — the proxy keeps the Free daily cap on for this user. A free or unpaid plan
+// returns null, a Pro plan with tokens left returns its remaining count, and an over-limit Pro plan returns
+// remaining 0.
+export interface PlanMeter {
+  // The workspace paying for this user's Puku use and what's left of its allowance this period, or null when the user's plan has none (the daily trial cap applies).
+  check(userId: string): Promise<{ orgId: string; remaining: number } | null>;
+  record(orgId: string, userId: string, tokens: number): Promise<void>;
+}
+
 export interface ProxyConfig {
   apiKey: string;
   secret: string;
@@ -32,6 +42,10 @@ export interface ProxyConfig {
   dailyRequests?: number;
   dailyTokens?: number;
   now?: () => number;
+  // When set, the proxy first asks the meter whether the user's workspace still has Puku tokens this period;
+  // when the meter says yes, the daily cap is skipped (the day counter still updates) and tokens are billed
+  // to the workspace at the end of the request.
+  plan?: PlanMeter;
 }
 
 // Only what puku-cli calls: messages (and counting their tokens) and the model list.
@@ -134,17 +148,31 @@ function forwardHeaders(req: Request, apiKey: string) {
 
 // The trial user a request is for, or the error to answer it with: a bad method or path, a bad token, or a
 // user over today's cap (a messages request counts toward it before it goes out).
-async function admit(req: Request, path: string, config: ProxyConfig, day: string, now: number): Promise<string | Response> {
+async function admit(req: Request, path: string, config: ProxyConfig, day: string, now: number): Promise<{ userId: string; paid: { orgId: string; remaining: number } | null } | Response> {
   if (req.method !== "POST" && req.method !== "GET") return apiError(405, "invalid_request_error", "POST or GET only.");
   if (!PATHS.test(path)) return apiError(404, "not_found_error", `Weft's Puku trial doesn't serve /v1/${path}.`);
   const claims = await verifyTrialToken(trialToken(req), config.secret, now);
   if (!claims) return apiError(401, "authentication_error", "Weft's Puku trial token is missing or expired. Weft gets a new one while you're signed in to your Weft account.");
-  if (!path.startsWith("messages")) return claims.sub;
+  if (!path.startsWith("messages")) return { userId: claims.sub, paid: null };
+  // Pro workspaces bypass the daily cap. A billing outage must not block anyone, so a thrown check falls back
+  // to the Free path; a thrown daily-cap add below would still let the user through to upstream.
+  let paid: { orgId: string; remaining: number } | null = null;
+  if (config.plan) {
+    try {
+      paid = await config.plan.check(claims.sub);
+    } catch (err) {
+      console.error(`Puku trial: plan meter check failed: ${(err as Error).message}`);
+      paid = null;
+    }
+    if (paid && paid.remaining <= 0) {
+      return apiError(429, "rate_limit_error", "This month's Weft Pro Puku allowance is used up. It resets at the start of your next billing period.");
+    }
+  }
   const used = await config.store.add(claims.sub, day, { ...NO_USAGE, requests: 1 });
-  if (overCap(used, config.dailyRequests ?? DAILY_REQUESTS, config.dailyTokens ?? DAILY_TOKENS)) {
+  if (!paid && overCap(used, config.dailyRequests ?? DAILY_REQUESTS, config.dailyTokens ?? DAILY_TOKENS)) {
     return apiError(429, "rate_limit_error", "You've used today's free Puku trial in Weft. Log in to Puku (puku-cli auth login, or Settings → CLIs in Weft) to keep going, or try again tomorrow.");
   }
-  return claims.sub;
+  return { userId: claims.sub, paid };
 }
 
 async function forward(req: Request, path: string, config: ProxyConfig): Promise<Response> {
@@ -163,8 +191,9 @@ async function forward(req: Request, path: string, config: ProxyConfig): Promise
 export async function proxy(req: Request, path: string, config: ProxyConfig): Promise<Response> {
   const now = (config.now ?? Date.now)();
   const day = today(now);
-  const userId = await admit(req, path, config, day, now);
-  if (userId instanceof Response) return userId;
+  const admitted = await admit(req, path, config, day, now);
+  if (admitted instanceof Response) return admitted;
+  const { userId, paid } = admitted;
 
   const upstream = await forward(req, path, config);
   const headers = new Headers();
@@ -174,7 +203,19 @@ export async function proxy(req: Request, path: string, config: ProxyConfig): Pr
   if (!path.startsWith("messages") || !upstream.ok || !upstream.body) return new Response(upstream.body, { status: upstream.status, headers });
   const streaming = (upstream.headers.get("content-type") ?? "").includes("text/event-stream");
   const record = async (usage: Usage) => {
-    if (usage.input_tokens || usage.cache_read_tokens || usage.output_tokens) await config.store.add(userId, day, usage);
+    if (usage.input_tokens || usage.cache_read_tokens || usage.output_tokens) {
+      // The daily store always gets a row (per-day stats for the free trial stay accurate); a Pro workspace
+      // also gets the charge against its monthly allowance. Cache reads don't count, matching overCap.
+      await config.store.add(userId, day, usage);
+      if (paid && config.plan) {
+        const tokens = usage.input_tokens + usage.output_tokens;
+        try {
+          await config.plan.record(paid.orgId, userId, tokens);
+        } catch (err) {
+          console.error(`Puku trial: plan meter record failed: ${(err as Error).message}`);
+        }
+      }
+    }
   };
   return new Response(upstream.body.pipeThrough(meter(streaming, record)), { status: upstream.status, headers });
 }

@@ -11,7 +11,7 @@ const LINE_COUNT = { skipBlankLines: true, skipComments: true };
 const OVERSIZE = {
   "components/Board.tsx": 933,
   "lib/runner.test.ts": 901,
-  "app/api/routes.test.ts": 762,
+  "app/api/routes.test.ts": 766,
   "lib/login.test.ts": 576,
   "lib/import.test.ts": 568,
   "components/Composer.tsx": 556,
@@ -31,6 +31,8 @@ const OVERSIZE = {
   "lib/login.ts": 316,
   "lib/repos.test.ts": 307,
   "components/RepoPicker.tsx": 304,
+  "lib/cloud-sync.test.ts": 561,
+  "app/api/thread-page-routes.test.ts": 766,
 };
 const COMPLEX = {
   "components/Board.tsx": 75,
@@ -106,6 +108,9 @@ const eslintConfig = defineConfig([
     "coverage/**",
     // The toolchain staged for the packaged app (scripts/bundle-toolchain.mjs): third-party code.
     ".toolchain-dist/**",
+    // Leftover installs (node_modules.npm-old) and scratch: ESLint skips only a folder named exactly node_modules.
+    "node_modules.*/**",
+    ".scratch/**",
   ]),
 ]);
 

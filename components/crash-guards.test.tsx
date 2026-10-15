@@ -61,7 +61,7 @@ describe("ThreadEntries", () => {
       { kind: "assistant", text: "boom", at: 2 },
       { kind: "assistant", text: "Fixed.", at: 3 },
     ]);
-    render(<ThreadEntries entries={entries} live={false} streaming="" />);
+    render(<ThreadEntries entries={entries} live={false} streaming="" cardId="x" />);
     expect(screen.getByText("fix it")).toBeInTheDocument();
     expect(screen.getByText("Fixed.")).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("message");
@@ -69,7 +69,7 @@ describe("ThreadEntries", () => {
 
   it("keeps the thread when the reply in progress fails to draw", () => {
     const entries = groupThread([{ kind: "user", text: "fix it", at: 1 }]);
-    render(<ThreadEntries entries={entries} live streaming="boom" />);
+    render(<ThreadEntries entries={entries} live streaming="boom" cardId="x" />);
     expect(screen.getByText("fix it")).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("reply in progress");
   });

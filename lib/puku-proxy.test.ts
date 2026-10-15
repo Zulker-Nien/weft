@@ -1,15 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { apiError, mergeUsage, meter, overCap, proxy, restUsageStore, today, trialToken, usageIn, type ProxyConfig, type Usage, type UsageStore } from "./puku-proxy";
+import { apiError, mergeUsage, meter, overCap, proxy, restUsageStore, today, trialToken, usageIn, type Usage } from "./puku-proxy";
 import { signTrialToken } from "./puku-trial-token";
+import { config, enc, fetchMock, memoryStore, NOW, ok, request, SECRET, sse } from "./puku-proxy.harness";
 
 // The Puku trial's proxy: auth, caps, header hygiene, usage metering from SSE and JSON replies, and the REST usage store.
+// The "with a plan meter" cases live in lib/puku-proxy-plan.test.ts to keep this file under max-lines.
 
-const SECRET = "s3cret";
-const NOW = Date.parse("2026-10-13T12:00:00Z");
 const ZERO: Usage = { requests: 0, input_tokens: 0, cache_read_tokens: 0, output_tokens: 0 };
-const enc = new TextEncoder();
 
-const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>();
 beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
@@ -18,22 +16,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
-
-function memoryStore(first: Partial<Usage> = { requests: 1 }) {
-  const add = vi.fn<UsageStore["add"]>();
-  add.mockResolvedValueOnce({ ...ZERO, ...first });
-  add.mockResolvedValue(ZERO);
-  return { add } satisfies UsageStore;
-}
-
-const config = (over: Partial<ProxyConfig> = {}): ProxyConfig => ({ apiKey: "real-key", secret: SECRET, store: memoryStore(), now: () => NOW, ...over });
-
-async function request(path: string, init: Omit<RequestInit, "headers"> & { token?: string; headers?: Record<string, string> } = {}) {
-  const { token = (await signTrialToken("u1", SECRET, NOW)).token, headers, ...rest } = init;
-  return new Request(`https://weft.example/api/puku/v1/${path}`, { method: "POST", body: "{}", ...rest, headers: { "x-api-key": token, ...headers } });
-}
-
-const sse = (events: unknown[]) => events.map((e) => `event: x\ndata: ${JSON.stringify(e)}\n\n`).join("");
 
 describe("small helpers", () => {
   it("apiError uses the Messages API's shape", async () => {
@@ -117,8 +99,6 @@ describe("meter", () => {
 });
 
 describe("proxy", () => {
-  const ok = (body: BodyInit | null = "{}", headers: Record<string, string> = { "content-type": "application/json" }, status = 200) => new Response(body, { status, headers });
-
   it("answers only POST and GET", async () => {
     const res = await proxy(await request("messages", { method: "DELETE", body: undefined }), "messages", config());
     expect(res.status).toBe(405);

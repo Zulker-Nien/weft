@@ -235,7 +235,7 @@ that opens the file itself (`~/.weft/shell-token` included). This is a strong de
 - Fixed 2026-10-12: the Supabase session, refresh token included, is `~/.weft/account.sealed`, encrypted by
   safeStorage in Electron main (`electron/account-store.cjs`). The Next server reads and writes it through main's
   token-guarded control server (`POST /account/read` and `/account/write`, `lib/account-storage.ts`); an old plain
-  `account.json` moves in on first read and is deleted. Outside the desktop app (`npm run dev` in a browser) there's
+  `account.json` moves in on first read and is deleted. Outside the desktop app (`pnpm dev` in a browser) there's
   no main, so it's still the plain file there.
 - Fixed in step 1: the secret guard turns away a thread's `cat .env.local`.
 

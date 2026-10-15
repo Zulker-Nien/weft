@@ -88,6 +88,10 @@ describe("/api/puku/v1/[...path]", () => {
     expect(path).toBe("messages/count_tokens");
     expect(config).toMatchObject({ apiKey: "key", secret: "sig", dailyRequests: 300, dailyTokens: 2_000_000 });
     expect(proxyLib.restUsageStore).toHaveBeenCalledWith("https://x.supabase.co", "sb_secret_x");
+    // Billing is configured (SUPABASE_SECRET_KEY is set), so the plan meter rides on the config.
+    expect(config).toHaveProperty("plan");
+    expect(typeof config.plan?.check).toBe("function");
+    expect(typeof config.plan?.record).toBe("function");
   });
 
   it("takes the daily limits from the env, falling back for invalid values", async () => {

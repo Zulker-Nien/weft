@@ -80,7 +80,8 @@ describe("a puku thread with no Puku login", () => {
       expect(h.fetchedTrials).toBe(1);
       expect(h.startLogin).toEqual([]);
       expect(h.queries).toHaveLength(2);
-      expect(lastQuery().received).toEqual(["please"]);
+      // A new CLI process, so its first message carries the puku context again (lib/puku-context.ts).
+      expect(lastQuery().received).toEqual([expect.stringMatching(/^<system-reminder>[\s\S]*<\/system-reminder>\n\nplease$/)]);
     });
 
     it("opens Puku's login and says why when the trial isn't available", async () => {

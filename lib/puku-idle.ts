@@ -36,5 +36,5 @@ export function idleToClose<T extends { spec: { backend: Backend } }>(idleOldest
 // A spare is only worth keeping warm for Claude Code and puku, which keep a CLI process open between turns.
 // Codex starts a fresh `exec` process for each turn, so it has no spare process to refill.
 export function refillsSpare(backend: Backend) {
-  return backend !== "puku";
+  return backend === "claude";
 }

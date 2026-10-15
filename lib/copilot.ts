@@ -6,6 +6,7 @@ import { boardDigest, lastSeen, rememberSeen, snapshot, withDigest } from "./cop
 import { startHookListener } from "./github-hooks";
 import { startVercelListener } from "./vercel-hooks";
 import { startWebhookRelay } from "./webhook-forward";
+import { startAccountCloudSync } from "./cloud-sync-start";
 import { startIssueSync } from "./github-issues";
 import { startPukuTrial } from "./puku-trial";
 import { endSession, ensureSpare, retryPukuWithTrial, sendUserMessage, warmUp } from "./runner";
@@ -82,6 +83,8 @@ export function prewarm() {
   startVercelListener();
   // Forward what providers post to your webhooks' relay URLs to their local targets (lib/webhook-forward.ts).
   startWebhookRelay();
+  // Upload the cards and threads of the folders that opted in to your workspace (lib/cloud-sync.ts).
+  startAccountCloudSync();
   // Keep Weft's Puku trial token fresh, and give puku threads waiting on a login the trial when you sign in to Weft.
   startPukuTrial(() => void retryPukuWithTrial());
   // Carry on the turns the last quit cut off (lib/resume.ts).

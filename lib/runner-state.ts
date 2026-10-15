@@ -23,6 +23,8 @@ export interface Pending {
   title: string;
   input: Record<string, unknown>;
   questions?: Question[];
+  readScope?: { directory: string; token: string };
+  previewUrl?: string;
   resolve: (result: PermissionResult) => void;
 }
 
@@ -68,6 +70,9 @@ export interface Spec {
   forkSession?: boolean;
   // Resume only up to this transcript entry, dropping the turns after it (↑ to edit, editLastMessage).
   resumeAt?: string;
+  // Directories the user has approved the thread to read from, beyond cwd. Passed to the SDK as
+  // additionalDirectories so the CLI's working-directory restriction lets the thread read there.
+  readScope?: string[];
   copilot: boolean;
 }
 
@@ -99,6 +104,8 @@ export interface Session {
   // The prompt cache after the last main-agent request: how long it stays warm, and its size in
   // tokens, which is how full the context window is.
   cache?: CacheState;
+  // What this CLI process's first message starts with, then cleared: a puku session's system prompt (lib/puku-context.ts).
+  preamble?: string;
   // The CLI's session id from its init, kept while a spare so the card that adopts it can resume.
   sessionId?: string;
   // The model its init named, kept the same way so the adopting card's header can show it.
@@ -169,6 +176,7 @@ export function specFor(card: Card): Spec {
     effort: effortFor(card.backend, card.effort),
     sessionId: card.sessionId,
     copilot: card.role === "copilot",
+    readScope: card.readScope && card.readScope.length ? card.readScope : undefined,
   };
 }
 

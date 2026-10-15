@@ -1,29 +1,30 @@
 import fs from "node:fs";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { query, type Options } from "@anthropic-ai/claude-agent-sdk";
 import { signAsWeft } from "./attribution";
-import { COPILOT_PROMPT, boardMcpServer, isTrustedTool, threadBoardMcpServer } from "./board-tools";
+import { boardMcpServer, isTrustedTool, threadBoardMcpServer } from "./board-tools";
 import { boardViewMcpServer } from "./board-view-tools";
-import { BROWSER_PROMPT, browserMcpServer } from "./browser-tools";
+import { browserMcpServer } from "./browser-tools";
 import { runsOn } from "./cli-defaults";
 import { executableFor } from "./cli-path";
 import { spawnCli, withStderr } from "./cli-process";
 import { claimQuestion } from "./claim-guard";
-import { guardedCli, RESTART_PROMPT } from "./env";
+import { guardedCli } from "./env";
 import { isNotLoggedInError, isRateLimitError } from "./login";
 import { hitRateLimit } from "./rate-limit";
-import { REVIEW_PROMPT } from "./review";
 import { askUser, settle } from "./runner-ask";
 import { close, hooks, Inbox, queued, safeUpdate, scheduleIdle, sessions, spares, specFor, type Session, type Spec } from "./runner-state";
 import { TURN_CODE, handle } from "./runner-turn";
-import { SECRETS_PROMPT, secretsMcpServer } from "./secret-tools";
-import { WEBHOOKS_PROMPT, webhooksMcpServer } from "./webhook-tools";
-import { defaultPermissionMode, subagentModel, threadPrompt } from "./settings";
+import { secretsMcpServer } from "./secret-tools";
+import { webhooksMcpServer } from "./webhook-tools";
+import { defaultPermissionMode, subagentModel } from "./settings";
+import { pukuContext } from "./puku-context";
 import { trialOptions } from "./puku-trial";
 import { PLUGIN_DIR } from "./skills";
 import { switchSpare } from "./spare-switch";
 import { backendEnv, refillsSpare } from "./puku-idle";
 import { subagentEnv, subagentPrompt } from "./subagents";
+import { promptsBuild, weftSystemPrompt } from "./weft-prompts";
 import { CODEX_CODE, driveCodex } from "./codex-runner";
 import { getCard, updateCard } from "./store";
 import * as turnRules from "./turn";
@@ -40,14 +41,14 @@ const MAX_SPARES = 3;
 // the code (not random) because each API route can load its own copy of these modules. The pure turn
 // rules in turn.ts count too: a session started before they changed would still run the old ones.
 const BUILD = createHash("sha1")
-  .update([drive, driveCodex, queryOptions, threadEnv, ...CODEX_CODE, ...TURN_CODE, askUser, settle, ...Object.values(turnRules)].map(String).join("\n"))
+  .update([drive, driveCodex, queryOptions, threadEnv, weftSystemPrompt, subagentPrompt, ...CODEX_CODE, ...TURN_CODE, askUser, settle, ...Object.values(turnRules)].map(String).join("\n"))
   .digest("hex");
 
-// The code fingerprint plus the settings a CLI only reads when it starts (the thread prompt, the subagent
-// model), so changing one in Settings replaces idle sessions too.
+// The code fingerprint plus what a CLI only reads when it starts: the content of Weft's pinned prompts
+// (lib/weft-prompts.ts) and the settings they're built from (thread prompt, subagent model), so editing
+// a prompt or changing one in Settings replaces idle sessions too.
 function currentBuild() {
-  const started = createHash("sha1").update(`${threadPrompt()}\n${subagentModel()}`).digest("hex").slice(0, 12);
-  return `${BUILD}:${started}`;
+  return `${BUILD}:${promptsBuild()}`;
 }
 
 function isStale(session: Session) {
@@ -82,6 +83,10 @@ export function open(spec: Spec, cardId: string | null): Session {
     pending: [],
     toolIndex: new Map(),
     done: Promise.resolve(),
+    preamble: spec.backend === "puku" ? pukuContext(spec.cwd, weftSystemPrompt(spec)) : undefined,
+    // A new conversation gets its id from Weft (--session-id), not from the CLI's init: puku can take 15s or more
+    // to send init, and a turn stopped before then left the card nothing to resume, so "continue" began a new one.
+    sessionId: spec.backend === "codex" || spec.sessionId ? undefined : randomUUID(),
   };
   if (cardId) sessions.set(cardId, session);
   session.done = drive(session, executable);
@@ -168,7 +173,12 @@ function queryOptions(session: Session, executable: string | undefined): Options
   const logStderr = (data: string) => console.error(`[thread ${(session.cardId ?? "spare").slice(0, 8)}] ${data.trimEnd()}`);
   return {
     cwd: spec.cwd,
+    // Directories the user approved reading from beyond cwd (Card.readScope, Spec.readScope).
+    // Forwarded to the SDK as additionalDirectories so the CLI's working-directory gate lets the
+    // thread read there without an extra prompt.
+    additionalDirectories: spec.readScope,
     resume: spec.sessionId,
+    sessionId: spec.sessionId ? undefined : session.sessionId,
     forkSession: spec.sessionId ? spec.forkSession : undefined,
     resumeSessionAt: spec.sessionId ? spec.resumeAt : undefined,
     ...guarded,
@@ -190,7 +200,7 @@ function queryOptions(session: Session, executable: string | undefined): Options
     systemPrompt: {
       type: "preset",
       preset: "claude_code",
-      append: spec.copilot ? `${BROWSER_PROMPT}\n\n${COPILOT_PROMPT}` : `${BROWSER_PROMPT}\n\n${SECRETS_PROMPT}\n\n${WEBHOOKS_PROMPT}\n\n${RESTART_PROMPT}\n\n${subagentPrompt(subagents, spec.backend)}\n\n${threadPrompt()}\n\n${REVIEW_PROMPT}`,
+      append: weftSystemPrompt(spec),
     },
     mcpServers: {
       browser: browserMcpServer(cardId),

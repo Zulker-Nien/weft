@@ -1,5 +1,7 @@
 import { SUPABASE_URL } from "@/lib/account";
-import { apiError, proxy, restUsageStore, DAILY_REQUESTS, DAILY_TOKENS } from "@/lib/puku-proxy";
+import { billingService } from "@/lib/billing/billing";
+import { pukuMeter } from "@/lib/billing/puku-meter";
+import { apiError, proxy, restUsageStore, DAILY_REQUESTS, DAILY_TOKENS, type ProxyConfig } from "@/lib/puku-proxy";
 
 // The Puku trial's proxy to Puku's gateway, on the deployed Weft (Vercel) (lib/puku-proxy.ts,
 // docs/architecture/puku-trial.md). puku-cli reaches it as PUKU_AI_BASE_URL=…/api/puku, so it has no localhost
@@ -19,14 +21,20 @@ async function handler(req: Request, { params }: { params: Promise<{ path: strin
   const supabaseKey = process.env.SUPABASE_SECRET_KEY;
   if (!apiKey || !secret || !supabaseKey) return apiError(503, "api_error", "The Puku trial isn't set up on this Weft.");
   const { path } = await params;
+  // When billing is wired up on the deployed Weft, attach the per-user plan meter so Pro workspaces skip the
+  // daily trial cap and spend from their monthly allowance instead. A Weft without billing falls back to
+  // today's exact behaviour (the free daily cap).
+  const service = billingService();
+  const config: ProxyConfig = {
+    apiKey,
+    secret,
+    store: restUsageStore(SUPABASE_URL, supabaseKey),
+    dailyRequests: limit("PUKU_TRIAL_DAILY_REQUESTS", DAILY_REQUESTS),
+    dailyTokens: limit("PUKU_TRIAL_DAILY_TOKENS", DAILY_TOKENS),
+    ...(service ? { plan: pukuMeter(service) } : {}),
+  };
   try {
-    return await proxy(req, path.join("/"), {
-      apiKey,
-      secret,
-      store: restUsageStore(SUPABASE_URL, supabaseKey),
-      dailyRequests: limit("PUKU_TRIAL_DAILY_REQUESTS", DAILY_REQUESTS),
-      dailyTokens: limit("PUKU_TRIAL_DAILY_TOKENS", DAILY_TOKENS),
-    });
+    return await proxy(req, path.join("/"), config);
   } catch (err) {
     console.error(`Puku trial proxy: ${(err as Error).message}`);
     return apiError(502, "api_error", "Weft's Puku trial couldn't handle that request.");

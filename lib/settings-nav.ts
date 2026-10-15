@@ -1,91 +1,22 @@
-// The Settings screen's two levels: sections down the left, each with its tabs along the top.
+import { SCENES, sceneOf, type Base, type Scene } from "./theme";
 
-export type SettingsTab =
-  | "appearance"
-  | "board"
-  | "sounds"
-  | "shortcuts"
-  | "defaults"
-  | "instructions"
-  | "subagents"
-  | "rules"
-  | "done"
-  | "account"
-  | "clis";
+// The Settings screen's pages, down the left. Each is one scrolling page of cards; no tabs.
+export type SettingsPage = "general" | "models" | "threads" | "automations" | "shortcuts" | "accounts" | "team";
 
-export type SettingsSection = "general" | "threads" | "automations" | "accounts";
-
-type Tab = { id: SettingsTab; label: string };
-export type SettingsNavSection = { id: SettingsSection; label: string; tabs: [Tab, ...Tab[]] };
-
-export const SETTINGS_NAV: SettingsNavSection[] = [
-  {
-    id: "general",
-    label: "General",
-    tabs: [
-      { id: "appearance", label: "Appearance" },
-      { id: "board", label: "Board" },
-      { id: "sounds", label: "Sounds" },
-      { id: "shortcuts", label: "Shortcuts" },
-    ],
-  },
-  {
-    id: "threads",
-    label: "Threads",
-    tabs: [
-      { id: "defaults", label: "Defaults" },
-      { id: "instructions", label: "Instructions" },
-      { id: "subagents", label: "Subagents" },
-    ],
-  },
-  {
-    id: "automations",
-    label: "Automations",
-    tabs: [
-      { id: "rules", label: "Rules" },
-      { id: "done", label: "Done wrap-up" },
-    ],
-  },
-  {
-    id: "accounts",
-    label: "Accounts",
-    tabs: [
-      { id: "account", label: "Weft account" },
-      { id: "clis", label: "CLIs" },
-    ],
-  },
+export const SETTINGS_PAGES: { id: SettingsPage; label: string; hint: string }[] = [
+  { id: "general", label: "General", hint: "How the board looks and sounds." },
+  { id: "models", label: "Models", hint: "Which CLI and model each kind of work runs on." },
+  { id: "threads", label: "Threads", hint: "How new threads start and what they're told." },
+  { id: "automations", label: "Automations", hint: "Skills that run on their own." },
+  { id: "shortcuts", label: "Shortcuts", hint: "Keys for the board's global actions." },
+  { id: "accounts", label: "Accounts", hint: "Your Weft account and the CLIs' logins." },
+  { id: "team", label: "Team", hint: "Your Weft workspace and the people in it." },
 ];
 
-const TAB_SECTION: Record<SettingsTab, SettingsSection> = {
-  appearance: "general",
-  board: "general",
-  sounds: "general",
-  shortcuts: "general",
-  defaults: "threads",
-  instructions: "threads",
-  subagents: "threads",
-  rules: "automations",
-  done: "automations",
-  account: "accounts",
-  clis: "accounts",
-};
+const BY_ID = Object.fromEntries(SETTINGS_PAGES.map((p) => [p.id, p])) as Record<SettingsPage, (typeof SETTINGS_PAGES)[number]>;
+export const pageInfo = (id: SettingsPage) => BY_ID[id];
 
-const BY_ID = Object.fromEntries(SETTINGS_NAV.map((s) => [s.id, s])) as Record<SettingsSection, SettingsNavSection>;
-
-export function sectionOf(tab: SettingsTab): SettingsSection {
-  return TAB_SECTION[tab];
-}
-
-export function navSectionOf(tab: SettingsTab): SettingsNavSection {
-  return BY_ID[TAB_SECTION[tab]];
-}
-
-// Picking a section opens its first tab, or the one last open in it.
-export function firstTab(section: SettingsSection, remembered: Partial<Record<SettingsSection, SettingsTab>> = {}) {
-  return remembered[section] ?? BY_ID[section].tabs[0].id;
-}
-
-// The settings that wait for Save, by the tab they sit on, so the nav can mark unsaved edits.
+// The settings that wait for Save, so the nav can mark the pages they sit on.
 export type PendingEdits = {
   prompt: boolean;
   keepAlive: boolean;
@@ -94,21 +25,25 @@ export type PendingEdits = {
   rules: boolean;
 };
 
-export function unsavedTabs(p: PendingEdits): Set<SettingsTab> {
-  const tabs = new Set<SettingsTab>();
-  if (p.keepAlive || p.mode || p.backend) tabs.add("defaults");
-  if (p.prompt) tabs.add("instructions");
-  if (p.rules) tabs.add("rules");
-  return tabs;
+export function unsavedPages(p: PendingEdits): Set<SettingsPage> {
+  const pages = new Set<SettingsPage>();
+  if (p.backend) pages.add("models");
+  if (p.prompt || p.keepAlive || p.mode) pages.add("threads");
+  if (p.rules) pages.add("automations");
+  return pages;
 }
 
-export function unsavedSections(tabs: Set<SettingsTab>): Set<SettingsSection> {
-  return new Set([...tabs].map(sectionOf));
+// Twin Suns over the dark palette, Salt Flats over the light one.
+const FALLBACK_SCENE: Record<Base, Scene> = { dark: SCENES[0], light: SCENES[5] };
+
+// The picture behind Settings: your scene if you've picked one, else one that suits the light or dark palette.
+export function settingsScene(theme: string, base: Base): Scene {
+  return sceneOf(theme) ?? FALLBACK_SCENE[base];
 }
 
-// The tab the screen opens on: the last one you had open this session.
-let lastTab: SettingsTab = "appearance";
-export const rememberedTab = () => lastTab;
-export function rememberTab(tab: SettingsTab) {
-  lastTab = tab;
+// The page the screen opens on: the last one you had open this session.
+let lastPage: SettingsPage = "general";
+export const rememberedPage = () => lastPage;
+export function rememberPage(page: SettingsPage) {
+  lastPage = page;
 }

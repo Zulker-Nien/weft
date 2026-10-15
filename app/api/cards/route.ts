@@ -3,7 +3,7 @@ import { connection } from "next/server";
 import { firstMessage } from "@/lib/automations";
 import { prewarm } from "@/lib/copilot";
 import { resolveFolder } from "@/lib/folders";
-import { asText, titleFromPrompt } from "@/lib/format";
+import { asText, shortTitle, titleFromPrompt } from "@/lib/format";
 import { fail, guard } from "@/lib/guard";
 import { projectRoot } from "@/lib/repos";
 import { sendMessage } from "@/lib/runner";
@@ -41,7 +41,7 @@ export async function POST(req: Request) {
     const body = (await req.json()) as Record<string, unknown>;
     const prompt = asText(body.prompt).trim();
     if (!prompt) throw new Error("Write a prompt for this thread.");
-    const typedTitle = asText(body.title).trim();
+    const typedTitle = shortTitle(asText(body.title));
     const title = typedTitle || titleFromPrompt(prompt);
 
     const cwd = resolveFolder(body.cwd);

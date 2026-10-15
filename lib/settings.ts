@@ -50,6 +50,8 @@ interface Settings {
   dismissedSessions?: string[];
   // Project folders whose open GitHub issues become Backlog cards (lib/github-issues.ts).
   issueFolders?: string[];
+  // Project folders whose cards sync to the cloud (lib/cloud-sync.ts). Off by default.
+  syncFolders?: string[];
 }
 
 const FILE = path.join(DATA_DIR, "settings.json");
@@ -69,6 +71,7 @@ function settings(): Settings {
       projects: saved.projects ?? [],
       dismissedSessions: saved.dismissedSessions ?? [],
       issueFolders: saved.issueFolders ?? [],
+      syncFolders: saved.syncFolders ?? [],
     };
   });
 }
@@ -200,6 +203,18 @@ export function setIssueSync(folder: string, on: boolean) {
   const s = settings();
   const rest = (s.issueFolders ?? []).filter((f) => f !== folder);
   s.issueFolders = on ? [...rest, folder] : rest;
+  save();
+}
+
+// The folders whose cards sync to the cloud (lib/cloud-sync.ts), in the order they were turned on. Off by default.
+export function syncFolders(): string[] {
+  return [...(settings().syncFolders ?? [])];
+}
+
+export function setSyncSync(folder: string, on: boolean) {
+  const s = settings();
+  const rest = (s.syncFolders ?? []).filter((f) => f !== folder);
+  s.syncFolders = on ? [...rest, folder] : rest;
   save();
 }
 

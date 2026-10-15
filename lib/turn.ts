@@ -18,7 +18,11 @@ export function readQuestions(input: Record<string, unknown>): Question[] | unde
       multiSelect: q.multiSelect === true,
       options: (Array.isArray(q.options) ? q.options : [])
         .filter((o): o is Record<string, unknown> => Boolean(o) && typeof o === "object")
-        .map((o) => ({ label: asText(o.label), description: typeof o.description === "string" ? o.description : undefined }))
+        .map((o) => ({
+          label: asText(o.label),
+          description: typeof o.description === "string" ? o.description : undefined,
+          ...(typeof o.preview === "string" && o.preview.trim() ? { preview: o.preview } : {}),
+        }))
         .filter((o) => o.label),
     }))
     .filter((q) => q.question);

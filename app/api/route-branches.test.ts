@@ -6,7 +6,7 @@ import { COPILOT_ID } from "@/lib/types";
 
 vi.mock("next/server", () => ({ connection: async () => {} }));
 vi.mock("@/lib/store", () => ({ getCard: vi.fn((id: string) => ({ id })) }));
-vi.mock("@/lib/runner", () => ({ sendUserMessage: vi.fn(), editLastMessage: vi.fn(() => Promise.resolve()), retryAfterLogin: vi.fn() }));
+vi.mock("@/lib/runner", () => ({ sendUserMessage: vi.fn(), editLastMessage: vi.fn(() => Promise.resolve()), retryAfterLogin: vi.fn(), clearLoginWaiters: vi.fn() }));
 vi.mock("@/lib/restart", () => ({ restartTurn: vi.fn(() => Promise.resolve()) }));
 vi.mock("@/lib/copilot", () => ({ sendToCopilot: vi.fn() }));
 vi.mock("@/lib/login", () => ({
@@ -92,6 +92,16 @@ describe("POST /login", () => {
   it("input for a CLI with no run returns no login", async () => {
     const res = await loginRoute.POST(post("/login", { backend: "puku", action: "input", text: "code" }));
     expect(((await res.json()) as { login: unknown }).login).toBeNull();
+  });
+
+  it("cancel drops the cards waiting on this CLI's login, so a fresh card can retry cleanly", async () => {
+    // Cancelling a login must not leave the cards that were waiting on it in
+    // loginWaiters — otherwise the next card that hits the same auth error
+    // would re-open the same dialog, and the user couldn't get out of it.
+    const res = await loginRoute.POST(post("/login", { backend: "puku", action: "cancel" }));
+    expect(res.status).toBe(200);
+    expect(login.cancelLogin).toHaveBeenCalledWith("puku");
+    expect(runner.clearLoginWaiters).toHaveBeenCalledWith("puku");
   });
 });
 

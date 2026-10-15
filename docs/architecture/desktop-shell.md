@@ -15,7 +15,7 @@ lives in `electron/server.cjs`.
 - `PREFERRED_PORT` is `THREADBOARD_PORT` or `1024`. From source, `server.cjs` first runs
   `electron/free-port.cjs`, which kills whatever listens there and deletes the dev build folder
   (`.next`), so a stale server never forces a second port or a shared build folder; the packaged
-  app still falls back to a free port when 1024 is taken. (`npm run dev`, the board-only mode without Electron, also
+  app still falls back to a free port when 1024 is taken. (`pnpm dev`, the board-only mode without Electron, also
   uses `1024`, so a dev server and the desktop app never collide on different ports.)
 - `app.requestSingleInstanceLock()` makes a second `weft` launch just emit
   `second-instance`, which the first process handles by calling `showMain()` and
@@ -63,12 +63,12 @@ lives in `electron/server.cjs`.
 Supervises the Next server. Three run modes, decided by `app.isPackaged` and the
 env var `THREADBOARD_PROD`:
 
-- **Dev** (`npm run desktop`): `next dev -H 127.0.0.1 -p <port>` under
-  `npm_node_execpath` (the same Node that ran `npm run desktop`). Stdout and
+- **Dev** (`pnpm desktop`): `next dev -H 127.0.0.1 -p <port>` under
+  `npm_node_execpath` (the same Node that ran `pnpm desktop`). Stdout and
   stderr are also written to the parent's stdout.
-- **Start** (`npm run app`): builds into `.next-app`, then runs `next start`, gated on
+- **Start** (`pnpm app`): builds into `.next-app`, then runs `next start`, gated on
   `THREADBOARD_PROD=1`.
-- **Packaged standalone** (`npm run dist`): the standalone build at
+- **Packaged standalone** (`pnpm dist`): the standalone build at
   `process.resourcesPath/server/server.js` is launched as `${name} Helper` (e.g.
   `Weft Helper`) — the helper binary inside `Weft Helper.app/Contents/MacOS/`,
   launched with `ELECTRON_RUN_AS_NODE=1` so it runs as plain Node. Falling back to
@@ -161,7 +161,7 @@ forward / reload / onState), `dialog.openFolder`, `openExternal`, `revealFolder`
 `copilot.toggle` and `copilot.onState`, `onMenu`, and `splashAction` (only used by
 the splash screen's retry/logs/quit buttons). Typed in `lib/client.ts` as
 `ShellBridge`; when `window.threadboard` is absent the board is running in a normal
-browser tab (`npm run dev`).
+browser tab (`pnpm dev`).
 
 ## `electron/env.cjs`
 
@@ -254,7 +254,7 @@ restart). In dev that PID is `next dev`'s launcher, not necessarily the process 
   tool's login when it needs a real terminal."` (used by the AppleScript in
   `lib/login.ts`).
 
-`npm run dist` runs `THREADBOARD_DIST=.next-dist THREADBOARD_STANDALONE=1 next
+`pnpm dist` runs `THREADBOARD_DIST=.next-dist THREADBOARD_STANDALONE=1 next
 build && node scripts/prepare-standalone.mjs .next-dist && electron-builder --mac
 --dir`. The build flow:
 

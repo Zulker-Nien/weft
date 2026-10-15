@@ -45,7 +45,11 @@ class ShellParser {
     "\t": () => this.space(),
   };
 
-  constructor(private readonly src: string) {}
+  // A plain field, not a parameter property: Node's type stripping (scripts/import-check-hook.mjs) can't run those.
+  private readonly src: string;
+  constructor(src: string) {
+    this.src = src;
+  }
 
   parse(): { commands: SimpleCommand[]; nested: string[] } {
     while (this.i < this.src.length) (this.handlers[this.at()] ?? (() => this.plain()))();

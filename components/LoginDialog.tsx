@@ -76,6 +76,10 @@ export default function LoginDialog({ login, onClose }: { login: LoginView; onCl
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Cancel aborts the in-flight request and always closes the dialog, so the
+  // user is never trapped if the server is slow or the CLI is wedged.
+  const abortRef = useRef<AbortController | null>(null);
+
   const close = useEffectEvent(onClose);
 
   // Done closes itself after a moment; a cancelled login has nothing left to show.
@@ -89,11 +93,14 @@ export default function LoginDialog({ login, onClose }: { login: LoginView; onCl
     return () => clearTimeout(timer);
   }, [login.state]);
 
-  async function act(action: Action, text?: string) {
+  // If the dialog unmounts mid-request, abort it so the server call unwinds.
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  async function act(action: Action, text?: string, signal?: AbortSignal) {
     setBusy(true);
     setError(null);
     try {
-      await api.login(login.backend, action, text);
+      await api.login(login.backend, action, text, signal);
       return true;
     } catch (err) {
       setError(message(err));
@@ -112,8 +119,19 @@ export default function LoginDialog({ login, onClose }: { login: LoginView; onCl
     if (await act("input", code.trim())) setCode("");
   }
 
-  async function cancel() {
-    if (await act("cancel")) onClose();
+  function cancel() {
+    // Abort any in-flight request first so a stuck POST doesn't keep us waiting.
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    // The server's cancel is idempotent and we don't need its response to close
+    // the dialog. Fire the request (with the abort signal so a slow server can't
+    // pin us) and close immediately, then clear the ref when it settles so we
+    // don't leak a reference to an aborted controller.
+    void act("cancel", undefined, controller.signal).finally(() => {
+      if (abortRef.current === controller) abortRef.current = null;
+    });
+    onClose();
   }
 
   if (login.state === "cancelled") return null;
@@ -213,7 +231,7 @@ export default function LoginDialog({ login, onClose }: { login: LoginView; onCl
             <button onClick={() => void act("terminal")} disabled={busy} className={secondary}>
               Use Terminal instead
             </button>
-            <button onClick={() => void cancel()} disabled={busy} className={secondary}>
+            <button onClick={cancel} className={secondary}>
               Cancel
             </button>
           </div>
@@ -221,7 +239,7 @@ export default function LoginDialog({ login, onClose }: { login: LoginView; onCl
 
         {login.state === "terminal" && (
           <div className="flex justify-end gap-2 border-t border-line px-5 py-3">
-            <button onClick={() => void cancel()} disabled={busy} className={secondary}>
+            <button onClick={cancel} className={secondary}>
               Cancel
             </button>
           </div>

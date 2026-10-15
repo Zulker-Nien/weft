@@ -2,103 +2,20 @@
 
 import { useState } from "react";
 import { api } from "@/lib/client";
-import { folderName, isLive, STAGES, stageStep, timeAgo } from "@/lib/format";
-import { modelLabel, runningOn } from "@/lib/new-thread";
-import { isBusy } from "@/lib/overlap";
-import { sendsWhen } from "@/lib/schedule";
-import { type Card } from "@/lib/types";
-import { ContinueButton, RestartButton, type ResumeHow } from "./CardResume";
+import { isLive } from "@/lib/format";
+import { BACKEND_LABELS, type Backend, type Card } from "@/lib/types";
+import ArchiveButton from "./ArchiveButton";
+import CardFooterMeta from "./CardFooterMeta";
 import CardPicture from "./CardPicture";
+import CardProgress, { showsCardProgress } from "./CardProgress";
 import Icon, { Spinner } from "./Icon";
-import StarButton from "./StarButton";
-import Tip from "./Tip";
+import { ContinueButton, RestartButton, type ResumeHow } from "./CardResume";
 import CardMarks from "./CardMarks";
+import StarButton from "./StarButton";
 
-// The footer's left side: CLI dot, folder (or "whole board" for the copilot), overlap, age, turns, scheduled
-// sends, open elsewhere, and the card's issue and tags when it has no progress line.
-function FooterMeta({ card, now, alsoHere, marks }: { card: Card; now: number; alsoHere: Card[]; marks: React.ReactNode }) {
-  const copilot = card.role === "copilot";
-  const scheduled = card.scheduled ?? [];
-  const nextSend = scheduled[0];
-  const puku = card.backend === "puku";
-  const { model, effort } = runningOn(card);
-  const cliTip = `${puku ? "puku-cli" : card.backend === "codex" ? "Codex" : "Claude Code"}${model ? ` on ${model}${effort ? ` · ${effort} effort` : ""}` : ""}${card.source === "claude-code" ? " · picked up from Claude Code" : ""}`;
-  return (
-    <span className="flex min-w-0 items-center gap-1.5">
-      <span className={`size-1.5 shrink-0 rounded-full ${puku ? "bg-puku" : card.backend === "codex" ? "bg-accent" : "bg-claude"}`} title={cliTip} />
-      {model && (
-        <span className={`shrink-0 whitespace-nowrap font-medium ${puku ? "text-puku" : card.backend === "codex" ? "text-accent" : "text-claude"}`} title={cliTip}>
-          {modelLabel(model)}
-        </span>
-      )}
-      {copilot ? (
-        <span className="flex shrink-0 items-center gap-1 font-medium text-accent" title="The copilot runs the whole board">
-          <Icon name="sparkles" size={10} />
-          whole board
-        </span>
-      ) : (
-        <span className="truncate font-medium text-muted" title={card.cwd}>{folderName(card.cwd)}</span>
-      )}
-      {isBusy(card) && alsoHere.length > 0 && (
-        <span
-          className="shrink-0 font-medium text-warn"
-          title={`Also running in this folder (shared working tree):\n${alsoHere.map((c) => c.title).join("\n")}`}
-        >
-          +{alsoHere.length} here
-        </span>
-      )}
-      <span className="shrink-0 whitespace-nowrap">
-        {timeAgo(card.lastActivity ?? card.updatedAt, now).replace(" ago", "")}
-        {card.turns ? ` · ${card.turns}t` : ""}
-      </span>
-      {marks}
-      {nextSend ? (
-        <span
-          className="flex shrink-0 items-center gap-0.5 text-accent"
-          title={`${scheduled.length} message${scheduled.length > 1 ? "s" : ""} scheduled; the next sends ${nextSend.afterRestart ? "after Weft restarts" : sendsWhen(nextSend, now)}`}
-        >
-          <Icon name={nextSend.afterRestart || nextSend.afterTurn ? "reload" : "clock"} size={10} />
-          {sendsWhen(nextSend, now)}
-        </span>
-      ) : null}
-      {card.openElsewhere && (
-        <span
-          className="flex shrink-0 items-center gap-1 text-muted"
-          title="This thread is open in the Claude app or a terminal right now"
-        >
-          <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-          open
-        </span>
-      )}
-    </span>
-  );
-}
-
-// The CLI's chip, coloured by CLI; given a card, it names the model and effort the thread runs on instead.
-export function BackendBadge({ backend, card }: { backend: Card["backend"]; card?: Card }) {
-  const { model, effort } = card ? runningOn(card) : {};
-  const label = model ? [modelLabel(model), effort].filter(Boolean).join(" · ") : backend === "codex" ? "Codex" : backend;
-  const tone = backend === "puku" ? "bg-puku-soft text-puku" : backend === "codex" ? "bg-accent-soft text-accent" : "bg-claude-soft text-claude";
-  const badge = <span className={`shrink-0 whitespace-nowrap rounded px-1.5 py-px text-[11px] font-medium ${tone}`}>{label}</span>;
-  if (!model) return badge;
-  const cli = backend === "puku" ? "puku-cli" : backend === "codex" ? "Codex" : "Claude Code";
-  const how = card?.effort ? "" : " (the CLI's default)";
-  return <Tip text={`${cli} · ${model}${effort ? ` · ${effort} effort${how}` : ""}`}>{badge}</Tip>;
-}
-
-// A clickable version for the thread header. Click the chip, pick the other CLI, and the next turn
-// runs there. No replay by default — that's the rate-limit banner's job (and it always replays).
-// Lives in components/BackendPicker.tsx; re-exported here so existing import sites keep working.
+// Re-exports so existing import sites keep working.
+export { default as BackendBadge } from "./BackendBadge";
 export { default as BackendPicker } from "./BackendPicker";
-
-// The card's column colour, shared by the summary icon and the stage bar.
-const TONE: Record<Card["column"], { text: string; bar: string }> = {
-  running: { text: "text-accent", bar: "bg-accent" },
-  needs_you: { text: "text-warn", bar: "bg-warn" },
-  review: { text: "text-ok", bar: "bg-ok" },
-  backlog: { text: "text-muted", bar: "bg-muted" },
-  done: { text: "text-faint", bar: "bg-faint" },
-};
 
 // What the thread last said: the line you read to decide whether to open it.
 function Summary({ card }: { card: Card }) {
@@ -127,41 +44,11 @@ function Summary({ card }: { card: Card }) {
   );
 }
 
-// Whether the card has a progress line: a stage or what's left, and in Done only what's left.
-function showsProgress(card: Card) {
-  // In Done, "Done" says nothing the column doesn't.
-  if (card.column === "done" && (stageStep(card.stage) === STAGES.length || !card.remaining)) return false;
-  return Boolean(card.stage || card.remaining);
-}
-
-// How far along the card is (the BOARD STATUS stage) and what's left, on one line; marks (the issue and
-// tags) go at its end, so they don't crowd the footer.
-function Progress({ card, marks }: { card: Card; marks: React.ReactNode }) {
-  const step = stageStep(card.stage);
-  const tone = TONE[card.column];
-  return (
-    <div className="mt-2 flex min-w-0 items-center gap-1.5 overflow-hidden text-[11px]">
-      {step > 0 && (
-        <span className="flex shrink-0 gap-[2px]" title={`${card.stage}: step ${step} of ${STAGES.length}`} aria-hidden>
-          {STAGES.map((s, i) => (
-            <span key={s} className={`h-[5px] w-[5px] rounded-full ${i < step ? tone.bar : "bg-line-strong"}`} />
-          ))}
-        </span>
-      )}
-      {card.stage && <span className={`max-w-[50%] shrink-0 truncate font-medium ${tone.text}`}>{card.stage}</span>}
-      {card.remaining && card.remaining !== "none" && (
-        <span className="min-w-0 shrink-[10] truncate text-faint" title={`Left: ${card.remaining}`}>· {card.remaining}</span>
-      )}
-      <span className="ml-auto flex shrink-0">{marks}</span>
-    </div>
-  );
-}
-
 // "Run on <other CLI>" — the one-click escape from a rate-limit error. Sits under the error line
 // on a rate-limited card; flips the card's backend and replays the last user message.
 function RateLimitSwitch({ card }: { card: Card }) {
   if (!card.rateLimitHit) return null;
-  const other = card.backend === "puku" ? "claude" : "puku";
+  const other: Backend = card.backend === "puku" ? "claude" : "puku";
   return (
     <button
       onClick={(e) => {
@@ -170,7 +57,7 @@ function RateLimitSwitch({ card }: { card: Card }) {
       }}
       className="mt-2 rounded-md bg-accent px-2.5 py-1 text-[12px] font-medium text-on-accent hover:opacity-90"
     >
-      Run on {other === "puku" ? "puku-cli" : "Claude Code"}
+      Run on {BACKEND_LABELS[other]}
     </button>
   );
 }
@@ -200,6 +87,7 @@ export default function CardView({
   onContextMenu,
   onStar,
   onTag,
+  onArchive,
   alsoHere = [],
 }: {
   card: Card;
@@ -220,6 +108,8 @@ export default function CardView({
   onStar?: () => void;
   // A click on one of its tag pills: the board filters to that tag.
   onTag?: (tag: string) => void;
+  // Done cards get a one-click archive (Board.tsx → lib/board-view.ts); archived cards unarchive.
+  onArchive?: () => void;
   // Other busy cards in this folder (lib/overlap.ts busyHere); flagged only while this one is busy too.
   alsoHere?: Card[];
 }) {
@@ -232,7 +122,7 @@ export default function CardView({
   const fixed = card.column === "running" || copilot;
   // The issue and tags sit on the progress line, or in the footer when the card has none.
   const marks = <CardMarks card={card} onTag={onTag} />;
-  const progress = showsProgress(card);
+  const progress = showsCardProgress(card);
   const answered = answeredId !== null && answeredId === card.pending?.id;
   const needsLogin = waitsForLogin(card);
   const border = cardBorder(card, selected, unseen, lastOpen);
@@ -270,7 +160,7 @@ export default function CardView({
         </div>
         <CardPicture card={card} />
       </div>
-      {progress && <Progress card={card} marks={marks} />}
+      {progress && <CardProgress card={card} marks={marks} />}
 
       {needsLogin && (
         <button
@@ -299,48 +189,52 @@ export default function CardView({
       )}
 
       {card.pending && !card.pending.questions && (
-        <div className="mt-2 flex gap-1.5">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              answer(true);
-            }}
-            disabled={answered}
-            className="rounded-md bg-accent px-2.5 py-1 text-[12px] font-medium text-on-accent hover:opacity-90 disabled:opacity-50"
-          >
-            Allow
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              answer(false);
-            }}
-            disabled={answered}
-            className="rounded-md border border-line-strong px-2.5 py-1 text-[12px] text-ink hover:bg-sunken disabled:opacity-50"
-          >
-            Deny
-          </button>
-        </div>
+        <PermissionRow answered={answered} onAnswer={answer} />
       )}
 
-      <div className="mt-2 flex items-center justify-between gap-2 border-t border-line pt-1.5 text-[11px] text-faint">
-        <FooterMeta card={card} now={now} alsoHere={alsoHere} marks={progress ? null : marks} />
-        <ContinueButton card={card} onResume={onResume} />
-        {!copilot && <StarButton variant="card" starred={Boolean(card.starred)} onClick={onStar} />}
-        {live && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onStop();
-            }}
-            title="Stop this thread"
-            aria-label="Stop this thread"
-            className="rounded p-1 text-muted hover:bg-sunken hover:text-danger"
-          >
-            <Icon name="stop" size={12} />
-          </button>
-        )}
+      <div className="mt-2 flex items-center gap-2 border-t border-line pt-1.5 text-[11px] text-faint">
+        <div className="min-w-0 flex-1">
+          <CardFooterMeta card={card} now={now} alsoHere={alsoHere} marks={progress ? null : marks} />
+        </div>
+        <div className="flex shrink-0 items-center">
+          <ContinueButton card={card} onResume={onResume} />
+          {!copilot && <StarButton variant="card" starred={Boolean(card.starred)} onClick={onStar} />}
+          {(card.column === "done" || card.archived) && <ArchiveButton archived={Boolean(card.archived)} onClick={onArchive} />}
+          {live && <StopButton onClick={onStop} />}
+        </div>
       </div>
     </div>
+  );
+}
+
+// The Allow / Deny pair for a permission prompt. The card opens the thread on click; each button
+// stops the event so the click answers the prompt instead.
+function PermissionRow({ answered, onAnswer }: { answered: boolean; onAnswer: (allow: boolean) => void }) {
+  const stop = (allow: boolean) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onAnswer(allow);
+  };
+  return (
+    <div className="mt-2 flex gap-1.5">
+      <button onClick={stop(true)} disabled={answered} className="rounded-md bg-accent px-2.5 py-1 text-[12px] font-medium text-on-accent hover:opacity-90 disabled:opacity-50">Allow</button>
+      <button onClick={stop(false)} disabled={answered} className="rounded-md border border-line-strong px-2.5 py-1 text-[12px] text-ink hover:bg-sunken disabled:opacity-50">Deny</button>
+    </div>
+  );
+}
+
+// The card's footer button that stops a running thread.
+function StopButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      title="Stop this thread"
+      aria-label="Stop this thread"
+      className="rounded p-1 text-muted hover:bg-sunken hover:text-danger"
+    >
+      <Icon name="stop" size={12} />
+    </button>
   );
 }

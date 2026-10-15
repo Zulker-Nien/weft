@@ -34,7 +34,7 @@ tool call.
 
 ## Cutting a release
 
-1. Bump `version` in `package.json` (and the two lines in `package-lock.json`).
+1. Bump `version` in `package.json`.
 2. In `CHANGELOG.md`, move **Unreleased** under a new `## [X.Y.Z] - date` heading.
 3. Commit, tag `vX.Y.Z`, and push the tag.
 
@@ -43,13 +43,13 @@ tool call.
 - refuses a tag that doesn't match `package.json`, runs the tests;
 - `scripts/release-feed.mjs` writes `dist/update.json` and `dist/release-notes.md` from that version's CHANGELOG section
   (and fails when the section is missing);
-- `npm run dist:release` builds the dmg and zip (`Weft-X.Y.Z-arm64.*`), signed with the Developer ID certificate,
+- `pnpm dist:release` builds the dmg and zip (`Weft-X.Y.Z-arm64.*`), signed with the Developer ID certificate,
   hardened runtime with `build/entitlements.mac.plist`, and notarized;
 - checks the signature with `codesign` and Gatekeeper with `spctl`;
 - publishes a GitHub release with the dmg, the zip and `update.json`.
 
-Local `npm run dist` stays an unsigned `--dir` build (`CSC_IDENTITY_AUTO_DISCOVERY=false`, so no certificate in your
-keychain gets picked up by accident). A local signed dmg is `NODE_ENV=production npm run dist:release`: it signs with
+Local `pnpm dist` stays an unsigned `--dir` build (`CSC_IDENTITY_AUTO_DISCOVERY=false`, so no certificate in your
+keychain gets picked up by accident). A local signed dmg is `NODE_ENV=production pnpm dist:release`: it signs with
 the Developer ID in your keychain and skips notarization without the `APPLE_API_*` variables, so Gatekeeper on
 another Mac asks before the first open.
 

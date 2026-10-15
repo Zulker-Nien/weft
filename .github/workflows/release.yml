@@ -15,10 +15,11 @@ jobs:
     runs-on: macos-15 # Apple silicon, for the arm64 build and its native modules
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
 
       - name: Check the tag matches package.json
         run: |
@@ -27,8 +28,8 @@ jobs:
           if [ "$tag" != "$pkg" ]; then echo "Tag v$tag doesn't match package.json $pkg"; exit 1; fi
           echo "VERSION=$pkg" >> "$GITHUB_ENV"
 
-      - run: npm ci
-      - run: npm test
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
       - run: node scripts/release-feed.mjs "$VERSION" dist
 
       - name: Write the notarization key
@@ -45,7 +46,7 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-        run: npm run dist:release
+        run: pnpm run dist:release
 
       - name: Check the signature and notarization
         run: |

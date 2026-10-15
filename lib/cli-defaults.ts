@@ -12,7 +12,7 @@ function settingsFile(backend: Backend) {
   return path.join(process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude"), "settings.json");
 }
 
-// The effort a CLI runs at when the card picks none: `effortLevel` in its user settings, if set.
+// The effort a CLI runs at when the card picks none: its user settings, if set.
 export function defaultEffort(backend: Backend): Effort | undefined {
   try {
     if (backend === "codex") {

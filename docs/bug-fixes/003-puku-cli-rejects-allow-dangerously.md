@@ -28,7 +28,7 @@ For a puku card, `!spec.copilot` is `true`, so the SDK forwarded the flag to puk
 
 ## Why It Was Hard to Find
 
-Obvious from the error, but only triggered on the second backend. Puku had been added recently and hadn't been exercised end to end (SOUL.md's "Known gaps" still lists *"a full puku thread hasn't been verified end to end"*). A Claude-Code user could refactor the runner, run `npm test`, and never see it — the bug lives in a code path that only one backend ever hits.
+Obvious from the error, but only triggered on the second backend. Puku had been added recently and hadn't been exercised end to end (SOUL.md's "Known gaps" still lists *"a full puku thread hasn't been verified end to end"*). A Claude-Code user could refactor the runner, run `pnpm test`, and never see it — the bug lives in a code path that only one backend ever hits.
 
 ## The Fix
 

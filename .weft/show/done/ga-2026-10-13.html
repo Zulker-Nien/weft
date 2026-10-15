@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Wrap-up: Google Analytics on weft.zip</title>
+<style>
+  body { font: 14px/1.55 -apple-system, system-ui, "Segoe UI", sans-serif; margin: 28px auto; max-width: 760px; color: #1a1a1a; padding: 0 16px; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  h2 { font-size: 15px; margin: 22px 0 6px; text-transform: uppercase; letter-spacing: 0.05em; color: #555; }
+  .meta { color: #666; font-size: 12.5px; margin-bottom: 18px; }
+  .ok { color: #0a7c2f; }
+  .skip { color: #555; }
+  ul { margin: 6px 0 0 18px; padding: 0; }
+  li { margin: 3px 0; }
+  code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; }
+  hr { border: 0; border-top: 1px solid #e0e0e0; margin: 18px 0; }
+</style>
+</head>
+<body>
+  <h1>Wrap-up: Google Analytics on weft.zip</h1>
+  <div class="meta">2026-10-13 · <code>106f7e3</code> · feat(home)</div>
+
+  <h2>What landed</h2>
+  <ul>
+    <li><b>GA4 snippet on the home page only.</b> <code>components/GoogleAnalytics.tsx</code> is a server component (loader + inline config, hardcoded <code>G-L9YCWJ4LZ2</code>, <code>JSON.stringify</code>/<code>encodeURIComponent</code> for safety). Mounted by <code>components/home/Home.tsx</code>, the only importer — so the local board never calls home by construction.</li>
+    <li><b>Parse-error fallback extracted.</b> The dark "Home page failed to build" page that <code>app/page.tsx</code> and <code>app/home/page.tsx</code> render when <code>loadHome()</code> fails used to be inlined twice. It's now <code>components/HomeErrorFallback.tsx</code>, used by both routes.</li>
+    <li><b>Doc:</b> new <code>docs/architecture/analytics.md</code> describes the gating (mount point, lazy load, snippet, ID). <code>docs/architecture/themes.md</code> got a one-line pointer.</li>
+  </ul>
+
+  <h2>Stats</h2>
+  <ul>
+    <li>Commit <code>106f7e3</code> · 6 files · +92 / &minus;57</li>
+    <li>Files created: <code>components/HomeErrorFallback.tsx</code>, <code>docs/architecture/analytics.md</code></li>
+    <li>Lint clean, typecheck clean, vitest 18/18 pass for <code>lib/home.test.ts</code> + <code>lib/home-release.test.ts</code></li>
+  </ul>
+
+  <h2>Push</h2>
+  <p class="skip">Push script reported "main matches origin/main" — the commit is already on the remote's <code>main</code>. Nothing to push; exit 0.</p>
+
+  <h2>SOUL.md</h2>
+  <p class="skip">No update needed. The two new files are tiny presentational pieces that the next agent will find by <code>Grep</code>; there's no new behavioral pattern, build system, or hot spot for the file map.</p>
+
+  <h2>Scout's top three</h2>
+  <ul>
+    <li><b>Duplicated Code (high) — <code>app/page.tsx</code> + <code>app/home/page.tsx</code>:</b> identical parse-error fallback JSX. <b>Fixed</b>: extracted to <code>components/HomeErrorFallback.tsx</code>.</li>
+    <li><b>Malformed Indentation (high) — <code>components/home/Home.tsx:22</code>:</b> <code>wz-root</code> &lt;div&gt; and children shared the same column. <b>Fixed</b>: re-indented after wrapping in a fragment.</li>
+    <li><b>Magic String (medium) — <code>components/GoogleAnalytics.tsx:5</code>:</b> lift <code>GA_ID</code> into <code>lib/home.ts</code> for a test seam. <b>Skipped</b>: a test for a single string constant is over-engineering; the value is public, build-time, and not parameterized anywhere.</li>
+  </ul>
+
+  <h2>Files in this commit</h2>
+  <ul>
+    <li><code>components/HomeErrorFallback.tsx</code> (new)</li>
+    <li><code>components/home/Home.tsx</code></li>
+    <li><code>app/home/page.tsx</code></li>
+    <li><code>app/page.tsx</code></li>
+    <li><code>docs/architecture/analytics.md</code> (new)</li>
+    <li><code>docs/architecture/themes.md</code></li>
+  </ul>
+
+  <hr>
+  <p class="meta">Status: committed, on remote <code>main</code>. Card can move to Done.</p>
+</body>
+</html>

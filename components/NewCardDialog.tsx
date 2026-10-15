@@ -22,7 +22,7 @@ import {
   startButton,
 } from "@/lib/new-thread";
 import Composer, { type ComposerHandle } from "./Composer";
-import Icon from "./Icon";
+import Icon, { Spinner } from "./Icon";
 import ModePicker from "./ModePicker";
 import { alsoHereLine, busyInFolder } from "@/lib/overlap";
 import type { Card } from "@/lib/types";
@@ -73,7 +73,8 @@ export default function NewCardDialog({
   // Cards get no worktree, so a busy card in this folder would share its working tree.
   const alsoHere = busyInFolder(cards, cwd);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  // Which button is waiting on the server, so it can say so instead of just going dim.
+  const [busy, setBusy] = useState<false | "start" | "backlog">(false);
   // The title of the thread ⌃↵ just started, while the dialog waits for the next one.
   const [started, setStarted] = useState<string | null>(null);
   // ⌘ or ⌃ held: the Start button names what ⌘↵ or ⌃↵ will do.
@@ -148,7 +149,7 @@ export default function NewCardDialog({
     if (busy) return;
     const prompt = promptToStart();
     if (prompt === null) return;
-    setBusy(true);
+    setBusy(start ? "start" : "backlog");
     try {
       const input: NewCardInput = {
         prompt,
@@ -303,20 +304,30 @@ export default function NewCardDialog({
         </p>
         <button
           onClick={() => void submit(false)}
-          disabled={busy}
-          className="shrink-0 rounded-md border border-line-strong px-3 py-1.5 text-[13px] text-ink hover:bg-sunken disabled:opacity-50"
+          disabled={!!busy}
+          className="flex shrink-0 items-center gap-1.5 rounded-md border border-line-strong px-3 py-1.5 text-[13px] text-ink hover:bg-sunken disabled:cursor-wait disabled:opacity-40 disabled:hover:bg-transparent"
         >
-          Add to backlog
+          {busy === "backlog" && <Spinner size={12} />}
+          {busy === "backlog" ? "Adding…" : "Add to backlog"}
         </button>
         <button
           onClick={() => void submit(true)}
-          disabled={busy}
-          className="flex shrink-0 items-center gap-1.5 rounded-md bg-accent px-3.5 py-1.5 text-[13px] font-medium text-on-accent hover:opacity-90 disabled:opacity-50"
+          disabled={!!busy}
+          className="flex shrink-0 items-center gap-1.5 rounded-md bg-accent px-3.5 py-1.5 text-[13px] font-medium text-on-accent hover:opacity-90 disabled:cursor-wait disabled:opacity-40 disabled:saturate-0"
         >
-          {startBtn.label}
-          <kbd aria-hidden="true" className="font-sans font-normal opacity-60">
-            {startBtn.key}
-          </kbd>
+          {busy === "start" ? (
+            <>
+              <Spinner size={12} />
+              Starting…
+            </>
+          ) : (
+            <>
+              {startBtn.label}
+              <kbd aria-hidden="true" className="font-sans font-normal opacity-60">
+                {startBtn.key}
+              </kbd>
+            </>
+          )}
         </button>
       </div>
     </aside>
