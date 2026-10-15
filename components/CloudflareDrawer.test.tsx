@@ -85,9 +85,9 @@ describe("CloudflareDrawer", () => {
   it("asks for a token, opens the token page, and saves it", async () => {
     const { b, reload, notify, openExternal } = setup({ signedIn: false, user: null, error: null, folders: [] });
     expect(screen.queryByRole("button", { name: "Forget it" })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("link", { name: "dash.cloudflare.com/profile/api-tokens" }));
+    await userEvent.click(screen.getByRole("button", { name: "Open Cloudflare API tokens ↗" }));
     expect(openExternal).toHaveBeenCalledWith("https://dash.cloudflare.com/profile/api-tokens");
-    const save = screen.getByRole("button", { name: "Save token" });
+    const save = screen.getByRole("button", { name: "Connect" });
     expect(save).toBeDisabled();
     await userEvent.type(screen.getByLabelText("Cloudflare API token"), "tok");
     await userEvent.click(save);
@@ -95,6 +95,10 @@ describe("CloudflareDrawer", () => {
     expect(b.setToken).toHaveBeenCalledWith("tok");
     expect(reload).toHaveBeenCalled();
     expect(screen.getByLabelText("Cloudflare API token")).toHaveValue("");
+    b.setToken.mockResolvedValueOnce({ name: "Acme", made: true, setupDeleted: true });
+    await userEvent.type(screen.getByLabelText("Cloudflare API token"), "setup");
+    await userEvent.click(save);
+    await waitFor(() => expect(notify).toHaveBeenCalledWith("Signed in to Cloudflare: Acme. Weft made its own token and deleted the setup token."));
   });
 
   it("shows a token that stopped working, lets you forget it, and toasts a failed save", async () => {
@@ -104,7 +108,7 @@ describe("CloudflareDrawer", () => {
     expect(b.forgetToken).toHaveBeenCalled();
     b.setToken.mockRejectedValueOnce(new Error("nope"));
     await userEvent.type(screen.getByLabelText("Cloudflare API token"), "x");
-    await userEvent.click(screen.getByRole("button", { name: "Save token" }));
+    await userEvent.click(screen.getByRole("button", { name: "Connect" }));
     await waitFor(() => expect(notify).toHaveBeenCalledWith(new Error("nope")));
   });
 

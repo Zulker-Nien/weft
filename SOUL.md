@@ -169,7 +169,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   on the rail; token sealed in the Keychain, link a project as `supabase/.temp/project-ref`, state, unapplied migrations matched by version then name;
   `lib/supabase-migrate.ts` is the prompt of **Migrate**, the card that applies them on your OK; docs/architecture/supabase.md).
 - `electron/cloudflare*.cjs` + `lib/cloudflare-view.ts` + `lib/use-cloudflare.ts` + `components/Cloudflare*.tsx`: the Cloudflare drawer (its orange
-  cloud on the rail; API token sealed in the Keychain, link a Worker or Pages project in `~/.weft/cloudflare-links.json`, best fit from the
+  cloud on the rail; a pasted setup token becomes Weft's own narrow token, sealed in the Keychain, then the setup token is deleted; link a Worker or Pages project in `~/.weft/cloudflare-links.json`, best fit from the
   folder's wrangler config; docs/architecture/cloudflare.md).
 - `electron/blastcp*.cjs` + `lib/blastcp-view.ts` + `lib/use-blastcp.ts` + `components/BlastcpDrawer.tsx`: the BlastCP drawer (its rocket logo on the rail, `components/BlastcpLogo.tsx`) (OAuth + PKCE
   sign-in sealed in the Keychain, reads through BlastCP's MCP tools, folder → property links in `~/.weft/blastcp-links.json`; docs/architecture/blastcp.md).

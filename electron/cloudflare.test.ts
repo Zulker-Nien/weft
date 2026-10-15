@@ -4,63 +4,7 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { failureOf, pagesDeploy, pagesUrl, workerDeploy, workerUrl, wranglerOf } from "./cloudflare-api.cjs";
 import { createCloudflare, LINKS_FILE, registerCloudflare, TOKEN_FILE } from "./cloudflare.cjs";
-
-const safeStorage = {
-  isEncryptionAvailable: () => true,
-  encryptString: (text: string) => Buffer.from(`w:${text}`),
-  decryptString: (buf: Buffer) => buf.toString().slice(2),
-};
-
-const tmp = (prefix: string) => fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-
-type Answer = { status?: number; body: unknown };
-type Route = (url: URL) => Answer;
-
-// A fake api.cloudflare.com: routes by path (after /client/v4), wraps a plain value as { success, result },
-// answers 404 otherwise. Records each URL and its token.
-function fakeFetch(routes: Record<string, unknown>) {
-  const calls: { url: URL; auth: string | undefined }[] = [];
-  const fetch = vi.fn((url: URL, init: { headers: Record<string, string> }) => {
-    calls.push({ url, auth: init.headers.Authorization });
-    const route = routes[url.pathname.replace("/client/v4", "")];
-    const answer: Answer =
-      typeof route === "function"
-        ? (route as Route)(url)
-        : route === undefined
-          ? { status: 404, body: { success: false, errors: [{ code: 10007, message: "Not found" }] } }
-          : { body: { success: true, result: route } };
-    const status = answer.status ?? 200;
-    return Promise.resolve({ ok: status < 400, status, json: () => (answer.body === "bad json" ? Promise.reject(new Error("x")) : Promise.resolve(answer.body)) });
-  });
-  return { fetch, calls };
-}
-
-const ACC = "/accounts/acc1";
-const PAGES = {
-  name: "site",
-  subdomain: "site.pages.dev",
-  domains: ["site.pages.dev", "site.example.com"],
-  source: { type: "github", config: { owner: "me", repo_name: "site" } },
-  latest_deployment: { url: "https://abc.site.pages.dev", created_on: "2026-10-01T00:00:00Z", environment: "production", latest_stage: { name: "deploy", status: "success" } },
-};
-
-const API: Record<string, unknown> = {
-  "/accounts": [{ id: "acc1", name: "Acme" }],
-  [`${ACC}/pages/projects/site`]: PAGES,
-  [`${ACC}/workers/scripts/api/deployments`]: { deployments: [{ id: "d1", created_on: "2026-10-01T00:00:00Z", source: "wrangler" }, { id: "d2", created_on: "2026-10-05T00:00:00Z", source: "dash" }] },
-  [`${ACC}/workers/subdomain`]: { subdomain: "acme" },
-  [`${ACC}/workers/domains`]: [],
-  [`${ACC}/workers/scripts/api/subdomain`]: { enabled: true },
-};
-
-function make(routes: Record<string, unknown> = API, remote = "git@github.com:me/site.git") {
-  const dataDir = tmp("weft-data-");
-  const { fetch, calls } = fakeFetch(routes);
-  const cloudflare = createCloudflare({ dataDir, safeStorage, fetch: fetch as unknown as typeof globalThis.fetch, remote: () => Promise.resolve(remote) });
-  return { cloudflare, dataDir, calls };
-}
-
-const linkFolder = (dataDir: string, folder: string, link: unknown) => fs.writeFileSync(path.join(dataDir, LINKS_FILE), JSON.stringify({ [folder]: link }));
+import { API, ACC, linkFolder, make, PAGES, safeStorage, tmp } from "./cloudflare.harness";
 
 describe("cloudflare-api", () => {
   it("reads a bad token, a missing permission and other failures", () => {
@@ -113,7 +57,8 @@ describe("createCloudflare", () => {
     await expect(cloudflare.setToken("  ")).rejects.toThrow("Paste a token");
     expect(await cloudflare.setToken(" tok ")).toEqual({ name: "Acme" });
     expect(calls[0]?.auth).toBe("Bearer tok");
-    expect(calls[0]?.url.href).toBe("https://api.cloudflare.com/client/v4/accounts?per_page=50");
+    expect(calls[0]?.url.pathname).toBe("/client/v4/user/tokens/permission_groups");
+    expect(calls[1]?.url.href).toBe("https://api.cloudflare.com/client/v4/accounts?per_page=50");
     const saved = fs.readFileSync(path.join(dataDir, TOKEN_FILE), "utf8");
     expect(saved).not.toContain('tok"');
     expect(fs.statSync(path.join(dataDir, TOKEN_FILE)).mode & 0o777).toBe(0o600);

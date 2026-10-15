@@ -9,9 +9,22 @@ links each board project to a Cloudflare Worker or Pages project. It's built lik
 
 ## The token
 
-- You paste an API token from dash.cloudflare.com/profile/api-tokens into the drawer (the "Edit Cloudflare Workers"
-  template covers Workers, Pages and account reads). Main checks it with `GET /accounts` before keeping it: that works
-  for user tokens and account-owned tokens alike, and a token that reaches no account is turned away.
+- The drawer asks for a **setup token**: one made with Cloudflare's "Create additional tokens" template (User → API
+  Tokens → Edit, offered by no other template or the custom builder, so the button opens the tokens page rather than a
+  prefilled form). Main never keeps it. It tells one from an ordinary token by `GET /user/tokens/permission_groups`,
+  which only a token with API Tokens Read/Edit can call, then (`fromSetupToken` in `electron/cloudflare.cjs`):
+  1. `GET /user/tokens/verify` for the setup token's own id;
+  2. `POST /user/tokens`: "Weft on <hostname>", one policy on `com.cloudflare.api.account.*` (every account you have)
+     with `NARROW` from `electron/cloudflare-api.cjs`: Account Settings Read, Workers Scripts Write, Pages Write
+     (needed; matched by either of Cloudflare's names) and Workers Tail Read (when offered);
+  3. `GET /accounts` with the new token, up to 3 tries a second apart while Cloudflare catches up. If it never works,
+     the new token is deleted again and nothing is kept;
+  4. seals the new token, then `DELETE /user/tokens/:setupId` with the setup token itself. If that fails the toast
+     says so and asks you to delete it on the tokens page (`tokenSavedLine` in `lib/cloudflare-view.ts`).
+- Any other token (one you made yourself, or the "Edit Cloudflare Workers" template) is kept as it is. Main checks it
+  with `GET /accounts` before keeping it: that works for user tokens and account-owned tokens alike, and a token that
+  reaches no account is turned away.
+- Signing out forgets Weft's token here only; "Weft on <hostname>" stays on Cloudflare's tokens page until you delete it.
 - Main seals it with Electron's `safeStorage` (Keychain) in `~/.weft/cloudflare-token.json` (mode 0600). Without
   safeStorage it refuses rather than writing it in the clear. `lib/secret-guard.ts` denies threads that file.
 - Cloudflare's codes for a malformed or revoked token (6003, 6111, 9106, 9109, 1000) or a 401 read as "turned the
@@ -55,7 +68,7 @@ the drawer then offers **Restart Weft** (`needsRestart` in `lib/cloudflare-view.
 
 - `electron/cloudflare.cjs`: `createCloudflare` (status, token, projects, link, unlink) and `registerCloudflare`, whose
   IPC handlers answer the board window only.
-- `electron/cloudflare-api.cjs`: request building, errors, reading Cloudflare's answers (`pagesDeploy`, `workerDeploy`,
+- `electron/cloudflare-api.cjs`: request building (GET, POST, DELETE), `NARROW` and `narrowToken`, errors, reading Cloudflare's answers (`pagesDeploy`, `workerDeploy`,
   `pagesUrl`, `workerUrl`, `pagesGit`) and the folder's wrangler config (`wranglerOf`).
 - `electron/preload.cjs`: `window.threadboard.cloudflare`.
 - `lib/cloudflare-view.ts`: types, the bridge, matching, labels. `lib/use-cloudflare.ts`: loading.

@@ -15,13 +15,44 @@ class CloudflareError extends Error {
 // Cloudflare's codes for a token that's malformed, unknown or revoked (not one missing a permission).
 const BAD_TOKEN = new Set([6003, 6111, 9106, 9109, 1000]);
 
-// One GET: the URL (query in it) and fetch's options.
-/** @param {string} pathname @param {{ auth: string, query?: Record<string, unknown> }} options */
-function request(pathname, { auth, query = {} }) {
+// One request: the URL (query in it) and fetch's options; a GET unless a method is given, with a JSON body.
+/** @param {string} pathname @param {{ auth: string, query?: Record<string, unknown>, method?: string, body?: unknown }} options */
+function request(pathname, { auth, query = {}, method = "GET", body }) {
   const url = new URL(API + pathname);
   for (const [k, v] of Object.entries(query)) url.searchParams.set(k, String(v));
-  return { url, init: { method: "GET", headers: { Authorization: `Bearer ${auth}` } } };
+  const headers = { Authorization: `Bearer ${auth}` };
+  if (body === undefined) return { url, init: { method, headers } };
+  return { url, init: { method, headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(body) } };
 }
+
+// What Weft's own token may do, in every account you have: read the account, edit Workers and Pages (for
+// secrets and deploys from the drawer), read Workers logs. Each entry is the permission group's names
+// (Cloudflare has called some two ways); the first three must be there for the token to be any use.
+const NARROW = [
+  { names: ["Account Settings Read"], needed: true },
+  { names: ["Workers Scripts Write", "Workers Scripts Edit"], needed: true },
+  { names: ["Pages Write", "Cloudflare Pages Edit"], needed: true },
+  { names: ["Workers Tail Read"], needed: false },
+];
+const ACCOUNT_SCOPE = "com.cloudflare.api.account";
+
+// The ids of NARROW's permission groups among the ones a setup token can grant, or an error naming a
+// needed one Cloudflare doesn't offer.
+function narrowGroups(groups) {
+  const ids = [];
+  for (const want of NARROW) {
+    const group = (groups ?? []).find((g) => want.names.includes(g.name) && (g.scopes ?? [ACCOUNT_SCOPE]).includes(ACCOUNT_SCOPE));
+    if (group) ids.push({ id: group.id });
+    else if (want.needed) throw new CloudflareError(403, `Cloudflare doesn't offer "${want.names[0]}" to this token, so Weft can't make its own.`);
+  }
+  return ids;
+}
+
+// The token Weft makes for itself with a setup token: NARROW, in every account.
+const narrowToken = (name, groups) => ({
+  name,
+  policies: [{ effect: "allow", resources: { [`${ACCOUNT_SCOPE}.*`]: "*" }, permission_groups: narrowGroups(groups) }],
+});
 
 // What went wrong, from Cloudflare's envelope ({ success, errors: [{ code, message }], result }).
 function failureOf(status, data) {
@@ -92,4 +123,4 @@ function wranglerOf(folder) {
   return null;
 }
 
-module.exports = { API, CloudflareError, request, failureOf, pagesGit, workerRow, pagesRow, pagesDeploy, workerDeploy, pagesUrl, workerUrl, wranglerOf };
+module.exports = { API, CloudflareError, request, failureOf, narrowGroups, narrowToken, NARROW, pagesGit, workerRow, pagesRow, pagesDeploy, workerDeploy, pagesUrl, workerUrl, wranglerOf };

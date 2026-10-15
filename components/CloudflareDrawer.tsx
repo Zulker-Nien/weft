@@ -11,6 +11,7 @@ import {
   shownFolders,
   sourceLine,
   TOKEN_URL,
+  tokenSavedLine,
   unlinkedLine,
   type CloudflareBridge,
   type CloudflareDeployment,
@@ -80,9 +81,9 @@ export default function CloudflareDrawer({
         busy={busy}
         onSave={(token) =>
           change(async () => {
-            const { name } = await cloudflare.setToken(token);
+            const saved = await cloudflare.setToken(token);
             setProjects(null);
-            notify(`Signed in to Cloudflare: ${name}`);
+            notify(tokenSavedLine(saved));
           })
         }
         onForget={status.signedIn ? () => void change(() => cloudflare.forgetToken()) : undefined}
@@ -153,43 +154,49 @@ function Restart() {
   );
 }
 
+// Asks for a setup token (Cloudflare's "Create additional tokens" template): main makes Weft's own narrower
+// token with it and deletes it. A token you made for Workers and Pages yourself is kept as it is.
 function TokenForm({ error, busy, onSave, onForget }: { error: string | null; busy: boolean; onSave: (token: string) => Promise<void>; onForget?: () => void }) {
   const [token, setToken] = useState("");
   return (
     <form
-      className={BODY}
+      className="flex flex-col gap-3 px-3 py-3 text-[12.5px] leading-snug text-muted"
       onSubmit={(e) => {
         e.preventDefault();
         if (token.trim()) void onSave(token).then(() => setToken(""));
       }}
     >
       {error && <p className="rounded-md bg-danger-soft px-2 py-1.5 text-danger">{error}</p>}
-      <p>
-        Link this project to a Cloudflare Worker or Pages project with an API token from{" "}
-        <a
-          href={TOKEN_URL}
-          onClick={(e) => {
-            e.preventDefault();
-            window.threadboard?.openExternal(TOKEN_URL);
-          }}
-          className="text-accent underline"
-        >
-          dash.cloudflare.com/profile/api-tokens
-        </a>
-        . The &ldquo;Edit Cloudflare Workers&rdquo; template covers it. Weft keeps it in your Keychain; threads never see it.
-      </p>
+      <p className="text-[13.5px] font-medium text-ink">Connect Cloudflare</p>
+      <ol className="flex flex-col gap-2.5">
+        <li className="flex gap-2">
+          <Step n={1} />
+          <div className="flex min-w-0 flex-col items-start gap-1.5">
+            <span>
+              Create a setup token with the <b className="text-ink">Create additional tokens</b> template.
+            </span>
+            <button type="button" onClick={() => window.threadboard?.openExternal(TOKEN_URL)} className="rounded-md border border-line-strong px-2.5 py-1 text-[12px] text-ink hover:bg-sunken">
+              Open Cloudflare API tokens ↗
+            </button>
+          </div>
+        </li>
+        <li className="flex gap-2">
+          <Step n={2} />
+          <span>Paste it here. Weft makes its own token that can only edit Workers and Pages, then deletes the setup token.</span>
+        </li>
+      </ol>
       <input
         type="password"
         value={token}
         onChange={(e) => setToken(e.target.value)}
-        placeholder="Cloudflare API token"
+        placeholder="Paste the Cloudflare token"
         aria-label="Cloudflare API token"
         autoComplete="off"
-        className="rounded-md border border-line-strong bg-card px-2 py-1 text-[12px] text-ink"
+        className="w-full rounded-lg border border-line-strong bg-card px-3 py-2.5 font-mono text-[13.5px] text-ink"
       />
-      <div className="flex gap-1.5">
-        <button type="submit" disabled={busy || !token.trim()} className="rounded-md bg-accent px-2.5 py-1 text-[11.5px] font-medium text-on-accent disabled:opacity-40">
-          {busy ? "Checking…" : "Save token"}
+      <div className="flex items-center gap-1.5">
+        <button type="submit" disabled={busy || !token.trim()} className="rounded-lg bg-accent px-3.5 py-1.5 text-[12.5px] font-medium text-on-accent disabled:opacity-40">
+          {busy ? "Connecting…" : "Connect"}
         </button>
         {onForget && (
           <button type="button" onClick={onForget} disabled={busy} className={SMALL}>
@@ -197,8 +204,13 @@ function TokenForm({ error, busy, onSave, onForget }: { error: string | null; bu
           </button>
         )}
       </div>
+      <p className="text-[11.5px] text-faint">Weft keeps its token in your Keychain; threads never see it. A token you made for Workers and Pages yourself works too, kept as it is.</p>
     </form>
   );
+}
+
+function Step({ n }: { n: number }) {
+  return <span className="mt-px flex h-[18px] w-[18px] flex-none items-center justify-center rounded-full bg-sunken text-[11px] font-medium text-ink">{n}</span>;
 }
 
 function FolderSection({ folder: f, busy, onLink, onUnlink, onOpenUrl }: { folder: CloudflareFolder; busy: boolean; onLink: () => void; onUnlink: () => void; onOpenUrl: (url: string) => void }) {

@@ -3,8 +3,9 @@
 // each folder is linked to. Cloudflare has no link file of its own, so links live in Weft's data folder; a
 // folder's wrangler config only suggests one. Like the vault, it answers the board only.
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
-const { CloudflareError, failureOf, pagesGit, pagesDeploy, pagesRow, pagesUrl, request, workerDeploy, workerRow, workerUrl, wranglerOf } = require("./cloudflare-api.cjs");
+const { CloudflareError, failureOf, narrowToken, pagesGit, pagesDeploy, pagesRow, pagesUrl, request, workerDeploy, workerRow, workerUrl, wranglerOf } = require("./cloudflare-api.cjs");
 const { gitRemote, mustBeFolder, repoOf } = require("./vercel-project.cjs");
 
 const TOKEN_FILE = "cloudflare-token.json";
@@ -12,8 +13,18 @@ const LINKS_FILE = "cloudflare-links.json";
 const KINDS = ["worker", "pages"];
 // Pages lists its projects a page at a time; this many pages is plenty to pick from.
 const MAX_PAGES = 10;
+// A token Weft just made can take a moment to work everywhere: this many tries, a second apart.
+const NEW_TOKEN_TRIES = 3;
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function createCloudflare({ dataDir, safeStorage, fetch: fetchImpl = globalThis.fetch, remote = gitRemote }) {
+function createCloudflare({
+  dataDir,
+  safeStorage,
+  fetch: fetchImpl = globalThis.fetch,
+  remote = gitRemote,
+  host = os.hostname().replace(/\.local$/, ""),
+  sleep = pause,
+}) {
   const tokenFile = path.join(dataDir, TOKEN_FILE);
   const linksFile = path.join(dataDir, LINKS_FILE);
 
@@ -38,9 +49,9 @@ function createCloudflare({ dataDir, safeStorage, fetch: fetchImpl = globalThis.
   }
 
   // Cloudflare's whole answer: { success, errors, result, result_info }.
-  async function answer(pathname, { auth = token(), query } = {}) {
+  async function answer(pathname, { auth = token(), query, method, body } = {}) {
     if (!auth) throw new CloudflareError(401, "Add a Cloudflare token first.");
-    const { url, init } = request(pathname, { auth, query });
+    const { url, init } = request(pathname, { auth, query, method, body });
     const res = await fetchImpl(url, init);
     const data = await res.json().catch(() => ({}));
     if (!res.ok || data?.success === false) throw failureOf(res.status, data);
@@ -54,6 +65,36 @@ function createCloudflare({ dataDir, safeStorage, fetch: fetchImpl = globalThis.
     const list = (await call("/accounts", { auth, query: { per_page: 50 } })) ?? [];
     if (!list.length) throw new CloudflareError(403, "This token reaches no Cloudflare account. Give it Account access.");
     return list.map((a) => ({ id: a.id, name: a.name ?? a.id }));
+  }
+
+  // A just-made token's accounts, tried a few times while Cloudflare catches up.
+  async function newTokenAccounts(auth) {
+    for (let tryNo = 1; ; tryNo++) {
+      try {
+        return await accounts(auth);
+      } catch (err) {
+        if (tryNo >= NEW_TOKEN_TRIES) throw err;
+        await sleep(1000);
+      }
+    }
+  }
+
+  // A setup token (Cloudflare's "Create additional tokens" template) can list the permission groups a
+  // token may get; any other token can't, and this returns null for it. With one, Weft makes its own
+  // narrower token ("Weft on <this Mac>", NARROW in electron/cloudflare-api.cjs) and returns it with the
+  // setup token's id, so the setup token can be deleted once the new one is kept. A new token that doesn't
+  // work is deleted again.
+  async function fromSetupToken(setup) {
+    const groups = await call("/user/tokens/permission_groups", { auth: setup }).catch(() => null);
+    if (!groups) return null;
+    const { id: setupId } = await call("/user/tokens/verify", { auth: setup });
+    const made = await call("/user/tokens", { auth: setup, method: "POST", body: narrowToken(`Weft on ${host}`, groups) });
+    try {
+      return { value: made.value, setupId, list: await newTokenAccounts(made.value) };
+    } catch (err) {
+      await call(`/user/tokens/${made.id}`, { auth: setup, method: "DELETE" }).catch(() => {});
+      throw err;
+    }
   }
 
   // How the drawer names who you are: the account, or the first one and how many more.
@@ -134,15 +175,23 @@ function createCloudflare({ dataDir, safeStorage, fetch: fetchImpl = globalThis.
       return { signedIn, user: list ? { name: accountLabel(list) } : null, error, folders: rows };
     },
 
-    // Checks the token with Cloudflare before keeping it.
+    // Checks the token with Cloudflare before keeping it. A setup token isn't kept: Weft makes its own
+    // narrower token with it, keeps that, then deletes the setup token (setupDeleted says whether it could).
     async setToken(value) {
-      const auth = String(value ?? "").trim();
-      if (!auth) throw new Error("Paste a token from dash.cloudflare.com/profile/api-tokens.");
+      const given = String(value ?? "").trim();
+      if (!given) throw new Error("Paste a token from dash.cloudflare.com/profile/api-tokens.");
       if (!safeStorage.isEncryptionAvailable()) throw new Error("The Keychain isn't available, so Weft can't keep the token safely.");
-      const list = await accounts(auth);
+      const made = await fromSetupToken(given);
+      const auth = made?.value ?? given;
+      const list = made?.list ?? (await accounts(auth));
       fs.mkdirSync(dataDir, { recursive: true });
       fs.writeFileSync(tokenFile, JSON.stringify({ token: safeStorage.encryptString(auth).toString("base64"), savedAt: new Date().toISOString() }), { mode: 0o600 });
-      return { name: accountLabel(list) };
+      if (!made) return { name: accountLabel(list) };
+      const setupDeleted = await call(`/user/tokens/${made.setupId}`, { auth: given, method: "DELETE" }).then(
+        () => true,
+        () => false,
+      );
+      return { name: accountLabel(list), made: true, setupDeleted };
     },
 
     forgetToken() {

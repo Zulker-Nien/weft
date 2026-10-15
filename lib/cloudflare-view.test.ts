@@ -11,6 +11,7 @@ import {
   pickerList,
   shownFolders,
   sourceLine,
+  tokenSavedLine,
   unlinkedLine,
   type CloudflareBridge,
   type CloudflareFolder,
@@ -26,6 +27,12 @@ afterEach(() => {
 });
 
 describe("cloudflare-view", () => {
+  it("says what happened to a setup token after saving", () => {
+    expect(tokenSavedLine({ name: "Acme" })).toBe("Signed in to Cloudflare: Acme");
+    expect(tokenSavedLine({ name: "Acme", made: true, setupDeleted: true })).toBe("Signed in to Cloudflare: Acme. Weft made its own token and deleted the setup token.");
+    expect(tokenSavedLine({ name: "Acme", made: true, setupDeleted: false })).toContain("couldn't delete the setup token");
+  });
+
   it("finds the bridge, and when a restart would turn it on", () => {
     expect(cloudflareBridge()).toBeNull();
     expect(needsRestart(null, null)).toBe(false);

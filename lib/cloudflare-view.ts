@@ -69,14 +69,30 @@ export interface CloudflareProject {
 // window.threadboard.cloudflare, from electron/preload.cjs.
 export interface CloudflareBridge {
   status(folders: string[]): Promise<CloudflareStatus>;
-  setToken(token: string): Promise<{ name: string }>;
+  setToken(token: string): Promise<TokenSaved>;
   forgetToken(): Promise<{ signedIn: false }>;
   projects(): Promise<CloudflareProject[]>;
   link(folder: string, kind: CloudflareKind, accountId: string, name: string): Promise<{ linked: true; name: string }>;
   unlink(folder: string): Promise<{ linked: false }>;
 }
 
+// What setToken answers: the account it reaches, and when you pasted a setup token, that Weft made its own
+// token with it and whether the setup token is deleted.
+export interface TokenSaved {
+  name: string;
+  made?: boolean;
+  setupDeleted?: boolean;
+}
+
 export const TOKEN_URL = "https://dash.cloudflare.com/profile/api-tokens";
+
+// The toast after a token is saved. A setup token Weft couldn't delete is yours to delete.
+export function tokenSavedLine(saved: TokenSaved) {
+  const signedIn = `Signed in to Cloudflare: ${saved.name}`;
+  if (!saved.made) return signedIn;
+  if (saved.setupDeleted) return `${signedIn}. Weft made its own token and deleted the setup token.`;
+  return `${signedIn}. Weft made its own token, but couldn't delete the setup token: delete it at dash.cloudflare.com/profile/api-tokens.`;
+}
 
 export function cloudflareBridge(): CloudflareBridge | null {
   return (typeof window !== "undefined" && window.threadboard?.cloudflare) || null;
