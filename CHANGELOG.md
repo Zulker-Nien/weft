@@ -8,21 +8,45 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ## [Unreleased]
 
+### Fixed
+
+- The Supabase drawer counted a migration applied through the MCP (which stamps its own version) as not applied; it
+  now matches by name too and says how many sit under another version.
+
 ### Changed
+
+- The copilot is a lane on the right of the board instead of a card: minimized it's a column with what finished, what needs you, its latest reply and an ask box; open (⌘J or the ✨ button) it's the chat over a cockpit picture, the copilot in a flight helmet in the seat beside you, while the five columns narrow to stay in view.
 
 - Settings → Team looks like the rest of Settings (one card per section, a role pill and member count, email, role and Send invite on one line) and opens already loaded: the team is fetched as soon as you sign in. Invites default to Member instead of Owner, and the roster says "Owner", not "owner".
 
+- A thread's questions are asked the Claude Code way: numbered options with ↑/↓, number keys and Enter, checkboxes for multi-select, a tab per question plus a Submit tab (text typed there goes with the answers as a note on all of them; no separate Chat about this). The reply box is the only input (your own answer, or a note on your pick, sent to the CLI as annotations), text already in it carries over, and option previews show in the browser pane.
+
+- Cards take turns at `pnpm typecheck` and `pnpm lint` (and the pre-commit hook's tsc) instead of all checking the whole repo at once, and a new Bash guard sends a direct `npx tsc` or `eslint` through them; tsc and ESLint also skip leftover installs like `node_modules.npm-old`, cutting tsc's file count by 79%.
+
+- New thread: while Weft makes the thread, Start reads "Starting…" with a spinner (Add to backlog reads "Adding…"), and both buttons dim clearly, instead of just going quietly unclickable.
+- Weft now builds with pnpm (hoisted node_modules); run `pnpm install` instead of `npm install`.
+
 ### Added
 
+- **Migrate** in the Supabase drawer: starts a card that reviews the pending migrations, applies them on your OK and
+  renames local files to the versions Supabase recorded.
+
+- A glance rail beside the browser pane's page: one small card per turn of the open thread (a status dot, its first words, how long ago) and per page the pane showed, newest on top. Click one to scroll the chat to that turn and put the pane back on the page it showed then; scroll the chat and the turn at its top lights up. It hides in windows narrower than 980 px.
+- **Codex CLI backend**: choose Codex for a new thread, resume its saved session between turns, set its sandbox mode and reasoning effort, switch cards between Claude Code, puku-cli and Codex, and check its login status. Codex uses its own CLI tools; Weft's browser, board, secrets and webhook MCP tools and per-tool guards aren't available in Codex threads.
+- **Shortcuts discoverability**: Settings → Shortcuts now lists every shortcut in the app, grouped by
+  what they do, in addition to the rebindable dictation row; users landing here for help see the full
+  set without having to learn the `?` key first.
 - Weft teams on weft.zip: every account gets a workspace; owners and admins invite people by email, change roles and remove
   members at `/<workspace>/team`, and **Your team** in the account menu opens it in the pane (docs/architecture/teams.md).
+- Weft Pro: workspace billing on weft.zip (Stripe Checkout and portal), with a monthly Puku allowance in place of the daily
+  trial cap; Settings → Accounts shows your plan and usage.
 - weft.zip sign-in has its own cookie session (`/auth/sign-in`, `/auth/callback`, `/auth/sign-out`), so each visitor is their own account.
+- ▲ Vercel drawer: **Push all** sends every 🔐 vault value to the linked project, in every environment, behind one Touch ID.
 - `mcp__secrets__set_value`: a thread stores a secret it generated (a signing secret) into one of its 🔐 blanks after Touch ID,
   blanks only, value never echoed (`electron/vault-routes.cjs`, `POST /secrets/set`; docs/architecture/secrets.md).
 - Vercel drawer: pull plain env variables the 🔐 vault has no value for (never replacing one), and **Live pull from Vercel**,
   a team webhook relayed by the deployed Weft and Supabase that pulls them as they're added (`lib/vercel-hooks.ts`,
   `lib/vercel-relay.ts`; docs/architecture/vercel.md).
-- **Codex CLI backend**: choose Codex for a new thread, resume its saved session between turns, set its sandbox mode and reasoning effort, switch cards between Claude Code, puku-cli and Codex, and check its login status. Codex uses its own CLI tools; Weft's browser, board, secrets and webhook MCP tools and per-tool guards aren't available in Codex threads.
 - **Cloudflare setup token**: the Cloudflare drawer asks for a setup token ("Create additional tokens" template); Weft
   makes its own narrower token with it (account settings, Workers, Pages), keeps that in the Keychain and deletes the
   setup token. The token form is bigger, with numbered steps. A token you made yourself still works as before.
@@ -58,10 +82,20 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Fixed
 
+- **Editing one of Weft's prompts reaches idle threads**: the build fingerprint hashed the runner's source but not the text of the prompts it appends, so after an edit to `BROWSER_PROMPT`, `SECRETS_PROMPT` and the like an idle session kept the old prompt until it ended. Every pinned prompt now lives in one list (`WEFT_PINNED_PROMPTS`, `weftSystemPrompt()` in `lib/weft-prompts.ts`) whose content is part of `currentBuild()`, and a new first line names SOUL.md and AGENTS.md as the source of truth for Weft's identity and conventions.
+
+- **A message after an early Stop continues the conversation**: a card only learned its session id from the CLI's init, which puku can take 15s or more to send, so a thread stopped before then lost it and "continue" started a new conversation ("I don't have prior context"). Weft now picks a new conversation's id itself (`--session-id`) and keeps it on the card from the first message (`lib/runner-session.ts` open, `lib/runner.ts`); Claude Code cards had the same gap.
+
+- **Puku threads know where they are in any project**: Puku's gateway drops the system prompt a client sends, and puku-cli reads only PUKU.md, so a puku card outside Weft's folder started without its working directory, the project's CLAUDE.md/AGENTS.md, or Weft's thread prompt (no BOARD STATUS, pane or vault). Each puku CLI's first message now carries all three in a `<system-reminder>` (`lib/puku-context.ts`, docs/bug-fixes/015).
 - **`/weft:done` no longer leaves scratch files in the project**: each wrap-up's prompts, `tasks.json` and batch
   output go to its own `~/.weft/done/run-XXXXXX/` (`plugin/skills/done/scratch.sh`), removed at the end and pruned
   after a day, so they stay out of the commit pile and wrap-ups running at once can't overwrite each other's notes.
   The old in-repo paths (`.done-batch/`, `.scratch/`, `plugin/skills/done/{out,scratch}/`…) are gitignored.
+- **Puku login dialog no longer pops again after a successful browser sign-in**: a recent puku-cli update made
+  the credential visible to `auth status` only after the `auth login` child had already closed, so Weft's single
+  immediate re-check ran too early. `lib/login.ts` `onExit` now polls `auth status` every 3 s for up to 10 s
+  before declaring the login failed, so the dialog closes the moment the CLI sees the new credential and the
+  waiting card retries.
 - **No more "This thread is already running"**: a message that reaches a busy thread from its page (Tell me what
   to change, a failed commit's note) waits on the card as "after this turn" in the reply queue and goes as the turn
   ends. "Commit and run /done" on a busy card runs /done once its turn is over instead of failing.
@@ -101,7 +135,7 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
   counts them, blanks sort first within each environment, every blank row has a visible **Fill in** button
   and the hint under the name, the right-click menu's **Set Value…** becomes **Fill In Value…**, and the
   plain Add form's button reads **Add blank / Add N blanks** until a value is typed. `mcp__secrets__ask_add`
-  stays as the urgent path (drawer opens with the name filled in). `lib/secret-ask.ts` `ASK_PROMPT` is the
+  stays as the urgent path (an input for the key in the thread). `lib/secret-ask.ts` `ASK_PROMPT` is the
   new default, `electron/vault.cjs` `addBlanks` stores the hint and source, `lib/vault-view.ts` `saveLabel` /
   `blankTitle` / blank-first sort name the UI, `components/SecretRow.tsx` and `components/VaultParts.tsx`
   draw it. Older shells without `addBlank` keep the "type a value" form.

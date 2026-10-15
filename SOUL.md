@@ -166,7 +166,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `electron/vercel*.cjs` (`vercel-env.cjs`: 🔐 vault → Vercel env push, Touch ID per push, also `mcp__secrets__push_to_vercel`; and `pull()`: plain Vercel vars the vault lacks → vault, by hand or live: `lib/vercel-hooks.ts` + `app/api/vercel/hooks` make the team webhook and listen, `lib/vercel-relay.ts` + `app/api/vercel/webhook` relay it on the deployed Weft → `vercel_events` on Supabase → Realtime) + `lib/vercel-view.ts` + `lib/use-vercel.ts` + `lib/use-linked-status.ts` (the three drawers' cached status hook) + `components/Vercel*.tsx`: the ▲ Vercel drawer (token sealed
   in the Keychain, link or create a project as `.vercel/project.json`, latest deploy; docs/architecture/vercel.md).
 - `electron/supabase.cjs` + `lib/supabase-view.ts` + `lib/use-supabase.ts` + `components/Supabase*.tsx`: the Supabase drawer (its bolt
-  on the rail; token sealed in the Keychain, link a project as `supabase/.temp/project-ref`, state, unapplied migrations; docs/architecture/supabase.md).
+  on the rail; token sealed in the Keychain, link a project as `supabase/.temp/project-ref`, state, unapplied migrations matched by version then name;
+  `lib/supabase-migrate.ts` is the prompt of **Migrate**, the card that applies them on your OK; docs/architecture/supabase.md).
 - `electron/cloudflare*.cjs` + `lib/cloudflare-view.ts` + `lib/use-cloudflare.ts` + `components/Cloudflare*.tsx`: the Cloudflare drawer (its orange
   cloud on the rail; API token sealed in the Keychain, link a Worker or Pages project in `~/.weft/cloudflare-links.json`, best fit from the
   folder's wrangler config; docs/architecture/cloudflare.md).
@@ -176,11 +177,14 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   one IPC handler, a fresh `Menu` from the items the board sends, the click → resolve wiring behind a `setTimeout`
   (because click fires before the callback on macOS but not on every platform). `Menu` and `BrowserWindow` are
   injected so the test can pass mocks without a real Electron.
-- `lib/copilot.ts` + `lib/board-tools.ts`: the copilot thread and its `mcp__board__*` tools.
+- `lib/copilot.ts` + `lib/board-tools.ts`: the copilot thread and its `mcp__board__*` tools. `components/CopilotLane.tsx` +
+  `lib/copilot-lane.ts` + `lib/use-copilot-thread.ts`: its lane on the right of the board (minimized column or open chat over
+  `public/copilots/wingman.jpg`, the cockpit), open or minimized by `copilotLaneOpen()` in `lib/board-prefs.ts`; narrow columns
+  are `@container`s that drop thumbnails and header extras.
 - `lib/browser-tools.ts`: `mcp__browser__*` tools every thread gets.
 - Browser pane: `components/BrowserPane.tsx` draws the toolbar and the placeholder the native view (`electron/browser-pane.cjs`)
   lies over; `components/GlanceRail.tsx` + `lib/glance-rail.ts` + `lib/glance-events.ts` are the 72 px glance rail right of the page,
-  one mini per turn, synced with the chat by two window events (`glance:scroll-to`, `glance:pulse`) on rows tagged `data-turn` (docs/architecture/glance-rail.md).
+  one mini per turn and per page the pane showed (the thread's `open_url` calls plus pages opened by hand, in memory), synced with the chat by two window events (`glance:scroll-to`, `glance:pulse`) on rows tagged `data-turn` (docs/architecture/glance-rail.md).
 - `lib/board-view-tools.ts` + `electron/board-view.cjs` + `electron/control-server.cjs`: `mcp__board_view__*`, a thread's eyes and hands
   on the board window itself (screenshot, click, hover, type, read; fixed scripts, no arbitrary JS; `data-secret` reads as ‹secret›,
   `data-secret-action` can't be clicked) through the pane's token-guarded control server (docs/architecture/board-view.md).
@@ -228,7 +232,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - `email-forwarding.md` — `weft.zip` mail → Resend → Svix-signed `email.received` → one inbox.
   - `github-issues.md` — a project's open GitHub issues become Backlog cards, one direction, polled every 5 min, instant sync via the deployed relay.
   - `tags.md` — ★ star and tags (the GitHub-label-style rules, the catalog in `~/.weft/tags.json`, the 🏷 drawer, pills on the card); replaced the library.
-  - `glance-rail.md` — the browser pane's 72 px rail of one mini per turn, its dots and fallbacks, and the two events that sync it with the chat.
+  - `glance-rail.md` — the browser pane's 72 px rail of one mini per turn and per page, its dots, fallbacks and browser history, and the two events that sync it with the chat.
   - `board-view.md` — `mcp__board_view__*`: a thread's eyes and hands on the board window itself, fixed scripts, the token-guarded control server.
   - `keyboard-shortcuts.md` — the shortcut registry, the `?` sheet, tooltips, key badges, the `ModifierHint` component.
   - `themes.md` — System/Light/Dark and a scene (one of Weft's pictures behind the board with its own palette).
