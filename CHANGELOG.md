@@ -18,6 +18,7 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 ### Changed
 
 - The copilot is a lane on the right of the board instead of a card: minimized it's a column with what finished, what needs you, its latest reply and an ask box; open (⌘J or the ✨ button) it's the chat over a cockpit picture, the copilot in a flight helmet in the seat beside you, while the five columns narrow to stay in view.
+- The copilot's lane has three states now (Intercom-style hider): the default is a 36px pill pinned to the right edge (avatar, needs-you dot, news count, vertical "Copilot" label) so it doesn't eat board width; ⌘J cycles it to a 236px peek (the digest column) and then to the 520px chat. The peek auto-closes 6s after the mouse leaves; the columns keep their 170px floor when hidden, 120px when peek or open.
 
 - Settings → Team looks like the rest of Settings (one card per section, a role pill and member count, email, role and Send invite on one line) and opens already loaded: the team is fetched as soon as you sign in. Invites default to Member instead of Owner, and the roster says "Owner", not "owner".
 

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/client";
-import { COCKPIT, LANE_WIDTH, laneDigest } from "@/lib/copilot-lane";
+import { COCKPIT, LANE_WIDTH, type LaneState, laneDigest } from "@/lib/copilot-lane";
 import { isLive } from "@/lib/format";
 import { COPILOT_ID, type Card } from "@/lib/types";
 import { useCopilotThread } from "@/lib/use-copilot-thread";
@@ -34,27 +34,51 @@ function Status({ card }: { card: Card | null }) {
   return <span className="text-[11px] text-muted">{card.warm ? "Ready" : "Idle"}</span>;
 }
 
-// The copilot's lane on the right of the board. Minimized it's a column: what needs you, what finished
-// since you last asked, its latest reply, a peek into the cockpit and an ask box. Open, it's the chat
-// over the cockpit: you in the driver's seat of a hovercaddy, the copilot beside you.
+// The copilot's lane on the right of the board. Three states, like Intercom's hider: hidden is a 36px
+// pill pinned to the right edge, peek is the 236px digest column, open is the 520px chat over the
+// cockpit. The hider pill hovers into peek; the copilot needing you auto-expands into peek; ⌘J
+// cycles hidden → peek → open → hidden.
 export default function CopilotLane(props: {
-  open: boolean;
-  onToggle: () => void;
+  state: LaneState;
   cards: Card[];
   onOpenCard: (card: Card) => void;
+  onHide: () => void;
+  onPeek: () => void;
+  onOpen: () => void;
   toggleTip: string;
 }) {
   const { card, items, streaming, error, fail, send, newChat } = useCopilotThread();
   const live = card ? isLive(card) : false;
 
+  if (props.state === "hidden") {
+    return (
+      <aside
+        data-copilot-lane="hidden"
+        style={{ width: LANE_WIDTH.hidden }}
+        className="shrink-0 self-stretch border-l border-line-strong bg-sunken"
+      >
+        <Hider
+          card={card}
+          cards={props.cards}
+          items={items}
+          onPeek={props.onPeek}
+          onOpen={props.onOpen}
+          toggleTip={props.toggleTip}
+        />
+      </aside>
+    );
+  }
+
+  const isOpen = props.state === "open";
+
   const header = (
     <header className="relative flex shrink-0 items-center gap-2 px-2.5 py-2">
-      <Avatar size={props.open ? 30 : 26} />
+      <Avatar size={isOpen ? 30 : 26} />
       <div className="min-w-0 flex-1 leading-tight">
         <div className="text-[13px] font-semibold text-ink">Copilot</div>
         <Status card={card} />
       </div>
-      {props.open && live && (
+      {isOpen && live && (
         <button
           onClick={() => void api.stop(COPILOT_ID).catch(fail)}
           className="flex items-center gap-1 rounded-md bg-black/30 px-2 py-1 text-[11.5px] text-ink hover:bg-black/50"
@@ -62,7 +86,7 @@ export default function CopilotLane(props: {
           <Icon name="stop" size={11} /> Stop
         </button>
       )}
-      {props.open && (
+      {isOpen && (
         <button
           onClick={() => void newChat().catch(fail)}
           title="Start a new conversation"
@@ -72,28 +96,36 @@ export default function CopilotLane(props: {
         </button>
       )}
       <button
-        onClick={props.onToggle}
-        title={props.open ? `Minimize — ${props.toggleTip}` : `Open — ${props.toggleTip}`}
-        aria-label={props.open ? "Minimize the copilot" : "Open the copilot"}
+        onClick={props.onHide}
+        title={`Hide — ${props.toggleTip}`}
+        aria-label="Hide the copilot"
         className="grid h-6 w-6 place-items-center rounded-md bg-black/30 text-muted hover:bg-black/50 hover:text-ink"
       >
-        <Icon name={props.open ? "chevronRight" : "chevronLeft"} size={13} />
+        <Icon name="chevronRight" size={13} />
       </button>
     </header>
   );
 
-  if (!props.open) {
+  if (!isOpen) {
     return (
       <aside
-        data-copilot-lane="minimized"
-        style={{ width: LANE_WIDTH.minimized }}
+        data-copilot-lane="peek"
+        style={{ width: LANE_WIDTH.peek }}
         className="flex shrink-0 flex-col border-l border-line-strong bg-sunken"
       >
         {header}
-        <Minimized cards={props.cards} items={items} error={error} onOpen={props.onToggle} onOpenCard={props.onOpenCard} onAsk={(text) => {
-          props.onToggle();
-          send(text).catch(fail);
-        }} />
+        <Peek
+          cards={props.cards}
+          items={items}
+          error={error}
+          onHide={props.onHide}
+          onOpen={props.onOpen}
+          onOpenCard={props.onOpenCard}
+          onAsk={(text) => {
+            props.onOpen();
+            send(text).catch(fail);
+          }}
+        />
       </aside>
     );
   }
@@ -146,10 +178,66 @@ export default function CopilotLane(props: {
   );
 }
 
-function Minimized(props: {
+// The 36px pill pinned to the right edge: avatar, needs-you dot, count, rotated "Copilot" label. Hover
+// (or having news) auto-expands into peek; click opens the chat.
+function Hider(props: {
+  card: Card | null;
+  cards: Card[];
+  items: Parameters<typeof laneDigest>[1];
+  onPeek: () => void;
+  onOpen: () => void;
+  toggleTip: string;
+}) {
+  // The peeking digest, the same one the peek column shows, so the hider knows what to glance at.
+  const digest = laneDigest(props.cards, props.items);
+  const waiting = digest.needsYou.length;
+  const news = waiting + digest.finished;
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={props.onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          props.onOpen();
+        }
+      }}
+      title={`Open the copilot — ${props.toggleTip}`}
+      aria-label={`Open the copilot${news > 0 ? ` (${news} new)` : ""}`}
+      className="group flex h-full cursor-pointer flex-col items-center gap-2 px-1 py-3 hover:bg-sunken/80 focus:bg-sunken/80 focus:outline-none"
+    >
+      <div className="relative">
+        <Avatar size={26} />
+        {waiting > 0 && (
+          <span
+            aria-hidden="true"
+            className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-warn ring-2 ring-sunken"
+            title="The copilot needs you"
+          />
+        )}
+      </div>
+      {news > 0 && (
+        <span
+          aria-hidden="true"
+          className="rounded-full bg-warn px-1.5 text-[10px] font-bold leading-4 text-[#1a1410] tabular-nums"
+        >
+          {news}
+        </span>
+      )}
+      <span className="mt-auto select-none text-[10.5px] font-medium uppercase tracking-wider text-muted group-hover:text-ink [writing-mode:vertical-rl]">
+        Copilot
+      </span>
+    </div>
+  );
+}
+
+function Peek(props: {
   cards: Card[];
   items: Parameters<typeof laneDigest>[1];
   error: string | null;
+  onHide: () => void;
   onOpen: () => void;
   onOpenCard: (card: Card) => void;
   onAsk: (text: string) => void;
@@ -158,8 +246,21 @@ function Minimized(props: {
   const digest = laneDigest(props.cards, props.items);
   const waiting = digest.needsYou.length;
 
+  // The peek is the kind of pane you glance at, then look away. Auto-close 6s after the mouse leaves
+  // the peek, so the board reclaims the 236px without you having to find the ×.
+  const [armed, setArmed] = useState(true);
+  useEffect(() => {
+    if (!armed) return;
+    const id = window.setTimeout(props.onHide, 6000);
+    return () => window.clearTimeout(id);
+  }, [armed, props.onHide]);
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2 px-2 pb-2">
+    <div
+      className="flex min-h-0 flex-1 flex-col gap-2 px-2 pb-2"
+      onMouseEnter={() => setArmed(false)}
+      onMouseLeave={() => setArmed(true)}
+    >
       {props.error && <p className="rounded-md bg-danger-soft px-2 py-1.5 text-[11.5px] text-danger">{props.error}</p>}
       <div className="rounded-lg border border-accent/30 bg-accent-soft px-2.5 py-2 text-[12px] leading-snug text-ink">
         <span className="font-semibold text-accent">Since you last asked:</span> {digest.finished} finished
@@ -205,6 +306,7 @@ function Minimized(props: {
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
+          onFocus={() => setArmed(false)}
           placeholder="Ask the copilot…"
           className="w-full rounded-lg border border-line-strong bg-panel px-2.5 py-1.5 text-[12.5px] text-ink placeholder:text-faint focus:border-accent focus:outline-none"
         />

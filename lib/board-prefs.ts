@@ -28,8 +28,11 @@ export function setShowProgress(on: boolean) {
 }
 
 const LANE_COOKIE = "weft-copilot-lane";
+const PEEK_COOKIE = "weft-copilot-peek";
 
-// The copilot's lane on the right of the board: minimized (a column) by default, open is the chat.
+// The copilot's lane has three states (lib/copilot-lane.ts): hidden (the hider pill), peek (the digest
+// column), and open (the chat). The open state has its own cookie; the peek state has one too so it
+// sticks across reloads when you hover the hider and decide to look away.
 export function copilotLaneOpen(): boolean {
   if (typeof document === "undefined") return false;
   return new RegExp(`(?:^|; )${LANE_COOKIE}=1`).test(document.cookie);
@@ -37,6 +40,16 @@ export function copilotLaneOpen(): boolean {
 
 export function setCopilotLaneOpen(open: boolean) {
   document.cookie = `${LANE_COOKIE}=${open ? 1 : 0}; path=/; max-age=${10 * 365 * 24 * 60 * 60}; SameSite=Lax`;
+  window.dispatchEvent(new Event(EVENT));
+}
+
+export function copilotLanePeek(): boolean {
+  if (typeof document === "undefined") return false;
+  return new RegExp(`(?:^|; )${PEEK_COOKIE}=1`).test(document.cookie);
+}
+
+export function setCopilotLanePeek(peek: boolean) {
+  document.cookie = `${PEEK_COOKIE}=${peek ? 1 : 0}; path=/; max-age=${10 * 365 * 24 * 60 * 60}; SameSite=Lax`;
   window.dispatchEvent(new Event(EVENT));
 }
 

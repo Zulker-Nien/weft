@@ -2,7 +2,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   copilotLaneOpen,
+  copilotLanePeek,
   setCopilotLaneOpen,
+  setCopilotLanePeek,
   setShowBacklog,
   setShowProgress,
   showBacklog,
@@ -15,6 +17,7 @@ afterEach(() => {
   document.cookie = "weft-show-backlog=; path=/; max-age=0";
   document.cookie = "weft-show-progress=; path=/; max-age=0";
   document.cookie = "weft-copilot-lane=; path=/; max-age=0";
+  document.cookie = "weft-copilot-peek=; path=/; max-age=0";
 });
 
 describe("showBacklog", () => {
@@ -66,6 +69,22 @@ describe("copilotLaneOpen", () => {
   it("is minimized on the server, where there's no document", () => {
     vi.stubGlobal("document", undefined);
     expect(copilotLaneOpen()).toBe(false);
+  });
+});
+
+describe("copilotLanePeek", () => {
+  it("is hidden by default and follows setCopilotLanePeek", () => {
+    expect(copilotLanePeek()).toBe(false);
+    setCopilotLanePeek(true);
+    expect(document.cookie).toContain("weft-copilot-peek=1");
+    expect(copilotLanePeek()).toBe(true);
+    setCopilotLanePeek(false);
+    expect(copilotLanePeek()).toBe(false);
+  });
+
+  it("is hidden on the server, where there's no document", () => {
+    vi.stubGlobal("document", undefined);
+    expect(copilotLanePeek()).toBe(false);
   });
 });
 

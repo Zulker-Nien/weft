@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { columnMinWidth, laneDigest, lastAsked, lastReply } from "./copilot-lane";
+import { columnMinWidth, LANE_CYCLE, laneDigest, laneStateFromPrefs, lastAsked, lastReply } from "./copilot-lane";
 import type { Card, ThreadItem } from "./types";
 
 function card(over: Partial<Card>): Card {
@@ -18,8 +18,27 @@ function card(over: Partial<Card>): Card {
 }
 
 describe("columnMinWidth", () => {
-  it("lets columns narrow further when the lane is open", () => {
-    expect(columnMinWidth(true)).toBeLessThan(columnMinWidth(false));
+  it("keeps columns roomy when the lane is hidden, narrows them once peek or open", () => {
+    expect(columnMinWidth("hidden")).toBe(170);
+    expect(columnMinWidth("peek")).toBe(120);
+    expect(columnMinWidth("open")).toBe(120);
+  });
+});
+
+describe("laneStateFromPrefs", () => {
+  it("is hidden when both cookies are off, peek when peek is on, open when open is on", () => {
+    expect(laneStateFromPrefs(false, false)).toBe("hidden");
+    expect(laneStateFromPrefs(false, true)).toBe("peek");
+    expect(laneStateFromPrefs(true, false)).toBe("open");
+    expect(laneStateFromPrefs(true, true)).toBe("open");
+  });
+});
+
+describe("LANE_CYCLE", () => {
+  it("walks hidden → peek → open → hidden", () => {
+    expect(LANE_CYCLE.hidden).toBe("peek");
+    expect(LANE_CYCLE.peek).toBe("open");
+    expect(LANE_CYCLE.open).toBe("hidden");
   });
 });
 

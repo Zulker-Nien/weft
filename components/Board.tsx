@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { copilotLaneOpen, setCopilotLaneOpen, showBacklog, subscribeBoardPrefs } from "@/lib/board-prefs";
-import { columnMinWidth } from "@/lib/copilot-lane";
+import { copilotLaneOpen, copilotLanePeek, setCopilotLaneOpen, setCopilotLanePeek, showBacklog, subscribeBoardPrefs } from "@/lib/board-prefs";
+import { columnMinWidth, laneStateFromPrefs, LANE_CYCLE, type LaneState } from "@/lib/copilot-lane";
 import { api, mergeThread, type BrowserState, type MenuAction, type NewCardInput } from "@/lib/client";
 import { worktreeParent } from "@/lib/format";
 import { busyHere } from "@/lib/overlap";
@@ -58,7 +58,7 @@ import { NO_DRAG } from "@/lib/no-drag";
 // fails as its module loads, breaks only its own spot on the board.
 const AccountButton = guarded(() => import("./AccountButton"), { inline: true, what: "account button" });
 const CopilotButton = guarded(() => import("./CopilotButton"), { inline: true, what: "copilot button" });
-const CopilotLane = guarded(() => import("./CopilotLane"), { what: "copilot", className: "m-3 w-[236px] shrink-0 self-start" });
+const CopilotLane = guarded(() => import("./CopilotLane"), { what: "copilot", className: "self-stretch shrink-0" });
 const RestartChip = guarded(() => import("./RestartChip"), { inline: true, what: "restart chip" });
 const BrowserPane = guarded(() => import("./BrowserPane"), { what: "browser pane", className: "m-3 w-[360px] self-start" });
 const CardView = guarded(() => import("./CardView"), { what: "card" });
@@ -72,9 +72,9 @@ const NewCardDialog = guarded(() => import("./NewCardDialog"), { what: "New thre
 const SettingsDialog = guarded(() => import("./SettingsDialog"), { what: "settings", className: "fixed left-4 top-16 z-50" });
 const ShortcutsDialog = guarded(() => import("./ShortcutsDialog"), { what: "shortcuts sheet", className: "fixed left-4 top-16 z-50" });
 const TerminalDrawer = guarded(() => import("./TerminalDrawer"), { what: "terminal", className: "m-3" });
+const GlanceRail = guarded(() => import("./GlanceRail"), { what: "glance rail", className: "w-[72px] shrink-0" });
 const ThreadPanel = guarded(() => import("./ThreadPanel"), { what: "thread", className: "m-3 w-[360px] self-start" });
 const CommandPalette = guarded(() => import("./CommandPalette"), { what: "command palette", className: "fixed left-4 top-16 z-50" });
-const GlanceRail = guarded(() => import("./GlanceRail"), { what: "glance rail", className: "w-[72px] shrink-0" });
 
 // The browser pane's page beside the New thread dialog (not a card's).
 const NEW_THREAD_PANE = "new-thread";
@@ -407,8 +407,11 @@ export default function Board() {
   const { resume, all: resumeAll } = resumeActions(byColumn.get("review") ?? [], notify);
   // Backlog hides unless Settings turns it on, but never hides cards waiting in it.
   const backlogOn = useSyncExternalStore(subscribeBoardPrefs, showBacklog, () => false);
-  // The copilot's lane on the right: minimized (a column) or open (the chat).
+  // The copilot's lane has three states (lib/copilot-lane.ts): hidden (hider pill, default), peek
+  // (the 236px digest column), open (the 520px chat). ⌘J and the top bar button cycle through them.
   const laneOpen = useSyncExternalStore(subscribeBoardPrefs, copilotLaneOpen, () => false);
+  const lanePeek = useSyncExternalStore(subscribeBoardPrefs, copilotLanePeek, () => false);
+  const laneState: LaneState = laneStateFromPrefs(laneOpen, lanePeek);
   const visibleColumns = COLUMNS.filter(
     (c) => c.id !== "backlog" || backlogOn || cards.some((card) => card.column === "backlog" && !card.archived),
   );
@@ -678,9 +681,17 @@ export default function Board() {
 
   // The ✨ button, ⌘J and the palette open or minimize the copilot's lane on the right of the board;
   // only the global hotkey (⌃⌥Space) still opens its own window, for when the board is hidden.
+  // Cycles hidden → peek → open → hidden, so the user can stop at the digest instead of jumping past it.
   function toggleCopilot() {
+    setCopilotState(LANE_CYCLE[laneState]);
+  }
+
+  // Move the copilot's lane to a specific state. Closes the copilot card if it's open, so it doesn't
+  // overlap the new lane.
+  function setCopilotState(next: "hidden" | "peek" | "open") {
     if (selectedRef.current === COPILOT_ID) select(null);
-    setCopilotLaneOpen(!copilotLaneOpen());
+    setCopilotLaneOpen(next === "open");
+    setCopilotLanePeek(next === "peek");
   }
 
   // Moves a card for you, remembering it so the move doesn't chime.
@@ -761,7 +772,7 @@ export default function Board() {
         className={`flex shrink-0 items-center gap-3 border-b border-line bg-panel ${mac ? "app-drag mac-title-bar pr-4" : "px-4 py-2.5"}`}
       >
         <h1 className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-ink">
-          <img src="/logo.svg" alt="" width={18} height={18} />
+          <img src="/app-icon.png" alt="" width={18} height={18} />
           Weft
         </h1>
         <span className="text-[12px] text-muted">
@@ -874,7 +885,7 @@ export default function Board() {
                 onDrop={(e) => drop(column.id, e)}
                 onContextMenu={(e) => void onColumnMenu(column.id, e)}
                 // Columns narrow beside the copilot's lane, down to a floor, before the board scrolls.
-                style={{ minWidth: columnMinWidth(laneOpen) }}
+                style={{ minWidth: columnMinWidth(laneState) }}
                 className={`@container flex w-[264px] shrink flex-col rounded-xl border ${dragOver === column.id ? "border-accent bg-accent-soft" : "border-transparent bg-sunken"}`}
               >
                 <ColumnHeader
@@ -933,8 +944,16 @@ export default function Board() {
             );
           })}
         </main>
+        <CopilotLane
+          state={laneState}
+          cards={cards}
+          onOpenCard={openCard}
+          onHide={() => setCopilotState("hidden")}
+          onPeek={() => setCopilotState("peek")}
+          onOpen={() => setCopilotState("open")}
+          toggleTip={hint("copilot", "Copilot")}
+        />
 
-        <CopilotLane open={laneOpen} onToggle={toggleCopilot} cards={cards} onOpenCard={openCard} toggleTip={hint("copilot", "Copilot")} />
         {framed && <div style={NO_DRAG} className="fixed inset-0 z-30 bg-black/40" onClick={() => (showNew ? setShowNew(false) : select(null))} aria-hidden="true" />}
         <div style={framed ? { ...NO_DRAG, bottom: terminalOpen ? terminalHeight + 16 : undefined } : undefined} className={framed ? "fixed inset-4 z-40 flex overflow-hidden rounded-xl border border-line-strong bg-panel shadow-2xl" : "contents"}>
         {showNew ? (
@@ -977,13 +996,13 @@ export default function Board() {
         {browserOpen && (
           <BrowserPane
             desktop={desktop}
-            rail={<GlanceRail card={selected} hidden={showNew} items={thread} pageUrl={browser.url} />}
             state={browser}
             obscured={showSettings || showPalette || showHelp || Boolean(login) || menuOpen}
             width={browserWidth}
             onWidth={setBrowserWidth}
             onClose={showNew ? () => setShowNew(false) : selected ? () => select(null) : toggleBrowser}
             expanded={framed}
+            rail={<GlanceRail card={selected} hidden={showNew} items={thread} pageUrl={browser.url} />}
           />
         )}
         </div>

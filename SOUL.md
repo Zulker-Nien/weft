@@ -33,7 +33,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - tests before refactoring; small behavior-preserving steps
   - "make the change easy, then make the easy change"
   - name the smell (Long Function, Large Class, Duplicated Code, Feature Envy) before fixing it
-  - hotspots: components/Board.tsx (~1,050 lines), electron/main.cjs (~460). lib/runner.ts was split in five, each under 300.
+  - hotspots: components/Board.tsx (~1,080 lines), components/CopilotLane.tsx (~316, the three-state
+    lane on the right of the board), electron/main.cjs (~460). lib/runner.ts was split in five, each under 300.
     Pure logic already moved out: `lib/board-view.ts` (columns, project chips, chime/unseen rules) and
     `lib/turn.ts` (how a turn's result reads, cost, limits); Board's hooks into `lib/use-*.ts` (`use-now`,
     `use-toast`, `use-desktop-bridge`, `use-copilot-card`). Next: live events/chimes, view prefs, shortcuts, command palette.
@@ -178,8 +179,12 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   (because click fires before the callback on macOS but not on every platform). `Menu` and `BrowserWindow` are
   injected so the test can pass mocks without a real Electron.
 - `lib/copilot.ts` + `lib/board-tools.ts`: the copilot thread and its `mcp__board__*` tools. `components/CopilotLane.tsx` +
-  `lib/copilot-lane.ts` + `lib/use-copilot-thread.ts`: its lane on the right of the board (minimized column or open chat over
-  `public/copilots/wingman.jpg`, the cockpit), open or minimized by `copilotLaneOpen()` in `lib/board-prefs.ts`; narrow columns
+  `lib/copilot-lane.ts` + `lib/use-copilot-thread.ts`: its lane on the right of the board with three states,
+  like Intercom's hider: hidden (a 36px pill, the default), peek (a 236px digest column), open (a 520px chat
+  over `public/copilots/wingman.jpg`, the cockpit); ⌘J cycles them via `LANE_CYCLE` and the two
+  `weft-copilot-lane` / `weft-copilot-peek` cookies in `lib/board-prefs.ts`. The board's columns
+  keep their 170px floor when hidden and narrow to 120px when peek or open (`columnMinWidth(state)`);
+  the peek auto-closes 6s after the mouse leaves so the board reclaims the width. They
   are `@container`s that drop thumbnails and header extras.
 - `lib/browser-tools.ts`: `mcp__browser__*` tools every thread gets.
 - Browser pane: `components/BrowserPane.tsx` draws the toolbar and the placeholder the native view (`electron/browser-pane.cjs`)
