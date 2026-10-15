@@ -1,42 +1,229 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { createRef, type KeyboardEvent } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Question } from "@/lib/types";
-import QuestionForm from "./QuestionForm";
+import type { ComposerHandle } from "./Composer";
+import QuestionForm, { type QuestionFormHandle } from "./QuestionForm";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  delete (window as { threadboard?: unknown }).threadboard;
+});
 
-const QUESTIONS: Question[] = [
-  { question: "Which sign-in methods?", header: "Providers", multiSelect: true, options: [{ label: "GitHub", description: "" }, { label: "Google", description: "" }] },
-  { question: "Required?", header: "Required?", multiSelect: false, options: [{ label: "Optional", description: "" }, { label: "Required", description: "" }] },
+const ONE: Question[] = [
+  {
+    question: "Which layout?",
+    header: "Layout",
+    options: [
+      { label: "Sidebar", description: "Nav on the left", preview: "| Nav | Content |" },
+      { label: "Top bar", preview: "[ Nav ]\n Content" },
+    ],
+  },
 ];
 
-function setup() {
-  const onAnswer = vi.fn();
-  const onSkip = vi.fn();
-  render(<QuestionForm questions={QUESTIONS} onAnswer={onAnswer} onSkip={onSkip} />);
-  return { onAnswer, onSkip };
+const TWO: Question[] = [
+  { question: "Which sign-in methods?", header: "Providers", multiSelect: true, options: [{ label: "GitHub" }, { label: "Google" }] },
+  { question: "Required?", header: "Required", options: [{ label: "Optional" }, { label: "Required" }] },
+];
+
+// The reply box's composer, as the form sees it: a text box it reads, writes and clears.
+function fakeComposer(initial = "") {
+  let text = initial;
+  const focus = vi.fn();
+  const handle: ComposerHandle = {
+    focus,
+    read: () => text,
+    readText: () => text,
+    clear: () => (text = ""),
+    write: (markdown) => (text = markdown),
+    isEmpty: () => text === "",
+  };
+  return { handle, focus, get text() { return text; }, set text(t: string) { text = t; } };
 }
 
+function setup(questions: Question[], opts: { box?: string; readScope?: { directory: string; token: string }; previewUrl?: string } = {}) {
+  const box = fakeComposer(opts.box);
+  const composer = { current: box.handle };
+  const form = createRef<QuestionFormHandle>();
+  const onAnswer = vi.fn();
+  const onReadScope = vi.fn();
+  render(
+    <QuestionForm
+      ref={form}
+      cardId="c1"
+      composer={composer}
+      questions={questions}
+      readScope={opts.readScope}
+      previewUrl={opts.previewUrl}
+      onAnswer={onAnswer}
+      onReadScope={onReadScope}
+    />,
+  );
+  const key = (k: string, mods: Partial<KeyboardEvent> = {}) => {
+    let used = false;
+    act(() => {
+      used = form.current!.key({ key: k, metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...mods } as KeyboardEvent, box.text === "");
+    });
+    return used;
+  };
+  const enter = () => act(() => form.current!.enter());
+  return { box, onAnswer, onReadScope, key, enter };
+}
+
+const highlighted = () => screen.getAllByRole("option").findIndex((o) => o.querySelector(".text-accent")?.textContent === "❯");
+
 describe("QuestionForm", () => {
-  it("scrolls the questions but keeps the buttons outside the scroll area", () => {
-    setup();
-    const scroll = screen.getByText("Which sign-in methods?").closest(".overflow-y-auto");
-    expect(scroll).not.toBeNull();
-    expect(scroll!.contains(screen.getByText("Required?", { selector: "div" }))).toBe(true);
-    expect(scroll!.contains(screen.getByRole("button", { name: "Send answer" }))).toBe(false);
-    expect(scroll!.contains(screen.getByRole("button", { name: "Skip" }))).toBe(false);
+  it("sends a single question as soon as an option is clicked", () => {
+    const { onAnswer } = setup(ONE);
+    expect(screen.getByText("The agent has a question")).toBeTruthy();
+    fireEvent.click(screen.getByRole("option", { name: /Top bar/ }));
+    expect(onAnswer).toHaveBeenCalledWith({ "Which layout?": "Top bar" }, { "Which layout?": { preview: "[ Nav ]\n Content" } });
   });
 
-  it("asks for every question before sending, then sends the picks", async () => {
-    const { onAnswer } = setup();
-    await userEvent.click(screen.getByRole("button", { name: /GitHub/ }));
-    await userEvent.click(screen.getByRole("button", { name: "Send answer" }));
-    expect(screen.getByText("Answer “Required?” first.")).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: /Google/ }));
-    await userEvent.click(screen.getByRole("button", { name: /^Optional/ }));
-    await userEvent.click(screen.getByRole("button", { name: "Send answer" }));
-    expect(onAnswer).toHaveBeenCalledWith({ "Which sign-in methods?": "GitHub, Google", "Required?": "Optional" });
+  it("takes the box's text as your own answer, or as a note on your pick", () => {
+    const own = setup(ONE, { box: "A drawer instead" });
+    own.enter();
+    expect(own.onAnswer).toHaveBeenCalledWith({ "Which layout?": "A drawer instead" }, {});
+    expect(own.box.text).toBe("");
+    cleanup();
+    const noted = setup(ONE, { box: "but narrow" });
+    fireEvent.click(screen.getByRole("option", { name: /Sidebar/ }));
+    expect(noted.onAnswer).toHaveBeenCalledWith(
+      { "Which layout?": "Sidebar" },
+      { "Which layout?": { notes: "but narrow", preview: "| Nav | Content |" } },
+    );
+  });
+
+  it("moves with the arrows and picks by number or Enter, only while the box is empty", () => {
+    const { key, enter, onAnswer, box } = setup(ONE);
+    expect(highlighted()).toBe(0);
+    expect(key("ArrowDown")).toBe(true);
+    expect(highlighted()).toBe(1);
+    expect(key("ArrowUp")).toBe(true);
+    expect(key("ArrowUp")).toBe(true);
+    expect(highlighted()).toBe(1);
+    expect(key("ArrowLeft")).toBe(false); // one question: no tabs
+    expect(key("9")).toBe(false);
+    expect(key("x")).toBe(false);
+    expect(key("1", { metaKey: true })).toBe(false);
+    box.text = "typing";
+    expect(key("ArrowDown")).toBe(false);
+    box.text = "";
+    fireEvent.mouseEnter(screen.getByRole("option", { name: /Sidebar/ }));
+    expect(highlighted()).toBe(0);
+    enter();
+    expect(onAnswer).toHaveBeenCalledWith({ "Which layout?": "Sidebar" }, { "Which layout?": { preview: "| Nav | Content |" } });
+    // Sent: nothing more goes out.
+    expect(key("2")).toBe(false);
+    enter();
+    expect(onAnswer).toHaveBeenCalledTimes(1);
+  });
+
+  it("walks several questions as tabs, ticks multi-select, and reviews before sending", () => {
+    const { key, enter, onAnswer, box } = setup(TWO);
+    expect(screen.getByRole("button", { name: /Providers/ })).toBeTruthy();
+    // Multi-select: Enter on an empty box ticks the highlighted option and stays.
+    enter();
+    expect(screen.getByRole("option", { name: /GitHub/ }).getAttribute("aria-selected")).toBe("true");
+    expect(key(" ")).toBe(true);
+    expect(screen.getByRole("option", { name: /GitHub/ }).getAttribute("aria-selected")).toBe("false");
+    expect(key("2")).toBe(true);
+    fireEvent.click(screen.getByRole("option", { name: /GitHub/ }));
+    expect(screen.getByText("Which sign-in methods?")).toBeTruthy();
+    // Enter with picks moves on to the next unanswered question.
+    enter();
+    expect(screen.getByText("Required?", { selector: "p" })).toBeTruthy();
+    box.text = "if possible";
+    fireEvent.click(screen.getByRole("option", { name: /^2\.\s*Required/ }));
+    expect(screen.getByText("Review your answers")).toBeTruthy();
+    expect(screen.getByText("Google, GitHub")).toBeTruthy();
+    expect(screen.getByText("Note: if possible")).toBeTruthy();
+    expect(key("ArrowDown")).toBe(false); // the Submit tab has no options
+    enter();
+    expect(onAnswer).toHaveBeenCalledWith(
+      { "Which sign-in methods?": "Google, GitHub", "Required?": "Required" },
+      { "Required?": { notes: "if possible" } },
+    );
+  });
+
+  it("keeps each question's text with it across tabs, and sends you back to one left unanswered", () => {
+    const { key, enter, onAnswer, box } = setup(TWO);
+    box.text = "SSO too";
+    fireEvent.click(screen.getByRole("button", { name: /Required/ }));
+    expect(box.text).toBe("");
+    expect(key("ArrowLeft")).toBe(true);
+    expect(box.text).toBe("SSO too");
+    box.text = "";
+    expect(key("ArrowRight")).toBe(true);
+    expect(key("ArrowRight")).toBe(true);
+    expect(screen.getAllByText("not answered")).toHaveLength(2);
+    enter();
+    expect(onAnswer).not.toHaveBeenCalled();
+    expect(screen.getByText(/Answer “Providers” first/)).toBeTruthy();
+    expect(screen.getByText("Which sign-in methods?")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Submit/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Providers:/ }));
+    expect(screen.getByText("Which sign-in methods?")).toBeTruthy();
+  });
+
+  it("has no Chat about this: text typed on the Submit tab goes with the answers as a note", () => {
+    const { key, enter, onAnswer, box } = setup(TWO);
+    expect(screen.queryByRole("button", { name: "Chat about this" })).toBeNull();
+    expect(key("1")).toBe(true);
+    enter();
+    expect(key("1")).toBe(true);
+    expect(screen.getByText("Review your answers")).toBeTruthy();
+    box.text = "Ship it behind a flag";
+    enter();
+    expect(onAnswer).toHaveBeenCalledWith(
+      { "Which sign-in methods?": "GitHub", "Required?": "Optional" },
+      { "Which sign-in methods?": { notes: "On all answers: Ship it behind a flag" } },
+    );
+    expect(box.text).toBe("");
+  });
+
+  it("reads the box as typed while an upload keeps it from reading as Markdown", () => {
+    const { box, enter, onAnswer } = setup(ONE, { box: "my own" });
+    box.handle.read = () => {
+      throw new Error("Still uploading");
+    };
+    enter();
+    expect(onAnswer).toHaveBeenCalledWith({ "Which layout?": "my own" }, {});
+  });
+
+  it("Type something focuses the box", () => {
+    const { box } = setup(ONE);
+    fireEvent.click(screen.getByRole("button", { name: /Type something/ }));
+    expect(box.focus).toHaveBeenCalled();
+  });
+
+  it("Read from grants the folder and answers with it", () => {
+    const { onAnswer, onReadScope } = setup(TWO, { readScope: { directory: "/dev/deckcp", token: "~/dev/deckcp" }, box: "the login page" });
+    fireEvent.click(screen.getByRole("option", { name: /GitHub/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Read from ~\/dev\/deckcp/ }));
+    expect(onReadScope).toHaveBeenCalledWith("/dev/deckcp");
+    expect(onAnswer).toHaveBeenCalledWith(
+      {
+        "Which sign-in methods?": "GitHub, You can read from /dev/deckcp — try again",
+        "Required?": "You can read from /dev/deckcp — try again",
+      },
+      {},
+    );
+    expect(screen.queryByRole("button", { name: /Read from/ })).toBeNull();
+  });
+
+  it("shows the highlighted option's preview in the browser pane, or under the options without one", () => {
+    const open = vi.fn(() => Promise.resolve());
+    (window as { threadboard?: unknown }).threadboard = { browser: { open } };
+    const { key } = setup(ONE, { previewUrl: "file:///glance/c1-question.html" });
+    expect(open).toHaveBeenLastCalledWith("file:///glance/c1-question.html#0-0", "c1");
+    key("ArrowDown");
+    expect(open).toHaveBeenLastCalledWith("file:///glance/c1-question.html#0-1", "c1");
+    expect(screen.queryByText("| Nav | Content |")).toBeNull();
+    cleanup();
+    delete (window as { threadboard?: unknown }).threadboard;
+    setup(ONE);
+    expect(screen.getByText("| Nav | Content |")).toBeTruthy();
   });
 });

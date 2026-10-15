@@ -4,26 +4,28 @@ import { useEffect, useState, type ReactNode } from "react";
 import { setShowBacklog, setShowProgress, showBacklog, showProgress } from "@/lib/board-prefs";
 import { api } from "@/lib/client";
 import {
-  SETTINGS_NAV,
-  firstTab,
-  navSectionOf,
-  rememberTab,
-  rememberedTab,
-  sectionOf,
-  unsavedSections,
-  unsavedTabs,
-  type SettingsSection,
-  type SettingsTab,
+  SETTINGS_PAGES,
+  pageInfo,
+  rememberPage,
+  rememberedPage,
+  settingsScene,
+  unsavedPages,
+  type SettingsPage,
 } from "@/lib/settings-nav";
+import { sceneUrl, type Base, type Scene } from "@/lib/theme";
 import type { Automation, Backend, PermissionMode, SettingsView } from "@/lib/types";
 import AccountSettings from "./AccountSettings";
 import AppearancePicker from "./AppearancePicker";
 import AutomationSettings from "./AutomationSettings";
 import CliLogins from "./CliLogins";
 import DonePicker from "./DonePicker";
-import { Spinner } from "./Icon";
+import Icon, { Spinner } from "./Icon";
+import LaptopModeCard from "./LaptopModeCard";
+import TeamSettings from "./TeamSettings";
 import Modal from "./Modal";
+import { SELECT_CLASS } from "./ModelSelect";
 import ModePicker from "./ModePicker";
+import NewThreadDefaults from "./NewThreadDefaults";
 import ShortcutSettings from "./ShortcutSettings";
 import SoundSettings from "./SoundSettings";
 import SubagentPicker from "./SubagentPicker";
@@ -36,40 +38,68 @@ const KEEP_ALIVE: { minutes: number; label: string }[] = [
   { minutes: 15, label: "15 minutes" },
 ];
 
-// The tabs whose settings come from the server; the rest draw right away.
-const NEEDS_SETTINGS = new Set<SettingsTab>(["defaults", "instructions", "subagents", "rules", "done"]);
+// The pages whose settings come from the server; the rest draw right away.
+const NEEDS_SETTINGS = new Set<SettingsPage>(["models", "threads", "automations"]);
+
+// A dark wash over a dark scene, a light one over a light scene, so the header and frosted cards read.
+const SCRIM: Record<Base, string> = {
+  dark: "linear-gradient(180deg, rgb(0 0 0 / 0.45), rgb(0 0 0 / 0.15) 35%, rgb(0 0 0 / 0.5))",
+  light: "linear-gradient(180deg, rgb(255 255 255 / 0.55), rgb(255 255 255 / 0.2) 35%, rgb(255 255 255 / 0.55))",
+};
+
+const TITLE = "text-[13px] font-medium text-ink";
+const HINT = "text-[12.5px] text-muted";
 
 function message(err: unknown) {
   return err instanceof Error ? err.message : String(err);
 }
 
-// A section's title and hint, stacked at the top of its content. The same shape wraps every setting here.
-function SectionHeader({
-  titleClass,
-  hintClass,
-  title,
-  hint,
-}: {
-  titleClass: string;
-  hintClass: string;
-  title: string;
-  hint: string;
-}) {
+function currentScene(): Scene {
+  const root = document.documentElement;
+  return settingsScene(root.dataset.scene ?? "", root.dataset.theme === "dark" ? "dark" : "light");
+}
+
+// The board's scene, following a pick in Appearance while Settings is open.
+function useScene(): Scene {
+  const [scene, setScene] = useState(currentScene);
+  useEffect(() => {
+    const watch = new MutationObserver(() => setScene(currentScene()));
+    watch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-scene", "data-theme"] });
+    return () => watch.disconnect();
+  }, []);
+  return scene;
+}
+
+// A setting's title and hint, stacked on the left of its row.
+function SectionHeader({ title, hint }: { title: string; hint: string }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <h3 className={titleClass}>{title}</h3>
-      <p className={hintClass}>{hint}</p>
+      <h3 className={TITLE}>{title}</h3>
+      <p className={HINT}>{hint}</p>
     </div>
   );
 }
 
-// The small accent dot on a nav item whose tab holds edits that wait for Save.
+// A frosted card over the scene, holding one group of settings. The card stops mousedown so
+// clicks on it (and its solid background) don't close the dialog as if they were the scene.
+function Card({ children }: { children: ReactNode }) {
+  return (
+    <div
+      onMouseDown={(e) => e.stopPropagation()}
+      className="flex flex-col gap-5 rounded-xl border border-line-strong bg-panel/85 p-5 shadow-lg backdrop-blur-xl"
+    >
+      {children}
+    </div>
+  );
+}
+
+// The small accent dot on a page whose edits wait for Save.
 function UnsavedDot() {
   return <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-label="Unsaved changes" />;
 }
 
-// Settings fills the window: main sections down the left, their tabs along the top, one tab's settings at a time.
-// Appearance, board, sound, shortcut and account changes apply right away; the rest wait for Save.
+// Settings fills the window over one of Weft's scenes: pages down the left, the open page's cards on the right.
+// Appearance, board, sound, shortcut, account and most model changes apply right away; the rest wait for Save.
 export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [settings, setSettings] = useState<SettingsView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -82,16 +112,12 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [saving, setSaving] = useState(false);
   const [backlog, setBacklog] = useState(showBacklog);
   const [progress, setProgress] = useState(showProgress);
-  const [tab, setTabState] = useState<SettingsTab>(rememberedTab);
-  // The tab last open in each section, so going back to a section lands where you were.
-  const [sectionTabs, setSectionTabs] = useState<Partial<Record<SettingsSection, SettingsTab>>>(() => ({
-    [sectionOf(rememberedTab())]: rememberedTab(),
-  }));
+  const [page, setPageState] = useState<SettingsPage>(rememberedPage);
+  const scene = useScene();
 
-  function setTab(next: SettingsTab) {
-    rememberTab(next);
-    setTabState(next);
-    setSectionTabs((m) => ({ ...m, [sectionOf(next)]: next }));
+  function setPage(next: SettingsPage) {
+    rememberPage(next);
+    setPageState(next);
   }
 
   useEffect(() => {
@@ -126,14 +152,13 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
   const keepAliveOptions = KEEP_ALIVE.some((o) => o.minutes === keepAlive)
     ? KEEP_ALIVE
     : [...KEEP_ALIVE, { minutes: keepAlive, label: `${keepAlive} minutes` }];
-  const dirtyTabs = unsavedTabs({
+  const dirty = unsavedPages({
     prompt: promptChanged,
     keepAlive: keepAliveChanged,
     mode: modeChanged,
     backend: defaultBackendChanged,
     rules: rulesChanged,
   });
-  const dirtySections = unsavedSections(dirtyTabs);
 
   async function save() {
     if (!settings) return;
@@ -159,203 +184,255 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
-  const sectionTitle = "text-[13px] font-medium text-ink";
-  const sectionHint = "text-[12.5px] text-muted";
-  const selectClass =
-    "rounded-md border border-line-strong bg-canvas px-2.5 py-[7px] text-[12.5px] text-ink outline-none focus:border-accent";
-  const section = navSectionOf(tab);
-
-  // What each tab draws. Tabs in NEEDS_SETTINGS only draw once the server's settings are in.
-  function body(s: SettingsView): Record<SettingsTab, ReactNode> {
-    return {
-      appearance: (
-        <section className="flex flex-col gap-2">
-          <SectionHeader titleClass={sectionTitle} hintClass={sectionHint} title="Appearance" hint="Changes right away. System follows your computer&apos;s setting; a scene puts its picture behind the board." />
-          <AppearancePicker />
-        </section>
-      ),
-      board: (
-        <>
-          <SwitchRow
-            title="Show backlog"
-            hint="A column for threads you add without starting. It still shows while cards wait in it."
-            on={backlog}
-            onChange={(on) => {
-              setShowBacklog(on);
-              setBacklog(on);
-            }}
-          />
-          <SwitchRow
-            title="Show progress"
-            hint="Your streak and level in the header, with badges and level-ups as toasts. Off is quiet mode."
-            on={progress}
-            onChange={(on) => {
-              setShowProgress(on);
-              setProgress(on);
-            }}
-          />
-        </>
-      ),
-      sounds: <SoundSettings titleClass={sectionTitle} hintClass={sectionHint} />,
-      shortcuts: <ShortcutSettings titleClass={sectionTitle} hintClass={sectionHint} />,
-      defaults: (
-        <>
-          <section className="flex items-center justify-between gap-4">
-            <SectionHeader titleClass={sectionTitle} hintClass={sectionHint} title="Default CLI" hint="What new threads start on. You can still switch mid-flight from a card&apos;s menu." />
-            <select value={defaultBackend} aria-label="Default CLI" onChange={(e) => { setDefaultBackend(e.target.value as Backend); setSaveError(null); }} className={selectClass}>
-              <option value="claude">Claude Code</option> <option value="puku">puku-cli</option>
-            </select>
-          </section>
-          <section className="flex items-center justify-between gap-4">
-            <SectionHeader titleClass={sectionTitle} hintClass={sectionHint} title="Default permission mode" hint="What a new thread starts in. You can still change it per thread." />
-            <ModePicker
-              value={mode}
-              onChange={(next) => {
-                setMode(next);
+  // What each page draws: a few cards. Pages in NEEDS_SETTINGS only draw once the server's settings are in.
+  function pageBody(s: SettingsView): ReactNode {
+    switch (page) {
+      case "general":
+        return (
+          <>
+            <Card>
+              <section className="flex flex-col gap-3">
+                <SectionHeader title="Appearance" hint="Changes right away. System follows your computer&apos;s setting; a scene puts its picture behind the board." />
+                <AppearancePicker />
+              </section>
+            </Card>
+            <Card>
+              <SwitchRow
+                title="Show backlog"
+                hint="A column for threads you add without starting. It still shows while cards wait in it."
+                on={backlog}
+                onChange={(on) => {
+                  setShowBacklog(on);
+                  setBacklog(on);
+                }}
+              />
+              <SwitchRow
+                title="Show progress"
+                hint="Your streak and level in the header, with badges and level-ups as toasts. Off is quiet mode."
+                on={progress}
+                onChange={(on) => {
+                  setShowProgress(on);
+                  setProgress(on);
+                }}
+              />
+            </Card>
+            <Card>
+              <SoundSettings titleClass={TITLE} hintClass={HINT} />
+            </Card>
+            <Card>
+              <LaptopModeCard />
+            </Card>
+          </>
+        );
+      case "models":
+        return (
+          <Card>
+            <NewThreadDefaults
+              backend={defaultBackend}
+              onBackend={(next) => {
+                setDefaultBackend(next);
                 setSaveError(null);
               }}
             />
-          </section>
-          <section className="flex items-center justify-between gap-4">
-            <SectionHeader titleClass={sectionTitle} hintClass={sectionHint} title="Keep conversations open" hint={`A thread's CLI stays open between messages so replies start right away.`} />
-            <select value={keepAlive} aria-label="Keep conversations open" onChange={(e) => { setKeepAlive(Number(e.target.value)); setSaveError(null); }} className={selectClass}>
-              {keepAliveOptions.map((o) => (
-                <option key={o.minutes} value={o.minutes}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </section>
-        </>
-      ),
-      instructions: (
-        <section className="flex min-h-0 flex-1 flex-col gap-2">
-          <SectionHeader
-            titleClass={sectionTitle}
-            hintClass={sectionHint}
-            title="Thread instructions"
-            hint={`Added to every thread's system prompt. The board reads the BOARD STATUS line it asks for, so keep that line's format.`}
-          />
-          <textarea
-            value={prompt}
-            spellCheck={false}
-            aria-label="Thread instructions"
-            onChange={(e) => {
-              setPrompt(e.target.value);
-              setSaveError(null);
-            }}
-            className="min-h-[240px] w-full flex-1 resize-none rounded-md border border-line-strong bg-canvas px-3 py-2 font-mono text-[12px] leading-relaxed text-ink outline-none focus:border-accent"
-          />
-          <div className="flex items-start justify-between gap-4">
-            <p className="text-[12px] text-faint">
-              Takes effect for threads that start after you save; threads already open keep their instructions.
-            </p>
-            <button
-              onClick={() => setPrompt(s.defaultThreadPrompt)}
-              disabled={isDefaultPrompt}
-              className="shrink-0 text-[12.5px] text-accent hover:underline disabled:text-faint disabled:no-underline"
-            >
-              Reset to default
-            </button>
-          </div>
-        </section>
-      ),
-      subagents: <SubagentPicker value={s.subagentModel} />,
-      rules: (
-        <AutomationSettings
-          rules={rules}
-          pushOnDone={s.pushOnDone}
-          onChange={(next) => {
-            setRules(next);
-            setSaveError(null);
-          }}
-        />
-      ),
-      done: <DonePicker model={s.doneModel} effort={s.doneEffort} />,
-      account: <AccountSettings titleClass={sectionTitle} hintClass={sectionHint} />,
-      clis: <CliLogins titleClass={sectionTitle} />,
-    };
+            <SubagentPicker value={s.subagentModel} />
+            <DonePicker model={s.doneModel} effort={s.doneEffort} />
+          </Card>
+        );
+      case "threads":
+        return (
+          <>
+            <Card>
+              <section className="flex items-center justify-between gap-4">
+                <SectionHeader title="Default permission mode" hint="What a new thread starts in. You can still change it per thread." />
+                <ModePicker
+                  value={mode}
+                  onChange={(next) => {
+                    setMode(next);
+                    setSaveError(null);
+                  }}
+                />
+              </section>
+              <section className="flex items-center justify-between gap-4">
+                <SectionHeader title="Keep conversations open" hint={`A thread's CLI stays open between messages so replies start right away.`} />
+                <select value={keepAlive} aria-label="Keep conversations open" onChange={(e) => { setKeepAlive(Number(e.target.value)); setSaveError(null); }} className={SELECT_CLASS}>
+                  {keepAliveOptions.map((o) => (
+                    <option key={o.minutes} value={o.minutes}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </section>
+            </Card>
+            <Card>
+              <section className="flex flex-col gap-2">
+                <SectionHeader
+                  title="Thread instructions"
+                  hint={`Added to every thread's system prompt. The board reads the BOARD STATUS line it asks for, so keep that line's format.`}
+                />
+                <textarea
+                  rows={18}
+                  value={prompt}
+                  spellCheck={false}
+                  aria-label="Thread instructions"
+                  onChange={(e) => {
+                    setPrompt(e.target.value);
+                    setSaveError(null);
+                  }}
+                  className="w-full resize-y rounded-md border border-line-strong bg-canvas px-3 py-2 font-mono text-[12px] leading-relaxed text-ink outline-none focus:border-accent"
+                />
+                <div className="flex items-start justify-between gap-4">
+                  <p className="text-[12px] text-faint">
+                    Takes effect for threads that start after you save; threads already open keep their instructions.
+                  </p>
+                  <button
+                    onClick={() => setPrompt(s.defaultThreadPrompt)}
+                    disabled={isDefaultPrompt}
+                    className="shrink-0 text-[12.5px] text-accent hover:underline disabled:text-faint disabled:no-underline"
+                  >
+                    Reset to default
+                  </button>
+                </div>
+              </section>
+            </Card>
+          </>
+        );
+      case "automations":
+        return (
+          <Card>
+            <AutomationSettings
+              rules={rules}
+              pushOnDone={s.pushOnDone}
+              onChange={(next) => {
+                setRules(next);
+                setSaveError(null);
+              }}
+            />
+          </Card>
+        );
+      case "shortcuts":
+        return (
+          <Card>
+            <ShortcutSettings titleClass={TITLE} hintClass={HINT} />
+          </Card>
+        );
+      case "accounts":
+        return (
+          <>
+            <Card>
+              <AccountSettings titleClass={TITLE} hintClass={HINT} />
+            </Card>
+            <Card>
+              <CliLogins titleClass={TITLE} />
+            </Card>
+          </>
+        );
+      case "team":
+        // TeamSettings draws its own cards, one per section.
+        return <TeamSettings />;
+    }
   }
 
   function content() {
-    if (settings === null && NEEDS_SETTINGS.has(tab)) {
-      if (loadError !== null) return <p className="text-[12.5px] text-danger">Couldn&apos;t load settings: {loadError}</p>;
+    if (settings === null && NEEDS_SETTINGS.has(page)) {
       return (
-        <div className="flex items-center justify-center gap-2 py-16 text-[13px] text-muted">
-          <Spinner /> Loading settings
-        </div>
+        <Card>
+          {loadError !== null ? (
+            <p className="text-[12.5px] text-danger">Couldn&apos;t load settings: {loadError}</p>
+          ) : (
+            <div className="flex items-center justify-center gap-2 py-10 text-[13px] text-muted">
+              <Spinner /> Loading settings
+            </div>
+          )}
+        </Card>
       );
     }
-    // The tabs drawn here before the server answers never read `settings`.
-    return body(settings ?? ({} as SettingsView))[tab];
+    // The pages drawn before the server answers never read `settings`.
+    return pageBody(settings ?? ({} as SettingsView));
   }
 
-  return (
-    <Modal title="Settings" onClose={onClose} className="h-full w-full">
-      <div className="flex min-h-0 flex-1">
-        <nav aria-label="Settings sections" className="flex w-[180px] shrink-0 flex-col gap-0.5 border-r border-line p-2">
-          {SETTINGS_NAV.map((s) => {
-            const active = s.id === section.id;
-            return (
-              <button
-                key={s.id}
-                type="button"
-                aria-current={active ? "page" : undefined}
-                onClick={() => setTab(firstTab(s.id, sectionTabs))}
-                className={`flex items-center justify-between gap-2 rounded-md px-3 py-1.5 text-left text-[13px] ${
-                  active ? "bg-line font-medium text-ink" : "text-muted hover:bg-sunken hover:text-ink"
-                }`}
-              >
-                {s.label}
-                {dirtySections.has(s.id) && <UnsavedDot />}
-              </button>
-            );
-          })}
-        </nav>
+  const open = pageInfo(page);
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div role="tablist" aria-label={section.label} className="flex shrink-0 gap-5 border-b border-line px-6">
-            {section.tabs.map((t) => {
-              const active = t.id === tab;
+  return (
+    <Modal
+      label="Settings"
+      onClose={onClose}
+      className="h-full w-full overflow-hidden"
+      style={{ background: `${SCRIM[scene.base]}, url(${sceneUrl(scene.id)}) center 62% / cover no-repeat, var(--canvas)` }}
+    >
+      <div
+        // The whole panel is the scene photo; a mousedown anywhere on it closes, like a backdrop.
+        // The panes below (header, row, footer) stop the event so clicks on them keep working.
+        onMouseDown={onClose}
+        className="flex h-full min-h-0 flex-col"
+      >
+        <div
+          onMouseDown={(e) => e.stopPropagation()}
+          className="flex shrink-0 items-center justify-between border-b border-line bg-panel/80 px-5 py-3 backdrop-blur-xl"
+        >
+          <h2 className="text-[15px] font-medium text-ink">Settings</h2>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-md p-1 text-muted hover:bg-sunken hover:text-ink"
+          >
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+
+        <div className="flex min-h-0 flex-1 gap-4 p-4">
+          <nav
+            aria-label="Settings pages"
+            onMouseDown={(e) => e.stopPropagation()}
+            className="flex w-[200px] shrink-0 flex-col gap-0.5 self-start rounded-xl border border-line-strong bg-panel/80 p-2 shadow-lg backdrop-blur-xl"
+          >
+            {SETTINGS_PAGES.map((p) => {
+              const active = p.id === page;
               return (
                 <button
-                  key={t.id}
+                  key={p.id}
                   type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => setTab(t.id)}
-                  className={`-mb-px flex items-center gap-1.5 border-b-2 py-2.5 text-[13px] ${
-                    active ? "border-accent font-medium text-ink" : "border-transparent text-muted hover:text-ink"
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => setPage(p.id)}
+                  className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-[13px] ${
+                    active ? "bg-accent-soft font-medium text-ink" : "text-muted hover:bg-sunken hover:text-ink"
                   }`}
                 >
-                  {t.label}
-                  {dirtyTabs.has(t.id) && <UnsavedDot />}
+                  {p.label}
+                  {dirty.has(p.id) && <UnsavedDot />}
                 </button>
               );
             })}
-          </div>
-          <div role="tabpanel" className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-5">
-            <div className="flex w-full max-w-[720px] flex-1 flex-col gap-6">{content()}</div>
+          </nav>
+
+          <div className="flex h-full min-h-0 min-w-0 max-w-[760px] flex-1 flex-col gap-4 overflow-y-auto pb-4 pr-2">
+            <div className="px-1 pt-1 [text-shadow:0_1px_8px_rgb(0_0_0/0.35)]">
+              <h2 className="text-[22px] font-semibold text-ink">{open.label}</h2>
+              <p className="text-[13px] text-ink/80">{open.hint}</p>
+            </div>
+            {content()}
           </div>
         </div>
-      </div>
 
-      <div className="flex shrink-0 items-center justify-end gap-2 border-t border-line px-5 py-3">
-        {saveError && <p className="mr-auto min-w-0 break-words text-[12.5px] text-danger">{saveError}</p>}
-        <button
-          onClick={onClose}
-          className="rounded-md border border-line-strong px-3 py-1.5 text-[13px] text-ink hover:bg-sunken"
+        <div
+          onMouseDown={(e) => e.stopPropagation()}
+          className="flex shrink-0 items-center justify-end gap-2 border-t border-line bg-panel/80 px-5 py-3 backdrop-blur-xl"
         >
-          Cancel
-        </button>
-        <button
-          onClick={() => void save()}
-          disabled={settings === null || saving}
-          className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-on-accent hover:opacity-90 disabled:opacity-50"
-        >
-          {saving && <Spinner size={12} />}
-          Save
-        </button>
+          {saveError && <p className="mr-auto min-w-0 break-words text-[12.5px] text-danger">{saveError}</p>}
+          <button
+            onClick={onClose}
+            className="rounded-md border border-line-strong px-3 py-1.5 text-[13px] text-ink hover:bg-sunken"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => void save()}
+            disabled={settings === null || saving}
+            className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-on-accent hover:opacity-90 disabled:opacity-50"
+          >
+            {saving && <Spinner size={12} />}
+            Save
+          </button>
+        </div>
       </div>
     </Modal>
   );

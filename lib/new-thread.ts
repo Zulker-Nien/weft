@@ -119,6 +119,15 @@ export function effortFor(backend: Backend, effort: Effort | "" | undefined): Ef
   return undefined;
 }
 
+// Settings → Models sets what the next new thread starts on; the New thread dialog keeps its own last pick the same way.
+export function setModelFor(backend: Backend, model: string) {
+  remember(`${LAST_MODEL}.${backend}`, model);
+}
+
+export function setLastEffort(effort: Effort | "") {
+  remember(LAST_EFFORT, effort);
+}
+
 // The last effort picked, High at first. Only the Claude CLI takes one.
 export function lastEffort(): Effort | "" {
   const saved = remembered(LAST_EFFORT);

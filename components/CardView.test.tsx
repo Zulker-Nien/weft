@@ -188,6 +188,33 @@ describe("CardView star", () => {
   });
 });
 
+describe("CardView archive", () => {
+  it("a Done card has an Archive button that calls onArchive without opening the card", async () => {
+    const onArchive = vi.fn();
+    const { onOpen } = renderCard({ column: "done" }, { onArchive });
+    await userEvent.click(screen.getByRole("button", { name: "Archive" }));
+    expect(onArchive).toHaveBeenCalledOnce();
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it("cards outside Done don't get an Archive button", () => {
+    renderCard({ column: "review" }, { onArchive: vi.fn() });
+    expect(screen.queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
+  });
+
+  it("an already-archived card gets an Unarchive button", async () => {
+    const onArchive = vi.fn();
+    renderCard({ column: "done", archived: true }, { onArchive });
+    await userEvent.click(screen.getByRole("button", { name: "Unarchive" }));
+    expect(onArchive).toHaveBeenCalledOnce();
+  });
+
+  it("has no archive button without a handler", () => {
+    renderCard({ column: "done" });
+    expect(screen.queryByRole("button", { name: /rchive/ })).not.toBeInTheDocument();
+  });
+});
+
 describe("CardView copilot", () => {
   const copilot = { id: "copilot", role: "copilot" as const, title: "Copilot", column: "review" as const };
 
@@ -246,7 +273,7 @@ describe("BackendBadge", () => {
 
   it("says the CLI until it knows the model", () => {
     render(<BackendBadge backend="puku" />);
-    expect(screen.getByText("puku")).toBeInTheDocument();
+    expect(screen.getByText("puku-cli")).toBeInTheDocument();
   });
 
   it("names the model and effort the CLI reported, or the card's own picks", () => {
@@ -300,6 +327,6 @@ describe("BackendPicker", () => {
   it("the copilot doesn't get a switcher — just the static badge", () => {
     render(<BackendPicker card={makeCard({ id: "copilot", backend: "claude", role: "copilot" })} />);
     expect(screen.queryByRole("button", { name: /Switch model/ })).not.toBeInTheDocument();
-    expect(screen.getByText("claude")).toBeInTheDocument();
+    expect(screen.getByText("Claude Code")).toBeInTheDocument();
   });
 });

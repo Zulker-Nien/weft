@@ -81,8 +81,12 @@ every API route shares it), and returns the running `Session`. `drive()` (`lib/r
 - `resume`: the existing `sessionId` (or unset for new cards)
 - `forkSession`: true when Weft continues a session that's open elsewhere
 - `permissionMode`: `default` / `acceptEdits` / `auto` / `bypassPermissions` (`MODES` in `lib/types.ts`)
-- `systemPrompt.preset: "claude_code"` with `BROWSER_PROMPT` + either `threadPrompt()`
-  (board threads) or `COPILOT_PROMPT` (the copilot)
+- `systemPrompt.preset: "claude_code"` appending `weftSystemPrompt(spec)` (`lib/weft-prompts.ts`, the one
+  place that lists what Weft injects): `WEFT_SOUL_PROMPT` + `BROWSER_PROMPT`, then either `COPILOT_PROMPT`
+  (the copilot) or the secrets, webhooks, restart, subagent, `threadPrompt()` and review prompts (board threads).
+  The content of every string in `WEFT_PINNED_PROMPTS`, plus the thread prompt and subagent model, is part of
+  `currentBuild()`, so editing any of them replaces idle sessions (busy ones finish first); the text is
+  memoized per that key
 - `mcpServers`: copilot gets `browser` and `board`; board threads get just `browser`
 - `plugins`: board threads load `plugin/` (`PLUGIN_DIR` in `lib/skills.ts`), Weft's own skills,
   so `/weft:done` and `/weft:commit` work in every thread. The packaged app ships the folder in

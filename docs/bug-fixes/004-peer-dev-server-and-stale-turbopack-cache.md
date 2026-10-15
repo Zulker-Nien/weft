@@ -114,9 +114,9 @@ crashes = [...crashes.filter((t) => now - t < RESTART_WINDOW_MS), now];
 if (crashes.length > MAX_RESTARTS) { ... }
 ```
 
-Defense in depth: the dev port is now **1000 everywhere**. `package.json` (`scripts.dev`) and `electron/main.cjs` (`PREFERRED_PORT` default) both use 1000; previously `npm run dev` used 3456 and the Electron app used 3457, so two dev servers in the same project on different ports were trivially easy to start (and for the project-wide guard to squash). With one port, the run script's `node electron/free-port.cjs 1000 .next` and the Electron app's own `freePort` call agree on the same target.
+Defense in depth: the dev port is now **1000 everywhere**. `package.json` (`scripts.dev`) and `electron/main.cjs` (`PREFERRED_PORT` default) both use 1000; previously `pnpm dev` used 3456 and the Electron app used 3457, so two dev servers in the same project on different ports were trivially easy to start (and for the project-wide guard to squash). With one port, the run script's `node electron/free-port.cjs 1000 .next` and the Electron app's own `freePort` call agree on the same target.
 
-**Verified:** with a stale `next-server` left over from a previous Weft session, a fresh launch reads the log, kills the squatter (`SIGTERM`), restarts once, and the board comes up. A `rm -rf .next && npm run dev` is no longer needed for the Turbopack cache case; the supervisor wipes `.next` itself on the next retry.
+**Verified:** with a stale `next-server` left over from a previous Weft session, a fresh launch reads the log, kills the squatter (`SIGTERM`), restarts once, and the board comes up. A `rm -rf .next && pnpm dev` is no longer needed for the Turbopack cache case; the supervisor wipes `.next` itself on the next retry.
 
 ## Key Rule
 

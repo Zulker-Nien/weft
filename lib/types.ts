@@ -52,7 +52,15 @@ export interface Question {
   question: string;
   header?: string;
   multiSelect?: boolean;
-  options: { label: string; description?: string }[];
+  // preview: a mockup or code snippet for the option, shown in the browser pane while it's highlighted.
+  options: { label: string; description?: string; preview?: string }[];
+}
+
+// What goes back with a question's answers: notes on a pick (and the preview it showed), keyed by question,
+// or, instead of answers, a message to talk it over ("Chat about this").
+export interface QuestionReply {
+  annotations?: Record<string, { notes?: string; preview?: string }>;
+  chat?: string;
 }
 
 export interface PendingPermission {
@@ -62,6 +70,11 @@ export interface PendingPermission {
   input: Record<string, unknown>;
   // Set when the agent asked questions instead of asking to use a tool.
   questions?: Question[];
+  // A folder outside the card's project that a question names, found on the server (lib/read-scope.ts
+  // stats the disk, so the client can't run it); the form offers "Read from <token>" for it.
+  readScope?: { directory: string; token: string };
+  // The page with the options' previews (lib/question-preview.ts); open it at #<question>-<option>.
+  previewUrl?: string;
 }
 
 // One plan rate-limit window: how much is used (0-100) and when it resets (unix seconds).
@@ -210,6 +223,11 @@ export interface Card {
   titleBy?: "user" | "auto";
   // ★: worth keeping. A starred card is never auto-archived.
   starred?: boolean;
+  // Directories the user has approved this thread to read from, beyond cwd (the card's project folder).
+  // Stored on the card so a resumed session keeps the read scope; passed to the SDK as
+  // additionalDirectories. A run-time `/add-dir` slash command isn't enough on its own — the path
+  // has to be a subdirectory of cwd or another already-granted directory at session launch.
+  readScope?: string[];
   // Short labels (lib/tags.ts), the same rules as GitHub labels so they sync with an issue's. Weft's
   // retitle picks them after a turn (tagsBy "auto") until you edit them (tagsBy "user").
   tags?: string[];
@@ -250,6 +268,9 @@ export type ThreadItem =
       action?: string;
       at: number;
       result?: string;
+      // Set when a long result was left out of the item (lib/cloud-sync-types.ts TOOL_RESULT_INLINE_MAX):
+      // its length, so the row can say how much it holds before it's fetched.
+      resultBytes?: number;
       // URLs of images the tool returned, like a screenshot.
       images?: string[];
       isError?: boolean;

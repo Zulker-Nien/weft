@@ -8,12 +8,14 @@ import { sendLaterOptions, type PlanResets } from "@/lib/schedule";
 import { useNow } from "@/lib/use-now";
 import type { Backend, ScheduledMessage } from "@/lib/types";
 import Composer, { type ComposerHandle } from "./Composer";
+import QuestionForm, { type QuestionFormHandle, type QuestionProps } from "./QuestionForm";
 import ReplyButtons from "./ReplyButtons";
 import { EditingNote, ReplyQueue } from "./ReplyQueue";
 import SendLater from "./SendLater";
 
 // While a turn runs, the box says the next message waits; idle, it shows the thread's suggested next message.
-function replyPlaceholder(live: boolean, suggestion: string | undefined, fallback: string) {
+function replyPlaceholder(live: boolean, suggestion: string | undefined, fallback: string, question: boolean) {
+  if (question) return "Type your own answer, or a note on your pick. Enter answers.";
   if (live) return "Working. Write the next message and it'll send when this turn is done.";
   return suggestion ? `${suggestion}  ⇥ Tab` : fallback;
 }
@@ -32,6 +34,7 @@ export default function ReplyBox({
   autoFocus,
   editLast,
   onEditing,
+  question,
   onSend,
   onShell,
   onStop,
@@ -59,6 +62,10 @@ export default function ReplyBox({
   editLast?: { text: string; canRewind: boolean; fileEdits: number; onEdit: (text: string) => Promise<void> };
   // Tells the thread when an edit starts or ends, so it can mark the message and the reply it replaces.
   onEditing?: (editing: boolean) => void;
+  // The agent asked a question (AskUserQuestion): it shows above the box, and the box is where you type your
+  // own answer or a note on your pick, so there's one place to write. Text already in the box carries over.
+  // key: the request, so each question starts fresh.
+  question?: QuestionProps & { key: string };
   onSend: (text: string) => Promise<void>;
   // Runs a "!" command (board threads; the copilot leaves it out, so "!" there is just text).
   onShell?: (command: string) => Promise<void>;
@@ -78,6 +85,7 @@ export default function ReplyBox({
   const [shell, setShell] = useState(() => Boolean(onShell) && isBang(initial));
   const now = useNow();
   const composer = useRef<ComposerHandle>(null);
+  const form = useRef<QuestionFormHandle>(null);
   const draftTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // The queued messages on their way out, numbered so each batch is sent exactly once.
@@ -280,6 +288,12 @@ export default function ReplyBox({
     }
   }
 
+  // Enter or Send: answers a waiting question (a "!" command still runs), else sends.
+  function send(now = false) {
+    if (question && form.current && !shell) form.current.enter();
+    else void submit(now);
+  }
+
   // Tab in an empty box takes the suggested next message, to edit or send.
   function takeSuggestion(e: KeyboardEvent) {
     const plainTab = e.key === "Tab" && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey;
@@ -296,6 +310,12 @@ export default function ReplyBox({
     <div
       className="border-t border-line p-3"
       onKeyDownCapture={(e) => {
+        // While a question waits, the arrows, numbers and space in an empty box move through its options.
+        if (question && form.current?.key(e, composer.current?.isEmpty() ?? true)) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
         // Alt+Enter opens Send later with the default time focused, so a second Enter schedules it.
         if (sendLater && e.key === "Enter" && e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
           e.preventDefault();
@@ -336,6 +356,7 @@ export default function ReplyBox({
         }
       }}
     >
+      {question && <QuestionForm {...question} key={question.key} ref={form} cardId={cardId} composer={composer} />}
       <ReplyQueue
         scheduled={scheduled}
         queue={queue}
@@ -355,8 +376,8 @@ export default function ReplyBox({
         cwd={cwd}
         initial={initial}
         autoFocus={autoFocus}
-        placeholder={replyPlaceholder(live, suggestion, placeholder)}
-        onSubmit={() => void submit()}
+        placeholder={replyPlaceholder(live, suggestion, placeholder, Boolean(question))}
+        onSubmit={() => send()}
         onChange={saveDraft}
         sizeClass="min-h-[44px] max-h-[40vh]"
         className={shell ? "border-warn! focus-within:border-warn!" : ""}
@@ -374,10 +395,11 @@ export default function ReplyBox({
             )}
             <ReplyButtons
               live={live}
+              answering={Boolean(question)}
               sending={sending}
               shell={shell}
               onStop={() => void onStop().catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))}
-              onSend={(now) => void submit(now)}
+              onSend={send}
             />
           </>
         }

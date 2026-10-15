@@ -7,13 +7,13 @@
 
 ## Symptom
 
-In `npm run desktop` (the dev Electron), clicking **Sign in → GitHub** opened Supabase's
+In `pnpm desktop` (the dev Electron), clicking **Sign in → GitHub** opened Supabase's
 authorize page in the system browser, the user clicked **Authorize** on GitHub, and
 Supabase redirected to `weft://account-callback?code=…`. The browser then showed a blank
 page; nothing happened on the Weft side. The board's `useAccount` polling never picked up
 a session, and the user had no way to know the link was being dropped by the OS.
 
-In a packaged build (`npm run dist`) the same flow worked, which made the dev/build split
+In a packaged build (`pnpm dist`) the same flow worked, which made the dev/build split
 look like the bug.
 
 ## Root cause
@@ -41,14 +41,14 @@ the running dev Electron sees the link in its argv. The Electron main's `second-
 handler pulls the link out with `argvLink()` and dispatches it to the existing
 `handleLink()` path.
 
-- `scripts/dev-protocol.cjs` (run by `npm run desktop` before Electron starts, and
-  standalone as `npm run dev:protocol`):
+- `scripts/dev-protocol.cjs` (run by `pnpm desktop` before Electron starts, and
+  standalone as `pnpm dev:protocol`):
   - Writes `~/Applications/Weft Dev.app/Contents/Info.plist` with the
     `CFBundleURLTypes` block declaring `weft`.
   - Writes `~/Applications/Weft Dev.app/Contents/MacOS/weft-dev`, a bash launcher that
     execs `node_modules/electron/dist/Electron.app/Contents/MacOS/Electron <project>
     --weft-link="$1"`.
-  - Idempotent: re-runs on every `npm run desktop`, skips the write when the file already
+  - Idempotent: re-runs on every `pnpm desktop`, skips the write when the file already
     matches.
   - Calls `lsregister -f <wrapper>` so a fresh `Info.plist` is picked up by
     LaunchServices.
@@ -65,8 +65,8 @@ handler pulls the link out with `argvLink()` and dispatches it to the existing
 - `electron/main.cjs` — `app.on("second-instance", …)` now calls `argvLink(argv,
   PROTOCOL)` and hands the result to the existing `handleLink()`. The macOS `open-url`
   path is unchanged.
-- `package.json` — `npm run desktop` runs `dev-protocol.cjs` before launching Electron.
-  A standalone `npm run dev:protocol` script runs it on its own (handy after editing
+- `package.json` — `pnpm desktop` runs `dev-protocol.cjs` before launching Electron.
+  A standalone `pnpm dev:protocol` script runs it on its own (handy after editing
   the wrapper or when an old wrapper is still on disk).
 
 The dev flow is now end-to-end: Supabase → `weft://account-callback` → wrapper at
@@ -89,7 +89,7 @@ in `second-instance` covers the cross-platform path that `open-url` doesn't.
 - `electron/argv-link.cjs` (new) — parses the link out of argv.
 - `electron/argv-link.test.ts` (new) — five tests.
 - `electron/main.cjs` — `second-instance` handler now uses `argvLink()`.
-- `package.json` — `npm run desktop` runs `dev-protocol` first; new `dev:protocol`
+- `package.json` — `pnpm desktop` runs `dev-protocol` first; new `dev:protocol`
   script.
 - `docs/architecture/account.md` — documents the redirect target, the wrapper, and
   the argv-link mechanism.

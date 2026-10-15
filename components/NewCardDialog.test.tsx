@@ -55,6 +55,17 @@ describe("NewCardDialog", () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 
+  it("says Starting… while the server makes the thread, with both buttons disabled", async () => {
+    const { onCreate, box } = setup();
+    let finish = () => {};
+    onCreate.mockImplementation(() => new Promise<void>((resolve) => (finish = resolve)));
+    await userEvent.type(box, "Slow start");
+    await userEvent.click(screen.getByRole("button", { name: "Start now" }));
+    expect(screen.getByRole("button", { name: "Starting…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Add to backlog" })).toBeDisabled();
+    await act(() => { finish(); return Promise.resolve(); });
+  });
+
   it("Add to backlog creates the card without starting it", async () => {
     const { onCreate, box } = setup();
     await userEvent.type(box, "Later idea");

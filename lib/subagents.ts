@@ -30,9 +30,9 @@ export function subagentLabel(model: SubagentModel): string {
   return label ? `${label} (${backend === "claude" ? "Claude" : backend === "puku" ? "Puku" : "Codex"})` : model;
 }
 
-const DELEGATE = `Use subagents (the Agent tool) more than you'd think: their file reads and long outputs stay out of this thread's context, and several run at once. Delegate when answering means reading across many files (the Explore agent), when the task splits into independent pieces (send them in one message so they run in parallel), for a test, lint or typecheck run where you only need the failures, and for a second-opinion review of a change you made. Do a single known lookup (one file, one grep) yourself. Give each subagent a self-contained prompt that says what to report back, and relay what matters: the user doesn't see its report.`;
+export const DELEGATE = `Use subagents (the Agent tool) more than you'd think: their file reads and long outputs stay out of this thread's context, and several run at once. Delegate when answering means reading across many files (the Explore agent), when the task splits into independent pieces (send them in one message so they run in parallel), for a test, lint or typecheck run where you only need the failures, and for a second-opinion review of a change you made. Do a single known lookup (one file, one grep) yourself. Give each subagent a self-contained prompt that says what to report back, and relay what matters: the user doesn't see its report.`;
 
-const CHOOSE = `Pick each subagent's model with the Agent tool's model input:
+export const CHOOSE = `Pick each subagent's model with the Agent tool's model input:
 - haiku: searches, file lookups, summarizing logs or test output, mechanical edits from a precise spec. Fast and cheap; the default for read-only fan-out.
 - sonnet: most coding work: a well-scoped change, writing tests, a code review, research that needs judgment.
 - opus: hard reasoning where a mistake is costly: architecture, subtle bugs, security review, a plan others will build from.

@@ -158,6 +158,26 @@ export function describeToolRun(calls: { action: string; target?: string }[], sh
   };
 }
 
+// How many words a card title is allowed to be. The user wants titles around 3–4 words; the rest of
+// the prompt is still in the thread, so a tight title is plenty to recognise the card on the board.
+export const TITLE_WORDS = 4;
+const LEADING_EMOJI = /^\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*/u;
+
+// A card title in 3–4 words: the leading emoji (if any) followed by the first TITLE_WORDS words, with
+// an ellipsis if it had more. Keeps the emoji the card's tile shows, drops nothing inside a line.
+export function shortTitle(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) return trimmed;
+  const match = LEADING_EMOJI.exec(trimmed);
+  const emoji = match?.[0] ?? "";
+  const rest = trimmed.slice(emoji.length).trim();
+  const words = rest.split(/\s+/).filter(Boolean);
+  if (words.length <= TITLE_WORDS && !emoji) return trimmed;
+  const kept = words.slice(0, TITLE_WORDS).join(" ");
+  const head = emoji ? `${emoji} ${kept}`.trim() : kept;
+  return words.length > TITLE_WORDS ? `${head.trimEnd()}…` : head;
+}
+
 // A card title from its prompt: the first line with words in it, without Markdown markup or pasted
 // media. A prompt that's only media is named after its first file.
 export function titleFromPrompt(prompt: string, max = 60) {
@@ -175,9 +195,13 @@ export function titleFromPrompt(prompt: string, max = 60) {
     .filter((l) => !/^\s*(```|~~~|---+\s*$)/.test(l))
     .map(clean)
     .find(Boolean);
-  if (line) return line.length > max ? `${line.slice(0, max - 1).trimEnd()}…` : line;
+  if (line) {
+    const short = shortTitle(line);
+    return short.length > max ? `${short.slice(0, max - 1).trimEnd()}…` : short;
+  }
   const media = /!\[([^\]\n]*)\]/.exec(prompt)?.[1]?.trim();
-  return media ? `Look at ${media}` : "New thread";
+  const named = media ? `Look at ${media}` : "New thread";
+  return shortTitle(named);
 }
 
 export function formatTokens(n: number) {

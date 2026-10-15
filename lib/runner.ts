@@ -13,7 +13,7 @@ import { answerPermission, settle } from "./runner-ask";
 import { adoptSpare, currentSession, open } from "./runner-session";
 import { withShellContext } from "./shell";
 import { switchSpare } from "./spare-switch";
-import { archiveAfter, CLI_NAMES, close, errorText, hooks, isBusy, loginWaiters, queued, safeUpdate, sessions, specFor } from "./runner-state";
+import { archiveAfter, CLI_NAMES, close, errorText, hooks, isBusy, loginWaiters, queued, safeUpdate, sessions, specFor, type Session } from "./runner-state";
 import { panePage } from "./pane-page";
 import { appendThread, foldThread, getCard, getThread, updateCard } from "./store";
 import type { Backend, Card, LoginTrial, PermissionMode } from "./types";
@@ -72,8 +72,16 @@ export function sendMessage(cardId: string, text: string, { echo = true, cli = t
   session.status = undefined;
   session.openedPane = false;
   session.turnSeq = (session.turnSeq ?? 0) + 1;
-  session.inbox.push(cli, promptId);
+  session.inbox.push(`${session.preamble ?? ""}${cli}`, promptId);
+  keepSessionId(cardId, session);
+  session.preamble = undefined;
   if (!session.spec.copilot) showStarter(cardId, card.title, text).catch(() => {});
+}
+
+// A new conversation's id is Weft's own (lib/runner-session.ts open), so the card keeps it from the first
+// message: stopped before the CLI's init, the next message still resumes this conversation.
+function keepSessionId(cardId: string, session: Session) {
+  if (!getCard(cardId)?.sessionId && session.sessionId && !session.spec.sessionId) updateCard(cardId, { sessionId: session.sessionId });
 }
 
 // The card's CLI for the next message: its open one, a copy when another app has the session, a spare, or a new one.
@@ -262,7 +270,20 @@ export function retryAfterLogin(backend: Backend) {
   }
 }
 
+// Drops the cards that were waiting on this CLI's login, so a cancelled login
+// doesn't drag the next card into the same loop when it hits the same auth error.
+export function clearLoginWaiters(backend: Backend) {
+  loginWaiters.delete(backend);
+}
+
 function needLogin(cardId: string, backend: Backend, message: string) {
+  // The CLI's last turn hit an auth error and persisted it into the session transcript. If we
+  // keep the card's sessionId, retryAfterLogin resumes the same session and puku-cli short-
+  // circuits on the cached authentication_failed entry instead of calling the API again —
+  // so the user can be logged in and the card still says "Not logged in". Drop the sessionId
+  // so the retry starts a fresh session.
+  const card = getCard(cardId);
+  if (card?.sessionId) updateCard(cardId, { sessionId: undefined });
   safeUpdate(cardId, {
     column: "needs_you",
     pending: null,

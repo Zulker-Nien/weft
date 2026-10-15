@@ -3,7 +3,7 @@
 // Info.plist and re-launches the real Electron from node_modules pointing at this project folder.
 // Needed because macOS only honours a custom URL scheme if the bundle's Info.plist declares it at
 // install time; the dev Electron.app (com.github.Electron) has no CFBundleURLTypes, so the OS
-// silently drops weft://account-callback clicks. Re-runs on every `npm run desktop` and is a no-op
+// silently drops weft://account-callback clicks. Re-runs on every `pnpm desktop` and is a no-op
 // when the wrapper is already current.
 
 const fs = require("node:fs");
@@ -19,7 +19,7 @@ const scheme = "weft";
 
 function ensureElectron() {
   if (!fs.existsSync(electronApp)) {
-    console.error(`dev-protocol: can't find ${electronApp} — run \`npm install\` first.`);
+    console.error(`dev-protocol: can't find ${electronApp} — run \`pnpm install\` first.`);
     process.exit(1);
   }
 }

@@ -8,9 +8,9 @@ thread. Read [SOUL.md](SOUL.md) first: it says what Weft values and where things
 ```bash
 git clone https://github.com/aimhuge/weft.git
 cd weft
-npm install
-npm run desktop     # Electron app: board + side browser
-npm run dev         # board only, at http://127.0.0.1:1024
+pnpm install
+pnpm desktop        # Electron app: board + side browser
+pnpm dev            # board only, at http://127.0.0.1:1024
 ```
 
 You need Node 20+ and a logged-in `claude` CLI (or `puku-cli`). Weft is macOS-first today.
@@ -18,12 +18,12 @@ You need Node 20+ and a logged-in `claude` CLI (or `puku-cli`). Weft is macOS-fi
 ## Before you open a PR
 
 ```bash
-npm run lint
-npm run typecheck
-npm test
+pnpm lint
+pnpm typecheck
+pnpm test
 ```
 
-`npm install` sets up a pre-commit hook that type-checks exactly what you staged, so a commit can't
+`pnpm install` sets up a pre-commit hook that type-checks exactly what you staged, so a commit can't
 import a file you forgot to `git add`.
 
 Tests are Vitest and sit beside the code as `lib/*.test.ts`. Add a test with any risky change,

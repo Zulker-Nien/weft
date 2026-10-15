@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cliEnv, guardedCli } from "./env";
+import { CHECK_GUARD_MATCHER } from "./check-guard";
 import { GIT_GUARD_MATCHER } from "./git-guard";
 import { IMPORT_GUARD_MATCHER } from "./import-check";
 import { ROUTE_IMPORT_GUARD_MATCHER } from "./route-import-guard";
@@ -114,7 +115,7 @@ describe("cliEnv", () => {
 });
 
 describe("guardedCli", () => {
-  it("starts a thread with the stripped env, the secret guard, the restart guard, the git guard, the route import guard, the import guard and symbol claims", () => {
+  it("starts a thread with the stripped env, the secret guard, the restart guard, the git guard, the check guard, the route import guard, the import guard and symbol claims", () => {
     vi.stubEnv("THREADBOARD_SHELL_TOKEN", "secret");
     const opts = guardedCli(() => 0, () => undefined);
     expect(opts.env).not.toHaveProperty("THREADBOARD_SHELL_TOKEN");
@@ -125,8 +126,9 @@ describe("guardedCli", () => {
     expect(pre[0]).toBe(SECRET_GUARD_MATCHER);
     expect(pre[1]?.matcher).toBe("Bash");
     expect(pre[2]).toBe(GIT_GUARD_MATCHER);
-    expect(pre[3]).toBe(ROUTE_IMPORT_GUARD_MATCHER);
-    expect(pre[4]?.matcher).toBe("Edit|MultiEdit|Write|NotebookEdit");
+    expect(pre[3]).toBe(CHECK_GUARD_MATCHER);
+    expect(pre[4]).toBe(ROUTE_IMPORT_GUARD_MATCHER);
+    expect(pre[5]?.matcher).toBe("Edit|MultiEdit|Write|NotebookEdit");
   });
 
   it("counts other cards' turns with the function it's given", async () => {

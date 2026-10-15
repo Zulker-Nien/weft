@@ -546,12 +546,25 @@ describe("POST /cards/:id/permission", () => {
   it("answers with allow, answers and pendingId", async () => {
     const res = await answer("c1", { allow: true, answers: { q: "a" }, pendingId: "p1" });
     expect(await body(res)).toEqual({ ok: true });
-    expect(runner.answerPermission).toHaveBeenCalledWith("c1", true, { q: "a" }, "p1");
+    expect(runner.answerPermission).toHaveBeenCalledWith("c1", true, { q: "a" }, "p1", undefined);
   });
 
   it("treats anything but allow: true as deny and drops malformed fields", async () => {
-    await answer("c1", { allow: "yes", answers: "nope", pendingId: 3 });
-    expect(runner.answerPermission).toHaveBeenCalledWith("c1", false, undefined, undefined);
+    await answer("c1", { allow: "yes", answers: "nope", pendingId: 3, annotations: "x", chat: 4 });
+    expect(runner.answerPermission).toHaveBeenCalledWith("c1", false, undefined, undefined, undefined);
+  });
+
+  it("passes a question's notes and Chat about this message, dropping malformed notes", async () => {
+    await answer("c1", {
+      allow: true,
+      answers: { q: "a" },
+      annotations: { q: { notes: "small", preview: "+-+" }, r: { notes: " ", preview: 3 }, s: null, t: "x" },
+    });
+    expect(runner.answerPermission).toHaveBeenLastCalledWith("c1", true, { q: "a" }, undefined, { annotations: { q: { notes: "small", preview: "+-+" } } });
+    await answer("c1", { allow: false, annotations: { r: {} }, chat: "let's talk" });
+    expect(runner.answerPermission).toHaveBeenLastCalledWith("c1", false, undefined, undefined, { chat: "let's talk" });
+    await answer("c1", { allow: false, chat: "   " });
+    expect(runner.answerPermission).toHaveBeenLastCalledWith("c1", false, undefined, undefined, undefined);
   });
 
   it("409s when there's nothing to answer, or bad JSON", async () => {
@@ -591,11 +604,11 @@ describe("POST /cards/:id/release", () => {
 });
 
 describe("GET /cards/:id/thread", () => {
-  it("loads the transcript and returns the items", async () => {
+  it("loads the transcript and returns the items, with start and total for paging", async () => {
     const card = addCard();
     db.threads.set(card.id, [{ kind: "user", text: "hi" }]);
     const res = await threadRoute.GET(req(`/cards/${card.id}/thread`), ctx(card.id));
-    expect(await body(res)).toEqual({ items: [{ kind: "user", text: "hi" }] });
+    expect(await body(res)).toEqual({ items: [{ kind: "user", text: "hi" }], start: 0, total: 1 });
     expect(importLib.loadTranscript).toHaveBeenCalledWith(card);
   });
 

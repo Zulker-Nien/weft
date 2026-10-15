@@ -4,7 +4,7 @@ import { useState } from "react";
 import { folderName, isLive } from "@/lib/format";
 import { useShortcutHint } from "@/lib/hotkeys";
 import type { PlanResets } from "@/lib/schedule";
-import type { Card, PermissionMode, ThreadItem } from "@/lib/types";
+import type { Card, PermissionMode, QuestionReply, ThreadItem } from "@/lib/types";
 import { BackendPicker } from "./CardView";
 import CrashGuard from "./CrashGuard";
 import { guarded } from "./guarded";
@@ -42,7 +42,7 @@ export default function ThreadPanel({
   items: ThreadItem[];
   streaming: string;
   onSend: (text: string) => Promise<void>;
-  onAnswer: (allow: boolean, answers?: Record<string, string>) => void;
+  onAnswer: (allow: boolean, answers?: Record<string, string>, reply?: QuestionReply) => void;
   onRelease: () => void;
   onArchive: () => void;
   // The ☆: star or unstar the card.

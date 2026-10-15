@@ -1,46 +1,33 @@
 import { describe, expect, it } from "vitest";
-import {
-  SETTINGS_NAV,
-  firstTab,
-  navSectionOf,
-  rememberTab,
-  rememberedTab,
-  sectionOf,
-  unsavedSections,
-  unsavedTabs,
-} from "./settings-nav";
+import { SETTINGS_PAGES, pageInfo, rememberPage, rememberedPage, settingsScene, unsavedPages } from "./settings-nav";
 
 const none = { prompt: false, keepAlive: false, mode: false, backend: false, rules: false };
 
 describe("settings nav", () => {
-  it("gives every tab one section", () => {
-    const ids = SETTINGS_NAV.flatMap((s) => s.tabs.map((t) => t.id));
+  it("lists each page once", () => {
+    const ids = SETTINGS_PAGES.map((p) => p.id);
     expect(new Set(ids).size).toBe(ids.length);
-    for (const s of SETTINGS_NAV)
-      for (const t of s.tabs) {
-        expect(sectionOf(t.id)).toBe(s.id);
-        expect(navSectionOf(t.id)).toBe(s);
-      }
+    expect(pageInfo("models").label).toBe("Models");
+    expect(pageInfo("team").label).toBe("Team");
   });
 
-  it("opens a section on its first tab unless one is remembered", () => {
-    expect(firstTab("threads")).toBe("defaults");
-    expect(firstTab("threads", { threads: "subagents" })).toBe("subagents");
+  it("marks the pages with unsaved edits", () => {
+    expect(unsavedPages(none).size).toBe(0);
+    expect([...unsavedPages({ ...none, backend: true })]).toEqual(["models"]);
+    expect([...unsavedPages({ ...none, mode: true })]).toEqual(["threads"]);
+    expect([...unsavedPages({ ...none, keepAlive: true })]).toEqual(["threads"]);
+    expect([...unsavedPages({ ...none, prompt: true, rules: true })]).toEqual(["threads", "automations"]);
   });
 
-  it("marks the tabs and sections with unsaved edits", () => {
-    expect(unsavedTabs(none).size).toBe(0);
-    expect([...unsavedTabs({ ...none, mode: true })]).toEqual(["defaults"]);
-    expect([...unsavedTabs({ ...none, keepAlive: true })]).toEqual(["defaults"]);
-    expect([...unsavedTabs({ ...none, backend: true })]).toEqual(["defaults"]);
-    const tabs = unsavedTabs({ ...none, prompt: true, rules: true });
-    expect([...tabs]).toEqual(["instructions", "rules"]);
-    expect([...unsavedSections(tabs)]).toEqual(["threads", "automations"]);
+  it("puts your scene behind Settings, else one that suits the palette", () => {
+    expect(settingsScene("canyon", "dark").id).toBe("canyon");
+    expect(settingsScene("", "dark").id).toBe("twin-suns");
+    expect(settingsScene("", "light").id).toBe("salt-flats");
   });
 
-  it("remembers the last tab", () => {
-    expect(rememberedTab()).toBe("appearance");
-    rememberTab("clis");
-    expect(rememberedTab()).toBe("clis");
+  it("remembers the last page", () => {
+    expect(rememberedPage()).toBe("general");
+    rememberPage("models");
+    expect(rememberedPage()).toBe("models");
   });
 });

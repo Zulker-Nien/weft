@@ -10,6 +10,8 @@ import {
   headline,
   lastEffort,
   modelFor,
+  setLastEffort,
+  setModelFor,
   modelLabel,
   problemWith,
   remember,
@@ -49,6 +51,13 @@ describe("modelFor", () => {
     expect(modelFor("puku")).toBe("opus-4.8");
     localStorage.setItem("weft.model.claude", "claude-haiku-5-5");
     expect(modelFor("claude")).toBe("claude-haiku-5-5");
+  });
+
+  it("takes the default Settings sets, with the effort beside it", () => {
+    setModelFor("puku", "puku-ai-2.7");
+    expect(modelFor("puku")).toBe("puku-ai-2.7");
+    setLastEffort("low");
+    expect(lastEffort()).toBe("low");
   });
 
   it("ignores a saved model the CLI no longer offers", () => {

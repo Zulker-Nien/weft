@@ -151,15 +151,26 @@ export const storeMock = (h: Harness) => ({
 
 export const busMock = (h: Harness) => ({ publish: (e: unknown) => h.publish.push(e) });
 // Hands back the restart guard's count of other running turns as options.otherTurns, for tests to call.
-export const envMock = () => ({
-  RESTART_PROMPT: "RESTART PROMPT",
+export const envMock = (restartPrompt = "RESTART PROMPT") => ({
+  RESTART_PROMPT: restartPrompt,
   guardedCli: (otherTurns: () => number) => ({ env: { PATH: "/usr/bin" }, hooks: { PreToolUse: [] }, otherTurns }),
 });
+// A dev reload after RESTART_PROMPT's text changed: the source of every runner function stays the same.
+export async function reloadWithEditedPrompt<T>(module: string): Promise<T> {
+  vi.resetModules();
+  vi.doMock("./env", () => envMock("RESTART PROMPT, edited"));
+  try {
+    return (await import(/* @vite-ignore */ module)) as T;
+  } finally {
+    vi.doMock("./env", () => envMock());
+  }
+}
 export const importMock = (h: Harness) => ({ isOpenElsewhere: () => h.openElsewhere, sessionFiles: () => h.sessionFiles });
 
 export const settingsMock = (h: Harness) => ({
   keepAliveMinutes: () => h.keepAlive,
   threadPrompt: () => "THREAD PROMPT",
+  DEFAULT_THREAD_PROMPT: "DEFAULT THREAD PROMPT",
   subagentModel: () => h.subagentModel,
   defaultPermissionMode: () => "bypassPermissions",
   touchProject: () => {},

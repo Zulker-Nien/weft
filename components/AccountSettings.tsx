@@ -4,6 +4,7 @@ import { useState } from "react";
 import { type AccountBusy, type AccountWaiting, PROVIDER_LABELS, useAccount } from "@/lib/use-account";
 import type { AccountProvider, AccountUser } from "@/lib/types";
 import Avatar from "./Avatar";
+import BillingStatus from "./BillingStatus";
 import { Spinner } from "./Icon";
 
 // How a signed-in user came in, from Supabase's app_metadata.provider.
@@ -109,6 +110,7 @@ export default function AccountSettings({ titleClass, hintClass }: { titleClass:
         <p className={hintClass}>Optional. Signing in turns on cloud features like page sync and share links.</p>
       </div>
       {body()}
+      {state.kind !== "loading" && state.kind !== "error" && state.view.configured && state.view.user && <BillingStatus />}
       {error && <p className="break-words text-[12.5px] text-danger">{error}</p>}
     </section>
   );

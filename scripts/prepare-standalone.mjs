@@ -54,7 +54,7 @@ for (const pkg of ["@anthropic-ai/claude-agent-sdk", platformPkg]) {
   const source = path.join(ROOT, "node_modules", pkg);
   const marker = pkg === platformPkg ? "claude" : "package.json";
   if (!fs.existsSync(path.join(target, marker))) {
-    if (!fs.existsSync(source)) fail(`${pkg} isn't installed in node_modules. Run npm install.`);
+    if (!fs.existsSync(source)) fail(`${pkg} isn't installed in node_modules. Run pnpm install.`);
     console.log(`Tracing missed ${pkg}; copying it in`);
     copyDir(source, target);
   }

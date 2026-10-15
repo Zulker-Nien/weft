@@ -123,7 +123,12 @@ describe("parseTitle", () => {
     expect(parseTitle("\n\n**✨ Polish**")).toBe("✨ Polish");
   });
 
-  it("cuts a long title and rejects an empty reply", () => {
+  it("clips to four words and ends in an ellipsis when longer", () => {
+    expect(parseTitle(`🐞 ${"a ".repeat(20).trimEnd()}`)).toBe("🐞 a a a a…");
+    expect(parseTitle("🐞 a a a a a a a a a a")).toBe("🐞 a a a a…");
+  });
+
+  it("cuts a long single-word title at the byte cap and rejects an empty reply", () => {
     expect(parseTitle(`🐞 ${"a".repeat(100)}`)).toHaveLength(60);
     expect(parseTitle(`🐞 ${"a".repeat(100)}`)!.endsWith("…")).toBe(true);
     expect(parseTitle("  \n ")).toBeUndefined();

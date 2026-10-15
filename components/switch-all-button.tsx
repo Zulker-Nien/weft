@@ -1,6 +1,8 @@
 import { useCallback, useState } from "react";
 import { api } from "@/lib/client";
+import { BACKENDS } from "@/lib/new-thread";
 import type { Backend, Card, Column } from "@/lib/types";
+import { BACKEND_LABELS } from "@/lib/types";
 import Icon from "./Icon";
 import Modal from "./Modal";
 import Tip from "./Tip";
@@ -93,8 +95,9 @@ export function useSwitchAll({ byColumn, setToast, notify }: { byColumn: Map<Col
       list.forEach((c) => {
         counts[c.backend]++;
       });
-      const target: Backend = counts.claude >= counts.puku ? "puku" : "claude";
-      const targetLabel = target === "puku" ? "puku-cli" : "Claude Code";
+      const mostCommon = BACKENDS.reduce((best, backend) => counts[backend.id] > counts[best.id] ? backend : best);
+      const target = BACKENDS[(BACKENDS.findIndex((backend) => backend.id === mostCommon.id) + 1) % BACKENDS.length]?.id ?? "claude";
+      const targetLabel = BACKEND_LABELS[target];
       const columnLabel = column.replace("_", " ");
       if (!window.confirm(`Switch ${list.length} thread${list.length > 1 ? "s" : ""} in ${columnLabel} to ${targetLabel}?`)) return;
       const first = await send(list.map((c) => c.id), target, targetLabel);

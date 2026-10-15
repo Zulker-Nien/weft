@@ -65,6 +65,17 @@ describe("readQuestions", () => {
     ]);
   });
 
+  it("keeps an option's preview, but not a blank or non-string one", () => {
+    const out = readQuestions({
+      questions: [{ question: "Q?", options: [{ label: "A", preview: "+--+" }, { label: "B", preview: "  " }, { label: "C", preview: 3 }] }],
+    });
+    expect(out?.[0]?.options).toEqual([
+      { label: "A", description: undefined, preview: "+--+" },
+      { label: "B", description: undefined },
+      { label: "C", description: undefined },
+    ]);
+  });
+
   it("treats multiSelect truthy but not literal true as false", () => {
     const out = readQuestions({
       questions: [

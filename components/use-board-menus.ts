@@ -2,7 +2,7 @@ import { useState } from "react";
 import { api } from "@/lib/client";
 import { cardMenu, columnMenu, resumeCommand, withAccelerators, type CardAction, type ColumnAction } from "@/lib/card-menu";
 import { toAccelerator, useShortcutList } from "@/lib/hotkeys";
-import type { Backend, Card, Column, DevServerStatus, PermissionMode } from "@/lib/types";
+import { BACKEND_LABELS, type Backend, type Card, type Column, type DevServerStatus, type PermissionMode } from "@/lib/types";
 
 // What the board's right-click menus act through: the same functions its buttons, drag and command palette use.
 export interface BoardMenuDeps {
@@ -75,7 +75,7 @@ export function useBoardMenus(deps: BoardMenuDeps) {
     const backend = action.slice(7) as Backend;
     const replay = Boolean(card.rateLimitHit);
     await api.switchBackend(card.id, backend, replay);
-    deps.toast(`Switched to ${backend === "puku" ? "puku-cli" : "Claude Code"}${replay ? " · replaying last message" : ""}.`);
+    deps.toast(`Switched to ${BACKEND_LABELS[backend]}${replay ? " · replaying last message" : ""}.`);
     return true;
   }
 

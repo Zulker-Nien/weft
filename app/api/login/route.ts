@@ -1,7 +1,7 @@
 import { connection } from "next/server";
 import { fail, guard } from "@/lib/guard";
 import { authStatus, cancelLogin, loginRuns, openLoginInTerminal, sendLoginInput, startLogin } from "@/lib/login";
-import { retryAfterLogin } from "@/lib/runner";
+import { clearLoginWaiters, retryAfterLogin } from "@/lib/runner";
 import type { Backend, LoginView } from "@/lib/types";
 
 const BACKENDS: Backend[] = ["claude", "puku", "codex"];
@@ -49,6 +49,10 @@ export async function POST(req: Request) {
       }
       case "cancel":
         cancelLogin(backend);
+        // The cancelled login's cards stay parked in needs_you. Clear them so
+        // the next card that hits the same auth error doesn't reopen this login
+        // and re-show the dialog.
+        clearLoginWaiters(backend);
         login = currentRun(backend);
         break;
     }

@@ -25,7 +25,7 @@ mail, and the deployed Weft on Vercel sends it on.
 
 ## Setting it up (once)
 
-- `scripts/resend-domain.mjs` (`npm run resend -- …`) talks to Resend's API through the vault (`mcp__secrets__run` with
+- `scripts/resend-domain.mjs` (`pnpm resend -- …`) talks to Resend's API through the vault (`mcp__secrets__run` with
   `RESEND_API_KEY`), so the key never shows in a thread: `create weft.zip` adds the domain with sending and receiving on
   and prints its DNS records; `verify weft.zip` asks Resend to check them; `status weft.zip` prints them; `webhook <url>`
   subscribes the route to `email.received`; `webhooks` lists them. It needs a **Full access** key: a sending-only key
@@ -58,5 +58,7 @@ path. Both at 100%.
 
 - Resend sends up to 40 MB per mail; a bigger set of attachments fails with 502, and Resend's retries fail the same way.
   The mail itself stays readable on resend.com.
-- One inbox for the whole domain: no per-alias routing, and no DMARC record yet.
+- One inbox for the whole domain: no per-alias routing. (DMARC `p=none` with a `rua` is now in place; mail
+  to `dmarc@`, `postmaster@`, and `abuse@` and their sub-addresses is dropped at the route, so a future `p=quarantine`
+  won't land its reports in the inbox.)
 - The forwarded mail is signed by weft.zip, not the sender's domain, so Gmail shows it as sent via weft.zip.

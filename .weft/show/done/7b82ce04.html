@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Run /weft:done model and effort picker — wrap-up</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    color: #1d1d1f;
+    background: linear-gradient(180deg, #fafafa 0%, #f3f3f5 100%);
+    padding: 28px 32px 64px;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: #6b6b70; font-size: 13px; margin-bottom: 24px; }
+  .commit {
+    display: flex; align-items: center; gap: 8px;
+    background: #1d1d1f; color: #fafafa;
+    padding: 8px 12px; border-radius: 8px; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12.5px; margin-bottom: 24px;
+  }
+  .commit code { color: #c8e6ff; }
+  .pill {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 600; letter-spacing: 0.02em;
+  }
+  .pill.ok { background: #d6f3df; color: #0a6630; }
+  .pill.skip { background: #f0f0f2; color: #6b6b70; }
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px; margin-bottom: 24px;
+  }
+  .stat {
+    background: white; border: 1px solid #e5e5e8; border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .stat .v { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .stat .k { color: #6b6b70; font-size: 12px; margin-top: 2px; }
+  section {
+    background: white; border: 1px solid #e5e5e8; border-radius: 10px;
+    padding: 16px 18px; margin-bottom: 16px;
+  }
+  h2 { font-size: 14px; margin: 0 0 10px; text-transform: uppercase;
+       letter-spacing: 0.05em; color: #6b6b70; font-weight: 600; }
+  ul { margin: 0; padding-left: 18px; }
+  li { margin: 3px 0; }
+  .finding {
+    padding: 10px 12px; border-left: 3px solid #d4d4d8;
+    background: #fafafa; border-radius: 0 6px 6px 0; margin-bottom: 8px;
+  }
+  .finding .l { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px;
+                color: #1d1d1f; }
+  .finding .s { color: #6b6b70; font-size: 12px; margin-top: 2px; }
+  .meta { color: #6b6b70; font-size: 12px; }
+</style>
+</head>
+<body>
+  <h1>📝 Add Run /weft:done model and effort picker</h1>
+  <div class="sub">Wrap-up · /weft:done · 2026-10-13</div>
+
+  <div class="commit">
+    <span class="pill ok">pushed</span>
+    <code>2ec17e3</code> feat(batch): webhooks, restart-when-idle, account/auth refactor, <strong>done picker</strong>, pane-error
+  </div>
+
+  <div class="grid">
+    <div class="stat"><div class="v">+9,317</div><div class="k">lines added</div></div>
+    <div class="stat"><div class="v">−598</div><div class="k">lines removed</div></div>
+    <div class="stat"><div class="v">168</div><div class="k">files in batch</div></div>
+    <div class="stat"><div class="v">3,500</div><div class="k">tests passing</div></div>
+    <div class="stat"><div class="v">✅</div><div class="k">lint clean</div></div>
+    <div class="stat"><div class="v">✅</div><div class="k">typecheck clean</div></div>
+  </div>
+
+  <section>
+    <h2>What changed (this session)</h2>
+    <ul>
+      <li><strong>Settings → Run /weft:done on …</strong> with a model and effort pair (<code>lib/settings.ts</code>, <code>components/DonePicker.tsx</code>, <code>components/ModelSelect.tsx</code>)</li>
+      <li>Empty pick = the card's own model and effort (default)</li>
+      <li>Snapshot fields <code>preDoneModel</code> / <code>preDoneEffort</code> on the card; <code>applyDoneOverride</code> in <code>app/api/cards/[id]/route.ts</code> patches the card right after the move to Done</li>
+      <li><code>lib/automations.ts</code> <code>doneOverrides()</code> — selective: model is dropped if its backend doesn't match the card's; effort always applied (stepped down via <code>effortFor</code> for puku)</li>
+      <li><code>lib/runner.ts</code> <code>restoreDoneOverride()</code> + <code>lib/runner-turn.ts</code> <code>finishResult()</code> hook — runs whether the turn succeeded, failed or was stopped</li>
+      <li>Round-trip storage in <code>app/api/settings/route.ts</code> with <code>validateDone(field, value)</code> helper</li>
+      <li>Type updates: <code>lib/types.ts</code> (<code>SettingsView</code>, <code>Card</code>), <code>lib/client.ts</code> (<code>saveSettings</code>)</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Docs touched</h2>
+    <ul>
+      <li><code>docs/architecture/threads-and-sessions.md</code> — new subsection "/weft:done's model and effort override" under "Queued messages (automations)", corrected by the docs agent to match the final selective behavior</li>
+      <li><code>SOUL.md</code> — file map entry under automations (<code>doneOverrides</code>) and subagents (ModelSelect); other entries expanded by the linter</li>
+      <li><code>CHANGELOG.md</code> — Unreleased "Added" entry for "Run /weft:done on …"</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Tests</h2>
+    <ul>
+      <li><code>lib/automations.test.ts</code> — 24 tests pass, including the new <code>doneOverrides</code> block</li>
+      <li><code>components/DonePicker.test.tsx</code> (new) — 4 tests: render+saves, "Card's own" default, saves a Puku model, rolls back on save error</li>
+      <li><code>lib/settings.test.ts</code> — round-trip and unknown-id</li>
+      <li><code>app/api/routes.test.ts</code> — Done move applies override and snapshots</li>
+      <li>Full suite: <strong>3,500 tests pass</strong> (Vitest, 85.4s, 80 files)</li>
+    </ul>
+    <p class="meta">Puku batch in this session used 3 parallel agents (docs, scout, tests); all reported ok.</p>
+  </section>
+
+  <section>
+    <h2>Scout — top 3 findings</h2>
+    <div class="finding">
+      <div class="l">components/SettingsDialog.tsx:169</div>
+      <div class="s"><strong>Long Function</strong> — the 110-line <code>body(s)</code> map is why SettingsDialog itself sits at 275 lines / complexity 18 (ratchet holds it). Split each tab into its own component.</div>
+    </div>
+    <div class="finding">
+      <div class="l">lib/runner-turn.ts:24</div>
+      <div class="s"><strong>Long Function / Switch Statement</strong> — <code>handle</code> (15), <code>handleResult</code> (15), <code>finishResult</code> (14) push the file over the ratchet. Replace the big switch with a dispatch table or per-handler functions.</div>
+    </div>
+    <div class="finding">
+      <div class="l">app/api/settings/route.ts:50</div>
+      <div class="s"><strong>Long Function / Primitive Obsession</strong> — <code>validate</code> (complexity 16) hand-rolls field-by-field checks; <code>commit</code> re-states the same conditions; the <code>as "" | "low" | ...</code> cast on line 103 exists only because <code>validateDone</code> returns void. Move to a real schema / Patch-walk.</div>
+    </div>
+    <p class="meta">Full list: 8 findings, written to <code>plugin/skills/done/out/findings.json</code>. No source files were modified by the scout.</p>
+  </section>
+
+  <section>
+    <h2>SOUL.md change</h2>
+    <p>File map entry for <code>lib/automations.ts</code> <code>doneOverrides</code> added under automations; SubagentPicker note updated to "Threads → Subagents"; other entries expanded by the linter. Accurate as of <code>2ec17e3</code>.</p>
+  </section>
+
+  <p class="meta">Card <code>7b82ce04</code> · backend puku · model opus-4.8 · effort high · ready to move to Done.</p>
+</body>
+</html>

@@ -203,6 +203,19 @@ describe("settings", () => {
     expect(s.issueFolders()).toEqual(["/a"]);
   });
 
+  it("turns cloud sync on and off per folder, without duplicates, and keeps it across a reload", async () => {
+    let s = await load();
+    expect(s.syncFolders()).toEqual([]);
+    s.setSyncSync("/a", true);
+    s.setSyncSync("/b", true);
+    s.setSyncSync("/a", true);
+    expect(s.syncFolders()).toEqual(["/b", "/a"]);
+    s = await load();
+    expect(s.syncFolders()).toEqual(["/b", "/a"]);
+    s.setSyncSync("/b", false);
+    expect(s.syncFolders()).toEqual(["/a"]);
+  });
+
   it("settings survive a reload and settingsView bundles them", async () => {
     let s = await load();
     s.setKeepAliveMinutes(30);

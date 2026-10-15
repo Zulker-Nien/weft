@@ -16,6 +16,12 @@ const OUTPUT_BYTES = 8 * 1024;
 const RAW_BYTES = 32 * 1024;
 const PUBLISH_MS = 200;
 export const POLL_MS = 3_000;
+// How long onExit keeps re-checking authStatus after `auth login` exits before giving up.
+// A puku-cli update made the credential visible from `auth status` only after the login
+// child had already closed, so a single check ran too early and reported "logged out".
+// We poll for up to this window before failing, so the dialog closes the moment the CLI
+// sees the new credential and the card retries.
+export const LOGIN_POLL_TIMEOUT_MS = 10_000;
 export const TERMINAL_WAIT_MS = 10 * 60_000;
 
 interface LoginRun {
@@ -134,6 +140,49 @@ function emitSoon(run: LoginRun) {
 export function stopPolling(run: LoginRun) {
   if (run.poll) clearInterval(run.poll);
   run.poll = undefined;
+  run.polling = false;
+}
+
+// Starts a polling loop on the run that re-checks `auth status` until it reports
+// `loggedIn: true`, the run is no longer current, or the timeout elapses. Used
+// after the `auth login` child has exited but its credential may not yet be
+// visible to a fresh `auth status` call.
+function startPolling(run: LoginRun, deadline: number) {
+  if (run.poll || run.polling) return;
+  run.polling = true;
+  // The interval's first tick fires after POLL_MS, so do the first check now to
+  // avoid an extra wait when the credential is already visible.
+  const tick = () => {
+    if (!stillRunning(run) || !run.polling) {
+      stopPolling(run);
+      return;
+    }
+    if (Date.now() >= deadline) {
+      stopPolling(run);
+      run.polling = false;
+      failRun(run, "auth login exited but the CLI still reports logged out. Try logging in again.");
+      return;
+    }
+    authStatus(run.view.backend)
+      .then((status) => {
+        if (!stillRunning(run) || !run.polling) {
+          stopPolling(run);
+          return;
+        }
+        if (status.loggedIn) {
+          stopPolling(run);
+          run.polling = false;
+          succeed(run);
+        }
+      })
+      .catch((err: unknown) => {
+        // A status check erroring out is not the same as the login failing; try
+        // again next tick rather than giving up.
+        if (stillRunning(run)) append(run, `\n${message(err)}\n`);
+      });
+  };
+  run.poll = setInterval(tick, POLL_MS);
+  tick();
 }
 
 function killChild(run: LoginRun) {
@@ -216,6 +265,12 @@ async function onExit(run: LoginRun, child: ChildProcess, code: number | null, s
   } else if (needsTty(clean(run.raw))) {
     append(run, "\nThe CLI needs a terminal for this login, so it's opening in Terminal.\n");
     openLoginInTerminal(run.view.backend);
+  } else if (code === 0 && !signal) {
+    // The CLI exited cleanly but its credential isn't visible yet to a fresh
+    // status check. Poll for a short window before declaring the login failed,
+    // so a card that's mid-login doesn't pop the dialog again the moment you
+    // click "accept" in the browser.
+    startPolling(run, Date.now() + LOGIN_POLL_TIMEOUT_MS);
   } else {
     failRun(run, signal ? `auth login stopped (${signal}).` : `auth login exited with code ${code ?? "unknown"}.`);
   }

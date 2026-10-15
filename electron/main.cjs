@@ -424,6 +424,9 @@ require("./blastcp.cjs").setupBlastcp({ ipcMain, dataDir: dataDir(), board: () =
 require("./cloudflare.cjs").setupCloudflare({ ipcMain, dataDir: dataDir(), board: () => appView?.webContents });
 // The board's first cards are on screen: save this launch's timing and tell the board if it ran slow.
 ipcMain.handle("startup:ready", () => timer.finish());
+// Keep Working (electron/keep-working.cjs): the board's Settings → General → Laptop mode card; the
+// wiring lives in electron/keep-working-ipc.cjs to keep main.cjs under the size budget.
+require("./keep-working-ipc.cjs")({ ipcMain, keepWorking: menus.keepWorking, getBoardContents: () => appView?.webContents });
 ipcMain.on("badge:set",(_e, count) => menus.refreshWaiting(Number(count) || 0));
 ipcMain.on("splash:action", async (_e, action) => {
   // "relaunch": a drawer whose main side arrived after launch (BlastCP) starts Weft again on the new code.

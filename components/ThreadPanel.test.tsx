@@ -50,8 +50,8 @@ describe("ThreadPanel", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "New chat" }));
     expect(onNewChat).toHaveBeenCalled();
-    await userEvent.click(screen.getByRole("button", { name: "What needs my attention?" }));
-    expect(onSend).toHaveBeenCalledWith("What needs my attention?");
+    await userEvent.click(screen.getByRole("button", { name: "Help me get started with Weft" }));
+    expect(onSend).toHaveBeenCalledWith("Help me get started with Weft");
   });
 
   it("doesn't let the copilot be renamed", async () => {

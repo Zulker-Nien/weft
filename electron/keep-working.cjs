@@ -99,14 +99,24 @@ async function countRunning(server) {
 
 function createKeepWorking({ getServer, onChange }) {
   const notify = (message) => dialog.showMessageBox({ type: "warning", message });
+  /** @type {{ mode: "off" | "threads" | "hours"; hours?: number; until?: number; running?: number | null }} */
   let state = { mode: "off" };
   let watchdog = null;
   let ticker = null;
   let idle = 0;
+  // Subscribers fire on every state change; main.cjs forwards them to the board window over IPC
+  // (one of the chips changed, the deadline ticked over, the watchdog restored sleep on its own).
+  const subscribers = new Set();
+  function fanout() {
+    onChange();
+    for (const cb of subscribers) {
+      try { cb(); } catch (err) { console.error("keep-working subscriber:", err); }
+    }
+  }
 
   const set = (next) => {
-    state = next;
-    onChange();
+    state = { ...next };
+    fanout();
   };
 
   async function hasRule() {
@@ -188,7 +198,7 @@ function createKeepWorking({ getServer, onChange }) {
       if (idle >= IDLE_CHECKS) return stop();
       set({ ...state, running });
     } else {
-      onChange(); // the hours left in the menu bar
+      fanout(); // the hours left in the menu bar
     }
   }
 
@@ -214,8 +224,15 @@ function createKeepWorking({ getServer, onChange }) {
   return {
     title: () => trayTitle(state, Date.now()),
     menu: () => menuTemplate(state, Date.now(), { start, stop }),
+    start,
+    stop,
+    // The card in Settings reads this; it mirrors the shape of the internal state and is safe to send
+    // over IPC (only primitives, no Electron handles).
+    state: () => ({ ...state }),
+    // Returns the unsubscribe. main.cjs uses this to forward changes to the board window over IPC.
+    subscribe: (cb) => { subscribers.add(cb); return () => subscribers.delete(cb); },
     stopSync,
   };
 }
 
-module.exports = { createKeepWorking, menuTemplate, statusText, sudoersLine, trayTitle };
+module.exports = { createKeepWorking, HOUR_CHOICES, menuTemplate, statusText, sudoersLine, trayTitle };

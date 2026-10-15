@@ -222,7 +222,7 @@ button:disabled {
 
 .mac-title-bar {
   height: calc(44px / var(--zoom));
-  padding-left: calc(78px / var(--zoom));
+  padding-left: calc(96px / var(--zoom));
 }
 
 /* A header that moves the desktop window, like a title bar. Its controls still take clicks. */

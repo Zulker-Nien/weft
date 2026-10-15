@@ -1,5 +1,7 @@
+import type { MeterBalance } from "@aimhuge/billing";
 import type { MenuItem } from "./card-menu";
 import type { MediaKind } from "./media";
+import type { PlanId } from "./billing/plans";
 import type { TagInfo, TagRow } from "./tags";
 import type { VaultBridge } from "./vault-view";
 import type { VercelBridge } from "./vercel-view";
@@ -24,6 +26,7 @@ import type {
   LoginView,
   PermissionMode,
   Project,
+  QuestionReply,
   RestartStatus,
   SettingsView,
   SkillInfo,
@@ -44,6 +47,20 @@ export interface BrowserState {
 // What the app menu, dock, tray, global shortcuts and weft:// links ask a window to do.
 // open-card carries an id.
 export type MenuAction = "new-thread" | "settings" | "open-card" | "find" | "terminal" | "add-webhook";
+
+// The board's view of the signed-in user's billing (docs/architecture/billing.md). Mirrors the JSON the local
+// /api/account/billing route returns, kept client-side so React components don't pull in server-only modules.
+export interface BillingStatusView {
+  org: { slug: string; name: string };
+  plan: { id: PlanId; name: string };
+  status: string;
+  interval: "monthly" | "yearly" | null;
+  periodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  puku: MeterBalance | null;
+  manageUrl: string;
+}
+export type BillingClientView = BillingStatusView | { error: string } | null;
 
 // Exposed by electron/preload.cjs; absent when the board runs in a normal browser tab.
 export interface ShellBridge {
@@ -81,6 +98,14 @@ export interface ShellBridge {
   popupMenu(items: MenuItem[]): Promise<string | null>;
   // The dock badge, e.g. how many cards need the user.
   setBadge(count: number): void;
+  // Keep Working (electron/keep-working.cjs). Settings → General → Laptop mode uses this. Missing on
+  // non-macOS and in shells that don't expose it.
+  keepWorking?: {
+    state(): Promise<{ mode: "off" | "threads" | "hours"; hours?: number; until?: number; running?: number | null }>;
+    start(mode: "threads" | "hours", hours?: number): Promise<void>;
+    stop(): Promise<void>;
+    onChange(callback: () => void): () => void;
+  };
   copilot: {
     toggle(): void;
     onState(callback: (state: { open: boolean }) => void): () => void;
@@ -196,11 +221,12 @@ async function transcribe(audio: Blob) {
   return data.text ?? "";
 }
 
-async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
+async function call<T>(method: string, url: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const res = await fetch(url, {
     method,
     headers: { "content-type": "application/json", "x-threadboard": "1" },
     body: body === undefined ? undefined : JSON.stringify(body),
+    ...(signal ? { signal } : {}),
   });
   const data = (await res.json()) as T & { error?: string };
   if (!res.ok) throw new Error(data.error ?? res.statusText);
@@ -225,6 +251,9 @@ export const api = {
   deleteTag: (name: string) => call<{ ok: true }>("DELETE", "/api/tags", { name }),
   setStarred: (id: string, starred: boolean) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { starred }),
   setTags: (id: string, tags: string[]) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { tags }),
+  // The user granted read access to a path outside the project. Persists on the card and queues
+  // a /add-dir slash command for the live session so the in-flight turn can keep reading.
+  setReadScope: (id: string, path: string) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { readScope: path }),
   remove: (id: string) => call("DELETE", `/api/cards/${id}`),
   send: (id: string, text: string) => call<{ card: Card }>("POST", `/api/cards/${id}/messages`, { text }),
   // A stopped or failed card's Restart: its last message again, in a fresh CLI.
@@ -235,8 +264,9 @@ export const api = {
   schedule: (id: string, text: string, at: number) => call<{ card: Card }>("POST", `/api/cards/${id}/scheduled`, { text, at }),
   unschedule: (id: string, messageId: string) => call<{ card: Card }>("DELETE", `/api/cards/${id}/scheduled`, { messageId }),
   // pendingId is the request the user saw; the server refuses the answer if another is in front.
-  answer: (id: string, allow: boolean, answers?: Record<string, string>, pendingId?: string) =>
-    call("POST", `/api/cards/${id}/permission`, { allow, answers, pendingId }),
+  // reply: a question's notes, or "Chat about this" instead of answers.
+  answer: (id: string, allow: boolean, answers?: Record<string, string>, pendingId?: string, reply?: QuestionReply) =>
+    call("POST", `/api/cards/${id}/permission`, { allow, answers, pendingId, ...reply }),
   stop: (id: string) => call("POST", `/api/cards/${id}/stop`),
   // "!" in the reply box: runs a shell command in the card's folder (lib/shell.ts).
   shell: (id: string, command: string) => call<{ ok: true }>("POST", `/api/cards/${id}/shell`, { command }),
@@ -280,8 +310,8 @@ export const api = {
     call<{ path: string; projects: Project[] }>("POST", "/api/projects/new", { parent, name }),
   removeProject: (path: string) => call<{ projects: Project[] }>("DELETE", "/api/projects", { path }),
   loginStatus: () => call<{ status: Record<Backend, CliStatus>; runs: LoginView[] }>("GET", "/api/login"),
-  login: (backend: Backend, action: "start" | "input" | "cancel" | "terminal", text?: string) =>
-    call<{ login: LoginView | null }>("POST", "/api/login", { backend, action, text }),
+  login: (backend: Backend, action: "start" | "input" | "cancel" | "terminal", text?: string, signal?: AbortSignal) =>
+    call<{ login: LoginView | null }>("POST", "/api/login", { backend, action, text }, signal),
   // Starts a CLI ahead of time: a card's own, or a spare in a project folder.
   warm: (body: { cardId?: string; cwd?: string; backend?: Backend }) => call<{ ok: true }>("POST", "/api/warm", body),
   // The splash page the browser pane shows beside the New thread dialog.
@@ -304,6 +334,8 @@ export const api = {
     call<{ url: string }>("POST", "/api/account", { action: "oauth", provider, ...(next ? { next } : {}) }),
   magicLink: (email: string) => call<{ ok: true }>("POST", "/api/account", { action: "email", email }),
   signOut: () => call<{ ok: true }>("POST", "/api/account", { action: "signout" }),
+  // The signed-in user's billing status (lib/billing-client.ts); null when signed out, { error } on a failure.
+  billingStatus: () => call<BillingClientView>("GET", "/api/account/billing"),
   cloneRepo: (fullName: string) => call<{ path: string; projects: Project[] }>("POST", "/api/repos/clone", { fullName }),
   // A folder's open GitHub issues as Backlog cards, now and every 5 minutes after (lib/github-issues.ts).
   importIssues: (folder: string) =>

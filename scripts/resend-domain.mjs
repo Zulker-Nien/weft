@@ -1,10 +1,10 @@
 // Weft's domain on Resend (docs/architecture/email-forwarding.md). Runs through the 🔐 vault (mcp__secrets__run)
 // with RESEND_API_KEY in its env, so the key never shows in a thread:
-//   npm run resend -- create weft.zip      add the domain with sending and receiving on; print its DNS records
-//   npm run resend -- verify weft.zip      ask Resend to check the records, then print their status
-//   npm run resend -- status weft.zip      print the domain and its records
-//   npm run resend -- webhook <url>        subscribe <url> to email.received (the signing secret stays in the dashboard)
-//   npm run resend -- webhooks             list the webhooks
+//   pnpm resend -- create weft.zip      add the domain with sending and receiving on; print its DNS records
+//   pnpm resend -- verify weft.zip      ask Resend to check the records, then print their status
+//   pnpm resend -- status weft.zip      print the domain and its records
+//   pnpm resend -- webhook <url>        subscribe <url> to email.received (the signing secret stays in the dashboard)
+//   pnpm resend -- webhooks             list the webhooks
 const key = process.env.RESEND_API_KEY;
 if (!key) {
   console.error("RESEND_API_KEY is not set; run this through the vault.");
@@ -69,6 +69,6 @@ switch (cmd) {
     break;
   }
   default:
-    console.error("usage: npm run resend -- create|verify|status <domain> | webhook <url> | webhooks");
+    console.error("usage: pnpm resend -- create|verify|status <domain> | webhook <url> | webhooks");
     process.exit(2);
 }

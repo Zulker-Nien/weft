@@ -1,4 +1,4 @@
-import { titleFromPrompt } from "./format";
+import { shortTitle, titleFromPrompt } from "./format";
 import { normalizeTag, normalizeTags, tagCounts } from "./tags";
 import type { Card } from "./types";
 
@@ -56,7 +56,7 @@ export function tagVocabulary(cards: readonly Pick<Card, "tags">[], catalog: rea
   return [...new Set(names)].slice(0, MAX_VOCABULARY);
 }
 
-const TITLE_RULE = `in at most 8 words, as one emoji, a space, then a specific title (a kind of "Compile Error: missing CoverageBadge import" or "Add dark mode toggle"). Say what the work is, not that a file or screenshot was attached.`;
+const TITLE_RULE = `in 3 or 4 words, as one emoji, a space, then a specific title (a kind of "Compile Error: missing import" or "Add dark mode toggle"). Say what the work is, not that a file or screenshot was attached.`;
 
 function tagRule(vocabulary: readonly string[]) {
   const known = vocabulary.slice(0, MAX_VOCABULARY);
@@ -95,15 +95,16 @@ Tags: <tag>, <tag>
 ${turnText(ask, reply)}`;
 }
 
-// The card title from Haiku's reply: its first line, without quotes or a "Title:" label, cut to a
-// readable length. Undefined when nothing usable came back.
+// The card title from Haiku's reply: its first line, without quotes or a "Title:" label, clipped to
+// 3–4 words so the board stays scannable. Undefined when nothing usable came back.
 export function parseTitle(reply: string) {
   const line = reply
     .split("\n")
     .map((l) => l.replace(/^\s*(title\s*:\s*)/i, "").replace(/^["'`“”*_#\s]+|["'`“”*_.\s]+$/g, ""))
     .find(Boolean);
   if (!line) return undefined;
-  return line.length > MAX_TITLE ? `${line.slice(0, MAX_TITLE - 1).trimEnd()}…` : line;
+  const short = shortTitle(line);
+  return short.length > MAX_TITLE ? `${short.slice(0, MAX_TITLE - 1).trimEnd()}…` : short;
 }
 
 // The tags from Haiku's reply: its "Tags:" line (and a bulleted list under an empty one), or with

@@ -122,7 +122,7 @@ export default function CopilotChat() {
             items={items}
             streaming={streaming}
             onSend={send}
-            onAnswer={(allow, answers) => void api.answer(COPILOT_ID, allow, answers, card.pending?.id).catch(() => {})}
+            onAnswer={(allow, answers, reply) => void api.answer(COPILOT_ID, allow, answers, card.pending?.id, reply).catch(() => {})}
             placeholder="Ask about your threads, or tell me what to start"
             empty={<CopilotEmpty onAsk={(text) => void send(text).catch((err: unknown) => setError(String(err)))} />}
           />

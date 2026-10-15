@@ -6,7 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { assistant, failure, flush, init, makeCard, nth, resetHarness, success, text, toolResultMsg, toolUse, type FakeQuery } from "./runner.harness";
+import { assistant, failure, flush, init, makeCard, nth, reloadWithEditedPrompt, resetHarness, success, text, toolResultMsg, toolUse, type FakeQuery } from "./runner.harness";
 import type { Card, ThreadItem } from "./types";
 
 const h = await vi.hoisted(async () => (await import("./runner.harness")).harnessState());
@@ -18,6 +18,12 @@ vi.mock("./env", async () => (await import("./runner.harness")).envMock());
 vi.mock("./import", async () => (await import("./runner.harness")).importMock(h));
 vi.mock("./settings", async () => (await import("./runner.harness")).settingsMock(h));
 vi.mock("./login", async () => (await import("./runner.harness")).loginMock(h));
+vi.mock("./question-preview", () => ({
+  writeQuestionPreview: vi.fn((cardId: string, questions: { options: { preview?: string }[] }[]) => {
+    if (cardId === "broken") throw new Error("EACCES");
+    return questions.some((q) => q.options.some((o) => o.preview)) ? `file:///glance/${cardId}-question.html` : undefined;
+  }),
+}));
 vi.mock("./automations", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./automations")>()),
   skillsForPrompt: () => h.skillsForPrompt,
@@ -359,6 +365,41 @@ describe("permissions", () => {
     runner.answerPermission("c1", false);
     await expect(promise).resolves.toEqual({ behavior: "deny", message: "The user skipped the question." });
   });
+
+  it("sends notes on a pick as annotations, and leaves out an empty set", async () => {
+    addCard({ id: "c1" });
+    const q = await send("c1");
+    const input = { questions: [{ question: "Which?", options: [{ label: "A", preview: "+--+" }, { label: "B" }] }] };
+    const first = ask(q, "AskUserQuestion", input);
+    expect(card("c1").pending?.previewUrl).toBe("file:///glance/c1-question.html");
+    runner.answerPermission("c1", true, { "Which?": "A" }, undefined, { annotations: { "Which?": { notes: "but small", preview: "+--+" } } });
+    await expect(first.promise).resolves.toEqual({
+      behavior: "allow",
+      updatedInput: { ...input, answers: { "Which?": "A" }, annotations: { "Which?": { notes: "but small", preview: "+--+" } } },
+    });
+    const second = ask(q, "AskUserQuestion", input);
+    runner.answerPermission("c1", true, { "Which?": "B" }, undefined, { annotations: {} });
+    await expect(second.promise).resolves.toEqual({ behavior: "allow", updatedInput: { ...input, answers: { "Which?": "B" } } });
+  });
+
+  it("asks without previews when their page can't be written", async () => {
+    addCard({ id: "broken" });
+    const q = await send("broken");
+    void ask(q, "AskUserQuestion", { questions: [{ question: "Which?", options: [{ label: "A", preview: "+--+" }] }] }).promise;
+    expect(card("broken").pending).toMatchObject({ title: "Which?", previewUrl: undefined });
+  });
+
+  it("Chat about this declines the question with what the user wrote", async () => {
+    addCard({ id: "c1" });
+    const q = await send("c1");
+    const { promise } = ask(q, "AskUserQuestion", { questions: [{ question: "Go?", options: [{ label: "Yes" }] }] });
+    expect(card("c1").pending?.previewUrl).toBeUndefined();
+    runner.answerPermission("c1", false, undefined, undefined, { chat: "  why not both?  " });
+    await expect(promise).resolves.toEqual({
+      behavior: "deny",
+      message: "The user didn't pick an answer and wants to talk it over instead. They wrote: why not both?",
+    });
+  });
 });
 
 describe("stop", () => {
@@ -515,13 +556,13 @@ describe("spares", () => {
     expect(lastQuery().options.resume).toBe("spare-sess");
   });
 
-  it("a spare adopted before its init leaves the card's session id to the init that follows", async () => {
+  it("a spare adopted before its init gives the card the id it was started with, then the init's", async () => {
     runner.ensureSpare(cwd);
     await flush();
     const spare = lastQuery();
     addCard({ id: "c1", permissionMode: "bypassPermissions" });
     runner.sendMessage("c1", "go");
-    expect(card("c1").sessionId).toBeUndefined();
+    expect(card("c1").sessionId).toBe(spare.options.sessionId);
     spare.emit(init("late-sess"));
     await flush();
     expect(card("c1").sessionId).toBe("late-sess");
@@ -613,76 +654,6 @@ describe("warmUp", () => {
     await flush();
     expect(h.queries).toHaveLength(0);
   });
-});
-
-describe("login", () => {
-  it("a not-logged-in result sends the card to needs_you and starts a login", async () => {
-    addCard({ id: "c1" });
-    const q = await send("c1");
-    q.emit(success("Not logged in · Please run /login", { is_error: true }));
-    await flush();
-    expect(card("c1")).toMatchObject({ column: "needs_you", pending: null, lastLine: "Log in to Claude Code to run this thread" });
-    expect(card("c1").error).toContain("Not logged in");
-    expect(h.startLogin).toEqual([expect.objectContaining({ backend: "claude" })]);
-  });
-
-  it("a not-logged-in error from the CLI does the same, and the login retries the last message in a fresh CLI", async () => {
-    addCard({ id: "c1" });
-    const q = await send("c1", "please");
-    q.fail(new Error("Invalid API key · Fix external API key"));
-    await flush();
-    expect(card("c1")).toMatchObject({ column: "needs_you", lastLine: "Log in to Claude Code to run this thread" });
-    expect(card("c1").error).toContain("Invalid API key");
-
-    nth(h.startLogin, 0, "login").onDone?.();
-    await flush();
-    expect(h.queries).toHaveLength(2);
-    expect(lastQuery().received).toEqual(["please"]);
-    // Retried with echo off: the thread still has the one user item.
-    expect(thread("c1").filter((i) => i.kind === "user")).toHaveLength(1);
-    expect(card("c1").column).toBe("running");
-  });
-
-  it("queued turns wait out a not-logged-in result and run after the login", async () => {
-    addCard({ id: "c1" });
-    runner.queueMessages("c1", ["/a", "/b"]);
-    await flush();
-    lastQuery().emit(success("Not logged in · Please run /login", { is_error: true }));
-    await flush();
-    expect(lastQuery().received).toEqual(["/a"]);
-
-    runner.retryAfterLogin("claude");
-    await flush();
-    expect(h.queries).toHaveLength(2);
-    expect(lastQuery().received).toEqual(["/a"]);
-    lastQuery().emit(success("a done"));
-    await flush();
-    expect(lastQuery().received).toEqual(["/a", "/b"]);
-  });
-
-  it("queued turns also wait out a not-logged-in CLI error", async () => {
-    addCard({ id: "c1" });
-    runner.queueMessages("c1", ["/a", "/b"]);
-    await flush();
-    lastQuery().fail(new Error("Not logged in · Please run /login"));
-    await flush();
-
-    runner.retryAfterLogin("claude");
-    await flush();
-    expect(h.queries).toHaveLength(2);
-    lastQuery().emit(success("a done"));
-    await flush();
-    expect(lastQuery().received).toEqual(["/a", "/b"]);
-  });
-
-  it("any other CLI error is kept on the card, which leaves running for review", async () => {
-    addCard({ id: "c1" });
-    const q = await send("c1");
-    q.fail(new Error("spawn ENOENT"));
-    await flush();
-    expect(card("c1")).toMatchObject({ column: "review", error: "spawn ENOENT", lastLine: "Stopped", warm: false });
-  });
-
 });
 
 describe("the CLI going away", () => {
@@ -779,6 +750,25 @@ describe("stale sessions (BUILD)", () => {
     await flush();
     expect(h.queries).toHaveLength(1);
     expect(q.received.at(-1)).toBe("from the reloaded copy");
+  });
+
+  it("editing a pinned Weft prompt makes an idle session stale: the next lookup closes it", async () => {
+    addCard({ id: "c1" });
+    const q = await send("c1");
+    q.emit(success("ok"));
+    await flush();
+    const reloaded = await reloadWithEditedPrompt<typeof import("./runner-session")>("./runner-session");
+    expect(reloaded.currentSession("c1")).toBeUndefined();
+    expect(sessionsMap().has("c1")).toBe(false);
+    await flush();
+    expect(q.inputClosed).toBe(true);
+  });
+
+  it("a busy session keeps running through a pinned prompt edit", async () => {
+    addCard({ id: "c1" });
+    await send("c1");
+    const reloaded = await reloadWithEditedPrompt<typeof import("./runner-session")>("./runner-session");
+    expect(reloaded.currentSession("c1")).toBe(sessionsMap().get("c1"));
   });
 
   it("ensureSpare replaces a stale spare", async () => {
