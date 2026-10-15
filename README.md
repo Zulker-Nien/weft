@@ -580,10 +580,13 @@ sees, of what finished, needs you or failed on the board since your last message
 (`lib/copilot-digest.ts`); nothing runs a copilot turn on its own. "New chat" starts a fresh copilot session. In a normal browser tab the
 copilot opens as a pop-up at `/copilot`.
 
-The copilot also shows as a card at the top of whichever column it is in (Running, Needs you, Review),
-marked ✨ whole board instead of a folder. Click it to open it like any card, in the same window with its own
-browser pane beside it (New chat in place of star, archive and delete). The top bar's ✨ Copilot button, `c` and the
-command palette open it the same way; ⌃⌥Space and ⌘J still open the separate copilot window, which works with the board hidden. Allow, Deny and Stop work from the card. A project filter keeps it; a search hides it. It can't be dragged or starred.
+On the board the copilot is a lane of its own on the right, after Done, instead of a card. Minimized (236px) it reads
+like a column: what finished since you last asked it something, the cards waiting on you (click one to open it), its
+latest reply, a peek into the cockpit and an ask box that sends your question and opens the lane. Open (520px), it's
+the conversation over a picture of the cockpit: you in the driver's seat of the hovercaddy, the copilot in a flight
+helmet beside you. The board's columns narrow beside it (thumbnails and header extras like Review all drop away in a
+narrow column) so all five stay in view. The top bar's ✨ Copilot button, ⌘J and the command palette open and minimize
+it, and the choice sticks; ⌃⌥Space still opens the separate copilot window, which works with the board hidden.
 
 ## Terminal
 

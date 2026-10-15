@@ -1,11 +1,20 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { setShowBacklog, setShowProgress, showBacklog, showProgress, subscribeBoardPrefs } from "./board-prefs";
+import {
+  copilotLaneOpen,
+  setCopilotLaneOpen,
+  setShowBacklog,
+  setShowProgress,
+  showBacklog,
+  showProgress,
+  subscribeBoardPrefs,
+} from "./board-prefs";
 
 afterEach(() => {
   vi.unstubAllGlobals();
   document.cookie = "weft-show-backlog=; path=/; max-age=0";
   document.cookie = "weft-show-progress=; path=/; max-age=0";
+  document.cookie = "weft-copilot-lane=; path=/; max-age=0";
 });
 
 describe("showBacklog", () => {
@@ -41,6 +50,22 @@ describe("showProgress", () => {
   it("is on on the server, where there's no document", () => {
     vi.stubGlobal("document", undefined);
     expect(showProgress()).toBe(true);
+  });
+});
+
+describe("copilotLaneOpen", () => {
+  it("is minimized by default and follows setCopilotLaneOpen", () => {
+    expect(copilotLaneOpen()).toBe(false);
+    setCopilotLaneOpen(true);
+    expect(document.cookie).toContain("weft-copilot-lane=1");
+    expect(copilotLaneOpen()).toBe(true);
+    setCopilotLaneOpen(false);
+    expect(copilotLaneOpen()).toBe(false);
+  });
+
+  it("is minimized on the server, where there's no document", () => {
+    vi.stubGlobal("document", undefined);
+    expect(copilotLaneOpen()).toBe(false);
   });
 });
 

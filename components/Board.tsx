@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { showBacklog, subscribeBoardPrefs } from "@/lib/board-prefs";
+import { copilotLaneOpen, setCopilotLaneOpen, showBacklog, subscribeBoardPrefs } from "@/lib/board-prefs";
+import { columnMinWidth } from "@/lib/copilot-lane";
 import { api, mergeThread, type BrowserState, type MenuAction, type NewCardInput } from "@/lib/client";
 import { worktreeParent } from "@/lib/format";
 import { busyHere } from "@/lib/overlap";
@@ -57,6 +58,7 @@ import { NO_DRAG } from "@/lib/no-drag";
 // fails as its module loads, breaks only its own spot on the board.
 const AccountButton = guarded(() => import("./AccountButton"), { inline: true, what: "account button" });
 const CopilotButton = guarded(() => import("./CopilotButton"), { inline: true, what: "copilot button" });
+const CopilotLane = guarded(() => import("./CopilotLane"), { what: "copilot", className: "m-3 w-[236px] shrink-0 self-start" });
 const RestartChip = guarded(() => import("./RestartChip"), { inline: true, what: "restart chip" });
 const BrowserPane = guarded(() => import("./BrowserPane"), { what: "browser pane", className: "m-3 w-[360px] self-start" });
 const CardView = guarded(() => import("./CardView"), { what: "card" });
@@ -244,7 +246,7 @@ export default function Board() {
     (event: BoardEvent) => {
       switch (event.type) {
         case "card":
-          // The copilot is a thread too, but it has its own window and no project.
+          // The copilot is a thread too, but it has its own lane and no project.
           if (event.card.role === "copilot") {
             updateCopilot(event.card);
             break;
@@ -405,6 +407,8 @@ export default function Board() {
   const { resume, all: resumeAll } = resumeActions(byColumn.get("review") ?? [], notify);
   // Backlog hides unless Settings turns it on, but never hides cards waiting in it.
   const backlogOn = useSyncExternalStore(subscribeBoardPrefs, showBacklog, () => false);
+  // The copilot's lane on the right: minimized (a column) or open (the chat).
+  const laneOpen = useSyncExternalStore(subscribeBoardPrefs, copilotLaneOpen, () => false);
   const visibleColumns = COLUMNS.filter(
     (c) => c.id !== "backlog" || backlogOn || cards.some((card) => card.column === "backlog" && !card.archived),
   );
@@ -672,12 +676,11 @@ export default function Board() {
     setTerminalOpen((open) => !open);
   }
 
-  // The ✨ button, c and the palette open the copilot as a card, like a click on its card in the column;
+  // The ✨ button, ⌘J and the palette open or minimize the copilot's lane on the right of the board;
   // only the global hotkey (⌃⌥Space) still opens its own window, for when the board is hidden.
   function toggleCopilot() {
     if (selectedRef.current === COPILOT_ID) select(null);
-    else if (copilot) openCard(copilot);
-    else select(COPILOT_ID);
+    setCopilotLaneOpen(!copilotLaneOpen());
   }
 
   // Moves a card for you, remembering it so the move doesn't chime.
@@ -768,7 +771,7 @@ export default function Board() {
         <RestartChip restart={restartView.restart} notify={notify} />
         <HeaderBadges cwd={selected?.cwd ?? project ?? latest?.cwd} cards={cards} start={improveQuality} notify={notify} toast={setToast} />
         <div className="flex-1" />
-        <CopilotButton open={selectedId === COPILOT_ID} needsYou={copilotNeedsYou} title={hint("copilot", "Copilot")} onClick={toggleCopilot} />
+        <CopilotButton open={laneOpen} needsYou={copilotNeedsYou} title={hint("copilot", "Copilot")} onClick={toggleCopilot} />
         <button
           onClick={toggleBrowser}
           title={hint("browser", "Browser")}
@@ -858,9 +861,7 @@ export default function Board() {
           {visibleColumns.map((column) => {
             const list = byColumn.get(column.id) ?? [];
             const shown = expandedColumns.includes(column.id) ? list : list.slice(0, COLUMN_LIMIT);
-            // The copilot runs the whole board, so a project filter keeps it; a search hides it.
-            const pilot = loaded && copilot?.column === column.id && !query.trim() && !isFiltering(railFilter) ? copilot : null;
-            const count = list.length + (pilot ? 1 : 0);
+            const count = list.length;
             return (
               <section
                 key={column.id}
@@ -872,7 +873,9 @@ export default function Board() {
                 onDragLeave={() => setDragOver((c) => (c === column.id ? null : c))}
                 onDrop={(e) => drop(column.id, e)}
                 onContextMenu={(e) => void onColumnMenu(column.id, e)}
-                className={`flex w-[264px] min-w-[220px] shrink-0 flex-col rounded-xl border ${dragOver === column.id ? "border-accent bg-accent-soft" : "border-transparent bg-sunken"}`}
+                // Columns narrow beside the copilot's lane, down to a floor, before the board scrolls.
+                style={{ minWidth: columnMinWidth(laneOpen) }}
+                className={`@container flex w-[264px] shrink flex-col rounded-xl border ${dragOver === column.id ? "border-accent bg-accent-soft" : "border-transparent bg-sunken"}`}
               >
                 <ColumnHeader
                   column={column}
@@ -889,17 +892,6 @@ export default function Board() {
                   onReviewAll={column.id === "review" ? reviewAll : undefined}
                 />
                 <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
-                  {pilot && (
-                      <CardView
-                        guardName={pilot.title}
-                        card={pilot}
-                        now={now}
-                        selected={pilot.id === selectedId}
-                        onOpen={toggleCopilot}
-                        onAnswer={(allow) => void api.answer(pilot.id, allow, undefined, pilot.pending?.id).catch(notify)}
-                        onStop={() => void api.stop(pilot.id).catch(notify)}
-                      />
-                  )}
                   {shown.map((card) => (
                     <CardView
                       key={card.id}
@@ -942,6 +934,7 @@ export default function Board() {
           })}
         </main>
 
+        <CopilotLane open={laneOpen} onToggle={toggleCopilot} cards={cards} onOpenCard={openCard} toggleTip={hint("copilot", "Copilot")} />
         {framed && <div style={NO_DRAG} className="fixed inset-0 z-30 bg-black/40" onClick={() => (showNew ? setShowNew(false) : select(null))} aria-hidden="true" />}
         <div style={framed ? { ...NO_DRAG, bottom: terminalOpen ? terminalHeight + 16 : undefined } : undefined} className={framed ? "fixed inset-4 z-40 flex overflow-hidden rounded-xl border border-line-strong bg-panel shadow-2xl" : "contents"}>
         {showNew ? (

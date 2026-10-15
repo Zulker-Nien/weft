@@ -5,8 +5,9 @@ import { api } from "./client";
 import { playChime } from "./chimes";
 import type { Card, Column } from "./types";
 
-// The copilot's card on the board. It's a thread too, but it has its own window and no project, so the
-// board keeps it apart from `cards` (counts, palette and pile leave it out) and draws it atop its column.
+// The copilot's card. It's a thread too, but it has its own lane (components/CopilotLane.tsx) and no project,
+// so the board keeps it apart from `cards` (counts, palette and pile leave it out); this tracks it for the
+// Copilot button's Needs you dot and its chime.
 export function useCopilotCard() {
   const [copilot, setCopilot] = useState<Card | null>(null);
   const column = useRef<Column | null>(null);

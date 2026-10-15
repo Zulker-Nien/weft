@@ -27,6 +27,19 @@ export function setShowProgress(on: boolean) {
   window.dispatchEvent(new Event(EVENT));
 }
 
+const LANE_COOKIE = "weft-copilot-lane";
+
+// The copilot's lane on the right of the board: minimized (a column) by default, open is the chat.
+export function copilotLaneOpen(): boolean {
+  if (typeof document === "undefined") return false;
+  return new RegExp(`(?:^|; )${LANE_COOKIE}=1`).test(document.cookie);
+}
+
+export function setCopilotLaneOpen(open: boolean) {
+  document.cookie = `${LANE_COOKIE}=${open ? 1 : 0}; path=/; max-age=${10 * 365 * 24 * 60 * 60}; SameSite=Lax`;
+  window.dispatchEvent(new Event(EVENT));
+}
+
 // For useSyncExternalStore.
 export function subscribeBoardPrefs(onChange: () => void) {
   window.addEventListener(EVENT, onChange);

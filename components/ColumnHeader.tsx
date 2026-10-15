@@ -47,34 +47,37 @@ export default function ColumnHeader({
   }
   return (
     <div className="flex items-center justify-between px-3 pb-1.5 pt-2.5">
-      <h2 className={`text-[12.5px] font-medium ${needsYou ? "text-warn" : "text-ink"}`}>{column.label}</h2>
-      <span className="flex items-center gap-2 text-[11.5px] text-faint">
-        {onSwitchAll && count ? <SwitchAllButton onClick={() => void onSwitchAll()} /> : null}
-        {onReviewAll && count ? (
-          <Tip text="Walk through the Review cards one at a time: what each changed, its checks, then commit it" className="inline-flex">
-            <button
-              onClick={() => void reviewAll()}
-              disabled={reviewing}
-              className="flex items-center gap-1 font-medium text-accent hover:opacity-80 disabled:opacity-50"
-            >
-              <Icon name="check" size={11} />
-              {reviewing ? "Starting…" : "Review all"}
+      <h2 className={`truncate text-[12.5px] font-medium ${needsYou ? "text-warn" : "text-ink"}`}>{column.label}</h2>
+      <span className="flex shrink-0 items-center gap-2 text-[11.5px] text-faint">
+        {/* A column narrowed beside the open copilot lane keeps only its count and Archive all. */}
+        <span className="flex items-center gap-2 @max-[230px]:hidden">
+          {onSwitchAll && count ? <SwitchAllButton onClick={() => void onSwitchAll()} /> : null}
+          {onReviewAll && count ? (
+            <Tip text="Walk through the Review cards one at a time: what each changed, its checks, then commit it" className="inline-flex">
+              <button
+                onClick={() => void reviewAll()}
+                disabled={reviewing}
+                className="flex items-center gap-1 font-medium text-accent hover:opacity-80 disabled:opacity-50"
+              >
+                <Icon name="check" size={11} />
+                {reviewing ? "Starting…" : "Review all"}
+              </button>
+            </Tip>
+          ) : null}
+          {resumeAll && (
+            <Tip text={`Carry on the ${resumeAll.count} turn${resumeAll.count > 1 ? "s" : ""} here that a restart cut off or that failed`} className="inline-flex">
+              <button onClick={resumeAll.run} className="flex items-center gap-1 font-medium text-accent hover:opacity-80">
+                <Icon name="play" size={10} />
+                Resume {resumeAll.count}
+              </button>
+            </Tip>
+          )}
+          {done && archivedCount > 0 && (
+            <button onClick={onToggleArchived} className="hover:text-ink" aria-pressed={showArchived}>
+              {showArchived ? "Hide" : "Show"} {archivedCount} archived
             </button>
-          </Tip>
-        ) : null}
-        {resumeAll && (
-          <Tip text={`Carry on the ${resumeAll.count} turn${resumeAll.count > 1 ? "s" : ""} here that a restart cut off or that failed`} className="inline-flex">
-            <button onClick={resumeAll.run} className="flex items-center gap-1 font-medium text-accent hover:opacity-80">
-              <Icon name="play" size={10} />
-              Resume {resumeAll.count}
-            </button>
-          </Tip>
-        )}
-        {done && archivedCount > 0 && (
-          <button onClick={onToggleArchived} className="hover:text-ink" aria-pressed={showArchived}>
-            {showArchived ? "Hide" : "Show"} {archivedCount} archived
-          </button>
-        )}
+          )}
+        </span>
         {done && toArchive > 0 && (
           <Tip text={archiveTip} className="inline-flex">
             <button onClick={onArchiveAll} className="rounded p-0.5 hover:bg-hover hover:text-ink" aria-label={`Archive all ${toArchive} in Done`}>

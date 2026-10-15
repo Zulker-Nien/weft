@@ -123,7 +123,8 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `Done` **Threads can hand off work** — every board thread has `mcp__board__list_cards` (read-only) and `mcp__board__create_card` (starts in its own folder by default, records `parentId`); no move, stop, archive or read of other cards.
 - `P3` **Show spawned cards** — use `parentId` to show which card started another on the board.
 - `Done` **Copilot event feed** — with each of your messages the copilot gets a digest of cards that finished, need you, or failed since your last one (`lib/copilot-digest.ts`); no extra turns run.
-- `Done` **Copilot on the board** — the copilot shows as a card (✨ whole board) at the top of its column; click opens it in the card window like any thread, Allow/Deny/Stop work on the card, a search hides it.
+- `Done` **Copilot lane** — the copilot left the card list for a lane on the right of the board: minimized it's a column (what finished, what needs you, its latest reply, an ask box), open it's a 520px chat over the hovercaddy cockpit while the columns narrow beside it; ⌘J and the ✨ button toggle it (`components/CopilotLane.tsx`, `lib/copilot-lane.ts`).
+- `P1` **Copilot crew** — pick from several copilots in the top bar (Founder and Eng Manager from gstack, Marketer on BlastCP, Market Researcher on last30days), each a `persona.md` plus a `skills/` folder under `~/.weft/copilots/<id>/`, with its own pilot in the cockpit picture (renders in `~/.weft/show/copilot-cockpit/`).
 - `P2` **Copilot acts on its own** — start a copilot turn when a card finishes or needs you, instead of waiting for your next message.
 - `P1` **Away digest** — "what happened while I was away": a short per-card summary of results since you last looked.
 - `P2` **Spec to cards** — paste a spec; the copilot proposes a set of cards with folders and order, and creates them after you approve.

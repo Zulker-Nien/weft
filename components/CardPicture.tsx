@@ -8,7 +8,8 @@ import { folderName } from "@/lib/format";
 import type { Card } from "@/lib/types";
 
 // The card's latest picture beside its title, bigger on hover; a card with none shows its emoji
-// (or its folder's initial until Haiku picks one) in a small tile instead.
+// (or its folder's initial until Haiku picks one) in a small tile instead. A column narrowed beside
+// the open copilot lane (an @container) hides it, so the title keeps the room.
 export default function CardPicture({ card }: { card: Card }) {
   const [hover, setHover] = useState<DOMRect | null>(null);
   const [broken, setBroken] = useState<string | null>(null);
@@ -17,7 +18,7 @@ export default function CardPicture({ card }: { card: Card }) {
     return (
       <span
         aria-hidden
-        className={`grid size-7 shrink-0 place-items-center rounded-md bg-sunken text-[15px] leading-none ${card.emoji ? "" : "text-[12px] font-semibold text-faint"} ${done ? "opacity-60" : ""}`}
+        className={`grid size-7 shrink-0 place-items-center @max-[180px]:hidden rounded-md bg-sunken text-[15px] leading-none ${card.emoji ? "" : "text-[12px] font-semibold text-faint"} ${done ? "opacity-60" : ""}`}
       >
         {card.emoji ?? monogram(folderName(card.cwd))}
       </span>
@@ -26,7 +27,7 @@ export default function CardPicture({ card }: { card: Card }) {
   const count = card.pictures ?? 0;
   return (
     <span
-      className="relative mt-0.5 size-[52px] shrink-0 cursor-zoom-in"
+      className="relative mt-0.5 size-[52px] shrink-0 cursor-zoom-in @max-[180px]:hidden"
       onMouseEnter={(e) => setHover(e.currentTarget.getBoundingClientRect())}
       onMouseLeave={() => setHover(null)}
     >

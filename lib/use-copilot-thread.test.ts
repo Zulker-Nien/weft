@@ -1,0 +1,116 @@
+// @vitest-environment happy-dom
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { BoardEvent, Card, ThreadItem } from "./types";
+
+const copilot = vi.fn<() => Promise<{ card: Card }>>();
+const thread = vi.fn<(id: string) => Promise<{ items: ThreadItem[] }>>();
+const send = vi.fn<(id: string, text: string) => Promise<void>>();
+const resetCopilot = vi.fn<() => Promise<{ card: Card }>>();
+vi.mock("./client", () => ({
+  api: {
+    copilot: () => copilot(),
+    thread: (id: string) => thread(id),
+    send: (id: string, text: string) => send(id, text),
+    resetCopilot: () => resetCopilot(),
+  },
+  // The real merge keeps live items past the snapshot; enough here to tell merge from replace.
+  mergeThread: (items: ThreadItem[], live: ThreadItem[]) => [...items, ...live.slice(items.length)],
+}));
+
+// Captures the hook's event handlers so a test can play the live stream.
+const stream = vi.hoisted(() => {
+  const handlers: { onEvent: (event: BoardEvent) => void; onOpen: () => void } = { onEvent: () => {}, onOpen: () => {} };
+  return handlers;
+});
+vi.mock("./use-events", () => ({
+  useBoardEvents: (onEvent: (e: BoardEvent) => void, onOpen: () => void) => {
+    stream.onEvent = onEvent;
+    stream.onOpen = onOpen;
+  },
+}));
+
+const { useCopilotThread } = await import("./use-copilot-thread");
+
+const pilot = (over: Partial<Card> = {}) => ({ id: "copilot", role: "copilot", title: "Copilot", column: "review", ...over }) as Card;
+const say = (text: string, at = 1): ThreadItem => ({ kind: "assistant", text, at });
+
+beforeEach(() => {
+  copilot.mockReset().mockResolvedValue({ card: pilot() });
+  thread.mockReset().mockResolvedValue({ items: [say("hello")] });
+  send.mockReset().mockResolvedValue();
+  resetCopilot.mockReset().mockResolvedValue({ card: pilot({ column: "backlog" }) });
+});
+
+afterEach(cleanup);
+
+describe("useCopilotThread", () => {
+  it("loads the copilot's card and thread when the stream opens", async () => {
+    const { result } = renderHook(() => useCopilotThread());
+    act(() => stream.onOpen());
+    await waitFor(() => expect(result.current.items).toEqual([say("hello")]));
+    expect(result.current.card?.id).toBe("copilot");
+    expect(thread).toHaveBeenCalledWith("copilot");
+  });
+
+  it("replaces what it shows on a reconnect", async () => {
+    const { result } = renderHook(() => useCopilotThread());
+    act(() => stream.onOpen());
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+    act(() => stream.onEvent({ type: "thread", cardId: "copilot", index: 1, item: say("live") }));
+    thread.mockResolvedValue({ items: [say("snapshot")] });
+    act(() => stream.onOpen());
+    await waitFor(() => expect(result.current.items).toEqual([say("snapshot")]));
+  });
+
+  it("shows a failed load", async () => {
+    copilot.mockRejectedValueOnce(new Error("down")).mockRejectedValueOnce("offline");
+    const { result } = renderHook(() => useCopilotThread());
+    act(() => stream.onOpen());
+    await waitFor(() => expect(result.current.error).toBe("down"));
+    act(() => stream.onOpen());
+    await waitFor(() => expect(result.current.error).toBe("offline"));
+  });
+
+  it("follows the copilot's live card, thread and streaming text, ignoring other cards", () => {
+    const { result } = renderHook(() => useCopilotThread());
+    act(() => {
+      stream.onEvent({ type: "card", card: pilot({ column: "running" }) });
+      stream.onEvent({ type: "card", card: { ...pilot(), id: "other" } });
+      stream.onEvent({ type: "thread", cardId: "other", index: 0, item: say("not mine") });
+      stream.onEvent({ type: "delta", cardId: "copilot", text: "Hel" });
+      stream.onEvent({ type: "delta", cardId: "other", text: "x" });
+      stream.onEvent({ type: "delta", cardId: "copilot", text: "lo" });
+    });
+    expect(result.current.card?.column).toBe("running");
+    expect(result.current.streaming).toBe("Hello");
+    act(() => stream.onEvent({ type: "thread", cardId: "copilot", index: 0, item: { kind: "user", text: "q", at: 1 } }));
+    expect(result.current.streaming).toBe("Hello");
+    act(() => stream.onEvent({ type: "thread", cardId: "copilot", index: 1, item: say("Hello") }));
+    expect(result.current.streaming).toBe("");
+    act(() => stream.onEvent({ type: "thread", cardId: "copilot", index: 1, item: say("Edited"), truncate: true }));
+    expect(result.current.items).toEqual([{ kind: "user", text: "q", at: 1 }, say("Edited")]);
+    act(() => stream.onEvent({ type: "card_deleted", id: "copilot" }));
+    expect(result.current.card?.column).toBe("running");
+  });
+
+  it("sends to the copilot, clearing an earlier error", async () => {
+    const { result } = renderHook(() => useCopilotThread());
+    act(() => result.current.fail(new Error("oops")));
+    expect(result.current.error).toBe("oops");
+    act(() => result.current.fail("plain"));
+    expect(result.current.error).toBe("plain");
+    await act(() => result.current.send("what's up?"));
+    expect(send).toHaveBeenCalledWith("copilot", "what's up?");
+    expect(result.current.error).toBeNull();
+  });
+
+  it("starts a new chat", async () => {
+    const { result } = renderHook(() => useCopilotThread());
+    act(() => stream.onEvent({ type: "delta", cardId: "copilot", text: "partial" }));
+    await act(() => result.current.newChat());
+    expect(result.current.items).toEqual([]);
+    expect(result.current.streaming).toBe("");
+    expect(result.current.card?.column).toBe("backlog");
+  });
+});
