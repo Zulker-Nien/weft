@@ -10,6 +10,8 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Fixed
 
+- A review step that points at a local page with an anchor or query (`tour.html#built`) now opens that section;
+  the `#` used to be encoded into the filename and the pane showed nothing.
 - The Supabase drawer counted a migration applied through the MCP (which stamps its own version) as not applied; it
   now matches by name too and says how many sit under another version.
 
