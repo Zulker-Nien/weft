@@ -772,7 +772,7 @@ export default function Board() {
         className={`flex shrink-0 items-center gap-3 border-b border-line bg-panel ${mac ? "app-drag mac-title-bar pr-4" : "px-4 py-2.5"}`}
       >
         <h1 className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-ink">
-          <img src="/app-icon.png" alt="" width={18} height={18} />
+          <img src="/app-icon.png" alt="" width={28} height={28} />
           Weft
         </h1>
         <span className="text-[12px] text-muted">
