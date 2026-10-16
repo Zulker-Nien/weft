@@ -7,7 +7,6 @@ import { requireSuperAdminWeft } from "@/lib/admin";
 import { loadAdminLocalOverview } from "@/app/api/admin/local/route";
 
 export const metadata: Metadata = { title: "Weft admin — Settings" };
-export const dynamic = "force-dynamic";
 
 function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   return (
