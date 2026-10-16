@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { saveAttachmentData } from "./attachments";
+import { saveImageData } from "./attachments";
 import { openInPane, paneThumb, paneUrl } from "./browser-tools";
 import { emojiPrompt, parseEmoji } from "./card-pictures";
 import { complete } from "./haiku";
@@ -236,7 +236,7 @@ async function pictureAfterTurn(cardId: string, isCurrent: () => boolean) {
   if (!isCurrent()) return;
   const jpg = await paneThumb(cardId);
   if (!jpg) return;
-  decorateCard(cardId, { thumb: saveAttachmentData(jpg, "pane.jpg", "image/jpeg").url });
+  decorateCard(cardId, { thumb: (await saveImageData(jpg, "pane.jpg", "image/jpeg")).url });
 }
 
 async function writeGlance(cardId: string, ask: string, reply: string, isCurrent: () => boolean) {

@@ -100,24 +100,11 @@ export async function saveAttachment(
   }
   // Convert uploaded raster images once, so composer previews, stored thread refs and model image
   // blocks all use WebP. SVGs and non-images keep their original bytes and extension.
-  let convertedFile: string | undefined;
-  if (mediaKind(name) === "image") {
-    try {
-      const image = sharp(file, { animated: true });
-      const metadata = await image.metadata();
-      if (["jpeg", "png", "gif"].includes(metadata.format)) {
-        const webpName = `${name.slice(0, name.lastIndexOf("."))}.webp`;
-        const webpFile = (convertedFile = path.join(ATTACHMENTS_DIR, webpName));
-        await image.rotate().webp({ quality: 85, effort: 4 }).toFile(webpFile);
-        bytes = fs.statSync(webpFile).size;
-        fs.rmSync(file, { force: true });
-        savedName = webpName;
-        file = webpFile;
-      }
-    } catch {
-      // Keep the original upload if it is malformed or the local image codec cannot decode it.
-      if (convertedFile) fs.rmSync(convertedFile, { force: true });
-    }
+  if (isRaster(name) && (await toWebp(file, path.join(ATTACHMENTS_DIR, webpNameOf(name))))) {
+    fs.rmSync(file, { force: true });
+    savedName = webpNameOf(name);
+    file = path.join(ATTACHMENTS_DIR, savedName);
+    bytes = fs.statSync(file).size;
   }
   if (mediaKind(savedName) === "image" && bytes > MAX_IMAGE_BYTES) makePreview(file);
   return { name: savedName, path: file, url: `/api/attachments/${savedName}`, kind: mediaKind(savedName), bytes };
@@ -128,15 +115,80 @@ export async function saveAttachment(
 export function saveAttachmentData(data: Buffer, originalName: string, type = ""): SavedAttachment {
   fs.mkdirSync(ATTACHMENTS_DIR, { recursive: true });
   const name = fileNameFor(originalName, type, createHash("sha1").update(data).digest("hex").slice(0, 12));
+  if (isRaster(name) && fs.existsSync(path.join(ATTACHMENTS_DIR, webpNameOf(name)))) return savedAs(webpNameOf(name));
   const file = path.join(ATTACHMENTS_DIR, name);
   if (!fs.existsSync(file)) {
-    // Write then rename, so a reader never sees half a file.
-    const temp = `${file}.${process.pid}.tmp`;
-    fs.writeFileSync(temp, data);
-    fs.renameSync(temp, file);
+    writeAtomically(file, data);
     if (mediaKind(name) === "image" && data.length > MAX_IMAGE_BYTES) makePreview(file);
+    // Callers here can't wait (a transcript being read), so the WebP is made beside it for next time.
+    if (isRaster(name)) convertLater(file, name);
   }
-  return { name, path: file, url: `/api/attachments/${name}`, kind: mediaKind(name), bytes: data.length };
+  return savedAs(name);
+}
+
+// saveAttachmentData for callers that can wait: a PNG, JPEG or GIF comes back as WebP straight away, and
+// its original bytes are never kept. Anything else, or bytes sharp can't read, saves as it is.
+export async function saveImageData(data: Buffer, originalName: string, type = ""): Promise<SavedAttachment> {
+  fs.mkdirSync(ATTACHMENTS_DIR, { recursive: true });
+  const name = fileNameFor(originalName, type, createHash("sha1").update(data).digest("hex").slice(0, 12));
+  const webpName = webpNameOf(name);
+  const webpFile = path.join(ATTACHMENTS_DIR, webpName);
+  if (!isRaster(name)) return saveAttachmentData(data, originalName, type);
+  if (fs.existsSync(webpFile)) return savedAs(webpName);
+  const file = path.join(ATTACHMENTS_DIR, name);
+  // An earlier saveAttachmentData kept the original, and threads may point at it: convert from it, keep it.
+  const source = fs.existsSync(file) ? file : `${file}.${process.pid}.src`;
+  if (source !== file) fs.writeFileSync(source, data);
+  const converted = await toWebp(source, webpFile);
+  if (source !== file) fs.rmSync(source, { force: true });
+  if (!converted) return saveAttachmentData(data, originalName, type);
+  if (fs.statSync(webpFile).size > MAX_IMAGE_BYTES) makePreview(webpFile);
+  return savedAs(webpName);
+}
+
+// PNG, JPEG and GIF become WebP; SVG and WebP itself stay as they are.
+const RASTER = new Set(["png", "jpg", "jpeg", "gif"]);
+
+function isRaster(name: string) {
+  return RASTER.has(extensionOf(name));
+}
+
+function webpNameOf(name: string) {
+  return `${name.slice(0, name.lastIndexOf("."))}.webp`;
+}
+
+function savedAs(name: string): SavedAttachment {
+  const file = path.join(ATTACHMENTS_DIR, name);
+  return { name, path: file, url: `/api/attachments/${name}`, kind: mediaKind(name), bytes: fs.statSync(file).size };
+}
+
+// Write then rename, so a reader never sees half a file.
+function writeAtomically(file: string, data: Buffer) {
+  const temp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(temp, data);
+  fs.renameSync(temp, file);
+}
+
+// Converts an image file to WebP at webpFile (through a temp file, so it's never seen half written);
+// false when it isn't a PNG, JPEG or GIF, or sharp can't decode it.
+async function toWebp(file: string, webpFile: string): Promise<boolean> {
+  const temp = `${webpFile}.${process.pid}.tmp`;
+  try {
+    const image = sharp(file, { animated: true });
+    const { format } = await image.metadata();
+    if (!["jpeg", "png", "gif"].includes(format)) return false;
+    await image.rotate().webp({ quality: 85, effort: 4 }).toFile(temp);
+    fs.renameSync(temp, webpFile);
+    return true;
+  } catch {
+    fs.rmSync(temp, { force: true });
+    return false;
+  }
+}
+
+// Only called right after the original is first written, so each file is converted once.
+function convertLater(file: string, name: string) {
+  void toWebp(file, path.join(ATTACHMENTS_DIR, webpNameOf(name)));
 }
 
 // The file for an attachment name, or null if there's no such attachment.

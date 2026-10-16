@@ -126,7 +126,7 @@ describe("pages glance writes and opens in the pane", () => {
     getCard: vi.fn<(id: string) => { id: string; title: string; prompt?: string; emoji?: string; titleBy?: "user" | "auto"; tags?: string[]; tagsBy?: "user" | "auto"; role?: "copilot" } | undefined>(),
     listCards: vi.fn(() => [{ tags: ["auth"] }, { tags: ["auth", "bug"] }]),
     decorateCard: vi.fn(),
-    saveAttachmentData: vi.fn(() => ({ url: "/api/attachments/pane-1.jpg" })),
+    saveImageData: vi.fn(() => Promise.resolve({ url: "/api/attachments/pane-1.webp" })),
   };
   let g: typeof import("./glance");
   let dataDir: string;
@@ -149,7 +149,7 @@ describe("pages glance writes and opens in the pane", () => {
     vi.doMock("./browser-tools", () => ({ paneUrl: h.paneUrl, paneThumb: h.paneThumb, openInPane: h.openInPane }));
     vi.doMock("./haiku", () => ({ complete: h.complete }));
     vi.doMock("./store", () => ({ DATA_DIR: dataDir, getCard: h.getCard, decorateCard: h.decorateCard, listCards: h.listCards }));
-    vi.doMock("./attachments", () => ({ saveAttachmentData: h.saveAttachmentData }));
+    vi.doMock("./attachments", () => ({ saveImageData: h.saveImageData }));
     g = await import("./glance");
   });
 
@@ -227,8 +227,8 @@ describe("pages glance writes and opens in the pane", () => {
       h.complete.mockRejectedValueOnce(new Error("rate limited"));
       h.paneThumb.mockResolvedValueOnce(Buffer.from("jpg"));
       await expect(settle(g.glanceAfterTurn("c1", turn, () => true))).resolves.toBeUndefined();
-      expect(h.saveAttachmentData).toHaveBeenCalledWith(Buffer.from("jpg"), "pane.jpg", "image/jpeg");
-      expect(h.decorateCard).toHaveBeenCalledWith("c1", { thumb: "/api/attachments/pane-1.jpg" });
+      expect(h.saveImageData).toHaveBeenCalledWith(Buffer.from("jpg"), "pane.jpg", "image/jpeg");
+      expect(h.decorateCard).toHaveBeenCalledWith("c1", { thumb: "/api/attachments/pane-1.webp" });
     });
 
     it("waits for the page to paint before capturing it", async () => {

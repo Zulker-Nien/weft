@@ -14,7 +14,7 @@ import { withRedacted } from "./secret-run";
 import { secretAskOf } from "./vault-view";
 import { extractStatus, type BoardStatus } from "./status";
 import { appendThread, getCard, getThread, replaceThreadItem } from "./store";
-import { adoptLocalMedia, toolResult } from "./thread-media";
+import { adoptLocalMedia, liveToolResult, type ToolResult } from "./thread-media";
 import { cacheAfter, columnAfterTurn, eventWindow, modelStats, readResult, turnCost, usageWindow } from "./turn";
 import type { CardStats } from "./types";
 
@@ -127,7 +127,19 @@ function recordEdit(id: string, toolName: string, input: Record<string, unknown>
 function handleToolResults(id: string, session: Session, msg: Extract<SDKMessage, { type: "user" }>): void | Promise<void> {
   const content = msg.message.content;
   if (!Array.isArray(content)) return;
-  const results = content.flatMap((b) => (b.type === "tool_result" && session.toolIndex.has(b.tool_use_id) ? [{ index: session.toolIndex.get(b.tool_use_id) as number, result: toolResult(b.content), isError: Boolean(b.is_error) }] : []));
+  const pending = content.flatMap((b) =>
+    b.type === "tool_result" && session.toolIndex.has(b.tool_use_id)
+      ? [{ index: session.toolIndex.get(b.tool_use_id) as number, result: liveToolResult(b.content), isError: Boolean(b.is_error) }]
+      : [],
+  );
+  // A screenshot is saved as WebP first, so its result waits for that; text-only results store right away.
+  if (pending.every((r) => !(r.result instanceof Promise))) return storeToolResults(id, pending as ToolEntry[]);
+  return Promise.all(pending.map(async (r) => ({ ...r, result: await r.result }))).then((results) => storeToolResults(id, results));
+}
+
+type ToolEntry = { index: number; result: ToolResult; isError: boolean };
+
+function storeToolResults(id: string, results: ToolEntry[]): void | Promise<void> {
   return withRedacted(id, results.map((r) => r.result.result), (texts) => {
     results.forEach(({ index, result, isError }, i) => {
       const item = getThread(id)[index];
@@ -235,4 +247,4 @@ function turnStats(id: string, session: Session, modelUsage: Record<string, Mode
 
 // Every function here, for the session fingerprint (BUILD in lib/runner-session.ts): changing any of them
 // replaces idle sessions started by the old code.
-export const TURN_CODE = [handle, handleRateLimit, handleSuggestion, handleAssistant, recordEdit, handleToolResults, handleResult, finishResult, glanceAfter, refreshLimits, updateStats, turnStats];
+export const TURN_CODE = [handle, handleRateLimit, handleSuggestion, handleAssistant, recordEdit, handleToolResults, storeToolResults, handleResult, finishResult, glanceAfter, refreshLimits, updateStats, turnStats];

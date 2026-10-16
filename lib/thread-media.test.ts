@@ -31,6 +31,46 @@ afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+describe("liveToolResult", () => {
+  it("is toolResult, sync, when there are no images", async () => {
+    const { liveToolResult } = await load();
+    expect(liveToolResult([{ type: "text", text: "hi" }])).toEqual({ result: "hi" });
+    expect(liveToolResult("ok")).toEqual({ result: "ok" });
+  });
+
+  it("returns a Promise when any image block is present, so handleToolResults can wait for the WebP", async () => {
+    const { liveToolResult } = await load();
+    const textOnly = liveToolResult([{ type: "text", text: "no shot" }]);
+    const withShot = liveToolResult([{ type: "image", source: { type: "base64", media_type: "image/png", data: PNG64 } }]);
+    expect(textOnly).not.toBeInstanceOf(Promise);
+    expect(withShot).toBeInstanceOf(Promise);
+    // Resolving the promise returns a ToolResult, never the data URL.
+    const out = await withShot;
+    expect(out.images).toHaveLength(1);
+    expect(out.images![0]).toMatch(/^\/api\/attachments\/screenshot-[0-9a-f]{12}\.webp$/);
+  });
+
+  it("saves a screenshot as WebP before answering, and keeps no PNG", async () => {
+    const { liveToolResult } = await load();
+    const out = await liveToolResult([
+      { type: "text", text: "shot" },
+      { type: "image", source: { type: "base64", media_type: "image/png", data: PNG64 } },
+      { type: "image", data: "", mimeType: "image/png" },
+    ]);
+    expect(out.result).toBe("shot\n[image]");
+    expect(out.images).toEqual([expect.stringMatching(/^\/api\/attachments\/screenshot-[0-9a-f]{12}\.webp$/)]);
+    expect(fs.readdirSync(attachments).filter((f) => f.endsWith(".png"))).toEqual([]);
+  });
+
+  it("falls back to saving the bytes as they are when the WebP save throws", async () => {
+    const { liveToolResult } = await load();
+    const attachmentsModule = await import("./attachments");
+    vi.spyOn(attachmentsModule, "saveImageData").mockRejectedValue(new Error("disk full"));
+    const out = await liveToolResult([{ type: "image", source: { type: "base64", media_type: "image/png", data: PNG64 } }]);
+    expect(out.images).toEqual([expect.stringMatching(/\.png$/)]);
+  });
+});
+
 describe("toolResult", () => {
   it("clips a string result to 4000 characters", async () => {
     const { toolResult } = await load();

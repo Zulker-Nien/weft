@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { saveAttachmentData } from "./attachments";
+import { saveAttachmentData, saveImageData, type SavedAttachment } from "./attachments";
 import { clip } from "./format";
 import { MEDIA_REF, attachmentName, mediaKind, mediaMarkdown } from "./media";
 import { globalSingleton } from "./global-singleton";
@@ -25,21 +25,46 @@ const MAX_COPY_BYTES = 200 * 1024 ** 2;
 // Files already copied, by "path|size|mtime", so a transcript read doesn't hash them again.
 const copied = globalSingleton("__threadboardCopied", () => new Map<string, string>());
 
-// Saves an image block's bytes and returns the attachment, or undefined if it isn't one.
-function saveImageBlock(block: Block, name: string) {
+// An image block's bytes and media type, or undefined if it isn't one.
+function imageBytes(block: Block) {
   const data = block.source?.type === "base64" ? block.source.data : block.data;
   const type = block.source?.media_type ?? block.mimeType ?? "";
   if (block.type !== "image" || !data || !type.startsWith("image/")) return undefined;
+  return { data: Buffer.from(data, "base64"), type };
+}
+
+// Saves an image block's bytes and returns the attachment, or undefined if it isn't one.
+function saveImageBlock(block: Block, name: string) {
+  const image = imageBytes(block);
+  if (!image) return undefined;
   try {
-    return saveAttachmentData(Buffer.from(data, "base64"), name, type);
+    return saveAttachmentData(image.data, name, image.type);
   } catch (err) {
     console.error("Couldn't save an image from the thread:", err);
     return undefined;
   }
 }
 
+export type ToolResult = { result: string; images?: string[] };
+
 // A tool result's text, and the URLs of any images in it (a screenshot, say).
-export function toolResult(content: unknown): { result: string; images?: string[] } {
+export function toolResult(content: unknown): ToolResult {
+  return assemble(content, (block) => saveImageBlock(block, "screenshot"));
+}
+
+// toolResult for a live turn, which can wait for its screenshots to be saved as WebP. Sync when there are none.
+export function liveToolResult(content: unknown): ToolResult | Promise<ToolResult> {
+  const images = Array.isArray(content) ? (content as (Block | null | undefined)[]).filter((b): b is Block => b?.type === "image") : [];
+  if (!images.length) return toolResult(content);
+  const saved = new Map<Block, SavedAttachment | undefined>();
+  const save = async (block: Block) => {
+    const image = imageBytes(block);
+    saved.set(block, image ? await saveImageData(image.data, "screenshot", image.type).catch(() => saveImageBlock(block, "screenshot")) : undefined);
+  };
+  return Promise.all(images.map(save)).then(() => assemble(content, (block) => saved.get(block)));
+}
+
+function assemble(content: unknown, save: (block: Block) => SavedAttachment | undefined): ToolResult {
   if (typeof content === "string") return { result: clip(content, 4000) };
   if (!Array.isArray(content)) return { result: "" };
   const texts: string[] = [];
@@ -47,7 +72,7 @@ export function toolResult(content: unknown): { result: string; images?: string[
   for (const block of content as (Block | null | undefined)[]) {
     if (block?.type === "text") texts.push(block.text ?? "");
     else if (block?.type === "image") {
-      const saved = saveImageBlock(block, "screenshot");
+      const saved = save(block);
       if (saved) images.push(saved.url);
       else texts.push("[image]");
     } else texts.push(`[${block?.type}]`);
