@@ -42,7 +42,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
     `pnpm coverage`): a test file beside each module, routes with their libs mocked, the runner's SDK loop
     against a fake `query()` (`lib/runner.harness.ts`, shared by `lib/runner*.test.ts`), and browser code and React hooks under happy-dom +
     @testing-library/react (`// @vitest-environment happy-dom`). Component tests have started under jsdom
-    (`components/*.test.tsx`: CardView, ReplyBox, NewCardDialog, TagsDialog, TagsDrawer, ThreadPanel, ColumnHeader, SettingsDialog; Composer stubbed by `components/composer-mock.tsx`);
+    (`components/*.test.tsx`: CardView, ReplyBox, NewCardDialog, TagsDialog, TagsDrawer, ThreadPanel, ColumnHeader, SettingsDialog, LibraryRail; Composer stubbed by `components/composer-mock.tsx`);
     `electron/main-menu-popup.test.ts` is the first test in `electron/`. The rest of `components/` and `electron/`
     are untested and outside the coverage set; add tests with any risky change, and keep new lib code at 100%.
 
@@ -216,6 +216,9 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   a tool output over 2 KB when its row opens (docs/architecture/cloud-sync.md).
   `app/[orgSlug]/board` + `components/web-board/*` + `lib/web-board.ts`: the weft.zip board is the desktop's own `CardView` (`readOnly`),
   `ColumnHeader`, `lib/board-view.ts` and `ThreadEntries` over Realtime, not a lookalike; change the desktop card or thread and the web follows.
+  `lib/cloud-commands.ts` + `lib/cloud-inbox.ts` + `lib/new-card.ts` + `lib/web-commands.ts` + `components/web-board/WebNewCardDialog.tsx`: **New thread** on the web board
+  inserts a `cloud_commands` row (`supabase/migrations/20261016130000_card_commands.sql`); the Mac it names hears it over Realtime, checks it (its device, its account, a
+  synced folder, its workspace), makes the card through the same `createCardFromBody` as `POST /api/cards`, starts it and reports back; the card syncs up like any other.
 - `app/api/*` + `lib/guard.ts`: localhost-only Host check, writes need `x-threadboard: 1`.
 - `lib/restart-guard.ts`: turns away Bash that would kill or restart Weft itself (its server pid, port, `next dev`, the app)
   while other cards' turns run, since a restart cuts them all off; in every thread via `guardedCli()`.
