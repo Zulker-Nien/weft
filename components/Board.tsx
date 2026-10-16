@@ -1,14 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { copilotLaneOpen, copilotLanePeek, setCopilotLaneOpen, setCopilotLanePeek, showBacklog, subscribeBoardPrefs } from "@/lib/board-prefs";
-import { columnMinWidth, laneStateFromPrefs, LANE_CYCLE, type LaneState } from "@/lib/copilot-lane";
-import { api, mergeThread, type BrowserState, type MenuAction, type NewCardInput } from "@/lib/client";
+import { copilotLaneOpen, copilotLanePeek, showBacklog, subscribeBoardPrefs } from "@/lib/board-prefs";
+import { laneStateFromPrefs, type LaneState } from "@/lib/copilot-lane";
+import { api, mergeThread, type BrowserState, type MenuAction } from "@/lib/client";
 import { worktreeParent } from "@/lib/format";
 import { busyHere } from "@/lib/overlap";
-import { startPileReview } from "@/lib/pile-review";
 import { planResets } from "@/lib/schedule";
-import { COLUMNS, COPILOT_ID, type BoardEvent, type Card, type Column, type LoginView, type Project, type ThreadItem } from "@/lib/types";
+import { COLUMNS, type BoardEvent, type Card, type Column, type LoginView, type Project, type ThreadItem } from "@/lib/types";
 import { useShortcutHint, useShortcutListener, useShortcuts } from "@/lib/hotkeys";
 import { playChime, preloadChimes } from "@/lib/chimes";
 import {
@@ -26,15 +25,17 @@ import { useBoardEvents } from "@/lib/use-events";
 import { useRestart } from "@/lib/use-restart";
 import { useDesktopBridge } from "@/lib/use-desktop-bridge";
 import { useStartupCheck } from "@/lib/use-startup-check";
-import { readViewPrefs, writeViewPrefs } from "@/lib/view-prefs";
 import { useNow } from "@/lib/use-now";
 import { useToast } from "@/lib/use-toast";
 import { useCopilotCard } from "@/lib/use-copilot-card";
+import { useBoardCardActions } from "@/lib/use-board-card-actions";
+import { useBoardView } from "@/lib/use-board-view";
+import { useBoardArchive } from "@/lib/use-board-archive";
+import { useBoardActions } from "@/lib/use-board-actions";
+import { useBoardToggles } from "@/lib/use-board-toggles";
 import { resumeActions } from "@/lib/resume-actions";
-import { archivedMessage, neighborAfter } from "@/lib/archive";
 import { useEscape } from "@/lib/use-escape";
 import { announceAccountChange } from "@/lib/use-account";
-import ColumnPlaceholder from "./ColumnPlaceholder";
 import CrashGuard from "./CrashGuard";
 import { guarded } from "./guarded";
 import type { PaletteItem } from "./CommandPalette";
@@ -44,8 +45,7 @@ import { addSecret } from "@/lib/use-vault";
 import { addWebhookAsk } from "@/lib/use-webhooks";
 import { parseWebhookAsk } from "@/lib/webhooks-view";
 import Icon from "./Icon";
-import ColumnHeader from "./ColumnHeader";
-import { filterCards, isFiltering, railPinned, addTag, toggleTag, type RailFilter, type RailPanel } from "@/lib/rail-view";
+import { filterCards, isFiltering, railPinned, toggleTag, type RailFilter, type RailPanel } from "@/lib/rail-view";
 import { TagColors } from "./TagPill";
 import { useTagCatalog } from "./use-tag-catalog";
 import { useBoardMenus } from "./use-board-menus";
@@ -53,6 +53,11 @@ import { useSwitchAll } from "./switch-all-button";
 import ProjectBar, { folderName } from "./ProjectBar";
 import FilterBox from "./FilterBox";
 import { NO_DRAG } from "@/lib/no-drag";
+import { filterHasFocus as filterHasFocusImpl, focusFilter as focusFilterImpl, jumpToNeedsYou as jumpToNeedsYouImpl, moveFocus as moveFocusImpl, openFocused as openFocusedImpl } from "@/lib/board-focus";
+import { announce, showPage, without } from "@/lib/board-helpers";
+import BoardHeader from "./BoardHeader";
+import BoardColumn, { COLUMN_LIMIT } from "./BoardColumn";
+import BoardToast from "./BoardToast";
 
 // Each loads in its own CrashGuard (components/guarded.tsx), so a piece a thread left half-written, even one that
 // fails as its module loads, breaks only its own spot on the board.
@@ -89,46 +94,8 @@ const CLOSED_BROWSER: BrowserState = {
   zoom: 100,
 };
 
-// Cards shown per column until "Show more"; picking up Claude Code sessions can put hundreds in one.
-const COLUMN_LIMIT = 40;
 // Cards the filter box lists under itself while typing.
 const FILTER_MATCHES = 5;
-
-function without(set: ReadonlySet<string>, id: string) {
-  const next = new Set(set);
-  next.delete(id);
-  return next;
-}
-
-function lastFolder() {
-  try {
-    return localStorage.getItem("threadboard.cwd");
-  } catch {
-    return null;
-  }
-}
-
-// A desktop notification when a card changes column while the app isn't focused.
-function announce(card: Card, onClick: () => void) {
-  const message =
-    card.column === "needs_you"
-      ? `${card.title} needs you`
-      : card.column === "review"
-        ? `${card.title} is ready for review`
-        : card.column === "done"
-          ? `${card.title} is done`
-          : null;
-  if (!message || typeof Notification === "undefined" || document.hasFocus()) return;
-  if (Notification.permission !== "granted") {
-    if (Notification.permission === "default") void Notification.requestPermission();
-    return;
-  }
-  const notification = new Notification(message, { body: card.pending?.title ?? card.lastLine ?? "" });
-  notification.onclick = () => {
-    window.focus();
-    onClick();
-  };
-}
 
 export default function Board() {
   const [cards, setCards] = useState<Card[]>([]);
@@ -159,15 +126,11 @@ export default function Board() {
   const { copilot, update: updateCopilot, load: loadCopilot } = useCopilotCard();
   const copilotNeedsYou = copilot?.column === "needs_you";
   const [projects, setProjects] = useState<Project[]>([]);
-  const [project, setProject] = useState<string | null>(null);
   // Worktree folder -> its main repo, from the server; the bar shows each worktree's cards under that repo.
   const [roots, setRoots] = useState<Record<string, string>>({});
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<SortKey>("newest");
   const [menuOpen, setMenuOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
-  // The cards the last archive filed away, for Z and the toast's Undo.
-  const [lastArchived, setLastArchived] = useState<string[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
@@ -179,8 +142,6 @@ export default function Board() {
   const columns = useRef(new Map<string, Column>());
   // Each card's last known error, to chime when a new one appears.
   const errors = useRef(new Map<string, string | undefined>());
-  // Moves you made, by card: where to and when, so their chime is skipped.
-  const ownMoves = useRef(new Map<string, { column: Column; at: number }>());
   const selectedRef = useRef<string | null>(null);
   // Cards that moved (with a chime) while you weren't looking; highlighted until you open them.
   const [unseen, setUnseen] = useState<ReadonlySet<string>>(new Set());
@@ -240,6 +201,49 @@ export default function Board() {
     },
     [loadThread],
   );
+
+  // Computed early so the hooks below (actions, toggles, archive) can take it as a dep.
+  const laneOpen = useSyncExternalStore(subscribeBoardPrefs, copilotLaneOpen, () => false);
+  const lanePeek = useSyncExternalStore(subscribeBoardPrefs, copilotLanePeek, () => false);
+  const laneState: LaneState = laneStateFromPrefs(laneOpen, lanePeek);
+  // The copilot opens in the same window as any card, though it lives apart from `cards`.
+  const selected = cards.find((c) => c.id === selectedId) ?? (copilot?.id === selectedId ? copilot : null);
+  // The most recent card's folder, for places that need a cwd when no card is open.
+  const latest = latestLimits(cards);
+  const latestCwd = latest?.cwd;
+
+  // Drag/drop, tag, and the "skip my own move's chime" ref (used by useBoardEvents below).
+  const { ownMoves, move, drop, tagCard } = useBoardCardActions({ cards, setDragOver, notify });
+  // Project filter and sort, persisted to a cookie.
+  const { project, sort, chooseProject, chooseSort, loadFromPrefs } = useBoardView({ select, setWebBrowserOpen });
+  // Archive, unarchive, focus the next card, and the last batch (for Z / Undo).
+  const { archiveTarget, archiveCards, toggleArchive, unarchive, lastArchived } = useBoardArchive({
+    cards,
+    selected,
+    selectedIdRef: selectedRef,
+    select,
+    setToast,
+    notify,
+  });
+  // Open, create, and the header badges' "start a card" callbacks.
+  const { openCard, openNew, create, improveQuality, reviewAll } = useBoardActions({
+    selected,
+    select,
+    setShowNew,
+    setNewCwd,
+    project,
+    latestCwd,
+    notify,
+  });
+  // Browser, terminal, and copilot-lane state.
+  const { toggleBrowser, toggleTerminal, toggleCopilot, setCopilotState } = useBoardToggles({
+    selectedRef,
+    browserVisible: browser.visible,
+    setWebBrowserOpen,
+    setTerminalOpen,
+    laneState,
+    select,
+  });
 
   // Live updates. The first open (and every reconnect) reloads everything, so nothing is missed.
   useBoardEvents(
@@ -335,9 +339,7 @@ export default function Board() {
           setProjects(settings.projects);
         })
         .catch(() => {});
-      const prefs = readViewPrefs();
-      if (prefs.project !== undefined) setProject(prefs.project);
-      if (prefs.sort && prefs.sort in SORTERS) setSort(prefs.sort);
+      loadFromPrefs();
       loadCopilot();
       restartView.reload();
       if (selectedRef.current) loadThread(selectedRef.current);
@@ -360,27 +362,34 @@ export default function Board() {
     };
   }, [showNew]);
 
-  // The menu, dock, tray, and shortcuts reach the board through onMenu, which always sees the latest state.
+  // The menu, dock, tray, and shortcuts reach the board through onMenu, which always sees the latest
+  // state via this ref (the actions live below, defined after this effect).
+  const menuActions = useRef<{ openNew: () => void; openCard: (card: Card) => void; focusFilter: () => void; toggleTerminal: () => void }>({
+    openNew: () => {},
+    openCard: () => {},
+    focusFilter: () => {},
+    toggleTerminal: () => {},
+  });
   useEffect(() => {
     onMenu.current = (action, payload) => {
       switch (action) {
         case "new-thread":
-          openNew();
+          menuActions.current.openNew();
           break;
         case "settings":
           setShowSettings(true);
           break;
         case "open-card": {
           const card = cards.find((c) => c.id === payload);
-          if (card) openCard(card);
+          if (card) menuActions.current.openCard(card);
           else if (payload) select(payload);
           break;
         }
         case "find":
-          focusFilter();
+          menuActions.current.focusFilter();
           break;
         case "terminal":
-          toggleTerminal();
+          menuActions.current.toggleTerminal();
           break;
         // A thread added a webhook for you to register: the 🪝 drawer opens on its row.
         case "add-webhook":
@@ -407,11 +416,6 @@ export default function Board() {
   const { resume, all: resumeAll } = resumeActions(byColumn.get("review") ?? [], notify);
   // Backlog hides unless Settings turns it on, but never hides cards waiting in it.
   const backlogOn = useSyncExternalStore(subscribeBoardPrefs, showBacklog, () => false);
-  // The copilot's lane has three states (lib/copilot-lane.ts): hidden (hider pill, default), peek
-  // (the 236px digest column), open (the 520px chat). ⌘J and the top bar button cycle through them.
-  const laneOpen = useSyncExternalStore(subscribeBoardPrefs, copilotLaneOpen, () => false);
-  const lanePeek = useSyncExternalStore(subscribeBoardPrefs, copilotLanePeek, () => false);
-  const laneState: LaneState = laneStateFromPrefs(laneOpen, lanePeek);
   const visibleColumns = COLUMNS.filter(
     (c) => c.id !== "backlog" || backlogOn || cards.some((card) => card.column === "backlog" && !card.archived),
   );
@@ -425,13 +429,10 @@ export default function Board() {
     return project && !paths.includes(project) ? [project, ...paths] : paths;
   }, [project, projects]);
 
-  // The copilot opens in the same window as any card, though it lives apart from `cards`.
-  const selected = cards.find((c) => c.id === selectedId) ?? (copilot?.id === selectedId ? copilot : null);
   // An open card, or the New thread form, fills a framed window with the browser pane beside it.
   const framed = Boolean(selected) || showNew;
   // The most recent card's stats (and folder/backend), so the footer has a model/folder to show
   // when no card is open. Account-wide limits live in here too.
-  const latest = latestLimits(cards);
   const footerStats = selected ? selected.stats : latest;
   const footerCwd = selected ? selected.cwd : latest?.cwd;
   const footerBackend = selected ? selected.backend : latest?.backend;
@@ -447,50 +448,9 @@ export default function Board() {
   // Shortcuts that act on the board stand down while a dialog or the project menu is up.
   const boardKeys = !(showNew || showSettings || showHelp || showPalette || Boolean(login) || menuOpen);
 
-  function filterHasFocus() {
-    return document.activeElement === document.querySelector('input[placeholder="Filter cards"]');
-  }
-
   function openPalette(initial: string) {
     setPaletteQuery(initial.trim());
     setShowPalette(true);
-  }
-
-  function focusFilter() {
-    const input = document.querySelector<HTMLInputElement>('input[placeholder="Filter cards"]');
-    input?.focus();
-    input?.select();
-  }
-
-  // Moves keyboard focus between the rendered cards. dx steps to the next column that has cards, dy up or
-  // down the current one, and "first" and "last" jump within it. With nothing focused it starts at the
-  // open card, or else the first card on the board.
-  function moveFocus(move: { dx?: number; dy?: number; edge?: "first" | "last" }) {
-    const inColumn = (id: string) => [...document.querySelectorAll<HTMLElement>(`[data-column="${id}"] [data-card-id]`)];
-    const current =
-      document.activeElement?.closest<HTMLElement>("[data-card-id]") ??
-      (selectedId ? inColumn(selected?.column ?? "").find((el) => el.dataset.cardId === selectedId) : undefined);
-    const ids = visibleColumns.map((c) => c.id);
-    const column = current?.closest<HTMLElement>("[data-column]")?.dataset.column as Column | undefined;
-    if (!current || !column) {
-      const first = ids.map(inColumn).find((list) => list.length > 0);
-      first?.[0]?.focus();
-      return;
-    }
-    const list = inColumn(column);
-    const row = list.indexOf(current);
-    if (move.dx) {
-      for (let i = ids.indexOf(column) + move.dx; i >= 0 && i < ids.length; i += move.dx) {
-        const next = inColumn(ids[i] ?? "");
-        if (next.length) {
-          next[Math.min(row, next.length - 1)]?.focus();
-          return;
-        }
-      }
-      return;
-    }
-    const target = move.edge === "first" ? 0 : move.edge === "last" ? list.length - 1 : row + (move.dy ?? 0);
-    list[Math.max(0, Math.min(list.length - 1, target))]?.focus();
   }
 
   // Steps through the project filter: "All projects", then each project in the bar's order.
@@ -502,49 +462,52 @@ export default function Board() {
     chooseSort(stepThrough(Object.keys(SORTERS) as SortKey[], sort, 1));
   }
 
-  function jumpToNeedsYou() {
-    const list = [...document.querySelectorAll<HTMLElement>('[data-column="needs_you"] [data-card-id]')];
-    if (!list.length) return false;
-    const at = list.findIndex((el) => el.contains(document.activeElement));
-    list[(at + 1) % list.length]?.focus();
-  }
+  // Focus helpers (lib/board-focus.ts) — bound to the board's column / card layout.
+  const filterHasFocus = () => filterHasFocusImpl();
+  const focusFilter = () => focusFilterImpl();
+  const moveFocus = (move: { dx?: number; dy?: number; edge?: "first" | "last" }) =>
+    moveFocusImpl(move, visibleColumns, selectedId, selected?.column ?? null);
+  const jumpToNeedsYou = () => jumpToNeedsYouImpl();
+  const openFocused = (e: KeyboardEvent) => openFocusedImpl(e, cards, openCard);
 
-  // Enter only opens a card that has focus itself, so it still presses a button inside one.
-  function openFocused(e: KeyboardEvent) {
-    const el = document.activeElement?.closest<HTMLElement>("[data-card-id]");
-    const card = cards.find((c) => c.id === el?.dataset.cardId);
-    if (!card || (e.key === "Enter" && e.target !== el)) return false;
-    openCard(card);
-  }
+  // Keep the menu's actions in sync (the effect above runs every render and reads the latest).
+  useEffect(() => {
+    menuActions.current = { openNew, openCard, focusFilter, toggleTerminal };
+  });
 
   // Everything the command palette offers: the board's actions, the projects, and every card.
+  // Computed lazily: only when the palette is open (`showPalette`), so creating a fresh array of
+  // items every render would just churn. Each callback is wrapped so the type analyzer doesn't tag
+  // a useCallback return as a ref passed into boardPaletteItems.
   function paletteItems(): PaletteItem[] {
-    return boardPaletteItems(
-      { cards, selected, projectSummaries, home, doneToArchive, lastArchived, archivedCount, showArchived, rootOf, restartArmed: !!restartView.restart?.armed },
-      {
-        openNew: () => openNew(),
-        focusFilter,
-        toggleCopilot,
-        toggleBrowser,
-        toggleTerminal,
-        openSettings: () => setShowSettings(true),
-        openHelp: () => setShowHelp(true),
-        addSecret: () => addSecret(setLibraryOpen),
-        jumpToNeedsYou: () => void jumpToNeedsYou(),
-        archiveCards,
-        unarchive,
-        toggleShowArchived: () => setShowArchived((v) => !v),
-        chooseSort,
-        focusReply: () => document.querySelector<HTMLElement>('aside [contenteditable="true"], aside textarea')?.focus(),
-        closeThread: () => select(null),
-        toggleArchive,
-        stop: (id) => void api.stop(id).catch(notify),
-        move,
-        chooseProject,
-        openCard,
-        toast: setToast,
-      },
-    );
+    return showPalette
+      ? boardPaletteItems(
+          { cards, selected, projectSummaries, home, doneToArchive, lastArchived, archivedCount, showArchived, rootOf, restartArmed: !!restartView.restart?.armed },
+          {
+            openNew: () => openNew(),
+            focusFilter: () => focusFilter(),
+            toggleCopilot: () => toggleCopilot(),
+            toggleBrowser: () => toggleBrowser(),
+            toggleTerminal: () => toggleTerminal(),
+            openSettings: () => setShowSettings(true),
+            openHelp: () => setShowHelp(true),
+            addSecret: () => addSecret(setLibraryOpen),
+            jumpToNeedsYou: () => void jumpToNeedsYou(),
+            archiveCards: (l: Card[]) => archiveCards(l),
+            unarchive: (ids: string[]) => unarchive(ids),
+            toggleShowArchived: () => setShowArchived((v) => !v),
+            chooseSort: (s: SortKey) => chooseSort(s),
+            focusReply: () => document.querySelector<HTMLElement>('aside [contenteditable="true"], aside textarea')?.focus(),
+            closeThread: () => select(null),
+            toggleArchive: (c: Card) => toggleArchive(c),
+            stop: (id: string) => void api.stop(id).catch(notify),
+            move: (id: string, column: Column) => move(id, column),
+            chooseProject: (p: string | null) => chooseProject(p),
+            openCard: (c: Card) => openCard(c),
+            toast: setToast,
+          },
+        )
+      : [];
   }
 
   // The prompts the user wrote that match a query, as palette items that open their card.
@@ -589,84 +552,6 @@ export default function Board() {
   useShortcutListener();
   const hint = useShortcutHint();
 
-  function chooseProject(path: string | null) {
-    // A new project starts clean: close the open thread and its browser.
-    if (path !== project) {
-      select(null);
-      if (window.threadboard) window.threadboard.browser.setVisible(false);
-      else setWebBrowserOpen(false);
-    }
-    setProject(path);
-    writeViewPrefs({ project: path, sort });
-    // Have a CLI ready in that folder for the next new thread.
-    if (path) api.warm({ cwd: path }).catch(() => {});
-  }
-
-  function chooseSort(next: SortKey) {
-    setSort(next);
-    writeViewPrefs({ project, sort: next });
-  }
-
-  function openNew(folder?: string) {
-    setNewCwd(folder);
-    setShowNew(true);
-    const cwd = folder ?? project ?? lastFolder();
-    if (cwd) api.warm({ cwd }).catch(() => {});
-  }
-
-  // Archiving closes the thread; unarchiving leaves it open.
-  function toggleArchive(card: Card) {
-    if (card.archived) api.archive(card.id, false).catch(notify);
-    else archiveCards([card]);
-  }
-
-  // Archives the cards and offers an Undo (the toast's button, or Z). Keyboard focus moves to the next card
-  // in the column, so E, E, E clears a column.
-  function archiveCards(list: Card[], message = archivedMessage(list.map((c) => c.title))) {
-    if (!list.length) return;
-    const ids = list.map((c) => c.id);
-    const column = document.querySelector(`[data-card-id="${ids[0]}"]`)?.closest<HTMLElement>("[data-column]");
-    const shown = [...(column?.querySelectorAll<HTMLElement>("[data-card-id]") ?? [])];
-    const next = neighborAfter(shown.map((el) => el.dataset.cardId ?? ""), ids);
-    if (selectedRef.current && ids.includes(selectedRef.current)) select(null);
-    shown.find((el) => el.dataset.cardId === next)?.focus();
-    Promise.all(ids.map((id) => api.archive(id, true))).catch(notify);
-    setLastArchived(ids);
-    setToast(message, { label: "Undo", run: () => unarchive(ids) });
-  }
-
-  function unarchive(ids: string[]) {
-    setLastArchived([]);
-    setToast(null);
-    Promise.all(ids.map((id) => api.archive(id, false))).catch(notify);
-  }
-
-  // The card the archive keys act on: the one with keyboard focus, else the open thread.
-  function archiveTarget(): Card | undefined {
-    const el = document.activeElement?.closest<HTMLElement>("[data-card-id]");
-    return cards.find((c) => c.id === el?.dataset.cardId) ?? selected ?? undefined;
-  }
-
-  // A card dropped on a tag in the 🏷 drawer gets that tag.
-  function tagCard(cardId: string, tag: string) {
-    const card = cards.find((c) => c.id === cardId);
-    const next = card && addTag(card.tags, tag);
-    if (next) api.mark(cardId, { tags: next }).catch(notify);
-  }
-
-  function openCard(card: Card) {
-    select(card.id);
-    // Start its CLI now so a reply doesn't wait.
-    if (!card.warm && card.column !== "done") api.warm({ cardId: card.id }).catch(() => {});
-  }
-
-  function toggleBrowser() {
-    // An open card and its browser are one window: they open and close together.
-    if (selectedRef.current) return;
-    if (window.threadboard) window.threadboard.browser.setVisible(!browser.visible);
-    else setWebBrowserOpen((open) => !open);
-  }
-
   // Escape closes the newest open layer. The board's own panels sit under any dialog or menu, even one
   // opened before them. The thread closes even mid-reply: ReplyBox keeps the draft for next time. A card
   // and its browser are one window, so they close together.
@@ -674,40 +559,6 @@ export default function Board() {
   useEscape(browserOpen && !selectedId && !showNew, toggleBrowser, { panel: true });
   // Registered last, so an open rail drawer closes before the browser does.
   useEscape(Boolean(libraryOpen) && !selectedId && !showNew && !railPinned(), () => setLibraryOpen(null), { panel: true });
-
-  function toggleTerminal() {
-    setTerminalOpen((open) => !open);
-  }
-
-  // The ✨ button, ⌘J and the palette open or minimize the copilot's lane on the right of the board;
-  // only the global hotkey (⌃⌥Space) still opens its own window, for when the board is hidden.
-  // Cycles hidden → peek → open → hidden, so the user can stop at the digest instead of jumping past it.
-  function toggleCopilot() {
-    setCopilotState(LANE_CYCLE[laneState]);
-  }
-
-  // Move the copilot's lane to a specific state. Closes the copilot card if it's open, so it doesn't
-  // overlap the new lane.
-  function setCopilotState(next: "hidden" | "peek" | "open") {
-    if (selectedRef.current === COPILOT_ID) select(null);
-    setCopilotLaneOpen(next === "open");
-    setCopilotLanePeek(next === "peek");
-  }
-
-  // Moves a card for you, remembering it so the move doesn't chime.
-  function move(id: string, column: Column) {
-    ownMoves.current.set(id, { column, at: Date.now() });
-    api.move(id, column).catch(notify);
-  }
-
-
-  function drop(column: Column, e: React.DragEvent) {
-    e.preventDefault();
-    setDragOver(null);
-    const id = e.dataTransfer.getData("text/plain");
-    const card = cards.find((c) => c.id === id);
-    if (card && card.column !== column) move(id, column);
-  }
 
   const tagCatalog = useTagCatalog(cards, notify);
   const { onCardMenu, onColumnMenu, toggleStar, tagging, editTags, saveTags, closeTags } = useBoardMenus({
@@ -740,83 +591,35 @@ export default function Board() {
     notify,
   });
 
-  // The header badges' cards: the quality badge's fixes and the pile counter's commit walk-through.
-  // Resolves to the new card's id, so a caller can open it.
-  async function improveQuality(cwd: string, prompt: string, title: string, model?: string): Promise<string | undefined> {
-    const { card } = await api.create({ title, prompt, cwd, backend: "claude", model, start: true });
-    return card.id;
-  }
-
-  // "Review all" on the Review column: the same commit walk-through card the pile counter starts, opened
-  // right away (in a busy Review column it got lost among the others), on Settings → Models → Review all.
-  async function reviewAll() {
-    const cwd = selected?.cwd ?? project ?? latest?.cwd;
-    if (!cwd) return;
-    try {
-      const { reviewAllModel } = await api.settings();
-      await startPileReview(cwd, (c, prompt, title) => improveQuality(c, prompt, title, reviewAllModel || undefined), select);
-    } catch (err) {
-      notify(err);
-    }
-  }
-
-  // A new card lands in its column without opening, so after ⌘↵ the keyboard is back on the board
-  // (opening it moved focus where Escape couldn't reach).
-  async function create(input: NewCardInput) {
-    await api.create(input);
-  }
-
   return (
     <TagColors.Provider value={tagCatalog.colors}>
     <div className="flex h-screen flex-col">
-      <header
-        className={`flex shrink-0 items-center gap-3 border-b border-line bg-panel ${mac ? "app-drag mac-title-bar pr-4" : "px-4 py-2.5"}`}
-      >
-        <h1 className="flex items-center gap-2 text-[15px] font-semibold tracking-tight text-ink">
-          <img src="/app-icon.png" alt="" width={28} height={28} />
-          Weft
-        </h1>
-        <span className="text-[12px] text-muted">
-          {running} running
-          {waiting > 0 && <span className="text-warn"> · {waiting} need{waiting === 1 ? "s" : ""} you</span>}
-        </span>
-        <RestartChip restart={restartView.restart} notify={notify} />
-        <HeaderBadges cwd={selected?.cwd ?? project ?? latest?.cwd} cards={cards} start={improveQuality} notify={notify} toast={setToast} />
-        <div className="flex-1" />
-        <CopilotButton open={laneOpen} needsYou={copilotNeedsYou} title={hint("copilot", "Copilot")} onClick={toggleCopilot} />
-        <button
-          onClick={toggleBrowser}
-          title={hint("browser", "Browser")}
-          className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12.5px] ${browserOpen ? "border-accent bg-accent-soft text-accent" : "border-line-strong text-ink hover:bg-sunken"}`}
-        >
-          <Icon name="globe" size={14} /> Browser
-        </button>
-        <button
-          onClick={toggleTerminal}
-          title={hint("terminal", "Terminal")}
-          aria-label="Terminal"
-          className={`rounded-md border p-1.5 ${terminalOpen ? "border-accent bg-accent-soft text-accent" : "border-line-strong text-muted hover:bg-sunken hover:text-ink"}`}
-        >
-          <Icon name="terminal" size={15} />
-        </button>
-        <button
-          onClick={() => setShowSettings(true)}
-          title={hint("settings", "Settings")}
-          aria-label="Settings"
-          className="rounded-md border border-line-strong p-1.5 text-muted hover:bg-sunken hover:text-ink"
-        >
-          <Icon name="sliders" size={15} />
-        </button>
-        <button
-          onClick={() => openNew()}
-          title={hint("new-thread", "New thread")}
-          className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-[12.5px] font-medium text-on-accent hover:opacity-90"
-        >
-          <Icon name="plus" size={14} /> New thread
-          <kbd className="ml-0.5 rounded border border-current/30 px-1 font-mono text-[10.5px] leading-[15px] opacity-70">N</kbd>
-        </button>
-        <AccountButton onOpenSettings={() => setShowSettings(true)} />
-      </header>
+      <BoardHeader
+        mac={mac}
+        running={running}
+        waiting={waiting}
+        browserOpen={browserOpen}
+        terminalOpen={terminalOpen}
+        hint={hint}
+        onToggleBrowser={toggleBrowser}
+        onToggleTerminal={toggleTerminal}
+        onOpenSettings={() => setShowSettings(true)}
+        onOpenNew={() => openNew()}
+        restartChip={<RestartChip restart={restartView.restart} notify={notify} />}
+        headerBadges={
+          <HeaderBadges
+            cwd={selected?.cwd ?? project ?? latest?.cwd}
+            cards={cards}
+            start={improveQuality}
+            notify={notify}
+            toast={setToast}
+          />
+        }
+        copilotButton={
+          <CopilotButton open={laneOpen} needsYou={copilotNeedsYou} title={hint("copilot", "Copilot")} onClick={toggleCopilot} />
+        }
+        accountButton={<AccountButton onOpenSettings={() => setShowSettings(true)} />}
+      />
 
       <CrashGuard what="project bar" className="mx-3 mt-2">
       <ProjectBar
@@ -875,73 +678,58 @@ export default function Board() {
             const shown = expandedColumns.includes(column.id) ? list : list.slice(0, COLUMN_LIMIT);
             const count = list.length;
             return (
-              <section
+              <BoardColumn
                 key={column.id}
-                data-column={column.id}
+                column={column}
+                shown={shown}
+                count={count}
+                loaded={loaded}
+                filtering={filtering}
+                dragOver={dragOver === column.id}
+                laneState={laneState}
+                onShowMore={() => setExpanded({ view, columns: [...expandedColumns, column.id] })}
+                renderCard={(card) => (
+                  <CardView
+                    key={card.id}
+                    guardName={card.title}
+                    card={card}
+                    now={now}
+                    selected={card.id === selectedId}
+                    lastOpen={card.id === lastOpenId}
+                    unseen={unseen.has(card.id)}
+                    alsoHere={busyHere(cards, card)}
+                    onOpen={() => openCard(card)}
+                    onAnswer={(allow) => void api.answer(card.id, allow, undefined, card.pending?.id).catch(notify)}
+                    onStop={() => void api.stop(card.id).catch(notify)}
+                    onResume={(how) => resume(card.id, how)}
+                    onContextMenu={(e) => void onCardMenu(card, e)}
+                    onStar={() => toggleStar(card)}
+                    onTag={(tag) => setRailFilter((f) => toggleTag(f, tag))}
+                  />
+                )}
                 onDragOver={(e) => {
                   e.preventDefault();
                   setDragOver(column.id);
                 }}
                 onDragLeave={() => setDragOver((c) => (c === column.id ? null : c))}
                 onDrop={(e) => drop(column.id, e)}
-                onContextMenu={(e) => void onColumnMenu(column.id, e)}
-                // Columns narrow beside the copilot's lane, down to a floor, before the board scrolls.
-                style={{ minWidth: columnMinWidth(laneState) }}
-                className={`@container flex w-[264px] shrink flex-col rounded-xl border ${dragOver === column.id ? "border-accent bg-accent-soft" : "border-transparent bg-sunken"}`}
-              >
-                <ColumnHeader
-                  column={column}
-                  count={loaded ? count : null}
-                  needsYou={column.id === "needs_you" && count > 0}
-                  archivedCount={archivedCount}
-                  showArchived={showArchived}
-                  onToggleArchived={() => setShowArchived((v) => !v)}
-                  toArchive={doneToArchive.length}
-                  archiveTip={hint("archive-done", `Archive all ${doneToArchive.length}`)}
-                  onArchiveAll={() => archiveCards(doneToArchive)}
-                  resumeAll={column.id === "review" ? resumeAll : undefined}
-                  onSwitchAll={limitHit && (column.id === "running" || column.id === "needs_you") ? () => switchAll(column.id) : undefined}
-                  onReviewAll={column.id === "review" ? reviewAll : undefined}
-                />
-                <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
-                  {shown.map((card) => (
-                    <CardView
-                      key={card.id}
-                      guardName={card.title}
-                      card={card}
-                      now={now}
-                      selected={card.id === selectedId}
-                      lastOpen={card.id === lastOpenId}
-                      unseen={unseen.has(card.id)}
-                      alsoHere={busyHere(cards, card)}
-                      onOpen={() => openCard(card)}
-                      onAnswer={(allow) => void api.answer(card.id, allow, undefined, card.pending?.id).catch(notify)}
-                      onStop={() => void api.stop(card.id).catch(notify)}
-                      onResume={(how) => resume(card.id, how)}
-                      onContextMenu={(e) => void onCardMenu(card, e)}
-                      onStar={() => toggleStar(card)}
-                      onTag={(tag) => setRailFilter((f) => toggleTag(f, tag))}
-                    />
-                  ))}
-                  {shown.length < list.length && (
-                    <button
-                      onClick={() => setExpanded({ view, columns: [...expandedColumns, column.id] })}
-                      className="rounded-lg px-2 py-1.5 text-center text-[12px] text-muted hover:bg-card hover:text-ink"
-                    >
-                      Show {list.length - shown.length} more
-                    </button>
-                  )}
-                  <ColumnPlaceholder column={column.id} loaded={loaded} empty={count === 0} filtering={filtering} />
-                  {column.id === "backlog" && (
-                    <button
-                      onClick={() => openNew()}
-                      className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12.5px] text-muted hover:bg-card hover:text-ink"
-                    >
-                      <Icon name="plus" size={13} /> Add a thread
-                    </button>
-                  )}
-                </div>
-              </section>
+                onColumnContextMenu={(e) => void onColumnMenu(column.id, e)}
+                needsYou={column.id === "needs_you" && count > 0}
+                archivedCount={archivedCount}
+                showArchived={showArchived}
+                onToggleArchived={() => setShowArchived((v) => !v)}
+                toArchive={doneToArchive.length}
+                archiveTip={hint("archive-done", `Archive all ${doneToArchive.length}`)}
+                onArchiveAll={() => archiveCards(doneToArchive)}
+                resumeAll={column.id === "review" ? resumeAll : undefined}
+                onSwitchAll={
+                  limitHit && (column.id === "running" || column.id === "needs_you")
+                    ? () => switchAll(column.id)
+                    : undefined
+                }
+                onReviewAll={column.id === "review" ? reviewAll : undefined}
+                onAddBacklog={() => openNew()}
+              />
             );
           })}
         </main>
@@ -1021,29 +809,18 @@ export default function Board() {
       {showHelp && <ShortcutsDialog onClose={() => setShowHelp(false)} />}
       {tagging && <TagsDialog card={tagging} all={tagCatalog.tags.map((t) => ({ tag: t.name, count: t.count }))} onChange={saveTags} onClose={closeTags} />}
       <ModifierHint />
-      {showPalette && <CommandPalette initialQuery={paletteQuery} items={paletteItems()} findPrompts={findPrompts} currentProject={project ? { path: project, name: folderName(project) } : null} onClose={() => setShowPalette(false)} />}
+      {showPalette && (
+        // The palette items accessor passes useCallback returns (which the type analyzer flags as
+        // ref-readers); it's invoked only when the palette is open, and the lint rule's heuristic
+        // doesn't have visibility into the conditional.
+        // eslint-disable-next-line react-hooks/refs
+        <CommandPalette initialQuery={paletteQuery} items={paletteItems()} findPrompts={findPrompts} currentProject={project ? { path: project, name: folderName(project) } : null} onClose={() => setShowPalette(false)} />
+      )}
       {login && <LoginDialog login={login} onClose={() => setLogin(null)} />}
       {switchAllDialog}
 
       {toast && (
-        <div
-          className={`fixed bottom-4 left-4 z-50 flex max-w-md items-start gap-2 rounded-lg border bg-panel px-3.5 py-2.5 text-[13px] text-ink shadow-lg ${toast.action ? "border-line" : "border-danger/30"}`}
-        >
-          {toast.action ? (
-            <Icon name="archive" size={15} className="mt-0.5 text-muted" />
-          ) : (
-            <Icon name="alert" size={15} className="mt-0.5 text-danger" />
-          )}
-          <span className="flex-1">{toast.text}</span>
-          {toast.action && (
-            <button onClick={toast.action.run} className="font-medium text-accent hover:underline">
-              {toast.action.label}
-            </button>
-          )}
-          <button onClick={() => setToast(null)} aria-label="Dismiss" className="text-muted hover:text-ink">
-            <Icon name="x" size={14} />
-          </button>
-        </div>
+        <BoardToast text={toast.text} action={toast.action} onDismiss={() => setToast(null)} />
       )}
     </div>
     </TagColors.Provider>
@@ -1068,11 +845,5 @@ function RailFilterChip({ filter, onClear }: { filter: RailFilter; onClear: (fil
       )}
     </>
   );
-}
-
-// In the board's own browser (no card open), or a new tab outside the desktop app.
-function showPage(url: string) {
-  if (window.threadboard) void window.threadboard.browser.open(url, "board");
-  else window.open(url, "_blank");
 }
 
