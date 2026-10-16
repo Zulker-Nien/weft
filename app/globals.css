@@ -29,7 +29,8 @@
   --puku-soft: rgb(122 82 209 / 0.13);
 }
 
-:root[data-theme="dark"] {
+:root[data-theme="dark"],
+[data-theme="dark"] {
   color-scheme: dark;
   --canvas: #131312;
   --panel: #1b1b19;

@@ -27,6 +27,13 @@ describe("mediaKind", () => {
     expect(mediaKind("a.pdf")).toBe("file");
     expect(mediaKind("a")).toBe("file");
   });
+
+  it("takes a signed link to a synced blob, which has no extension, for an image", () => {
+    const sha = "a".repeat(64);
+    expect(mediaKind(`https://x.supabase.co/storage/v1/object/sign/weft-blobs/org/${sha}?token=t`)).toBe("image");
+    // Any other extensionless link stays a file.
+    expect(mediaKind("https://x.com/download")).toBe("file");
+  });
 });
 
 describe("ATTACHMENT_NAME", () => {

@@ -29,7 +29,7 @@ import "@/components/web-board/web-board.css";
 
 export const metadata: Metadata = {
   title: "Board",
-  description: "A live, read-only mirror of the desktop board, shared with everyone in the workspace.",
+  description: "The desktop board, live and read-only, shared with everyone in the workspace.",
 };
 
 function NotDeployedCard({ slug }: { slug: string }) {
@@ -97,7 +97,7 @@ async function BoardPageBody({ orgSlug, searchParams }: { orgSlug: string; searc
   // Pre-resolve every blob ref the SSR shell needs. The client can keep the map for the
   // items it receives later through Realtime.
   const initialRefs = new Set<string>();
-  if (cardId) collectBlobRefs(windowFromItems(cardId, threadRows, null).items, initialRefs);
+  if (cardId) collectBlobRefs(windowFromItems(cardId, threadRows).items, initialRefs);
   const initialBlobUrls = await resolveBlobUrls(supabase, ctx.org.id, [...initialRefs]);
 
   return (
@@ -113,16 +113,7 @@ async function BoardPageBody({ orgSlug, searchParams }: { orgSlug: string; searc
 }
 
 function BoardPageFallback() {
-  return (
-    <div className="wz-boardPage">
-      <header className="wz-boardHeader">
-        <div>
-          <h1 className="wz-boardTitle">Board</h1>
-          <p className="wz-boardSub">Loading the workspace&apos;s cards…</p>
-        </div>
-      </header>
-    </div>
-  );
+  return <p className="wz-boardLoading">Loading the workspace&apos;s cards…</p>;
 }
 
 export default async function Page({ params, searchParams }: { params: Promise<{ orgSlug: string }>; searchParams?: Promise<Query> }) {

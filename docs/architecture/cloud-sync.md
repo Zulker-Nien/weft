@@ -31,11 +31,19 @@ is the contract between the parts:
   `lastError`, `signedOut`, `noWorkspace`. Folders live in settings `syncFolders` (`setSyncFolder`).
 - The web board (`app/[orgSlug]/board/page.tsx`, `components/web-board/*`, pure logic in `lib/web-board.ts`): behind the same
   `requireTeam` gate as Team and Billing, read as the visitor through their cookie session, so RLS decides what they see.
-  The server renders the workspace's non-deleted `cloud_cards` into the board's columns; a client component subscribes to
-  Realtime `postgres_changes` on `cloud_cards` and `cloud_thread_items` (filter `org_id=eq.<id>`) and moves, adds and removes
-  cards in place, with a Live dot that goes grey when the channel drops. `?card=<id>` opens a card's thread in a side panel,
-  newest 50 first with older ones on request, tool outputs from `cloud_tool_outputs` when a row opens, and blob refs
-  resolved to hour-long signed URLs from `weft-blobs`. Read-only.
+  It is the desktop board drawn read-only, not a lookalike: the cards are `components/CardView.tsx` with `readOnly` (no drag,
+  stop, answer, resume, star or archive), the columns and their counts are `ColumnHeader` and `ColumnPlaceholder`, and what a
+  column holds comes from the desktop's own `lib/board-view.ts` (`groupByColumn`, `summarizeProjects`, `SORTERS`), so a change
+  to the board reaches both. `WebProjectBar` is its project chips, filter box and sort; `.wz-desk` (`web-board.css`) gives the
+  subtree the dark desktop tokens and the full window instead of the workspace shell's 880px column. The server renders the
+  workspace's non-deleted cards (the copilot is left out); `useWebBoard` subscribes to Realtime `postgres_changes` on
+  `cloud_cards` and `cloud_thread_items` (filter `org_id=eq.<id>`) and moves, adds and removes cards in place, with a Live dot
+  that goes grey when the channel drops. `?card=<id>` opens a card's thread in `WebThreadPanel`: `groupThread` and
+  `ThreadEntries` from the desktop (oldest first, tool runs folded, `Markdown`), newest 50 first with "Load earlier messages",
+  blob refs resolved to hour-long signed URLs from `weft-blobs` as items arrive (live ones too), and a tool output over 2 KB
+  read from `cloud_tool_outputs` when its row opens, through `ToolResultSourceContext` in `lib/use-tool-result.ts` (the desktop
+  fetches the same row from its own server). A signed blob link has no file extension, so `mediaKind` takes it for an image.
+  Read-only.
 
 ## Ownership
 

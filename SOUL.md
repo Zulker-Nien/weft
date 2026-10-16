@@ -214,6 +214,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   and long tool outputs to Supabase (`supabase/migrations/20261015140000_card_sync.sql`), images and pages by content hash.
   `lib/thread-page.ts` + `app/api/cards/[id]/thread/**` + `lib/use-tool-result.ts`: threads page from the newest item back and fetch
   a tool output over 2 KB when its row opens (docs/architecture/cloud-sync.md).
+  `app/[orgSlug]/board` + `components/web-board/*` + `lib/web-board.ts`: the weft.zip board is the desktop's own `CardView` (`readOnly`),
+  `ColumnHeader`, `lib/board-view.ts` and `ThreadEntries` over Realtime, not a lookalike; change the desktop card or thread and the web follows.
 - `app/api/*` + `lib/guard.ts`: localhost-only Host check, writes need `x-threadboard: 1`.
 - `lib/restart-guard.ts`: turns away Bash that would kill or restart Weft itself (its server pid, port, `next dev`, the app)
   while other cards' turns run, since a restart cuts them all off; in every thread via `guardedCli()`.

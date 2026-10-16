@@ -1,42 +1,24 @@
 "use client";
 
-// The weft.zip board at /[orgSlug]/board: a live mirror of the desktop's opted-in cards. Server
-// hands it the org id, the visitor's signed-in user id, the initial card rows and the initial
-// thread (when a card is open). It subscribes to Supabase Realtime, renders the five columns,
-// and opens a side panel for the card the user picks.
-//
-// The browser client is the visitor's own cookie session (lib/web-board.ts builds it through
-// @supabase/ssr's createBrowserClient with the publishable key), so RLS gates both the initial
-// read and the Realtime stream. RLS does pass through Realtime for SELECT policies on tables in
-// the `supabase_realtime` publication — that's how the same select policy that gates /thread
-// also gates the postgres_changes stream.
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { createBrowserClient } from "@supabase/ssr";
-import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
-import { BLOB_BUCKET, BLOB_REF_PREFIX, THREAD_PAGE_SIZE, type CloudCardRow, type CloudThreadItemRow } from "@/lib/cloud-sync-types";
-import { SUPABASE_KEY, SUPABASE_URL } from "@/lib/supabase-project";
-import type { ThreadItem } from "@/lib/types";
-import {
-  applyCardChange,
-  applyItemChange,
-  batchBlobRefs,
-  blobPath,
-  buildBlobUrlMap,
-  collectBlobRefs,
-  folderName,
-  groupCardsByColumn,
-  toolOutputSummary,
-  windowFromItems,
-  rewriteWindowBlobRefs,
-  seqOf,
-  type WebBoardCard as WebBoardCardShape,
-  type WebBoardColumn as WebBoardColumnShape,
-} from "@/lib/web-board";
-import { WebBoardCard } from "./WebBoardCard";
-import { WebBoardSidePanel } from "./WebBoardSidePanel";
+// The weft.zip board at /[orgSlug]/board: the desktop board's own columns, cards and thread
+// components, drawn read-only from the opted-in cards the Macs sync (docs/architecture/cloud-sync.md).
+// Server hands it the org id, the initial rows and, with ?card=…, that card's first page of thread;
+// useWebBoard keeps both live over Supabase Realtime.
+import { useMemo, useState } from "react";
+import { groupByColumn, summarizeProjects, type SortKey } from "@/lib/board-view";
+import type { CloudCardRow, CloudThreadItemRow } from "@/lib/cloud-sync-types";
+import { useNow } from "@/lib/use-now";
+import { ToolResultSourceContext } from "@/lib/use-tool-result";
+import { busyHere } from "@/lib/overlap";
+import { COLUMNS, type Column } from "@/lib/types";
+import { boardCounts, webCards } from "@/lib/web-board";
+import CardView from "../CardView";
+import ColumnHeader from "../ColumnHeader";
+import ColumnPlaceholder from "../ColumnPlaceholder";
+import { useWebBoard, type LiveStatus } from "./useWebBoard";
+import { WebProjectBar } from "./WebProjectBar";
+import { WebThreadPanel } from "./WebThreadPanel";
 
-// What the server hands in. The thread is keyed by the open card id (or null when no card is
-// open); the blob URLs are pre-resolved for the initial render.
 export interface WebBoardProps {
   orgId: string;
   orgSlug: string;
@@ -46,271 +28,99 @@ export interface WebBoardProps {
   initialBlobUrls: Record<string, string>;
 }
 
-type ThreadWindow = ReturnType<typeof windowFromItems>;
+// How many cards a column draws before "Show N more", the desktop's own number.
+const COLUMN_LIMIT = 40;
 
-// The status of the Realtime channel — the small dot beside the title reflects it.
-type LiveStatus = "connecting" | "live" | "offline";
-
-export function WebBoard({ orgId, orgSlug, initialCards, openCardId, initialThread, initialBlobUrls }: WebBoardProps) {
-  // The list of cards, kept in sync with Realtime. `initialCards` is the server's first read.
-  const [cards, setCards] = useState<CloudCardRow[]>(initialCards);
-  // The currently-open card id (mirrors the ?card= search param so a reload keeps the same view).
-  const [activeCardId, setActiveCardId] = useState<string | null>(openCardId);
-  // The thread window for the open card, plus a copy of the card's metadata so the panel header
-  // can show its title without a second fetch.
-  const [thread, setThread] = useState<ThreadWindow | null>(
-    openCardId
-      ? rewriteWindowBlobRefs(windowFromItems(openCardId, initialThread, null), initialBlobUrls)
-      : null,
-  );
-  // The cached blob url table — a new card opens with the initial map, and a refetch replaces
-  // it. The side panel also fires a "load older" page through the same map.
-  const [blobUrls, setBlobUrls] = useState<Record<string, string>>(initialBlobUrls);
-  const [live, setLive] = useState<LiveStatus>("connecting");
-  // A shared Supabase client — created once per mount and reused by every Realtime callback.
-  // The browser client, with the visitor's cookie session under the hood. createBrowserClient
-  // reads the cookies from `document.cookie` and lets the project URL/anon key stand in for
-  // SERVICE_ROLE — RLS still gates every read, and a memberless visitor just sees nothing.
-  // useState's lazy initializer is the React-19-friendly way to make a long-lived client.
-  const [client] = useState<SupabaseClient>(() => createBrowserClient(SUPABASE_URL, SUPABASE_KEY));
-
-  // The five columns, derived. Recomputing on every Realtime event is fine; the card set is
-  // bounded by an org's synced cards, and the sort is stable.
-  const columns: WebBoardColumnShape[] = useMemo(() => groupCardsByColumn(cards), [cards]);
-
-  // Live: subscribe to INSERT/UPDATE/DELETE on cloud_cards and cloud_thread_items for this org.
-  // The filter tells Realtime which rows to send, but the project's RLS still enforces what
-  // actually lands in the visitor's session.
-  useEffect(() => {
-    let cancelled = false;
-    const channel: RealtimeChannel = client
-      .channel(`web-board-${orgId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "cloud_cards", filter: `org_id=eq.${orgId}` },
-        (payload: { eventType: string; new: unknown; old: unknown }) => {
-          if (cancelled) return;
-          // Supabase types the change as a generic payload; we know the row shape from
-          // lib/cloud-sync-types. Cast so applyCardChange can stay strictly typed.
-          const change: { eventType: "INSERT" | "UPDATE" | "DELETE"; new: CloudCardRow | null; old: Partial<CloudCardRow> | null } = {
-            eventType: payload.eventType as "INSERT" | "UPDATE" | "DELETE",
-            new: (payload.new as CloudCardRow | null) ?? null,
-            old: (payload.old as Partial<CloudCardRow> | null) ?? null,
-          };
-          if (!change.new && !change.old) return;
-          setCards((prev) => applyCardChange(prev, change as { eventType: "INSERT" | "UPDATE" | "DELETE"; new: CloudCardRow; old: Partial<CloudCardRow> | null }));
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "cloud_thread_items", filter: `org_id=eq.${orgId}` },
-        (payload: { eventType: string; new: unknown; old: unknown }) => {
-          if (cancelled) return;
-          const change: { eventType: "INSERT" | "UPDATE" | "DELETE"; new: CloudThreadItemRow | null; old: Partial<CloudThreadItemRow> | null } = {
-            eventType: payload.eventType as "INSERT" | "UPDATE" | "DELETE",
-            new: (payload.new as CloudThreadItemRow | null) ?? null,
-            old: (payload.old as Partial<CloudThreadItemRow> | null) ?? null,
-          };
-          if (!change.new && !change.old) return;
-          setThread((prev) => {
-            if (!prev) return prev;
-            return applyItemChange(prev, {
-              eventType: change.eventType,
-              new: change.new ?? undefined,
-              old: change.old ?? undefined,
-            });
-          });
-        },
-      )
-      .subscribe((status: string) => {
-        if (cancelled) return;
-        if (status === "SUBSCRIBED") setLive("live");
-        else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") setLive("offline");
-      });
-    return () => {
-      cancelled = true;
-      void client.removeChannel(channel);
-    };
-  }, [client, orgId]);
-
-  // Open a card: refetch the thread (newest 50) through the visitor's client, resolve the
-  // blob refs, and update the URL so the side panel is linkable / survives a refresh.
-  const openCard = useCallback(
-    async (cardId: string) => {
-      setActiveCardId(cardId);
-      if (typeof window !== "undefined") {
-        const url = new URL(window.location.href);
-        url.searchParams.set("card", cardId);
-        window.history.replaceState(null, "", url.toString());
-      }
-      const { data, error } = await client
-        .from("cloud_thread_items")
-        .select("*")
-        .eq("org_id", orgId)
-        .eq("card_id", cardId)
-        .order("seq", { ascending: false })
-        .limit(THREAD_PAGE_SIZE)
-        .overrideTypes<CloudThreadItemRow[]>();
-      if (error) {
-        setThread({ cardId, items: [], hasOlder: false, blobRefs: [] });
-        return;
-      }
-      const w = windowFromItems(cardId, data, null);
-      // Resolve every blob ref the page needs to render. Multiple cards worth of refs can pile
-      // up if the user flips between them, so the map is the long-lived cache.
-      const next = await resolveBlobUrls(client, orgId, w.blobRefs, blobUrls);
-      setBlobUrls(next);
-      setThread(rewriteWindowBlobRefs(w, next));
-    },
-    [client, orgId, blobUrls],
-  );
-
-  // Close the panel and clear the ?card= param.
-  const closeCard = useCallback(() => {
-    setActiveCardId(null);
-    setThread(null);
-    if (typeof window !== "undefined") {
-      const url = new URL(window.location.href);
-      url.searchParams.delete("card");
-      window.history.replaceState(null, "", url.toString());
-    }
-  }, []);
-
-  // "Load older" for the open card: page backward from the oldest item in the current window.
-  const loadOlder = useCallback(async () => {
-    if (!thread || !thread.hasOlder) return;
-    const oldest = thread.items[thread.items.length - 1];
-    if (!oldest) return;
-    const beforeSeq = seqOf(oldest) ?? null;
-    const { data, error } = await client
-      .from("cloud_thread_items")
-      .select("*")
-      .eq("org_id", orgId)
-      .eq("card_id", thread.cardId)
-      .lt("seq", beforeSeq ?? Number.MAX_SAFE_INTEGER)
-      .order("seq", { ascending: false })
-      .limit(THREAD_PAGE_SIZE)
-      .overrideTypes<CloudThreadItemRow[]>();
-    if (error) return;
-    const older = windowFromItems(thread.cardId, data, beforeSeq);
-    const next = await resolveBlobUrls(client, orgId, older.blobRefs, blobUrls);
-    setBlobUrls(next);
-    setThread({
-      ...older,
-      items: [...thread.items, ...older.items],
-      blobRefs: [...thread.blobRefs, ...older.blobRefs],
-    });
-  }, [client, orgId, thread, blobUrls]);
-
-  // The card's title and folder for the side panel header — pulled from the live cards list.
-  const activeCard = activeCardId ? cards.find((c) => c.card_id === activeCardId) : null;
-  const activeMeta = activeCard
-    ? {
-        id: activeCard.card_id,
-        title: activeCard.card.title,
-        folder: activeCard.folder,
-        ownerDevice: activeCard.owner_device,
-        card: activeCard.card,
-        updatedAt: activeCard.updated_at,
-      }
-    : null;
-
-  return (
-    <div className="wz-boardPage">
-      <header className="wz-boardHeader">
-        <div>
-          <h1 className="wz-boardTitle">Board</h1>
-          <p className="wz-boardSub">
-            The cards your team has synced to <strong>{orgSlug}</strong>.
-          </p>
-        </div>
-        <LiveDot status={live} />
-      </header>
-
-      {cards.length === 0 ? (
-        <p className="wz-boardEmpty">
-          No synced cards yet. Cards show here once a project&apos;s switch is on in the desktop app&apos;s{" "}
-          <strong>Settings → Sync</strong>.
-        </p>
-      ) : (
-        <div className="wz-boardColumns">
-          {columns.map((col) => (
-            <WebBoardColumn key={col.id} column={col} activeCardId={activeCardId} onOpen={(id) => void openCard(id)} />
-          ))}
-        </div>
-      )}
-
-      {activeCardId && activeMeta && thread ? (
-        <WebBoardSidePanel
-          meta={activeMeta}
-          window={thread}
-          blobUrls={blobUrls}
-          onClose={() => closeCard()}
-          onLoadOlder={() => void loadOlder()}
-        />
-      ) : null}
-    </div>
-  );
-}
+// A card's folder is its project; there is no worktree folding here, so a path stands for itself.
+const identity = (cwd: string) => cwd;
 
 function LiveDot({ status }: { status: LiveStatus }) {
   const label = status === "live" ? "Live" : status === "connecting" ? "Connecting…" : "Offline";
   return (
-    <span className="wz-boardLive" aria-live="polite">
-      <span className={`wz-boardLiveDot${status === "live" ? "" : " wz-boardLiveDot-off"}`} aria-hidden="true" />
+    <span className="flex items-center gap-1.5 text-[12px] text-muted" aria-live="polite">
+      <span aria-hidden="true" className={`size-2 rounded-full ${status === "live" ? "bg-ok" : "bg-faint"}`} />
       {label}
     </span>
   );
 }
 
-function WebBoardColumn({ column, activeCardId, onOpen }: { column: WebBoardColumnShape; activeCardId: string | null; onOpen: (id: string) => void }) {
+export function WebBoard({ orgId, orgSlug, initialCards, openCardId, initialThread, initialBlobUrls }: WebBoardProps) {
+  const board = useWebBoard({ orgId, initialCards, openCardId, initialThread, initialBlobUrls });
+  const now = useNow();
+  const [project, setProject] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortKey>("newest");
+  const [showArchived, setShowArchived] = useState(false);
+  const [expanded, setExpanded] = useState<Column[]>([]);
+
+  const cards = useMemo(() => webCards(board.cards), [board.cards]);
+  const byColumn = useMemo(() => groupByColumn(cards, { project, query, sort, showArchived }, identity), [cards, project, query, sort, showArchived]);
+  const projects = useMemo(() => summarizeProjects([], cards, identity), [cards]);
+  const { running, waiting } = boardCounts(cards);
+  const archivedCount = cards.filter((c) => c.archived).length;
+  const filtering = project !== null || query.trim() !== "";
+
+  const active = board.activeCardId ? board.cards.find((r) => r.card_id === board.activeCardId) : undefined;
+
   return (
-    <div className="wz-boardColumn">
-      <div className="wz-boardColumnHead">
-        <span>{column.label}</span>
-        <span className="wz-boardColumnCount">{column.cards.length}</span>
+    <ToolResultSourceContext.Provider value={board.toolOutput}>
+      <div className="wz-desk" data-theme="dark">
+        <header className="flex shrink-0 items-center gap-3 border-b border-line bg-panel px-4 py-2.5">
+          <h1 className="text-[15px] font-semibold tracking-tight text-ink">Board</h1>
+          <span className="text-[12px] text-muted">
+            {orgSlug} · {running} running
+            {waiting > 0 && <span className="text-warn"> · {waiting} need{waiting === 1 ? "s" : ""} you</span>}
+          </span>
+          <div className="flex-1" />
+          <LiveDot status={board.live} />
+        </header>
+
+        {cards.length === 0 ? (
+          <p className="m-6 rounded-lg border border-line bg-sunken p-6 text-[13.5px] leading-relaxed text-muted">
+            No synced cards yet. Cards show here once a project&apos;s switch is on in the desktop app&apos;s <strong className="text-ink">Settings → Sync</strong>.
+          </p>
+        ) : (
+          <>
+            <WebProjectBar projects={projects} total={cards.length} selected={project} onSelect={setProject} query={query} onQuery={setQuery} sort={sort} onSort={setSort} />
+            <main className="flex min-h-0 min-w-0 flex-1 gap-3 overflow-x-auto p-3">
+              {COLUMNS.map((column) => {
+                const list = byColumn.get(column.id) ?? [];
+                const shown = expanded.includes(column.id) ? list : list.slice(0, COLUMN_LIMIT);
+                return (
+                  <section key={column.id} data-column={column.id} style={{ minWidth: 170 }} className="@container flex w-[264px] shrink flex-col rounded-xl border border-transparent bg-sunken">
+                    <ColumnHeader
+                      column={column}
+                      count={list.length}
+                      needsYou={column.id === "needs_you" && list.length > 0}
+                      archivedCount={archivedCount}
+                      showArchived={showArchived}
+                      onToggleArchived={() => setShowArchived((v) => !v)}
+                      toArchive={0}
+                      archiveTip=""
+                      onArchiveAll={() => {}}
+                    />
+                    <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
+                      {shown.map((card) => (
+                        <CardView key={card.id} readOnly card={card} now={now} selected={card.id === board.activeCardId} alsoHere={busyHere(cards, card)} onOpen={() => void board.openCard(card.id)} />
+                      ))}
+                      {shown.length < list.length && (
+                        <button onClick={() => setExpanded((cols) => [...cols, column.id])} className="rounded-lg px-2 py-1.5 text-center text-[12px] text-muted hover:bg-card hover:text-ink">
+                          Show {list.length - shown.length} more
+                        </button>
+                      )}
+                      <ColumnPlaceholder column={column.id} loaded empty={list.length === 0} filtering={filtering} />
+                    </div>
+                  </section>
+                );
+              })}
+            </main>
+          </>
+        )}
+
+        {active && board.thread && (
+          <WebThreadPanel card={active.card} ownerDevice={active.owner_device} window={board.thread} blobUrls={board.blobUrls} onClose={board.closeCard} onLoadOlder={() => void board.loadOlder()} />
+        )}
       </div>
-      {column.cards.map((card: WebBoardCardShape) => (
-        <WebBoardCard key={card.id} entry={card} active={card.id === activeCardId} onOpen={onOpen} />
-      ))}
-    </div>
+    </ToolResultSourceContext.Provider>
   );
 }
-
-// Resolve a batch of blob refs to signed URLs through createSignedUrls. The map is the long-lived
-// cache; the same ref keeps its URL across re-renders. Errors fall through silently and the
-// renderer leaves the ref as-is so the user sees a missing image instead of a crash.
-async function resolveBlobUrls(client: SupabaseClient, orgId: string, refs: readonly string[], current: Record<string, string>): Promise<Record<string, string>> {
-  const out: Record<string, string> = { ...current };
-  const missing = refs.filter((r) => !current[r]);
-  if (!missing.length) return out;
-  for (const batch of batchBlobRefs(missing)) {
-    const paths = batch.map((r) => blobPath(orgId, r));
-    try {
-      const { data, error } = await client.storage.from(BLOB_BUCKET).createSignedUrls(paths, 3600);
-      if (error) continue;
-      const map = buildBlobUrlMap(
-        data.map((d: { path: string | null; signedUrl: string | null }) => ({ path: d.path ?? "", signedUrl: d.signedUrl })),
-        batch,
-      );
-      Object.assign(out, map);
-    } catch {
-      // Skip the batch; the renderer leaves the ref visible.
-    }
-  }
-  return out;
-}
-
-// The tool output hint used by the side panel's collapsed tool row. Re-exported so the tests
-// can hit it without pulling in the side panel.
-export const webBoardToolSummary = toolOutputSummary;
-
-// Used in the side panel to know which items carry images. Not part of the public surface but
-// re-exported through the module so tests can stub it.
-export const _imagePreflight = (items: ThreadItem[]) => {
-  const refs = new Set<string>();
-  collectBlobRefs(items, refs);
-  return refs;
-};
-
-export { folderName, BLOB_REF_PREFIX };

@@ -17,12 +17,13 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 - Server-side cards, off by default: Settings → Sync turns on a project, and its cards and threads upload to your workspace on
   Supabase (pictures and pages once each by content); the page shows the last sync, items uploaded, how many wait and the last
   error, with Sync now (docs/architecture/cloud-sync.md).
-- The web board: `weft.zip/<workspace>/board` shows the synced cards in their columns, live, and opens a card's thread (read-only).
+- The web board: `weft.zip/<workspace>/board` shows the synced cards in their columns, live, and opens a card's thread (read-only). It draws the desktop's own `CardView` (read-only), column headers, project chips, filter box, sort and archived toggle, and a card's thread through `ThreadEntries` and `Markdown` (oldest first, tool runs folded to "Ran 3 commands", tables and code blocks, pictures through signed links, a trimmed tool output loading from `cloud_tool_outputs` when its row opens), so the two boards stay in step.
 - Threads load their newest 50 items first and older ones as you scroll up; a tool's output over 2 KB loads when you open its row.
 - Settings → Models has a Copilot row: pick which Claude model the copilot thread runs on. The copilot is locked to Claude Code, so only Claude models appear; the default follows the model you last picked for new threads. The pick is read once when the copilot card is first made, so it takes effect on the next "New chat" in the copilot lane.
 
 ### Fixed
 
+- The board, home page and social preview use locally hosted fonts, so production builds no longer wait on Google Fonts requests; the home page's GitHub release-feed lookup now times out after three seconds.
 - A review step that points at a local page with an anchor or query (`tour.html#built`) now opens that section;
   the `#` used to be encoded into the filename and the pane showed nothing.
 - The Supabase drawer counted a migration applied through the MCP (which stamps its own version) as not applied; it

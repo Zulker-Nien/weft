@@ -11,14 +11,12 @@ import {
   blobPath,
   buildBlobUrlMap,
   collectBlobRefs,
-  columnFor,
-  folderName,
-  groupCardsByColumn,
-  toolOutputSummary,
+  boardCounts,
+  chronological,
+  webCards,
   windowFromItems,
   rewriteBlobRefs,
   rewriteWindowBlobRefs,
-  type WebBoardCard,
   _internals,
 } from "./web-board";
 import type { Card, ThreadItem } from "./types";
@@ -61,15 +59,6 @@ beforeEach(() => {
 });
 
 describe("_internals", () => {
-  it("compareWebCards returns the right sign for every branch", () => {
-    const a: WebBoardCard = { id: "a", card: makeCard(), folder: "", ownerDevice: "", updatedAt: "2026-10-15T10:00:00.000Z" };
-    const b: WebBoardCard = { id: "b", card: makeCard(), folder: "", ownerDevice: "", updatedAt: "2026-10-15T11:00:00.000Z" };
-    const same: WebBoardCard = { id: "a", card: makeCard(), folder: "", ownerDevice: "", updatedAt: "2026-10-15T10:00:00.000Z" };
-    expect(_internals.compareWebCards(a, b)).toBe(1);
-    expect(_internals.compareWebCards(b, a)).toBe(-1);
-    expect(_internals.compareWebCards(a, same)).toBe(0);
-  });
-
   it("compareThreadItems fills in the `?? 0` and returns the right sign for every branch", () => {
     const a: ThreadItem = { kind: "user", text: "a", at: 5 };
     const b: ThreadItem = { kind: "user", text: "b", at: 10 };
@@ -86,66 +75,36 @@ describe("_internals", () => {
   });
 });
 
-describe("groupCardsByColumn", () => {
-  it("places each card in its own column and sorts newest first by updated_at", () => {
-    const rows: CloudCardRow[] = [
-      makeRow({ card_id: "a", card: makeCard({ id: "a", column: "running" }), updated_at: "2026-10-15T10:00:00.000Z" }),
-      makeRow({ card_id: "b", card: makeCard({ id: "b", column: "running" }), updated_at: "2026-10-15T11:00:00.000Z" }),
-      makeRow({ card_id: "c", card: makeCard({ id: "c", column: "review" }), updated_at: "2026-10-15T09:00:00.000Z" }),
+describe("webCards", () => {
+  it("returns each live card's own Card, in the order the rows came", () => {
+    const rows = [
+      makeRow({ card_id: "a", card: makeCard({ id: "a" }) }),
+      makeRow({ card_id: "b", card: makeCard({ id: "b" }) }),
     ];
-    const cols = groupCardsByColumn(rows);
-    expect(cols.map((c) => c.id)).toEqual(["backlog", "running", "needs_you", "review", "done"]);
-    const running = cols.find((c) => c.id === "running")!;
-    expect(running.cards.map((c) => c.id)).toEqual(["b", "a"]);
-    expect(running.cards[0]?.folder).toBe("/u/me/projects/app");
-    expect(running.cards[0]?.ownerDevice).toBe("dev-laptop");
+    expect(webCards(rows).map((c) => c.id)).toEqual(["a", "b"]);
   });
 
-  it("keeps two cards in the same order when their updated_at is the same", () => {
-    const rows: CloudCardRow[] = [
-      makeRow({ card_id: "a", card: makeCard({ id: "a", column: "running" }), updated_at: "2026-10-15T10:00:00.000Z" }),
-      makeRow({ card_id: "b", card: makeCard({ id: "b", column: "running" }), updated_at: "2026-10-15T10:00:00.000Z" }),
-      makeRow({ card_id: "c", card: makeCard({ id: "c", column: "running" }), updated_at: "2026-10-15T11:00:00.000Z" }),
+  it("skips deleted rows and the copilot", () => {
+    const rows = [
+      makeRow({ card_id: "x", deleted: true, card: makeCard({ id: "x" }) }),
+      makeRow({ card_id: "cp", card: makeCard({ id: "cp", role: "copilot" }) }),
+      makeRow({ card_id: "z", card: makeCard({ id: "z" }) }),
     ];
-    const cols = groupCardsByColumn(rows);
-    const running = cols.find((c) => c.id === "running")!;
-    expect(running.cards.map((c) => c.id)).toEqual(["c", "a", "b"]);
-  });
-
-  it("skips deleted cards and unknown columns", () => {
-    const cols = groupCardsByColumn([
-      makeRow({ card_id: "x", deleted: true }),
-      makeRow({ card_id: "y", card: makeCard({ id: "y", column: "nope" as unknown as Card["column"] }) }),
-      makeRow({ card_id: "z", card: makeCard({ id: "z", column: "done" }) }),
-    ]);
-    const done = cols.find((c) => c.id === "done")!;
-    expect(done.cards).toHaveLength(1);
-    expect(done.cards[0]?.id).toBe("z");
+    expect(webCards(rows).map((c) => c.id)).toEqual(["z"]);
   });
 });
 
-describe("columnFor", () => {
-  it("returns the same string for every known column", () => {
-    for (const id of ["backlog", "running", "needs_you", "review", "done"]) {
-      expect(columnFor(id)).toBe(id);
-    }
-  });
-  it("returns null for anything else", () => {
-    expect(columnFor(undefined)).toBeNull();
-    expect(columnFor("archive")).toBeNull();
-    expect(columnFor(42 as unknown as string)).toBeNull();
-  });
-});
-
-describe("folderName", () => {
-  it("returns the last segment of a unix or windows path", () => {
-    expect(folderName("/Users/me/projects/app")).toBe("app");
-    expect(folderName("C:\\dev\\app")).toBe("app");
-    expect(folderName("just-a-name")).toBe("just-a-name");
-  });
-  it("falls back to the original when the path has no separators", () => {
-    expect(folderName("")).toBe("");
-    expect(folderName("/")).toBe("");
+describe("boardCounts", () => {
+  it("counts running and needs-you cards, leaving archived ones out", () => {
+    const cards = [
+      makeCard({ id: "1", column: "running" }),
+      makeCard({ id: "2", column: "running", archived: true }),
+      makeCard({ id: "3", column: "needs_you" }),
+      makeCard({ id: "4", column: "needs_you" }),
+      makeCard({ id: "5", column: "done" }),
+    ];
+    expect(boardCounts(cards)).toEqual({ running: 1, waiting: 2 });
+    expect(boardCounts([])).toEqual({ running: 0, waiting: 0 });
   });
 });
 
@@ -193,6 +152,19 @@ describe("applyCardChange", () => {
   });
 });
 
+describe("chronological", () => {
+  it("puts the items oldest first by their seq, leaving the window alone", () => {
+    const win = windowFromItems("c1", [
+      { org_id: ORG, card_id: "c1", seq: 7, kind: "user", item: { kind: "user", text: "late", at: 2 }, at: "x" },
+      { org_id: ORG, card_id: "c1", seq: 3, kind: "user", item: { kind: "user", text: "early", at: 1 }, at: "x" },
+    ]);
+    expect(win.items.map((i) => (i as { text: string }).text)).toEqual(["late", "early"]);
+    expect(chronological(win.items).map((i) => (i as { text: string }).text)).toEqual(["early", "late"]);
+    // An item with no seq (not from a row) sorts first.
+    expect(chronological([{ kind: "user", text: "n" } as ThreadItem])).toHaveLength(1);
+  });
+});
+
 describe("windowFromItems", () => {
   const userMsg: ThreadItem = { kind: "user", text: "Hello", at: 1000 };
   const assistantMsg: ThreadItem = { kind: "assistant", text: "Hi back", at: 2000 };
@@ -221,21 +193,12 @@ describe("windowFromItems", () => {
     expect(w.items.map((i) => (i as Extract<ThreadItem, { kind: "user" }>).text)).toEqual(["b", "a", "c"]);
   });
 
-  it("sets hasOlder when a full page older than seq was loaded", () => {
-    const small: CloudThreadItemRow[] = [
-      { org_id: ORG, card_id: "c1", seq: 0, kind: "user", item: userMsg, at: "2026-10-15T10:00:00.000Z" },
-    ];
-    const full: CloudThreadItemRow[] = [];
-    for (let i = 0; i < 50; i++) {
-      full.push({ org_id: ORG, card_id: "c1", seq: i, kind: "user", item: userMsg, at: "2026-10-15T10:00:00.000Z" });
-    }
-    // A partial page (1 row) might be the end of the thread — hasOlder stays false.
-    expect(windowFromItems("c1", small, 5).hasOlder).toBe(false);
-    // A full page with a beforeSeq means more rows likely remain.
-    expect(windowFromItems("c1", full, 50).hasOlder).toBe(true);
-    // No beforeSeq means this is the freshest page — hasOlder is false.
-    expect(windowFromItems("c1", full, null).hasOlder).toBe(false);
-    expect(windowFromItems("c1", full).hasOlder).toBe(false);
+  it("sets hasOlder when a full page came back, and not for a partial one", () => {
+    const row = (seq: number): CloudThreadItemRow => ({ org_id: ORG, card_id: "c1", seq, kind: "user", item: { kind: "user", text: "x", at: seq }, at: "2026-10-15T10:00:00.000Z" });
+    const full = Array.from({ length: 50 }, (_, i) => row(i));
+    expect(windowFromItems("c1", full).hasOlder).toBe(true);
+    // A partial page might be the end of the thread.
+    expect(windowFromItems("c1", [row(1)]).hasOlder).toBe(false);
   });
 
   it("drops rows that don't match the card or have a bad item", () => {
@@ -381,17 +344,6 @@ describe("rewriteWindowBlobRefs", () => {
     expect(out.hasOlder).toBe(true);
     expect(out.blobRefs).toEqual([REF]);
     expect((out.items[0] as { images: string[] }).images[0]).toBe("https://signed/x");
-  });
-});
-
-describe("toolOutputSummary", () => {
-  it("combines name, summary, size and an error tag", () => {
-    expect(toolOutputSummary("Bash", "ls -la")).toBe("Bash: ls -la");
-    expect(toolOutputSummary("Bash", "")).toBe("Bash");
-    expect(toolOutputSummary("Bash", "x".repeat(100))).toContain("…");
-    expect(toolOutputSummary("Bash", "ls", 2048)).toContain("2.0 KB");
-    expect(toolOutputSummary("Bash", "ls", 5_000_000)).toContain("4.8 MB");
-    expect(toolOutputSummary("Bash", "ls", 800, true)).toContain("failed");
   });
 });
 

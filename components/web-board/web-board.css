@@ -1,324 +1,42 @@
-/* The /[orgSlug]/board page (app/[orgSlug]/board/page.tsx): a dark, calm, compact mirror of
-   the desktop's board. Same wz- prefix and palette as components/team/team.css, so the workspace
-   shell looks like the rest of weft.zip. Plain global CSS — next.config.ts routes every .css
-   through the Tailwind loader, which drops module exports. */
+/* The /[orgSlug]/board page (app/[orgSlug]/board/page.tsx). The board itself is the desktop's own
+   Tailwind components, so all this file does is give them the room and the palette: the workspace
+   shell's 880px reading column becomes the whole window, and .wz-desk re-themes its subtree to the
+   desktop's dark tokens (app/globals.css, `[data-theme="dark"]`). Plain global CSS: next.config.ts
+   routes every .css through the Tailwind loader, which drops module exports. */
 
-.wz-boardPage {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+.wz-workspace:has(.wz-desk) {
   height: 100%;
+  min-height: 0;
 }
 
-.wz-boardHeader {
+.wz-workspaceMain:has(.wz-desk) {
   display: flex;
-  align-items: flex-end;
-  gap: 24px;
-  flex-wrap: wrap;
-}
-
-.wz-boardTitle {
+  min-height: 0;
+  max-width: none;
   margin: 0;
-  font-family: var(--display);
-  font-weight: 500;
-  font-size: 32px;
-  letter-spacing: -0.02em;
-  color: var(--thread);
+  padding: 0;
 }
 
-.wz-boardSub {
-  margin: 0;
-  font-size: 14px;
-  color: var(--thread-2);
-}
-
-.wz-boardLive {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
-  font-size: 12px;
-  color: var(--thread-3);
-}
-
-.wz-boardLiveDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: rgb(150 220 180);
-  box-shadow: 0 0 6px rgb(150 220 180 / 0.6);
-}
-
-.wz-boardLiveDot-off {
-  background: var(--thread-3);
-  box-shadow: none;
-}
-
-.wz-boardEmpty {
-  padding: 32px;
-  border: 1px solid rgb(236 229 216 / 0.1);
-  border-radius: 12px;
-  background: rgb(28 34 50 / 0.4);
-  color: var(--thread-2);
-  font-size: 14.5px;
-  line-height: 1.6;
-}
-
-.wz-boardColumns {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(170px, 1fr));
-  gap: 12px;
-  align-items: start;
-}
-
-@media (max-width: 1080px) {
-  .wz-boardColumns {
-    grid-template-columns: repeat(2, minmax(170px, 1fr));
-  }
-}
-
-@media (max-width: 640px) {
-  .wz-boardColumns {
-    grid-template-columns: 1fr;
-  }
-}
-
-.wz-boardColumn {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid rgb(236 229 216 / 0.08);
-  border-radius: 12px;
-  background: rgb(28 34 50 / 0.25);
-  min-height: 240px;
-}
-
-.wz-boardColumnHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 4px 8px;
-  border-bottom: 1px solid rgb(236 229 216 / 0.08);
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: var(--thread-3);
-}
-
-.wz-boardColumnCount {
-  font-size: 11px;
-  color: var(--thread-3);
-  background: rgb(236 229 216 / 0.08);
-  padding: 1px 7px;
-  border-radius: 999px;
-}
-
-.wz-boardCard {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px 12px;
-  border: 1px solid rgb(236 229 216 / 0.1);
-  border-radius: 8px;
-  background: rgb(15 19 28 / 0.6);
-  text-decoration: none;
-  color: inherit;
-  transition: border-color 0.12s, background 0.12s;
-  cursor: pointer;
-}
-
-.wz-boardCard:hover {
-  border-color: rgb(218 122 76 / 0.4);
-  background: rgb(28 34 50 / 0.6);
-}
-
-.wz-boardCard-active {
-  border-color: rgb(218 122 76 / 0.7);
-  background: rgb(218 122 76 / 0.06);
-}
-
-.wz-boardCardTitle {
-  font-size: 13.5px;
-  color: var(--thread);
-  font-weight: 500;
-  line-height: 1.35;
-}
-
-.wz-boardCardMeta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11.5px;
-  color: var(--thread-3);
-}
-
-.wz-boardCardMetaSep {
-  opacity: 0.5;
-}
-
-.wz-boardCardStage {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+.wz-root:has(.wz-desk) {
   overflow: hidden;
-  font-size: 12px;
-  color: var(--thread-2);
-  line-height: 1.4;
 }
 
-.wz-boardSidePanel {
-  position: fixed;
-  inset: 0;
-  background: rgb(0 0 0 / 0.45);
-  backdrop-filter: blur(4px);
-  z-index: 50;
+.wz-desk {
+  position: relative;
   display: flex;
-  justify-content: flex-end;
-}
-
-.wz-boardSidePanelBody {
-  display: flex;
-  flex-direction: column;
-  width: 520px;
-  max-width: 92vw;
-  height: 100%;
-  background: rgb(15 19 28 / 0.96);
-  border-left: 1px solid rgb(236 229 216 / 0.14);
-  padding: 20px 22px 28px;
-  overflow-y: auto;
-}
-
-.wz-boardSidePanelHeader {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid rgb(236 229 216 / 0.1);
-  margin-bottom: 16px;
-}
-
-.wz-boardSidePanelTitle {
-  margin: 0;
-  font-family: var(--display);
-  font-weight: 500;
-  font-size: 18px;
-  color: var(--thread);
   flex: 1;
+  flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
-.wz-boardSidePanelClose {
-  border: 1px solid rgb(236 229 216 / 0.14);
-  background: transparent;
-  color: var(--thread-2);
-  font-size: 12.5px;
-  padding: 5px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.wz-boardSidePanelClose:hover {
-  border-color: rgb(236 229 216 / 0.3);
-  color: var(--thread);
-}
-
-.wz-boardThread {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.wz-boardThreadItem {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 13.5px;
-  line-height: 1.55;
-}
-
-.wz-boardThreadItem-user {
-  color: var(--thread-2);
-}
-
-.wz-boardThreadItem-assistant {
-  color: var(--thread);
-}
-
-.wz-boardThreadItem-tool {
+.wz-boardLoading {
+  padding: 24px 28px;
   color: var(--thread-3);
-  font-size: 12.5px;
-}
-
-.wz-boardThreadItem-result {
-  padding: 6px 0;
-  border-top: 1px dashed rgb(236 229 216 / 0.12);
-  color: var(--thread-3);
-  font-size: 11.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  text-align: center;
-}
-
-.wz-boardThreadItem-toolSummary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border: 1px solid rgb(236 229 216 / 0.1);
-  border-radius: 6px;
-  background: rgb(28 34 50 / 0.4);
-  font-family: var(--display, ui-monospace, monospace);
-  cursor: pointer;
-  text-align: left;
-  color: var(--thread-2);
-}
-
-.wz-boardThreadItem-toolSummaryOpen {
-  background: rgb(28 34 50 / 0.6);
-}
-
-.wz-boardThreadItem-toolSummaryMark {
-  color: var(--clay-2);
-  font-size: 11px;
-  width: 12px;
-  text-align: center;
-}
-
-.wz-boardThreadItem-toolOutput {
-  margin-top: 6px;
-  padding: 10px 12px;
-  border-radius: 6px;
-  background: rgb(8 11 17 / 0.7);
-  border: 1px solid rgb(236 229 216 / 0.08);
-  font-family: ui-monospace, monospace;
-  font-size: 12px;
-  white-space: pre-wrap;
-  color: var(--thread-2);
-  max-height: 320px;
-  overflow-y: auto;
-}
-
-.wz-boardThreadItem-image {
-  max-width: 100%;
-  border-radius: 6px;
-  border: 1px solid rgb(236 229 216 / 0.12);
-  display: block;
-}
-
-.wz-boardLoadMore {
-  align-self: center;
-  padding: 6px 14px;
-  border-radius: 999px;
-  border: 1px solid rgb(236 229 216 / 0.14);
-  background: transparent;
-  color: var(--thread-2);
-  font-size: 12.5px;
-  cursor: pointer;
-}
-
-.wz-boardLoadMore:hover {
-  border-color: rgb(236 229 216 / 0.3);
-  color: var(--thread);
+  font-size: 14px;
 }

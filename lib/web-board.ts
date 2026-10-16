@@ -6,58 +6,29 @@
 // stays pure: callers pass in the rows they read and the diffs Realtime sends, and get back fresh
 // data shapes for the board to render.
 import { BLOB_REF_PREFIX, isBlobRef, THREAD_PAGE_SIZE, type CloudCardRow, type CloudThreadItemRow } from "./cloud-sync-types";
-import { COLUMNS, type Card, type Column, type ThreadItem } from "./types";
+import type { Card, ThreadItem } from "./types";
 
-// ─── Cards → columns ─────────────────────────────────────────────────────────
+// ─── Cards → the board ───────────────────────────────────────────────────────
 
-// How the web board stores its cards (one entry per card row, hidden ones filtered out).
-// `folder` is the last folder segment so a "my-app" hint shows up on the card without a long path.
-export interface WebBoardCard {
-  id: string;
-  card: Card;
-  folder: string;
-  ownerDevice: string;
-  updatedAt: string;
-}
-
-// A single column's worth of cards, ordered newest first by `updatedAt` (the cloud row's clock).
-export interface WebBoardColumn {
-  id: Column;
-  label: string;
-  cards: WebBoardCard[];
-}
-
-// Group `rows` into the five board columns. A deleted row is skipped; unknown columns get a default
-// label so a future column doesn't crash the page.
-export function groupCardsByColumn(rows: CloudCardRow[]): WebBoardColumn[] {
-  const groups = new Map<Column, WebBoardCard[]>(COLUMNS.map((c) => [c.id, []]));
+// The cards the board draws: every synced card that isn't deleted, and not the copilot (it has its
+// own lane on the desktop and never shows as a card). What to show of them (project, filter, sort,
+// columns) is the desktop's own lib/board-view.ts, so the two boards read the same.
+export function webCards(rows: CloudCardRow[]): Card[] {
+  const cards: Card[] = [];
   for (const row of rows) {
-    if (row.deleted) continue;
-    const col = columnFor(row.card.column);
-    if (!col) continue;
-    const list = groups.get(col) as WebBoardCard[];
-    list.push({
-      id: row.card_id,
-      card: row.card,
-      folder: row.folder,
-      ownerDevice: row.owner_device,
-      updatedAt: row.updated_at,
-    });
+    if (row.deleted || row.card.role === "copilot") continue;
+    cards.push(row.card);
   }
-  const out: WebBoardColumn[] = [];
-  for (const c of COLUMNS) {
-    const list = groups.get(c.id) as WebBoardCard[];
-    list.sort(compareWebCards);
-    out.push({ id: c.id, label: c.label, cards: list });
-  }
-  return out;
+  return cards;
 }
 
-// Newest first by updatedAt. Equal timestamps keep their original order (stable sort).
-function compareWebCards(a: WebBoardCard, b: WebBoardCard): number {
-  if (a.updatedAt < b.updatedAt) return 1;
-  if (a.updatedAt > b.updatedAt) return -1;
-  return 0;
+// The header's "N running · M need you". Archived cards are out of sight, so they don't count.
+export function boardCounts(cards: Card[]): { running: number; waiting: number } {
+  const open = cards.filter((c) => !c.archived);
+  return {
+    running: open.filter((c) => c.column === "running").length,
+    waiting: open.filter((c) => c.column === "needs_you").length,
+  };
 }
 
 function compareThreadItems(a: ThreadItem, b: ThreadItem): number {
@@ -70,25 +41,9 @@ function compareThreadItems(a: ThreadItem, b: ThreadItem): number {
   return 0;
 }
 
-// A tiny public surface so the comparators can be unit-tested without forcing v8 to inline them
+// A tiny public surface so the comparator can be unit-tested without forcing v8 to inline it
 // inside a sort and lose branch coverage. Production code never reaches in here.
-export const _internals = { compareWebCards, compareThreadItems };
-
-// What column a card belongs in. An archived card is hidden; anything else keeps its column.
-export function columnFor(raw: string | undefined): Column | null {
-  if (typeof raw !== "string") return null;
-  if (COLUMNS.some((c) => c.id === raw)) return raw as Column;
-  return null;
-}
-
-// The folder's last segment: "/Users/me/projects/App" → "App". Empty paths collapse to "".
-export function folderName(folder: string): string {
-  if (!folder) return "";
-  const parts = folder.split(/[\\/]+/).filter(Boolean);
-  if (!parts.length) return "";
-  // parts is non-empty, so the last entry is always a string here.
-  return parts[parts.length - 1] as string;
-}
+export const _internals = { compareThreadItems };
 
 // ─── Realtime → card list ────────────────────────────────────────────────────
 
@@ -126,8 +81,13 @@ export const SEQ_FIELD = "__seq" as const;
 export const seqOf = (item: ThreadItem): number | undefined => (item as ThreadItem & { [SEQ_FIELD]?: number })[SEQ_FIELD];
 const withSeq = (item: ThreadItem, seq: number): ThreadItem => Object.assign({}, item, { [SEQ_FIELD]: seq });
 
-// A thread window the side panel can render: the items it knows about, ordered newest first,
-// whether more older items are likely, and the set of blob refs the renderer will need to fetch.
+// The window's items the way a thread reads: oldest first, by their place in the thread.
+export function chronological(items: ThreadItem[]): ThreadItem[] {
+  return items.toSorted((a, b) => (seqOf(a) ?? 0) - (seqOf(b) ?? 0));
+}
+
+// A thread window the panel keeps: the items it knows about, ordered newest first, whether more
+// older items are likely, and the set of blob refs the renderer will need to fetch.
 export interface WebBoardThread {
   cardId: string;
   items: ThreadItem[];
@@ -135,11 +95,10 @@ export interface WebBoardThread {
   blobRefs: string[];
 }
 
-// Turn a page of cloud_thread_items rows into a renderable thread window. `beforeSeq` is the
-// thread seq the caller asked "older than" — when set and the page came back full, the thread
-// probably has more, and "Load older" makes sense. A row whose item isn't an object is dropped so
-// a partial event doesn't break the panel.
-export function windowFromItems(cardId: string, rows: CloudThreadItemRow[], beforeSeq?: number | null): WebBoardThread {
+// Turn a page of cloud_thread_items rows (newest first) into a thread window. A full page probably
+// has older items behind it, so "Load earlier" makes sense. A row whose item isn't an object is
+// dropped so a partial event doesn't break the panel.
+export function windowFromItems(cardId: string, rows: CloudThreadItemRow[]): WebBoardThread {
   const items: ThreadItem[] = [];
   const refs = new Set<string>();
   for (const row of rows) {
@@ -152,7 +111,7 @@ export function windowFromItems(cardId: string, rows: CloudThreadItemRow[], befo
   return {
     cardId,
     items,
-    hasOlder: typeof beforeSeq === "number" && rows.length >= THREAD_PAGE_SIZE,
+    hasOlder: rows.length >= THREAD_PAGE_SIZE,
     blobRefs: [...refs],
   };
 }
@@ -239,27 +198,6 @@ export function rewriteBlobRefs(items: ThreadItem[], map: Record<string, string>
     return value;
   };
   return items.map((item) => replace(item) as ThreadItem);
-}
-
-// Build a tool output row's "small preview" — the line a collapsed tool row shows before its
-// output is fetched.
-export function toolOutputSummary(name: string, summary: string, resultBytes?: number, isError?: boolean): string {
-  const errTag = isError ? " · failed" : "";
-  const sizeTag = resultBytes ? ` · ${formatBytes(resultBytes)}` : "";
-  return `${name}${summary ? `: ${truncate(summary, 80)}` : ""}${sizeTag}${errTag}`;
-}
-
-// ─── helpers ─────────────────────────────────────────────────────────────────
-
-function truncate(text: string, max: number): string {
-  if (text.length <= max) return text;
-  return text.slice(0, max - 1).trimEnd() + "…";
-}
-
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 // ─── Storage → signed URLs ───────────────────────────────────────────────────

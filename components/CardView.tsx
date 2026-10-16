@@ -74,6 +74,8 @@ function cardBorder(card: Card, selected: boolean, unseen: boolean, lastOpen: bo
   return card.column === "needs_you" ? "border-warn/60" : "border-line hover:border-line-strong";
 }
 
+const noop = () => {};
+
 export default function CardView({
   card,
   now,
@@ -81,14 +83,15 @@ export default function CardView({
   lastOpen = false,
   unseen = false,
   onOpen,
-  onAnswer,
-  onStop,
+  onAnswer = noop,
+  onStop = noop,
   onResume,
   onContextMenu,
   onStar,
   onTag,
   onArchive,
   alsoHere = [],
+  readOnly = false,
 }: {
   card: Card;
   now: number;
@@ -98,8 +101,8 @@ export default function CardView({
   // Moved here while you weren't looking; cleared when you open it.
   unseen?: boolean;
   onOpen: () => void;
-  onAnswer: (allow: boolean) => void;
-  onStop: () => void;
+  onAnswer?: (allow: boolean) => void;
+  onStop?: () => void;
   // ▶ sends "continue" into the card's session; Restart (on a stopped or failed card) runs its last message again.
   onResume?: (how: ResumeHow) => void;
   // Right-click: the card's menu (lib/card-menu.ts).
@@ -112,19 +115,17 @@ export default function CardView({
   onArchive?: () => void;
   // Other busy cards in this folder (lib/overlap.ts busyHere); flagged only while this one is busy too.
   alsoHere?: Card[];
+  // The weft.zip board mirrors a card it can't act on: no drag, no stop, answer, resume, star or archive.
+  readOnly?: boolean;
 }) {
   // The request already answered here, so a second click can't answer it (or the next one) again.
   const [answeredId, setAnsweredId] = useState<string | null>(null);
-  const live = isLive(card);
-  // The copilot opens like any card but can't be moved, starred or filed under a project.
-  const copilot = card.role === "copilot";
   // A running card is placed by its status line; one waiting on you (a question or a permission) can still be dragged.
-  const fixed = card.column === "running" || copilot;
+  const fixed = card.column === "running" || card.role === "copilot" || readOnly;
   // The issue and tags sit on the progress line, or in the footer when the card has none.
   const marks = <CardMarks card={card} onTag={onTag} />;
   const progress = showsCardProgress(card);
   const answered = answeredId !== null && answeredId === card.pending?.id;
-  const needsLogin = waitsForLogin(card);
   const border = cardBorder(card, selected, unseen, lastOpen);
 
   function answer(allow: boolean) {
@@ -156,13 +157,29 @@ export default function CardView({
             {card.title}
           </div>
           <Summary card={card} />
-          <RateLimitSwitch card={card} />
+          {!readOnly && <RateLimitSwitch card={card} />}
         </div>
         <CardPicture card={card} />
       </div>
       {progress && <CardProgress card={card} marks={marks} />}
 
-      {needsLogin && (
+      {!readOnly && <CardPrompts card={card} answered={answered} onAnswer={answer} onOpen={onOpen} onResume={onResume} />}
+
+      <div className="mt-2 flex items-center gap-2 border-t border-line pt-1.5 text-[11px] text-faint">
+        <div className="min-w-0 flex-1">
+          <CardFooterMeta card={card} now={now} alsoHere={alsoHere} marks={progress ? null : marks} />
+        </div>
+        <CardActions card={card} readOnly={readOnly} onResume={onResume} onStar={onStar} onArchive={onArchive} onStop={onStop} />
+      </div>
+    </div>
+  );
+}
+
+// What a card in Needs you asks of you, right on it: log in, restart, answer or allow.
+function CardPrompts({ card, answered, onAnswer, onOpen, onResume }: { card: Card; answered: boolean; onAnswer: (allow: boolean) => void; onOpen: () => void; onResume?: (how: ResumeHow) => void }) {
+  return (
+    <>
+      {waitsForLogin(card) && (
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -188,21 +205,22 @@ export default function CardView({
         </button>
       )}
 
-      {card.pending && !card.pending.questions && (
-        <PermissionRow answered={answered} onAnswer={answer} />
-      )}
+      {card.pending && !card.pending.questions && <PermissionRow answered={answered} onAnswer={onAnswer} />}
+    </>
+  );
+}
 
-      <div className="mt-2 flex items-center gap-2 border-t border-line pt-1.5 text-[11px] text-faint">
-        <div className="min-w-0 flex-1">
-          <CardFooterMeta card={card} now={now} alsoHere={alsoHere} marks={progress ? null : marks} />
-        </div>
-        <div className="flex shrink-0 items-center">
-          <ContinueButton card={card} onResume={onResume} />
-          {!copilot && <StarButton variant="card" starred={Boolean(card.starred)} onClick={onStar} />}
-          {(card.column === "done" || card.archived) && <ArchiveButton archived={Boolean(card.archived)} onClick={onArchive} />}
-          {live && <StopButton onClick={onStop} />}
-        </div>
-      </div>
+// The footer's buttons: continue, star, archive and stop. A read-only card (weft.zip) has none.
+function CardActions({ card, readOnly, onResume, onStar, onArchive, onStop }: { card: Card; readOnly: boolean; onResume?: (how: ResumeHow) => void; onStar?: () => void; onArchive?: () => void; onStop: () => void }) {
+  if (readOnly) return null;
+  // The copilot opens like any card but can't be moved, starred or filed under a project.
+  const copilot = card.role === "copilot";
+  return (
+    <div className="flex shrink-0 items-center">
+      <ContinueButton card={card} onResume={onResume} />
+      {!copilot && <StarButton variant="card" starred={Boolean(card.starred)} onClick={onStar} />}
+      {(card.column === "done" || card.archived) && <ArchiveButton archived={Boolean(card.archived)} onClick={onArchive} />}
+      {isLive(card) && <StopButton onClick={onStop} />}
     </div>
   );
 }

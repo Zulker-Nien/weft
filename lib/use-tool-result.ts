@@ -8,7 +8,18 @@
 //   undefined = nothing yet (or a fetch is in flight)
 //   string    = the result
 //   ""        = the fetch failed
-import { useEffect, useState, type RefObject } from "react";
+import { createContext, useContext, useEffect, useState, type RefObject } from "react";
+
+// Where a trimmed tool result comes from. The board reads it from its own server; the weft.zip board
+// provides one that reads cloud_tool_outputs through the visitor's session (components/web-board).
+export type ToolResultSource = (cardId: string, toolId: string) => Promise<string>;
+
+const localSource: ToolResultSource = (cardId, toolId) =>
+  fetch(`/api/cards/${cardId}/thread/tool/${encodeURIComponent(toolId)}`)
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${r.status}`))))
+    .then((data: { result: string }) => data.result);
+
+export const ToolResultSourceContext = createContext<ToolResultSource>(localSource);
 
 export interface ToolResultState {
   fetched: string | undefined;
@@ -33,6 +44,7 @@ export function useToolResult(
   detailsRef: RefObject<HTMLDetailsElement | null>,
 ): ToolResultState {
   const [fetched, setFetched] = useState<string | undefined>(trimmed ? undefined : knownResult);
+  const source = useContext(ToolResultSourceContext);
   useEffect(() => {
     const details = detailsRef.current;
     if (!trimmed || !details) return;
@@ -40,9 +52,8 @@ export function useToolResult(
     const onToggle = () => {
       if (!details.open || fetched !== undefined || inFlight) return;
       inFlight = true;
-      fetch(`/api/cards/${cardId}/thread/tool/${encodeURIComponent(toolId)}`)
-        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${r.status}`))))
-        .then((data: { result: string }) => setFetched(data.result))
+      source(cardId, toolId)
+        .then((result) => setFetched(result))
         .catch(() => setFetched(""))
         .finally(() => {
           inFlight = false;
@@ -50,7 +61,7 @@ export function useToolResult(
     };
     details.addEventListener("toggle", onToggle);
     return () => details.removeEventListener("toggle", onToggle);
-  }, [trimmed, cardId, toolId, fetched, detailsRef]);
+  }, [trimmed, cardId, toolId, fetched, detailsRef, source]);
   const result = knownResult ?? fetched;
   return { fetched: result, loading: trimmed && result === undefined, errored: result === "" };
 }

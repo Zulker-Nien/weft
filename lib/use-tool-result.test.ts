@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { cleanup, renderHook, act, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { toolSizeLabel, useToolResult } from "./use-tool-result";
+import { createElement, type ReactNode } from "react";
+import { ToolResultSourceContext, toolSizeLabel, useToolResult } from "./use-tool-result";
 
 const fetchMock = vi.fn();
 
@@ -34,6 +35,28 @@ describe("toolSizeLabel", () => {
     expect(toolSizeLabel(3 * 1024 + 300)).toBe("3.3 KB");
     expect(toolSizeLabel(40 * 1024)).toBe("40 KB");
     expect(toolSizeLabel(2.5 * 1024 * 1024)).toBe("2.5 MB");
+  });
+});
+
+describe("useToolResult with another source", () => {
+  it("reads the result from the source the provider gives (the weft.zip board's cloud_tool_outputs)", async () => {
+    const source = vi.fn().mockResolvedValue("from the cloud");
+    const wrapper = ({ children }: { children: ReactNode }) => createElement(ToolResultSourceContext.Provider, { value: source }, children);
+    const ref = details();
+    const { result } = renderHook(() => useToolResult("c1", "t1", true, undefined, ref), { wrapper });
+    open(ref);
+    await waitFor(() => expect(result.current.fetched).toBe("from the cloud"));
+    expect(source).toHaveBeenCalledWith("c1", "t1");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("marks the row errored when the source rejects", async () => {
+    const source = vi.fn().mockRejectedValue(new Error("nope"));
+    const wrapper = ({ children }: { children: ReactNode }) => createElement(ToolResultSourceContext.Provider, { value: source }, children);
+    const ref = details();
+    const { result } = renderHook(() => useToolResult("c1", "t1", true, undefined, ref), { wrapper });
+    open(ref);
+    await waitFor(() => expect(result.current.errored).toBe(true));
   });
 });
 
