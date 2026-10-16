@@ -11,6 +11,7 @@ runs, in every permission mode (bypass included), and the denial's reason goes b
 | Git guard | `lib/git-guard.ts` | git commands that throw away or hide uncommitted work in the shared tree |
 | Route import guard | `lib/route-import-guard.ts` | an edit that makes a route file import a module that isn't there yet |
 | Import guard | `lib/import-check.ts` | (PostToolUse) reports an edit that breaks an import |
+| Dropped-import check | `lib/dropped-imports.ts` | (PostToolUse, with the import guard) reports an edit that drops an import the file still uses |
 | Symbol claims | `lib/claim-guard.ts` | asks (doesn't deny) before an edit to a symbol another busy card is editing |
 
 ## Symbol claims
@@ -111,5 +112,17 @@ parse) can't help. The import guard's PostToolUse report comes too late for thes
 - **Outside Weft**: `scripts/import-check-hook.mjs` runs as both the PreToolUse and the PostToolUse hook in
   `.claude/settings.json`, branching on `hook_event_name`; a `registerHooks()` resolve hook lets Node's type
   stripping load `lib/` files that import their neighbours without `.ts`. It exits early in board threads, which get
-  the in-process guard.
+  the in-process guard: `lib/weft-thread.ts` walks up from the hook's process to Weft's server (`WEFT_SERVER_PID`,
+  set by `cliEnv()`), a few steps with no shell between. `CLAUDE_CODE_ENTRYPOINT=sdk-ts` can't tell, because a
+  thread's Bash passes it on: a `puku-cli -p` a thread started used to skip every check (2026-10-16, a Board.tsx split
+  that dropped `columnMinWidth` from its imports while still calling it, and the board threw on every reload).
+
+## Dropped-import check
+
+`lib/dropped-imports.ts`, run after each Edit, MultiEdit or Write next to the import guard (in-process and in the hook).
+An edit that trims an import while the file still uses the name compiles fine, so no build error shows; the board
+then throws `X is not defined` when it draws. It rebuilds the file before the edit (undoing the Edit's or MultiEdit's
+`new_string` → `old_string` on the text, or the last commit for a Write), takes the names the old imports bound and the
+new ones don't, and reports each that the file still uses outside comments, strings, properties (`a.x`) and object
+keys (`x:`), unless the file now declares it itself. Text only, like the import guard.
 

@@ -2,12 +2,14 @@ import type { HookCallback, HookCallbackMatcher } from "@anthropic-ai/claude-age
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { droppedImports } from "./dropped-imports";
 
 // Catches a broken import the moment an edit makes it, before the dev server shows it as a build error
 // over the whole board: one thread removes an export (or a whole module) another file still imports,
 // or adds an import of a name that isn't there. A React error boundary can't catch these: the module
 // never compiles, so nothing runs. Plain text matching, no type-checker, so it takes milliseconds.
-// Only node: imports (and erased type imports) here: scripts/import-check-hook.mjs loads this file with
+// Only node: imports (erased type imports, and ./dropped-imports, which keeps to the same rule) here:
+// scripts/import-check-hook.mjs loads this file with
 // Node's type stripping, for Claude Code sessions outside Weft.
 
 const SOURCE = /\.(ts|tsx|js|jsx|mjs)$/;
@@ -162,7 +164,7 @@ function list(names: string[]) {
 // What the agent that made the edit is told, so it fixes the break before anyone sees it.
 export function importReport(problems: string[]): string {
   return [
-    "This edit breaks the build (the dev server would show it over the whole board):",
+    "This edit breaks the board (a build error over all of it, or a name that's not defined when it draws):",
     ...problems.map((p) => `- ${p}`),
     "Fix it now: update those imports, or keep the old export until every importer has moved (Fowler's Parallel Change). Another thread may be editing the importer, so read it fresh first.",
   ].join("\n");
@@ -172,7 +174,8 @@ export function importReport(problems: string[]): string {
 export const importGuard: HookCallback = (input) => {
   if (input.hook_event_name !== "PostToolUse") return Promise.resolve({});
   const file = (input.tool_input as { file_path?: unknown } | null)?.file_path;
-  const problems = typeof file === "string" ? brokenImports(path.resolve(input.cwd, file)) : [];
+  const full = typeof file === "string" ? path.resolve(input.cwd, file) : null;
+  const problems = full ? [...brokenImports(full), ...droppedImports(input.tool_name, input.tool_input, full)] : [];
   return Promise.resolve(problems.length ? { decision: "block", reason: importReport(problems) } : {});
 };
 

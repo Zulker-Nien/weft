@@ -26,6 +26,7 @@ describe("cliEnv", () => {
       expect(env).not.toHaveProperty(key);
     }
     expect(env.CLAUDE_CODE_ENTRYPOINT).toBe("sdk-ts");
+    expect(env.WEFT_SERVER_PID).toBe(String(process.pid));
   });
 
   it("strips Weft's own keys, like the browser pane's control-server token", () => {

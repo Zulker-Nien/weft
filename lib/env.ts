@@ -42,6 +42,8 @@ export function cliEnv(): NodeJS.ProcessEnv {
   // The Claude app routes its own sessions through a local proxy; that address isn't ours to use.
   if (insideClaude) delete env.ANTHROPIC_BASE_URL;
   env.CLAUDE_CODE_ENTRYPOINT = "sdk-ts";
+  // So .claude/settings.json's hook can tell this server's own CLIs from ones a thread starts (lib/weft-thread.ts).
+  env.WEFT_SERVER_PID = String(process.pid);
   return env;
 }
 

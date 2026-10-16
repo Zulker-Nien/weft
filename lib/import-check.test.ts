@@ -161,6 +161,14 @@ describe("importReport and importGuard", () => {
     expect((out as { reason: string }).reason).toContain("lib/y.ts:1 still imports `gone`");
   });
 
+  it("blocks after an edit that drops an import the file still uses", async () => {
+    const after = 'import { b } from "./x";\n';
+    write({ "lib/x.ts": "export const a = 1;\nexport const b = 2;\n", "lib/y.ts": `${after}a(b);\n` });
+    const out = await run(post({ file_path: "lib/y.ts", old_string: 'import { a, b } from "./x";\n', new_string: after }));
+    expect(out).toMatchObject({ decision: "block" });
+    expect((out as { reason: string }).reason).toContain("y.ts no longer imports `a` but still uses it");
+  });
+
   it("stays out of the way otherwise", async () => {
     write({ "lib/x.ts": "export const a = 1;\n" });
     expect(await run(post({ file_path: path.join(root, "lib/x.ts") }))).toEqual({});

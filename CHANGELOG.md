@@ -10,6 +10,8 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Added
 
+- **Dropped-import guard.** An edit that removes an import the file still uses (the board's "columnMinWidth is not defined") is reported to the thread right away (`lib/dropped-imports.ts`). The `.claude/settings.json` guards now also run for a `puku-cli -p` or `claude -p` a thread starts, which used to skip them (`lib/weft-thread.ts`).
+
 - Settings → Models → **Review all** picks the Claude model the Review column's "Review all" card runs on (default: the CLI's own).
 - Pasted and dropped PNG, JPEG and GIF chat attachments are converted to WebP on upload to reduce disk and prompt image size.
 - Codex and Puku threads match Claude Code outside Weft's own folder. Codex gets Weft's browser, board, secrets, webhook and board-view tools (a per-turn token and `/api/mcp/[server]`, shown in the thread as `mcp__server__tool`), the project's `CLAUDE.md` (Codex loads `AGENTS.md` only, and DeckCP keeps its instructions in `CLAUDE.md`), and both Codex and Puku get the folder's and your `.claude/skills` as an index plus `/name` expanded to the skill. Puku's project instructions also stop cutting at 60,000 characters (now 100,000), so DeckCP's 66 KB `CLAUDE.md` arrives whole.

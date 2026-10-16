@@ -225,7 +225,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `lib/restart-when-idle.ts` + `app/api/restart` + `lib/restart-tool.ts` + `electron/restart-when-idle.cjs` + `components/RestartChip.tsx`: restart when idle
   (Weft menu, palette, updater, `mcp__board__restart_weft_when_idle`): `sendMessage` holds new turns as "after restart" scheduled
   messages, and once no turn runs or is queued the server calls the control server's `POST /app/restart` (relaunch or install the update).
-- `lib/import-check.ts`: after each Edit/Write, tells the thread which imports it broke (a build error no boundary catches);
+- `lib/import-check.ts` + `lib/dropped-imports.ts`: after each Edit/Write, tells the thread which imports it broke (a build error no boundary catches) or dropped while still in use (an "X is not defined" on draw);
   in every thread via `lib/env.ts` `guardedCli()`, and in other Claude Code sessions via `.claude/settings.json`.
 - Components: `Board.tsx`, `ThreadView.tsx`, `ThreadItems.tsx`, `Markdown.tsx`, `ReviewPanel.tsx`;
   every dialog sits in `Modal.tsx` (backdrop, header, close, Escape via `lib/use-escape.ts`);
