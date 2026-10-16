@@ -147,7 +147,7 @@ describe("WebBoard", () => {
     }
   });
 
-  it("shows the empty state and explains the Sync to workspace switch when there are no cards", async () => {
+  it("shows the empty state and points at Settings → Sync when there are no cards", async () => {
     const { WebBoard } = await loadBoard();
     render(
       <WebBoard
@@ -159,7 +159,7 @@ describe("WebBoard", () => {
         initialBlobUrls={{}}
       />,
     );
-    expect(screen.getByText(/Sync to workspace/i)).toBeInTheDocument();
+    expect(screen.getByText(/Settings → Sync/)).toBeInTheDocument();
     expect(screen.queryByText("Backlog")).not.toBeInTheDocument();
   });
 

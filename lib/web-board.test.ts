@@ -6,6 +6,7 @@ import { BLOB_REF_PREFIX, type CloudCardRow, type CloudThreadItemRow } from "./c
 import {
   applyCardChange,
   applyItemChange,
+  seqOf,
   batchBlobRefs,
   blobPath,
   buildBlobUrlMap,
@@ -267,16 +268,29 @@ describe("applyItemChange", () => {
     expect(next.blobRefs).toEqual([REF]);
   });
 
-  it("replaces an item at the same seq", () => {
-    const tagged = { ...userMsg, __seq: 0 } as ThreadItem;
-    const window = { ...base, items: [tagged] };
-    const replacement = { ...userMsg, text: "rewritten" } as ThreadItem & { __seq?: number };
-    (replacement as { __seq?: number }).__seq = 0;
-    const next = applyItemChange(window, {
-      eventType: "UPDATE",
-      new: { org_id: ORG, card_id: "c1", seq: 0, kind: "user", item: replacement, at: "2026-10-15T10:00:00.000Z" },
-    });
-    expect(next.items[0]?.kind).toBe("user");
+  const row = (seq: number, item: ThreadItem): CloudThreadItemRow => ({ org_id: ORG, card_id: "c1", seq, kind: item.kind, item, at: "2026-10-15T10:00:00.000Z" });
+
+  it("stamps each row's seq on its item, and seqOf reads it back", () => {
+    const win = windowFromItems("c1", [row(3, { kind: "user", text: "a", at: 1 }), row(4, { kind: "assistant", text: "b", at: 2 })]);
+    expect(win.items.map(seqOf)).toEqual([4, 3]);
+    expect(seqOf(userMsg)).toBeUndefined();
+  });
+
+  it("replaces the item at the same seq instead of adding a second one (a tool call getting its result)", () => {
+    const running: ThreadItem = { kind: "tool", id: "t1", name: "Bash", summary: "ls", at: 2 };
+    const finished: ThreadItem = { ...running, result: "done", resultBytes: 4 };
+    const win = windowFromItems("c1", [row(0, userMsg), row(1, running)]);
+    const next = applyItemChange(win, { eventType: "UPDATE", new: row(1, finished) });
+    expect(next.items).toHaveLength(2);
+    expect(next.items.find((i) => seqOf(i) === 1)).toMatchObject({ kind: "tool", result: "done" });
+  });
+
+  it("an INSERT carries its seq, so a later UPDATE of it replaces it", () => {
+    const first = applyItemChange(base, { eventType: "INSERT", new: row(7, { kind: "assistant", text: "draft", at: 5 }) });
+    expect(first.items.map(seqOf)).toEqual([7]);
+    const second = applyItemChange(first, { eventType: "UPDATE", new: row(7, { kind: "assistant", text: "final", at: 5 }) });
+    expect(second.items).toHaveLength(1);
+    expect(second.items[0]).toMatchObject({ text: "final" });
   });
 
   it("ignores events for other cards and DELETE without a seq", () => {
@@ -300,14 +314,10 @@ describe("applyItemChange", () => {
     ).toBe(base);
   });
 
-  it("drops an item by seq on DELETE", () => {
-    const tagged = { ...userMsg, __seq: 5 } as ThreadItem;
-    const window = { ...base, items: [tagged, { ...userMsg, __seq: 6 } as ThreadItem] };
-    const next = applyItemChange(window, {
-      eventType: "DELETE",
-      old: { card_id: "c1", seq: 5 },
-    });
-    expect(next.items).toHaveLength(1);
+  it("drops an item by seq on DELETE, for a window built from real rows", () => {
+    const win = windowFromItems("c1", [row(5, userMsg), row(6, { kind: "assistant", text: "b", at: 2 })]);
+    const next = applyItemChange(win, { eventType: "DELETE", old: { card_id: "c1", seq: 5 } });
+    expect(next.items.map(seqOf)).toEqual([6]);
   });
 });
 

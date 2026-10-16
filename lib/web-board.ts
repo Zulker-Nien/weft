@@ -120,6 +120,12 @@ export function applyCardChange(cards: CloudCardRow[], change: CloudCardChange):
 
 // ─── Thread items → renderable window ───────────────────────────────────────
 
+// A cloud row's seq isn't part of the ThreadItem type (lib/types.ts), so the window stamps it on each item. That
+// is how a Realtime UPDATE finds the slot it replaces, a DELETE the item it drops, and "Load older" its cursor.
+export const SEQ_FIELD = "__seq" as const;
+export const seqOf = (item: ThreadItem): number | undefined => (item as ThreadItem & { [SEQ_FIELD]?: number })[SEQ_FIELD];
+const withSeq = (item: ThreadItem, seq: number): ThreadItem => Object.assign({}, item, { [SEQ_FIELD]: seq });
+
 // A thread window the side panel can render: the items it knows about, ordered newest first,
 // whether more older items are likely, and the set of blob refs the renderer will need to fetch.
 export interface WebBoardThread {
@@ -139,7 +145,7 @@ export function windowFromItems(cardId: string, rows: CloudThreadItemRow[], befo
   for (const row of rows) {
     if (row.card_id !== cardId) continue;
     if (typeof row.item !== "object" || !("kind" in row.item)) continue;
-    items.push(row.item);
+    items.push(withSeq(row.item, row.seq));
   }
   items.sort(compareThreadItems);
   collectBlobRefs(items, refs);
@@ -158,7 +164,7 @@ export function applyItemChange(window: WebBoardThread, change: { eventType: "IN
     const id = change.old?.seq;
     const cardId = change.old?.card_id;
     if (typeof id !== "number" || cardId !== window.cardId) return window;
-    return { ...window, items: window.items.filter((item) => (item as { __seq?: number }).__seq !== id) };
+    return { ...window, items: window.items.filter((item) => seqOf(item) !== id) };
   }
   const row = change.new;
   if (!row || row.card_id !== window.cardId) return window;
@@ -166,10 +172,10 @@ export function applyItemChange(window: WebBoardThread, change: { eventType: "IN
   // DELETE above already trimmed its own item; what's left is the window with the items dropped.
   // The renderer also sees new items arriving after the cut as fresh INSERTs.
   const items = window.items.slice();
-  const seq = (row.item as { __seq?: number }).__seq;
-  const idx = seq === undefined ? -1 : items.findIndex((it) => (it as { __seq?: number }).__seq === seq);
-  if (idx === -1) items.unshift(row.item);
-  else items[idx] = row.item;
+  const stamped = withSeq(row.item, row.seq);
+  const idx = items.findIndex((it) => seqOf(it) === row.seq);
+  if (idx === -1) items.unshift(stamped);
+  else items[idx] = stamped;
   const refs = new Set<string>();
   collectBlobRefs(items, refs);
   return { ...window, items, blobRefs: [...refs] };
@@ -242,9 +248,6 @@ export function toolOutputSummary(name: string, summary: string, resultBytes?: n
   const sizeTag = resultBytes ? ` · ${formatBytes(resultBytes)}` : "";
   return `${name}${summary ? `: ${truncate(summary, 80)}` : ""}${sizeTag}${errTag}`;
 }
-
-// The seq number a Realtime event stashes on its item so windowFromItems can dedupe updates.
-export const SEQ_FIELD = "__seq" as const;
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 

@@ -28,6 +28,7 @@ import {
   toolOutputSummary,
   windowFromItems,
   rewriteWindowBlobRefs,
+  seqOf,
   type WebBoardCard as WebBoardCardShape,
   type WebBoardColumn as WebBoardColumnShape,
 } from "@/lib/web-board";
@@ -180,8 +181,7 @@ export function WebBoard({ orgId, orgSlug, initialCards, openCardId, initialThre
     if (!thread || !thread.hasOlder) return;
     const oldest = thread.items[thread.items.length - 1];
     if (!oldest) return;
-    const seq = (oldest as unknown as { __seq?: number }).__seq ?? null;
-    const beforeSeq = seq ?? null;
+    const beforeSeq = seqOf(oldest) ?? null;
     const { data, error } = await client
       .from("cloud_thread_items")
       .select("*")
@@ -229,8 +229,8 @@ export function WebBoard({ orgId, orgSlug, initialCards, openCardId, initialThre
 
       {cards.length === 0 ? (
         <p className="wz-boardEmpty">
-          No synced cards yet. Cards show here once a project&apos;s <strong>Sync to workspace</strong> switch
-          is on in the desktop app&apos;s GitHub drawer.
+          No synced cards yet. Cards show here once a project&apos;s switch is on in the desktop app&apos;s{" "}
+          <strong>Settings → Sync</strong>.
         </p>
       ) : (
         <div className="wz-boardColumns">
@@ -313,8 +313,4 @@ export const _imagePreflight = (items: ThreadItem[]) => {
   return refs;
 };
 
-// Tag a thread item with its seq so dedupe in applyItemChange can find it. The cloud row's
-// seq isn't part of the ThreadItem type (lib/types.ts), so the panel reads it from the
-// row directly and writes it on the item here.
-export const seqField = "__seq" as const;
 export { folderName, BLOB_REF_PREFIX };
