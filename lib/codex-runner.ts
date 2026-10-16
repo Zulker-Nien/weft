@@ -6,11 +6,14 @@ import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { spawnCli } from "./cli-process";
 import { CODEX_INPUT_CODE, codexInput, writeImages } from "./codex-input";
 import { permissionArgs } from "./codex-permissions";
+import { BRIDGE_TOKEN_ENV, codexMcpArgs, openBridge } from "./mcp-bridge";
+import { codexProjectInstructions } from "./puku-context";
+import { weftMcpServers } from "./weft-mcp";
 import { CODEX_DEFAULT_MODEL } from "./new-thread";
 import { cliEnv } from "./env";
 import { subagentModel, threadPrompt } from "./settings";
 import { subagentPrompt } from "./subagents";
-import { PLUGIN_DIR } from "./skills";
+import { skillIndex, skillInvocation } from "./skills";
 import { handle } from "./runner-turn";
 import { getCard, getThread, replaceThreadItem, updateCard } from "./store";
 import { touchFile } from "./overlap";
@@ -25,6 +28,12 @@ type CodexItem = {
   exit_code?: number;
   status?: string;
   changes?: { path?: string }[];
+  // An MCP tool call, such as Weft's own (mcp__browser__open_url).
+  server?: string;
+  tool?: string;
+  arguments?: Record<string, unknown>;
+  result?: { content?: { type?: string; text?: string }[] } | null;
+  error?: { message?: string } | string | null;
 };
 
 type CodexEvent = {
@@ -62,6 +71,18 @@ async function assistant(session: Session, text: string) {
   }));
 }
 
+// The tool the thread shows for an item: a shell command is Bash, an MCP call keeps Claude's mcp__server__tool name.
+export function toolUse(item: CodexItem) {
+  if (item.type === "mcp_tool_call") return { name: `mcp__${item.server}__${item.tool}`, input: item.arguments ?? {} };
+  return { name: "Bash", input: { command: item.command ?? "Codex command" } };
+}
+
+export function mcpResult(item: CodexItem) {
+  if (item.error) return { result: typeof item.error === "string" ? item.error : (item.error.message ?? "The tool failed."), isError: true };
+  const text = (item.result?.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("\n").trim();
+  return { result: text, isError: item.status === "failed" };
+}
+
 async function toolStart(session: Session, item: CodexItem) {
   if (!item.id || session.toolIndex.has(item.id)) return;
   await handle(session.cardId as string, session, sdkMessage({
@@ -72,7 +93,7 @@ async function toolStart(session: Session, item: CodexItem) {
       type: "message",
       role: "assistant",
       model: session.spec.model ?? "Codex",
-      content: [{ type: "tool_use", id: item.id, name: "Bash", input: { command: item.command ?? "Codex command" } }],
+      content: [{ type: "tool_use", id: item.id, ...toolUse(item) }],
       stop_reason: null,
       stop_sequence: null,
       usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
@@ -91,8 +112,12 @@ async function toolFinish(session: Session, item: CodexItem) {
   const output = item.aggregated_output?.trim();
   replaceThreadItem(session.cardId as string, index, {
     ...threadItem,
-    result: output || (item.exit_code === undefined ? "" : `Exited with code ${item.exit_code}.`),
-    isError: item.status === "failed" || (item.exit_code !== undefined && item.exit_code !== 0),
+    ...(item.type === "mcp_tool_call"
+      ? mcpResult(item)
+      : {
+          result: output || (item.exit_code === undefined ? "" : `Exited with code ${item.exit_code}.`),
+          isError: item.status === "failed" || (item.exit_code !== undefined && item.exit_code !== 0),
+        }),
   });
 }
 
@@ -135,24 +160,20 @@ async function result(session: Session, event: CodexEvent, error?: string) {
   }));
 }
 
-function skillPrompt(text: string) {
-  const match = /^\/(?:weft:)?([\w.-]+)(?:\s+([\s\S]*))?$/.exec(text.trim());
-  if (!match) return text;
-  const name = match[1] ?? "";
-  const args = match[2] ?? "";
-  const directory = path.join(PLUGIN_DIR, "skills", name);
-  const file = path.join(directory, "SKILL.md");
-  try {
-    const contents = fs.readFileSync(file, "utf8").replace(/^---\r?\n[\s\S]*?\r?\n---\s*/, "");
-    return `Follow this Weft skill for the current turn. Skill files are unavailable as Codex slash commands, so use these instructions directly.\n\n${contents.replaceAll("${CLAUDE_SKILL_DIR}", directory).replaceAll("${ARGUMENTS}", args)}`;
-  } catch {
-    return text;
-  }
+// Codex has no slash commands for skills, so `/name args` becomes the skill's own instructions.
+function skillPrompt(text: string, cwd: string) {
+  return skillInvocation(text, cwd, { weft: true });
 }
 
-function promptFor(session: Session, text: string) {
-  const weftInstructions = `You are a Codex CLI thread managed by Weft. Work in the card's project folder using Codex's native tools. Weft-specific MCP tools are unavailable in this backend; do not claim to use the board, browser, secrets or webhook tools. Never read .env files, credential stores or environment dumps. Never restart or kill Weft. Codex's sandbox enforces this card's permission mode.\n\n${subagentPrompt(subagentModel(), "codex")}\n\n${threadPrompt()}`;
-  return `${weftInstructions}\n\n${skillPrompt(text)}`;
+export function promptFor(session: Session, text: string) {
+  const weftInstructions = `You are a Codex CLI thread managed by Weft. Work in the card's project folder using Codex's native tools. Weft's tools (browser, board, secrets, webhooks, board_view) are MCP servers: call them as mcp__browser__open_url and so on. Never read .env files, credential stores or environment dumps. Never restart or kill Weft. Codex's sandbox enforces this card's permission mode.\n\n${subagentPrompt(subagentModel(), "codex")}\n\n${threadPrompt()}`;
+  // Codex reads AGENTS.md on its own but not CLAUDE.md; a resumed session already has it in its history.
+  const resumed = Boolean(session.sessionId ?? session.spec.sessionId);
+  const claudeMd = resumed ? "" : codexProjectInstructions(session.spec.cwd);
+  const skills = resumed ? "" : skillIndex(session.spec.cwd, { weft: true });
+  const project = claudeMd ? `Codex doesn't load CLAUDE.md, so Weft puts the project's here. Treat it like AGENTS.md.\n\n${claudeMd}\n\n` : "";
+  const reminder = project || skills ? `<system-reminder>\n${project}${skills}\n</system-reminder>\n\n` : "";
+  return `${reminder}${weftInstructions}\n\n${skillPrompt(text, session.spec.cwd)}`;
 }
 
 function modelArgs(model: string | undefined) {
@@ -163,16 +184,17 @@ function imageArgs(images: string[]) {
   return images.flatMap((image) => ["--image", image]);
 }
 
-function argsFor(session: Session, images: string[]) {
+// `mcp` is the `--config` pairs that point Codex at Weft's tools for this turn (lib/mcp-bridge.ts).
+function argsFor(session: Session, images: string[], mcp: string[] = []) {
   const card = session.cardId ? getCard(session.cardId) : undefined;
   const model = card?.model ?? session.spec.model;
   const sessionId = session.sessionId ?? session.spec.sessionId;
   if (sessionId) {
     // `exec resume` keeps the saved sandbox and reasoning effort; it only accepts a model override.
-    return ["exec", "resume", "--json", ...modelArgs(model), ...imageArgs(images), sessionId, "-"];
+    return ["exec", "resume", "--json", ...mcp, ...modelArgs(model), ...imageArgs(images), sessionId, "-"];
   }
 
-  const args = ["exec", "--json", "--cd", session.spec.cwd, "--skip-git-repo-check", ...modelArgs(model), ...imageArgs(images)];
+  const args = ["exec", "--json", "--cd", session.spec.cwd, "--skip-git-repo-check", ...mcp, ...modelArgs(model), ...imageArgs(images)];
   const effort = card?.effort ?? session.spec.effort;
   if (effort) args.push("--config", `model_reasoning_effort=${JSON.stringify(effort)}`);
   return [...args, ...permissionArgs(card?.permissionMode ?? session.spec.permissionMode), "-"];
@@ -181,7 +203,7 @@ function argsFor(session: Session, images: string[]) {
 async function handleItemEvent(session: Session, event: CodexEvent) {
   const item = event.item;
   if (!item) return;
-  if (item.type === "command_execution") {
+  if (item.type === "command_execution" || item.type === "mcp_tool_call") {
     if (event.type === "item.started") await toolStart(session, item);
     else if (event.type === "item.completed") await toolFinish(session, item);
     return;
@@ -250,10 +272,15 @@ export async function driveCodex(session: Session, executable: string) {
     const attachments = writeImages(input.images);
     const env = cliEnv();
     delete env.CLAUDE_CODE_ENTRYPOINT;
+    // Weft's tools for this turn, over HTTP; the server's own port says where (PORT is stripped from the CLI's env).
+    const servers = () => weftMcpServers(session.spec, () => session.cardId ?? undefined);
+    const bridge = process.env.PORT ? openBridge(servers) : undefined;
+    if (bridge) env[BRIDGE_TOKEN_ENV] = bridge.token;
+    const mcp = bridge ? codexMcpArgs(`http://127.0.0.1:${process.env.PORT}`, Object.keys(servers())) : [];
     const stderr = (data: string) => console.error(`[thread ${(session.cardId ?? "spare").slice(0, 8)}] ${data.trimEnd()}`);
     session.toolIndex.clear();
     try {
-      const process = spawnCli({ command: executable, args: argsFor(session, attachments.paths), cwd: session.spec.cwd, env, signal: session.abort.signal }, stderr);
+      const process = spawnCli({ command: executable, args: argsFor(session, attachments.paths, mcp), cwd: session.spec.cwd, env, signal: session.abort.signal }, stderr);
       session.process = process;
       process.stdin.on("error", () => {});
       process.stdin.end(promptFor(session, input.text));
@@ -268,6 +295,7 @@ export async function driveCodex(session: Session, executable: string) {
       if (spawnError) throw spawnError;
       assertTurnCompleted(completed, session.abort.signal.aborted, () => process.stderrTail(), exit);
     } finally {
+      bridge?.close();
       if (attachments.directory) fs.rmSync(attachments.directory, { recursive: true, force: true });
     }
   }

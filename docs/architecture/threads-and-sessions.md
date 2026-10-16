@@ -37,9 +37,19 @@ keeps the original sandbox and effort for that saved session. Starting a fresh C
 to change either. Weft maps its
 permission choices to Codex sandbox settings and uses Codex's own approval flow.
 
-Codex threads do not receive Weft's custom MCP tools, Claude plugins or Weft's per-tool guards. The prompt
-tells the agent about the missing integrations and asks it not to read `.env` files; Codex's own sandbox
-and rules apply. `/weft:<skill>` text is expanded from the local skill file for that turn. The shared turn
+Codex threads do not receive Claude plugins or Weft's per-tool guards. The prompt asks the agent not to read
+`.env` files; Codex's own sandbox and rules apply. Weft's MCP tools (browser, board, secrets, webhooks,
+board_view) reach Codex over HTTP: each turn `driveCodex` opens a bridge (`lib/mcp-bridge.ts`), a random token held
+in the registry and passed in the process's `WEFT_MCP_TOKEN` env var (never on the command line), and starts
+Codex with `--config mcp_servers.<name>.url=http://127.0.0.1:$PORT/api/mcp/<name>`,
+`bearer_token_env_var` and `default_tools_approval_mode="approve"` (`codex exec` has nobody to ask; tools
+that need the user, like a vault fill, ask through Weft). `app/api/mcp/[server]` answers each request
+statelessly with a fresh server from the same `weftMcpServers()` factory Claude and puku take in-process, and a
+Codex `mcp_tool_call` item shows in the thread as `mcp__server__tool`. Codex reads `AGENTS.md` but not
+`CLAUDE.md`, and neither it nor puku reads `.claude/skills` (puku: `.puku-cli/skills`, Codex: `.agents/skills`), so a new
+session's first prompt carries the folder's `CLAUDE.md` (`codexProjectInstructions`) and an index of its
+skills, and a message that is just `/name args` is sent as that skill's instructions (`skillInvocation`).
+`/weft:<skill>` text is expanded the same way from the local skill file for that turn. The shared turn
 handler still records assistant messages, command output, `BOARD STATUS`, changed files and turn completion.
 
 ### The CLI process and its children
@@ -390,10 +400,13 @@ polls `auth status` every 3 seconds (up to 10 minutes) until it reports `loggedI
 ## The copilot
 
 `lib/copilot.ts` creates a card with `id: COPILOT_ID` ("copilot"), `role: "copilot"`,
-`cwd: os.homedir()`, `backend: "claude"`. The card is filtered out of the board
+`cwd: os.homedir()`, `backend: "claude"`, and `model: copilotInitialModel()` — the pick from
+Settings → Models → Copilot, or the user's last-picked Claude model when that's the default
+(`lib/new-thread.ts` `modelFor`). The card is filtered out of the board
 (`listCards().filter((c) => c.role !== "copilot")` in the cards route) but its thread
 still runs through `runner.ts`. `resetCopilot()` ends its session, clears its
-thread, and re-warms it.
+thread, and re-warms it. The model is set once when the card is first made; changing the
+pick takes effect on the next "New chat" in the copilot lane.
 
 The copilot opens two ways:
 
@@ -469,8 +482,11 @@ last 400 items. That function drops user messages the person didn't type (`is_me
 strips embedded `<system-reminder>` and `<user-prompt-submit-hook>` sections, turns
 `<bash-input>` into `! …`, shows slash commands the user typed but not completed local
 commands (like `/clear`) or their output, and attaches each `tool_result` to its `tool_use`
-by id. Images go through `lib/thread-media.ts` into the attachments folder: screenshots in
-tool results become the tool item's `images`, images pasted into Claude Code become inline
+by id. Images go through `lib/thread-media.ts` into the attachments folder: chat uploads of PNG,
+JPEG and GIF are converted to WebP by `lib/attachments.ts` before composer previews, stored thread
+refs and model image blocks use them; SVG and non-image uploads keep their original bytes, and
+malformed rasters fall back to the original upload. Screenshots in tool results become the tool
+item's `images`, images pasted into Claude Code become inline
 `![…](path)` refs in the user's text, and local files the agent shows with `![…](path)` are
 copied in and the ref rewritten. `transcriptAt` records what was read, so unchanged sessions aren't re-read. A card
 Weft has open (`warm`) keeps its own live thread.

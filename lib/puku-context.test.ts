@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { projectInstructions, pukuContext } from "./puku-context";
+import { codexProjectInstructions, projectInstructions, pukuContext } from "./puku-context";
 
 let dir: string;
 const write = (name: string, text: string) => {
@@ -48,11 +48,38 @@ describe("projectInstructions", () => {
     expect(text).not.toContain("level 5");
   });
 
+  it("keeps a 66 KB CLAUDE.md whole", () => {
+    write("CLAUDE.md", "y".repeat(66_000));
+    expect(projectInstructions(dir)).not.toContain("[cut at");
+  });
+
   it("cuts a very long one", () => {
-    write("AGENTS.md", "x".repeat(70_000));
+    write("AGENTS.md", "x".repeat(110_000));
     const text = projectInstructions(dir);
-    expect(text.length).toBeLessThan(61_000);
-    expect(text).toMatch(/\[cut at 60000 characters\]$/);
+    expect(text.length).toBeLessThan(101_000);
+    expect(text).toMatch(/\[cut at 100000 characters\]$/);
+  });
+});
+
+describe("codexProjectInstructions", () => {
+  it("is empty without a CLAUDE.md, since Codex loads AGENTS.md itself", () => {
+    write("AGENTS.md", "use pnpm");
+    expect(codexProjectInstructions(dir)).toBe("");
+  });
+
+  it("sends CLAUDE.md and its imports but never AGENTS.md", () => {
+    write("CLAUDE.md", "@AGENTS.md\n\n@docs/SOUL.md\n\nship small");
+    write("AGENTS.md", "use pnpm");
+    write("docs/SOUL.md", "be kind");
+    const text = codexProjectInstructions(dir);
+    expect(text).toContain("ship small");
+    expect(text).toContain("be kind");
+    expect(text).not.toContain("use pnpm");
+  });
+
+  it("cuts a very long one", () => {
+    write("CLAUDE.md", "z".repeat(110_000));
+    expect(codexProjectInstructions(dir)).toMatch(/\[cut at 100000 characters\]$/);
   });
 });
 

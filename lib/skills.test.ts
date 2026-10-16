@@ -11,7 +11,7 @@ const project = path.join(root, "project");
 process.env.WEFT_PLUGIN_DIR = pluginDir;
 process.env.HOME = home;
 
-const { listSkills, PLUGIN_DIR, SKILL_NAME } = await import("./skills");
+const { listSkills, PLUGIN_DIR, SKILL_NAME, skillIndex, skillInvocation } = await import("./skills");
 
 afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
 beforeEach(() => {
@@ -144,5 +144,65 @@ describe("skill descriptions", () => {
     expect(cut).toHaveLength(240);
     expect(cut.endsWith("…")).toBe(true);
     expect(describeOf(`---\ndescription: ${"y".repeat(240)}\n---\n`)).toBe("y".repeat(240));
+  });
+});
+
+describe("skillIndex and skillInvocation, for CLIs that don't run .claude/skills", () => {
+  const fill = () => {
+    skill(weftSkills(), "done", "---\ndescription: Weft wrap-up\n---\nWEFT DONE ${ARGUMENTS}");
+    skill(projectSkills(), "deck", "---\ndescription: Make a deck\n---\nDECK in ${CLAUDE_SKILL_DIR} for ${ARGUMENTS}");
+    skill(projectSkills(), "done", "---\ndescription: Project wrap-up\n---\nPROJECT DONE");
+    skill(userSkills(), "slide", "---\ndescription: Make a slide\n---\nSLIDE");
+  };
+
+  it("lists project and user skills with the file to read, and Weft's only when asked", () => {
+    fill();
+    const without = skillIndex(project, { weft: false });
+    expect(without).toContain(`- deck: Make a deck (${path.join(projectSkills(), "deck", "SKILL.md")})`);
+    expect(without).toContain("- slide: Make a slide");
+    expect(without).not.toContain("weft:done");
+    expect(skillIndex(project, { weft: true })).toContain("- weft:done: Weft wrap-up");
+  });
+
+  it("is empty with no skills", () => {
+    expect(skillIndex(project, { weft: false })).toBe("");
+  });
+
+  it("turns /name args into the skill's instructions, its folder and arguments filled in", () => {
+    fill();
+    const text = skillInvocation("/deck for investors", project, { weft: false });
+    expect(text).toContain(`DECK in ${path.join(projectSkills(), "deck")} for for investors`);
+    expect(text).toMatch(/^Follow this skill for the current turn/);
+    expect(text).not.toContain("description:");
+  });
+
+  it("runs a project's /done, not Weft's, and Weft's /weft:done when asked", () => {
+    fill();
+    expect(skillInvocation("/done", project, { weft: true })).toContain("PROJECT DONE");
+    const weftText = skillInvocation("/weft:done now", project, { weft: true });
+    expect(weftText).toMatch(/^Follow this Weft skill/);
+    expect(weftText).toContain("WEFT DONE now");
+  });
+
+  it("falls back to Weft's skill for a bare name only the plugin has", () => {
+    skill(weftSkills(), "commit", "---\ndescription: c\n---\nWEFT COMMIT");
+    expect(skillInvocation("/commit", project, { weft: true })).toContain("WEFT COMMIT");
+  });
+
+  it("leaves a message alone that isn't a known skill, or is Weft's when Weft's are off", () => {
+    fill();
+    expect(skillInvocation("hello /deck", project, { weft: false })).toBe("hello /deck");
+    expect(skillInvocation("/nothing", project, { weft: false })).toBe("/nothing");
+    expect(skillInvocation("/weft:done", project, { weft: false })).toBe("/weft:done");
+  });
+
+  it("leaves the message alone when the skill file can't be read", () => {
+    fill();
+    const file = path.join(projectSkills(), "deck", "SKILL.md");
+    const read = fs.readFileSync;
+    const spy = vi.spyOn(fs, "readFileSync").mockImplementation(((f: fs.PathOrFileDescriptor, ...rest: never[]) =>
+      String(f) === file && spy.mock.calls.filter((c) => String(c[0]) === file).length > 1 ? (() => { throw new Error("gone"); })() : read(f, ...rest)) as typeof fs.readFileSync);
+    expect(skillInvocation("/deck", project, { weft: false })).toBe("/deck");
+    spy.mockRestore();
   });
 });

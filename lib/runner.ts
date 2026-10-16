@@ -15,6 +15,7 @@ import { withShellContext } from "./shell";
 import { switchSpare } from "./spare-switch";
 import { archiveAfter, CLI_NAMES, close, errorText, hooks, isBusy, loginWaiters, queued, safeUpdate, sessions, specFor, type Session } from "./runner-state";
 import { panePage } from "./pane-page";
+import { skillInvocation } from "./skills";
 import { appendThread, foldThread, getCard, getThread, updateCard } from "./store";
 import type { Backend, Card, LoginTrial, PermissionMode } from "./types";
 
@@ -72,7 +73,9 @@ export function sendMessage(cardId: string, text: string, { echo = true, cli = t
   session.status = undefined;
   session.openedPane = false;
   session.turnSeq = (session.turnSeq ?? 0) + 1;
-  session.inbox.push(`${session.preamble ?? ""}${cli}`, promptId);
+  // puku doesn't run .claude/skills as slash commands, so a /skill message goes as the skill's instructions.
+  const forCli = card.backend === "puku" ? skillInvocation(cli, card.cwd, { weft: false }) : cli;
+  session.inbox.push(`${session.preamble ?? ""}${forCli}`, promptId);
   keepSessionId(cardId, session);
   session.preamble = undefined;
   if (!session.spec.copilot) showStarter(cardId, card.title, text).catch(() => {});

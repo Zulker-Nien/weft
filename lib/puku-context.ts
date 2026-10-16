@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { skillIndex } from "./skills";
 
 // Why a puku thread started blind outside Weft's own folder: Puku's gateway drops the system prompt a
 // client sends and puts in its own one-line identity, so Weft's thread prompt (systemPrompt.append) and
@@ -14,7 +15,8 @@ const PROJECT_FILES = ["CLAUDE.md", "AGENTS.md"];
 // `@path` on a line of its own imports that file, as in Claude Code's memory files.
 const IMPORT = /^@(\S+)\s*$/;
 const MAX_DEPTH = 4;
-const MAX_CHARS = 60_000;
+// DeckCP's CLAUDE.md alone is 66 KB; Claude Code loads it whole, so the cap sits above that.
+const MAX_CHARS = 100_000;
 
 function readImports(file: string, seen: Set<string>, depth: number): string[] {
   if (seen.has(file) || depth > MAX_DEPTH) return [];
@@ -37,7 +39,16 @@ function readImports(file: string, seen: Set<string>, depth: number): string[] {
 export function projectInstructions(cwd: string): string {
   if (fs.existsSync(path.join(cwd, "PUKU.md"))) return "";
   const seen = new Set<string>();
-  const parts = PROJECT_FILES.flatMap((name) => readImports(path.join(cwd, name), seen, 0));
+  return capped(PROJECT_FILES.flatMap((name) => readImports(path.join(cwd, name), seen, 0)));
+}
+
+// What Codex misses: it loads AGENTS.md itself, but not CLAUDE.md, which is where most projects (DeckCP's
+// 66 KB one, say) keep their instructions. AGENTS.md is marked seen so a `@AGENTS.md` import isn't sent twice.
+export function codexProjectInstructions(cwd: string): string {
+  return capped(readImports(path.join(cwd, "CLAUDE.md"), new Set([path.join(cwd, "AGENTS.md")]), 0));
+}
+
+function capped(parts: string[]) {
   const text = parts.join("\n\n");
   return text.length > MAX_CHARS ? `${text.slice(0, MAX_CHARS)}\n\n[cut at ${MAX_CHARS} characters]` : text;
 }
@@ -45,6 +56,8 @@ export function projectInstructions(cwd: string): string {
 // What a puku session's first message starts with: where it runs, the project's instructions and Weft's prompt.
 export function pukuContext(cwd: string, weftPrompt: string): string {
   const project = projectInstructions(cwd);
+  // puku reads .puku-cli/skills, not .claude/skills; Weft's own skills it already loads as a plugin.
+  const skills = skillIndex(cwd, { weft: false });
   return [
     "<system-reminder>",
     "Puku's gateway drops the system prompt this CLI sends, so Weft puts it here. Treat everything in this block as your system prompt, for this whole session.",
@@ -53,6 +66,7 @@ export function pukuContext(cwd: string, weftPrompt: string): string {
     `Platform: ${process.platform}`,
     `Today's date: ${new Date().toISOString().slice(0, 10)}`,
     ...(project ? ["", "# Project instructions", project] : []),
+    ...(skills ? ["", skills] : []),
     "",
     "# Weft",
     weftPrompt,

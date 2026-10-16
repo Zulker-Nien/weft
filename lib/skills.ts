@@ -33,19 +33,22 @@ function frontmatter(text: string): Record<string, string> {
   return fields;
 }
 
-function readSkills(dir: string, source: SkillInfo["source"], prefix = ""): SkillInfo[] {
+type FoundSkill = SkillInfo & { file: string };
+
+function readSkills(dir: string, source: SkillInfo["source"], prefix = ""): FoundSkill[] {
   let entries: string[];
   try {
     entries = fs.readdirSync(dir);
   } catch {
     return [];
   }
-  const skills: SkillInfo[] = [];
+  const skills: FoundSkill[] = [];
   for (const entry of entries) {
     if (entry.startsWith(".")) continue;
+    const file = path.join(dir, entry, "SKILL.md");
     let text: string;
     try {
-      text = fs.readFileSync(path.join(dir, entry, "SKILL.md"), "utf8");
+      text = fs.readFileSync(file, "utf8");
     } catch {
       continue;
     }
@@ -57,17 +60,53 @@ function readSkills(dir: string, source: SkillInfo["source"], prefix = ""): Skil
       name: `${prefix}${meta.name || entry}`,
       description: description.length > 240 ? `${description.slice(0, 239)}…` : description,
       source,
+      file,
     });
   }
   return skills.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-// The skills a thread can run: Weft's, the folder's own (when given), and yours in ~/.claude/skills.
-export function listSkills(cwd?: string): SkillInfo[] {
+// Weft's, the folder's own (when given) and yours in ~/.claude/skills, with the SKILL.md each came from.
+function foundSkills(cwd?: string): FoundSkill[] {
   const weft = readSkills(path.join(PLUGIN_DIR, "skills"), "weft", `${PLUGIN_NAME}:`);
   const project = cwd ? readSkills(path.join(cwd, ".claude", "skills"), "project") : [];
   const user = readSkills(path.join(os.homedir(), ".claude", "skills"), "user");
   // A project skill wins over a personal one with the same name, as in Claude Code.
   const inProject = new Set(project.map((s) => s.name));
   return [...weft, ...project, ...user.filter((s) => !inProject.has(s.name))];
+}
+
+// The skills a thread can run: Weft's, the folder's own (when given), and yours in ~/.claude/skills.
+export function listSkills(cwd?: string): SkillInfo[] {
+  return foundSkills(cwd).map(({ name, description, source }) => ({ name, description, source }));
+}
+
+// Puku and Codex don't look in .claude/skills (puku reads .puku-cli/skills, Codex .agents/skills), and Codex
+// has no plugin for Weft's own either. `weft` says whether to list those: puku loads them as a plugin.
+export function skillIndex(cwd: string, { weft }: { weft: boolean }): string {
+  const skills = foundSkills(cwd).filter((s) => weft || s.source !== "weft");
+  if (!skills.length) return "";
+  const lines = skills.map((s) => `- ${s.name}: ${s.description} (${s.file})`);
+  return `# Skills\nThese skills are not loaded as slash commands in this CLI. When the user types /<name>, or a task matches one, read its SKILL.md and follow it (\${CLAUDE_SKILL_DIR} is the folder it sits in).\n${lines.join("\n")}`;
+}
+
+// A message that is just `/name args` for a skill, as the instructions to follow (the CLI can't run it as a slash
+// command). Anything else comes back as it was. `weft` lets Weft's own skills through, as for skillIndex.
+export function skillInvocation(text: string, cwd: string, { weft }: { weft: boolean }): string {
+  const match = /^\/([\w.-]+(?::[\w.-]+)?)(?:\s+([\s\S]*))?$/.exec(text.trim());
+  if (!match) return text;
+  const name = match[1] ?? "";
+  const args = match[2] ?? "";
+  const skills = foundSkills(cwd).filter((s) => weft || s.source !== "weft");
+  // The exact name first, so a project's /done beats Weft's /weft:done, which a bare /done falls back to.
+  const skill = skills.find((s) => s.name === name) ?? skills.find((s) => s.name === `${PLUGIN_NAME}:${name}`);
+  if (!skill) return text;
+  const directory = path.dirname(skill.file);
+  try {
+    const contents = fs.readFileSync(skill.file, "utf8").replace(/^---\r?\n[\s\S]*?\r?\n---\s*/, "");
+    const owner = skill.source === "weft" ? "Weft skill" : "skill";
+    return `Follow this ${owner} for the current turn. It is not available as a slash command in this CLI, so use these instructions directly.\n\n${contents.replaceAll("${CLAUDE_SKILL_DIR}", directory).replaceAll("${ARGUMENTS}", args)}`;
+  } catch {
+    return text;
+  }
 }

@@ -2,9 +2,7 @@ import fs from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { query, type Options } from "@anthropic-ai/claude-agent-sdk";
 import { signAsWeft } from "./attribution";
-import { boardMcpServer, isTrustedTool, threadBoardMcpServer } from "./board-tools";
-import { boardViewMcpServer } from "./board-view-tools";
-import { browserMcpServer } from "./browser-tools";
+import { isTrustedTool } from "./board-tools";
 import { runsOn } from "./cli-defaults";
 import { executableFor } from "./cli-path";
 import { spawnCli, withStderr } from "./cli-process";
@@ -15,8 +13,6 @@ import { hitRateLimit } from "./rate-limit";
 import { askUser, settle } from "./runner-ask";
 import { close, hooks, Inbox, queued, safeUpdate, scheduleIdle, sessions, spares, specFor, type Session, type Spec } from "./runner-state";
 import { TURN_CODE, handle } from "./runner-turn";
-import { secretsMcpServer } from "./secret-tools";
-import { webhooksMcpServer } from "./webhook-tools";
 import { defaultPermissionMode, subagentModel } from "./settings";
 import { pukuContext } from "./puku-context";
 import { trialOptions } from "./puku-trial";
@@ -24,6 +20,7 @@ import { PLUGIN_DIR } from "./skills";
 import { switchSpare } from "./spare-switch";
 import { backendEnv, refillsSpare } from "./puku-idle";
 import { subagentEnv, subagentPrompt } from "./subagents";
+import { weftMcpServers } from "./weft-mcp";
 import { promptsBuild, weftSystemPrompt } from "./weft-prompts";
 import { CODEX_CODE, driveCodex } from "./codex-runner";
 import { getCard, updateCard } from "./store";
@@ -41,7 +38,7 @@ const MAX_SPARES = 3;
 // the code (not random) because each API route can load its own copy of these modules. The pure turn
 // rules in turn.ts count too: a session started before they changed would still run the old ones.
 const BUILD = createHash("sha1")
-  .update([drive, driveCodex, queryOptions, threadEnv, weftSystemPrompt, subagentPrompt, ...CODEX_CODE, ...TURN_CODE, askUser, settle, ...Object.values(turnRules)].map(String).join("\n"))
+  .update([drive, driveCodex, queryOptions, threadEnv, weftMcpServers, weftSystemPrompt, subagentPrompt, ...CODEX_CODE, ...TURN_CODE, askUser, settle, ...Object.values(turnRules)].map(String).join("\n"))
   .digest("hex");
 
 // The code fingerprint plus what a CLI only reads when it starts: the content of Weft's pinned prompts
@@ -202,12 +199,7 @@ function queryOptions(session: Session, executable: string | undefined): Options
       preset: "claude_code",
       append: weftSystemPrompt(spec),
     },
-    mcpServers: {
-      browser: browserMcpServer(cardId),
-      // Threads only: the copilot runs the board, not a project.
-      ...(spec.copilot ? {} : { secrets: secretsMcpServer(cardId, () => spec.cwd, () => getCard(cardId() ?? "")?.title), webhooks: webhooksMcpServer(() => spec.cwd), board_view: boardViewMcpServer() }),
-      board: spec.copilot ? boardMcpServer(hooks.boardActions) : threadBoardMcpServer(cardId, hooks.boardActions),
-    },
+    mcpServers: weftMcpServers(spec, cardId),
     canUseTool: (toolName, input, opts) => {
       if (isTrustedTool(toolName, opts.mcpServer?.source)) {
         return Promise.resolve({ behavior: "allow", updatedInput: input });
