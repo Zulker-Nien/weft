@@ -109,7 +109,11 @@ loopback HTTP origin for plain `next dev` (no Electron, no `weft://` handler at 
 - `components/AccountSettings.tsx` (Settings → Weft account): GitHub and Google buttons, an email-link form, who you
   are, and Sign out (this Mac only).
 - `app/login/page.tsx`: the deployed weft.zip sign-in surface. GitHub only, the magic-link row is opt-in. A `<Suspense>`
-  with a "Checking your account" spinner bridges the `readSessionIdentity` server call.
+  with a "Checking your account" spinner bridges the `readSessionIdentity` server call. The page is two panels, styled
+  by the `.wz-login*` rules in `components/home/home.css`: on the left Weft's twin-suns speeder
+  (`electron/assets/splash-speeder.jpg`) with the pitch over the sky, on the right the cockpit picture
+  (`public/copilots/wingman.jpg`) with the sign-in as a glass card. Both are `next/image` with `fill`, a scrim keeps the
+  text readable, and under 860px the panels stack.
 - `app/app/page.tsx`: the small "you're signed in" card the deployed site lands on. It reads `latestRelease()` for the
   download CTA, so a signed-in visitor who came in from the marketing page leaves with the desktop app.
 

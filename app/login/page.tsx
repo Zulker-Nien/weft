@@ -2,6 +2,8 @@
 // shape: <Suspense> + readSessionIdentity + SignedInPrompt + LoginForm, with
 // safeNextPath on the `?next=` param. Today the form is a thin wrapper that
 // renders one "Continue with GitHub" button; the magic-link row is opt-in.
+// Two panels: the twin-suns speeder with the pitch, and the sign-in as a glass card over
+// the cockpit (the copilot's picture); stacks on a phone.
 //
 // On the deployed site the form is a set of plain GET links to /auth/sign-in
 // and the signed-in prompt is a POST form to /auth/sign-out — the cookie
@@ -17,6 +19,8 @@ import { Suspense } from "react";
 import { LoginForm, SignedInPrompt, readSessionIdentity, safeNextPath } from "@/lib/auth";
 import { isDeployed } from "@/lib/home";
 import emblem from "@/electron/assets/emblem.png";
+import speeder from "@/electron/assets/splash-speeder.jpg";
+import cockpit from "@/public/copilots/wingman.jpg";
 import "@/components/home/home.css";
 
 const DEFAULT_NEXT = "/team";
@@ -26,50 +30,43 @@ export const metadata: Metadata = {
   description: "Sign in to Weft with GitHub to sync your boards and unlock cloud features.",
 };
 
-function Handles() {
-  const corners = ["top-left", "top-right", "bottom-left", "bottom-right"];
-  return (
-    <>
-      {corners.map((corner) => (
-        <span key={corner} aria-hidden="true" className={`wz-loginHandle wz-loginHandle--${corner}`} />
-      ))}
-    </>
-  );
-}
-
 function Shell({ children, description }: { children?: React.ReactNode; description: string }) {
   return (
     <div className="wz-root wz-login">
-      <header className="wz-wrap wz-loginHeader">
+      <aside className="wz-loginAside">
+        <Image src={speeder} alt="" fill priority sizes="(max-width: 860px) 100vw, 55vw" className="wz-loginScene" />
+        <span aria-hidden="true" className="wz-loginScrim" />
         <Link href="/" className="wz-loginBrand">
-          <Image src={emblem} alt="" width={26} height={26} className="wz-emblem" />
+          <Image src={emblem} alt="" width={28} height={28} className="wz-emblem" />
           Weft
         </Link>
-        <Link href="/" className="wz-loginBack">Back to weft.zip</Link>
-      </header>
 
-      <main className="wz-loginMain">
-        <div className="wz-loginFrame wz-rise">
-          <span aria-hidden="true" className="wz-loginGuide wz-loginGuide--vertical" />
-          <span aria-hidden="true" className="wz-loginGuide wz-loginGuide--horizontal" />
-          <span aria-hidden="true" className="wz-loginCoordinate wz-loginCoordinate--x">x: 960</span>
-          <span aria-hidden="true" className="wz-loginCoordinate wz-loginCoordinate--y">y: 540</span>
+        <div className="wz-loginPitch">
+          <h1 className="wz-loginHeadline">
+            Pick up <em>the thread</em>.
+          </h1>
+          <p className="wz-loginLede">A board for your AI threads, synced wherever you sit down to work.</p>
+        </div>
+      </aside>
 
+      <div className="wz-loginPanel">
+        <Image src={cockpit} alt="" fill sizes="(max-width: 860px) 100vw, 45vw" className="wz-loginCockpit" />
+        <span aria-hidden="true" className="wz-loginCockpitScrim" />
+        <div className="wz-loginBar">
+          <Link href="/" className="wz-loginBack">Back to weft.zip</Link>
+        </div>
+
+        <main className="wz-loginMain">
           <section className="wz-loginCard">
-            <Handles />
             <p className="wz-loginEyebrow">Weft account</p>
-            <h1 className="wz-loginTitle">Pick up the thread.</h1>
+            <h2 className="wz-loginTitle">Sign in to Weft</h2>
             <p className="wz-loginSubtitle">{description}</p>
             {children}
-            <span className="wz-loginMeta wz-loginMeta--left">weft://login · account access</span>
-            <span className="wz-loginMeta wz-loginMeta--right">weft.zip</span>
           </section>
-        </div>
-      </main>
+        </main>
 
-      <footer className="wz-loginFooter">
-        A board for your AI, synced wherever you pick up the thread.
-      </footer>
+        <footer className="wz-loginFooter">weft.zip</footer>
+      </div>
     </div>
   );
 }
@@ -104,7 +101,7 @@ export default function Page({ searchParams }: { searchParams: Promise<{ next?: 
   // searchParams is awaited inside <LoginBody>, which is a Server Component
   // wrapped in <Suspense>; we hand the promise straight through.
   return (
-    <Shell description="A Weft account syncs your boards across machines, turns on share links, and lets the Puku trial run on Weft&apos;s key. Optional — the desktop app works signed out.">
+    <Shell description="An account syncs your boards across machines, turns on share links and runs the Puku trial on Weft&apos;s key. Optional: the desktop app works signed out.">
       <Suspense fallback={<LoginBodyFallback />}>
         <LoginBody searchParams={searchParams} />
       </Suspense>
