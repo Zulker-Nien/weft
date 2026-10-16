@@ -10,7 +10,14 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Added
 
+- Settings → Models → **Review all** picks the Claude model the Review column's "Review all" card runs on (default: the CLI's own).
 - Pasted and dropped PNG, JPEG and GIF chat attachments are converted to WebP on upload to reduce disk and prompt image size.
+- Codex and Puku threads match Claude Code outside Weft's own folder. Codex gets Weft's browser, board, secrets, webhook and board-view tools (a per-turn token and `/api/mcp/[server]`, shown in the thread as `mcp__server__tool`), the project's `CLAUDE.md` (Codex loads `AGENTS.md` only, and DeckCP keeps its instructions in `CLAUDE.md`), and both Codex and Puku get the folder's and your `.claude/skills` as an index plus `/name` expanded to the skill. Puku's project instructions also stop cutting at 60,000 characters (now 100,000), so DeckCP's 66 KB `CLAUDE.md` arrives whole.
+- Super-admin pages on the left rail: a 🛡 **Admin** icon (visible only to addresses on `SUPER_ADMIN_EMAILS`) opens `/admin/users`, a paginated, searchable list of every weft.zip account, with a companion `/admin/settings` page that shows the local install's data dir, version, uptime, card and thread counts, activity log size and keep-alive setting. Built on `@aimhuge/admin`'s `AdminTablePage`, gated by `@aimhuge/teams`'s `isSuperAdmin` via `lib/admin.ts`; the check is server-side and the routes 404 for non-admins.
+- Threads load their newest 50 items first and older ones as you scroll up; a tool's output over 2 KB loads when you open its row.
+- Server-side cards, first shot and off by default: an outbox uploads opted-in folders' cards and threads to your workspace on
+  Supabase, pictures and pages stored once by content (docs/architecture/cloud-sync.md).
+- Settings → Models has a Copilot row: pick which Claude model the copilot thread runs on. The copilot is locked to Claude Code, so only Claude models appear; the default follows the model you last picked for new threads. The pick is read once when the copilot card is first made, so it takes effect on the next "New chat" in the copilot lane.
 
 ### Fixed
 
