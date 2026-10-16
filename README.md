@@ -113,9 +113,9 @@ The new-thread dialog (⌘N) and every card's reply box use the same editor:
   the bar has the rest. The Markdown button shows the raw Markdown, which is what the agent gets.
   Pasted Markdown is formatted too.
 - **Images and videos go where you paste or drop them**, not in a tray on top. They're saved to
-  `~/.weft/attachments` and written into the prompt as `![name](path)`. Images also reach the agent
-  as images at that spot (shrunk with `sips` if over the API's 5 MB limit); videos and other files
-  go as paths the agent can open.
+  `~/.weft/attachments` and written into the prompt as `![name](path)`. Uploaded PNG, JPEG and GIF
+  images are converted to WebP; images also reach the agent as image blocks at that spot (shrunk if
+  over the API's 5 MB limit). Videos and other files go as paths the agent can open.
 - **The mic dictates** on this Mac with whisper.cpp: click it, talk, click again, and the text lands
   at the cursor (Esc throws the recording away). It needs `brew install whisper-cpp ffmpeg` and a
   model; it uses superwhisper's or Homebrew's models, or the one in `WEFT_WHISPER_MODEL`. In a

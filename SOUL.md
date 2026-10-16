@@ -75,8 +75,10 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   project's `pnpm typecheck`/`pnpm lint` take turns through `scripts/one-at-a-time.mjs`; plain Claude Code sessions get it from `.claude/settings.json`), `lib/route-import-guard.ts` (refuses an edit that makes `app/**/page.tsx`,
   a layout, a `route.ts` or middleware import a module that isn't there yet), `lib/claim-guard.ts` (symbol claims: asks before an edit to a top-level
   symbol another busy card is editing; `lib/claims.ts`, parsed by `lib/symbols.ts`) (docs/architecture/thread-guards.md).
-  Codex gets the filtered `cliEnv()` but not these per-tool hooks or Weft MCP tools; `lib/codex-runner.ts` tells it about
-  that limit and asks it not to read `.env` files. `cliEnv()` also drops secret-named and key-shaped variables from your shell's env (`lib/secret-detect.ts`); the control
+  Codex gets the filtered `cliEnv()` but not these per-tool hooks; `lib/codex-runner.ts` asks it not to read `.env` files. It does get
+  Weft's MCP tools, over HTTP: `lib/weft-mcp.ts` builds the servers every CLI gets, `lib/mcp-bridge.ts` opens a per-turn token and
+  `app/api/mcp/[server]` serves them to `codex exec --config mcp_servers.*`. Puku and Codex don't read `.claude/skills` or Codex `CLAUDE.md`,
+  so `lib/skills.ts` `skillIndex`/`skillInvocation` list a folder's skills and expand `/name`, and `lib/puku-context.ts` sends Codex the project's `CLAUDE.md`. `cliEnv()` also drops secret-named and key-shaped variables from your shell's env (`lib/secret-detect.ts`); the control
   server's token is a 0600 file, `~/.weft/shell-token` (`electron/shell-token.cjs`, read by `lib/shell-token.ts`), never an env var.
 - `scripts/check-staged.sh` + `scripts/secret-scan.mjs`: the pre-commit hook; gitleaks, or without it Weft's own key shapes on each added line.
   The Composer flags a pasted or typed key the same way (`components/SecretPaste.tsx`).
@@ -96,6 +98,10 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `lib/automations.ts` `doneOverrides` + `components/DonePicker.tsx`: Settings → Models → Run /weft:done on picks the model (any Claude or
   Puku model, applied to cards on its own CLI) and effort `/weft:done` uses on a Done move; both model menus are `components/ModelSelect.tsx`; `app/api/cards/[id]` moveCard snapshots the card's own picks into `preDoneModel` /
   `preDoneEffort` and `lib/runner.ts` `restoreDoneOverride` puts them back after the wrap-up.
+- `components/ReviewAllPicker.tsx`: Settings → Models → Review all picks the Claude model of the Review column's "Review all" card (`reviewAllModel`; `Board.tsx` `reviewAll` reads it at click time).
+- `components/CopilotPicker.tsx`: Settings → Models → Copilot picks the Claude model the copilot thread runs on. The pick is read once when the
+  card is first made (`lib/copilot.ts` `ensureCopilot`), so it takes effect on the next "New chat" in the copilot lane; the default follows the model
+  you last picked for new threads (`lib/new-thread.ts` `modelFor`).
 - `lib/puku-trial.ts` + `lib/puku-trial-token.ts` + `lib/puku-proxy.ts` + `app/api/puku/*`: the Puku trial; a puku thread with no Puku
   login, while you're signed in to Weft, runs through the deployed Weft's proxy on Weft's own key (signed day-long token read by puku's
   `apiKeyHelper` from `~/.weft/puku-trial-token`, per-account daily cap in `puku_trial_usage`; docs/architecture/puku-trial.md).
@@ -201,6 +207,11 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `lib/theme.ts` + `app/api/scenes` + `components/AppearancePicker.tsx` + `electron/theme-source.cjs`: System, Light, Dark or a scene
   (one of Weft's pictures behind the board with its own palette, in `app/globals.css`; docs/architecture/themes.md).
 - `lib/store.ts`: storage in `~/.weft` (board.json, threads/, attachments/).
+- `lib/cloud-sync.ts` + `lib/cloud-outbox.ts` + `lib/cloud-sync-start.ts` + `lib/blob-store.ts` + `lib/device-id.ts` + `lib/cloud-sync-types.ts`:
+  server-side cards, opt-in per folder (settings `syncFolders`): an outbox in `~/.weft/sync-outbox.jsonl` uploads cards, thread items
+  and long tool outputs to Supabase (`supabase/migrations/20261015140000_card_sync.sql`), images and pages by content hash.
+  `lib/thread-page.ts` + `app/api/cards/[id]/thread/**` + `lib/use-tool-result.ts`: threads page from the newest item back and fetch
+  a tool output over 2 KB when its row opens (docs/architecture/cloud-sync.md).
 - `app/api/*` + `lib/guard.ts`: localhost-only Host check, writes need `x-threadboard: 1`.
 - `lib/restart-guard.ts`: turns away Bash that would kill or restart Weft itself (its server pid, port, `next dev`, the app)
   while other cards' turns run, since a restart cuts them all off; in every thread via `guardedCli()`.
@@ -218,6 +229,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   A build error (a file that doesn't parse) fails the route before React runs, so no boundary sees it: `components/BuildErrorBar.tsx`
   (`lib/build-error.ts`) hides Next's overlay and leaves the last version that built running.
 - Deeper docs (read the one that matches your task; this is the index, not the docs themselves):
+  - `admin.md` — the super-admin gate (`SUPER_ADMIN_EMAILS` on `@aimhuge/teams` via `lib/admin.ts`), the `/admin/users` and `/admin/settings` pages, the rail's 🛡 Admin icon, the data routes in `app/api/admin/*`.
   - `overview.md` — what Weft is end to end: the Electron shell, the Next.js server, cards-as-threads, the loop with the user.
   - `desktop-shell.md` — `electron/` itself: main, preload, tray, dock, `weft://` links, the start screen, the terminal drawer.
   - `threads-and-sessions.md` — the runner: one Agent SDK `query()` per Claude Code/puku thread, the Codex runner, sessions, queues, rewind, warm spares.
@@ -248,6 +260,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - `updates.md` — the Squirrel.Mac JSON feed, the download fallback, the tag-triggered signed release, `CHANGELOG.md` notes.
   - `keep-working.md` — the menu bar icon's switch to keep the Mac awake with the lid shut so threads keep running in a bag.
   - `analytics.md` — GA4 on the home page only; `GoogleAnalytics` is gated on the home being mounted, so the board route never calls home.
+  - `cloud-sync.md` — server-side cards: the outbox, the content-addressed blob store, thread paging, the `cloud_*` tables and their policies.
 
   When a new doc lands in this folder, add it here on the same change.
 
