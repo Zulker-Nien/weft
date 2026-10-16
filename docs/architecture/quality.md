@@ -18,6 +18,10 @@ that fixes the checklist, weakest area first.
   - **Lint**: how locked down the linter is (a strict preset, `--max-warnings 0`, `max-lines`, `complexity`).
   - **Types**: `strict` and friends in tsconfig, minus escape hatches (`any`, `@ts-ignore`, `eslint-disable`).
   - **Guardrails**: a pre-commit hook and a CI workflow, and whether they lint, type-check and test.
+  - **Documentation**: a README, an agent guide, architecture docs, a CHANGELOG, source files that open
+    with a comment, and every backticked path the root guides and `docs/architecture/*.md` name existing.
+    A doc with `Status: design` (or planned, proposed) in its first 10 lines names files it plans to build, so it's skipped.
+- `lib/quality-files.ts`: the file walk behind it (`projectRoot`, `listSources`, `readSources`).
 - `lib/quality-view.ts`: the report's types, `tone()`, and `fixPrompt()`, the checklist card's prompt.
   Pure, so the client imports it.
 - `lib/scout.ts`: runs the scout (`startScout`), caches its report per project in `~/.weft/scout/`

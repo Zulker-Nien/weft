@@ -285,7 +285,7 @@ fails before the wrapped key is even produced. The check is mandatory at the gra
 the user skip it.
 
 **Q6: who decides the device name.** Recommend: the user, on first registration, prompted once with a
-sensible default ("Weft on `<hostname>`"). Saved in `electron/device-key.json` next to the keypair, sent
+sensible default ("Weft on `<hostname>`"). Saved in `~/.weft/device-key.json` next to the keypair, sent
 on every upsert. The `Settings` page lets the user rename later (out of this card's scope).
 
 ## How a local vault becomes a shared one

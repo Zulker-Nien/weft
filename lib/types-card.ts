@@ -1,0 +1,222 @@
+// Card, column, project and board-event types used across the app.
+
+import type { Effort, LoginView } from "./types-settings";
+import type { Question, ThreadItem } from "./types-thread";
+import type { Card } from "./types-card-detail";
+
+export const COLUMNS = [
+  { id: "backlog", label: "Backlog" },
+  { id: "running", label: "Running" },
+  { id: "needs_you", label: "Needs you" },
+  { id: "review", label: "Review" },
+  { id: "done", label: "Done" },
+] as const;
+
+// The copilot is one long-lived thread with this fixed id, kept off the board.
+export const COPILOT_ID = "copilot";
+
+export type Column = (typeof COLUMNS)[number]["id"];
+
+export type Backend = "claude" | "puku" | "codex";
+export const BACKEND_LABELS: Record<Backend, string> = { claude: "Claude Code", puku: "puku-cli", codex: "Codex" };
+// bypassPermissions is "YOLO": every tool runs without asking.
+export type PermissionMode = "default" | "acceptEdits" | "auto" | "bypassPermissions";
+export const MODES: PermissionMode[] = ["default", "acceptEdits", "auto", "bypassPermissions"];
+
+// How the pickers (new thread, thread header, card menu) name each mode, loosest first.
+export const MODE_OPTIONS: { id: PermissionMode; label: string; hint: string }[] = [
+  { id: "bypassPermissions", label: "YOLO", hint: "Runs every tool without asking" },
+  { id: "auto", label: "Auto", hint: "A classifier approves or asks" },
+  { id: "acceptEdits", label: "Accept edits", hint: "Edits files freely, asks before commands" },
+  { id: "default", label: "Ask me", hint: "Asks before each tool" },
+];
+
+export function permissionOptions(backend: Backend) {
+  if (backend !== "codex") return MODE_OPTIONS.filter((m) => backend === "claude" || m.id !== "bypassPermissions");
+  return [
+    { id: "bypassPermissions", label: "Full access", hint: "Runs commands and writes outside the project without approval" },
+    { id: "auto", label: "Auto review", hint: "Codex reviews command approvals inside the project" },
+    { id: "acceptEdits", label: "Workspace write", hint: "Can edit this project; Codex commands stay sandboxed" },
+    { id: "default", label: "Read only", hint: "Can inspect files without changing them" },
+  ] satisfies { id: PermissionMode; label: string; hint: string }[];
+}
+
+// A mode Claude Code recorded (or a setting) as the closest one Weft runs; undefined if unknown.
+// "plan" only reads, so it maps to "default", the mode that asks before anything changes.
+export function toPermissionMode(raw: unknown): PermissionMode | undefined {
+  if (MODES.includes(raw as PermissionMode)) return raw as PermissionMode;
+  if (raw === "plan" || raw === "dontAsk") return "default";
+  return undefined;
+}
+
+// One plan rate-limit window: how much is used (0-100) and when it resets (unix seconds).
+export interface LimitWindow {
+  used: number;
+  resetsAt?: number;
+}
+
+// The prompt cache after the thread's last request: when it went out (unix ms), how long the cache
+// lives after it (seconds), the share of it read from cache (0-100), and its size in tokens, which is
+// what the next request sends again at full price once the cache has gone cold.
+export interface CacheState {
+  at: number;
+  ttl: number;
+  hit: number;
+  tokens: number;
+}
+
+// What the thread panel's status strip shows (see components/StatusStrip.tsx).
+export interface CardStats {
+  // The model that cost the most last turn (a subagent's, sometimes).
+  model?: string;
+  // The thread's own model and effort, from its CLI's init (the header's chip; lib/cli-defaults.ts).
+  runsOn?: { model: string; effort?: Effort };
+  // The folder's git branch, when it is a repo.
+  branch?: string;
+  // Share of the model's context window the last turn filled, 0-100.
+  contextUsed?: number;
+  tokens?: number;
+  // Lines added and removed in the folder's working tree (git diff against HEAD).
+  added?: number;
+  removed?: number;
+  fiveHour?: LimitWindow;
+  sevenDay?: LimitWindow;
+  cache?: CacheState;
+}
+
+// A message written now and sent to the thread later, at `at` (unix ms).
+export interface ScheduledMessage {
+  id: string;
+  text: string;
+  at: number;
+  // Sent while a restart waited for the running threads (lib/restart-when-idle.ts): it goes out once Weft is back.
+  afterRestart?: boolean;
+  // Sent while the thread was mid-turn (a page's link, a failed commit's note): it goes out as that turn ends.
+  afterTurn?: boolean;
+}
+
+// A thread's tour of what it built, for the user to step through in Review (see lib/review.ts).
+export interface ReviewStep {
+  title: string;
+  // What to try and what should happen.
+  look?: string;
+  // The page for this step: a path on the plan's url, or a full URL.
+  path?: string;
+}
+
+export interface ReviewPlan {
+  // Where the running web app is; without it the steps are read-only.
+  url?: string;
+  // The shell command that starts that app (run in the card's folder), so Weft can start it and keep it up.
+  dev?: string;
+  steps: ReviewStep[];
+}
+
+export interface DevServerStatus {
+  state: "stopped" | "starting" | "running" | "failed";
+  command?: string;
+  // Whether the plan's url answers right now, whoever started it.
+  reachable: boolean;
+  // The last lines the server printed.
+  log: string;
+}
+
+export interface Project {
+  path: string;
+  lastUsedAt: number;
+}
+
+// When an automation runs its skill: as a thread starts, when you move a card to Review or Done, or
+// when a prompt you send matches the rule's pattern.
+export type AutomationTrigger = "start" | "review" | "done" | "prompt-matches";
+
+export const AUTOMATION_TRIGGERS: { id: AutomationTrigger; label: string }[] = [
+  { id: "start", label: "a thread starts" },
+  { id: "review", label: "you move a card to Review" },
+  { id: "done", label: "you move a card to Done" },
+  { id: "prompt-matches", label: "a prompt matches" },
+];
+
+// "When <on>, run the skill <skill>" (see lib/automations.ts).
+export interface Automation {
+  id: string;
+  on: AutomationTrigger;
+  // What follows the slash, e.g. "weft:done" for Weft's own skill or "done" for one in ~/.claude/skills.
+  skill: string;
+  // Regex source, matched case-insensitively; only the "prompt-matches" trigger reads it.
+  pattern?: string;
+}
+
+export interface SkillInfo {
+  // What follows the slash when running it.
+  name: string;
+  description: string;
+  // weft: ships with Weft (plugin/skills); user: ~/.claude/skills; project: <folder>/.claude/skills.
+  source: "weft" | "user" | "project";
+}
+
+export interface PendingPermission {
+  id: string;
+  toolName: string;
+  title: string;
+  input: Record<string, unknown>;
+  // Set when the agent asked questions instead of asking to use a tool.
+  questions?: Question[];
+  // A folder outside the card's project that a question names, found on the server (lib/read-scope.ts
+  // stats the disk, so the client can't run it); the form offers "Read from <token>" for it.
+  readScope?: { directory: string; token: string };
+  // The page with the options' previews (lib/question-preview.ts); open it at #<question>-<option>.
+  previewUrl?: string;
+}
+
+// Card and CardIssue live in lib/types-card-detail.ts to keep this file under the line limit.
+// Re-exported here so `./types` and direct importers keep working.
+export type { Card } from "./types-card-detail";
+export type { CardIssue } from "./types-card-detail";
+
+export type BoardEvent =
+  | { type: "card"; card: Card }
+  | { type: "card_deleted"; id: string }
+  // Appends when index === thread length, otherwise replaces the item at index; truncate drops what follows it.
+  | { type: "thread"; cardId: string; item: ThreadItem; index: number; truncate?: boolean }
+  // Streaming text of the assistant message in progress; cleared by the next assistant item.
+  | { type: "delta"; cardId: string; text: string }
+  | { type: "login"; login: LoginView }
+  | { type: "projects"; projects: Project[] }
+  // You signed in or out of your Weft account (lib/account.ts).
+  | { type: "account" }
+  // A restart was armed, cancelled, or the turns it waits on changed (lib/restart-when-idle.ts).
+  | { type: "restart"; restart: RestartStatus };
+
+// Restart when idle (lib/restart-when-idle.ts): no new turn starts, and Weft restarts when the last one ends.
+export interface RestartStatus {
+  armed: boolean;
+  // What happens once idle: a plain relaunch, or installing a downloaded update.
+  then?: "relaunch" | "update";
+  // The turns it waits on: running now, or with queued messages still to run.
+  waiting: { id: string; title: string }[];
+  // Why the restart didn't happen, when it couldn't (it's disarmed then).
+  error?: string;
+}
+
+// A folder the new-thread picker offers: a recent project, a git repo found on disk, or both.
+export interface LocalRepo {
+  path: string;
+  name: string;
+  git: boolean;
+  branch?: string;
+  // "owner/name" when origin is on GitHub.
+  github?: string;
+  // When the repo last changed (ms), and when it was last used for a card, if it's a recent project.
+  activity: number;
+  recentAt?: number;
+}
+
+export interface GithubRepo {
+  fullName: string;
+  description?: string;
+  private: boolean;
+  pushedAt: number;
+  // Set when it's already cloned on this machine.
+  localPath?: string;
+}

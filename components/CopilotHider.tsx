@@ -1,0 +1,71 @@
+"use client";
+
+// The copilot lane's hidden state: the 36px pill on the right edge, and the cockpit avatar the
+// header shares with it.
+import { COCKPIT, laneDigest } from "@/lib/copilot-lane";
+import type { Card } from "@/lib/types";
+
+export function Avatar({ size }: { size: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="shrink-0 rounded-full border-2 border-accent"
+      style={{ width: size, height: size, background: `url(${COCKPIT.src}) ${COCKPIT.face} / 520%` }}
+    />
+  );
+}
+
+// The 36px pill pinned to the right edge: avatar, needs-you dot, count, rotated "Copilot" label. Hover
+// (or having news) auto-expands into peek; click opens the chat.
+export default function CopilotHider(props: {
+  card: Card | null;
+  cards: Card[];
+  items: Parameters<typeof laneDigest>[1];
+  onPeek: () => void;
+  onOpen: () => void;
+  toggleTip: string;
+}) {
+  // The peeking digest, the same one the peek column shows, so the hider knows what to glance at.
+  const digest = laneDigest(props.cards, props.items);
+  const waiting = digest.needsYou.length;
+  const news = waiting + digest.finished;
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={props.onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          props.onOpen();
+        }
+      }}
+      title={`Open the copilot — ${props.toggleTip}`}
+      aria-label={`Open the copilot${news > 0 ? ` (${news} new)` : ""}`}
+      className="group flex h-full cursor-pointer flex-col items-center gap-2 px-1 py-3 hover:bg-sunken/80 focus:bg-sunken/80 focus:outline-none"
+    >
+      <div className="relative">
+        <Avatar size={26} />
+        {waiting > 0 && (
+          <span
+            aria-hidden="true"
+            className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-warn ring-2 ring-sunken"
+            title="The copilot needs you"
+          />
+        )}
+      </div>
+      {news > 0 && (
+        <span
+          aria-hidden="true"
+          className="rounded-full bg-warn px-1.5 text-[10px] font-bold leading-4 text-[#1a1410] tabular-nums"
+        >
+          {news}
+        </span>
+      )}
+      <span className="mt-auto select-none text-[10.5px] font-medium uppercase tracking-wider text-muted group-hover:text-ink [writing-mode:vertical-rl]">
+        Copilot
+      </span>
+    </div>
+  );
+}

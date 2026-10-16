@@ -1,15 +1,21 @@
 import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { firstMessage } from "./automations";
+import { boardCard, cardLine, LIST_LIMIT, readThreadText } from "./board-tools-format";
 import { markSeen } from "./copilot-digest";
 import { resolveFolder } from "./folders";
 import { restartTool } from "./restart-tool";
-import { asText, clip, firstLine, shortTitle, shortToolName, titleFromPrompt } from "./format";
+import { shortTitle, titleFromPrompt } from "./format";
 import { defaultPermissionMode, touchProject } from "./settings";
-import { createCard, getCard, getThread, listCards, updateCard } from "./store";
+import { createCard, getCard, listCards, updateCard } from "./store";
 import { rememberTags } from "./tag-store";
 import { normalizeTags } from "./tags";
-import type { Backend, Card, PermissionMode, ThreadItem } from "./types";
+import type { Backend, Card, PermissionMode } from "./types";
+
+// Re-exports for callers that import these from ./board-tools: lib/weft-mcp.ts builds the MCP
+// servers, lib/runner-ask.ts labels the permission prompt, lib/weft-prompts.ts the copilot prompt.
+export { COPILOT_PROMPT, SAFE_BOARD_TOOLS, isTrustedTool } from "./board-tools-trust";
+export { describeBoardTool } from "./board-tools-format";
 
 // What the board tools need from the runner, passed in to avoid a circular import.
 export interface BoardActions {
@@ -17,91 +23,6 @@ export interface BoardActions {
   stop(cardId: string): Promise<void>;
   answer(cardId: string, allow: boolean, answers?: Record<string, string>): void;
   isBusy(cardId: string): boolean;
-}
-
-export const COPILOT_PROMPT = `You are the Weft copilot: the orchestrator for the user's board of AI coding threads.
-Each card on the board is a separate Claude Code, puku-cli or Codex thread working in a project folder. Columns: Backlog (not started), Running, Needs you (waiting on a permission answer), Review (turn finished), Done.
-Use the mcp__board__* tools to see and run the board: list_cards and read_thread to check on work, create_card to add a thread to Backlog, start_card to run it, send_message to reply to a thread, move_card, stop_card, and answer_permission when the user tells you to approve or deny something.
-Delegate real work to threads instead of doing it yourself. Give each new thread a self-contained prompt and the right folder; it knows nothing about this chat.
-Cards can be starred (★, worth keeping) and carry short tags like "bug" or "launch"; list_cards shows both. Tag new cards when the user's words name one, and use set_tags when they ask.
-You're in a small chat window, so keep replies short.`;
-
-// The copilot uses these without asking: they read the board or only rearrange it.
-// Starting, replying to, and answering for a thread run agents, so the user approves those.
-export const SAFE_BOARD_TOOLS = new Set(["list_cards", "read_thread", "create_card", "move_card", "stop_card", "set_tags"]);
-
-// This app's own tools (the browser pane, and the board tools: list_cards, create_card, and the copilot's others) skip the prompt.
-// source is the MCP server's type; only in-process ("sdk") servers are Weft's own.
-export function isTrustedTool(toolName: string, source?: string) {
-  if (source !== "sdk") return false;
-  // The secrets tools ask for Touch ID themselves, so a permission prompt first would be a second yes.
-  // The webhooks tools only record names and URLs (lib/webhooks.ts); a relay needs the user's own signed-in Weft account.
-  // The board view runs a fixed set of operations and never hands back a secret (electron/board-view.cjs).
-  if (["mcp__browser__", "mcp__secrets__", "mcp__webhooks__", "mcp__board_view__"].some((p) => toolName.startsWith(p))) return true;
-  return toolName.startsWith("mcp__board__") && SAFE_BOARD_TOOLS.has(toolName.slice("mcp__board__".length));
-}
-
-function boardCard(id: string): Card {
-  const card = getCard(id);
-  if (!card || card.role === "copilot") throw new Error(`No card ${id}. Use list_cards to get card ids.`);
-  return card;
-}
-
-function describeCard(card: Card) {
-  return [
-    `id: ${card.id}`,
-    `title: ${card.title}`,
-    `column: ${card.column}`,
-    `cli: ${card.backend}`,
-    `folder: ${card.cwd}`,
-    card.stage && `stage: ${card.stage}`,
-    card.remaining && `remaining: ${card.remaining}`,
-    card.lastLine && `latest: ${card.lastLine}`,
-    card.pending && `waiting on the user for: ${card.pending.title}`,
-    card.error && `error: ${card.error}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
-function threadText(items: ThreadItem[]) {
-  return items
-    .map((item) => {
-      switch (item.kind) {
-        case "user":
-          return `USER: ${item.text}`;
-        case "assistant":
-          return `AGENT: ${item.text}`;
-        case "tool":
-          return `TOOL ${shortToolName(item.name)} ${item.summary}${item.isError ? " (failed)" : ""}`;
-        case "permission":
-          return `PERMISSION ${item.title}: ${item.decision ?? "waiting"}`;
-        case "result":
-          return item.isError ? `TURN ENDED: ${item.text}` : "TURN FINISHED";
-        case "shell":
-          return `USER RAN: ! ${item.command}${item.exitCode ? ` (exit ${item.exitCode})` : ""}`;
-      }
-    })
-    .join("\n\n");
-}
-
-// A readable permission prompt for the board tools that need the user's OK.
-export function describeBoardTool(toolName: string, input: Record<string, unknown>): string | null {
-  const name = toolName.replace(/^mcp__board__/, "");
-  const card = typeof input.card_id === "string" ? getCard(input.card_id) : undefined;
-  const label = card ? `“${card.title}”` : asText(input.card_id, "a card");
-  switch (name) {
-    case "start_card":
-      return `Start ${label}`;
-    case "send_message":
-      return `Reply to ${label}: ${clip(asText(input.text), 140)}`;
-    case "answer_permission":
-      return `${input.allow ? "Allow" : "Deny"} ${card?.pending?.title ?? "its request"} on ${label}`;
-    case "restart_weft_when_idle":
-      return "Restart Weft once the running threads finish";
-    default:
-      return null;
-  }
 }
 
 async function attempt(run: () => string | Promise<string>) {
@@ -150,26 +71,6 @@ function tagsPatch(raw: string[] = []): Pick<Card, "tags" | "tagsBy"> {
 }
 
 const TAGS = z.array(z.string()).optional().describe("Short labels for the card, like bug or launch");
-
-// One line per card, so a whole board fits in a tool result (the full detail is read_thread's).
-export function cardLine(card: Card) {
-  return [
-    card.id,
-    card.column,
-    `${card.starred ? "★ " : ""}${clip(card.title, 80)}`,
-    card.cwd.replace(/^\/Users\/[^/]+/, "~"),
-    card.tags?.length && `tags: ${card.tags.join(", ")}`,
-    card.stage,
-    card.remaining && `remaining: ${clip(card.remaining, 60)}`,
-    card.pending && `waiting on: ${clip(card.pending.title, 60)}`,
-    card.error && `error: ${firstLine(card.error, 60)}`,
-    card.lastLine && `latest: ${firstLine(card.lastLine, 80)}`,
-  ]
-    .filter(Boolean)
-    .join(" | ");
-}
-
-const LIST_LIMIT = 40;
 
 function listCardsTool() {
   return tool(
@@ -255,11 +156,7 @@ export function boardMcpServer(actions: BoardActions) {
         "Read a thread's conversation: user messages, agent replies, tool calls, and permission requests.",
         { card_id: z.string(), last: z.number().int().positive().optional().describe("Only the last N entries (default 30)") },
         ({ card_id, last }) =>
-          attempt(() => {
-            const card = boardCard(card_id);
-            const items = getThread(card.id).filter(Boolean).slice(-(last ?? 30));
-            return `${describeCard(card)}\n\n---\n\n${threadText(items) || "(empty thread)"}`;
-          }),
+          attempt(() => readThreadText(card_id, last)),
       ),
       tool(
         "create_card",

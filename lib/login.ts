@@ -5,6 +5,7 @@ import type { Backend, LoginState, LoginTrial, LoginView } from "./types";
 import { globalSingleton } from "./global-singleton";
 import { openLoginInTerminal } from "./login-terminal";
 import { authStatus } from "./login-status";
+import { clean, errMessage, isNotLoggedInError, isRateLimitError, lastUrl, needsTty } from "./login-output";
 
 // Runs `<cli> auth login` in the background when a thread finds its CLI logged out, streams the
 // CLI's output to the board's login pop-up, and falls back to a Terminal window when the CLI
@@ -17,10 +18,6 @@ const RAW_BYTES = 32 * 1024;
 const PUBLISH_MS = 200;
 export const POLL_MS = 3_000;
 // How long onExit keeps re-checking authStatus after `auth login` exits before giving up.
-// A puku-cli update made the credential visible from `auth status` only after the login
-// child had already closed, so a single check ran too early and reported "logged out".
-// We poll for up to this window before failing, so the dialog closes the moment the CLI
-// sees the new credential and the card retries.
 export const LOGIN_POLL_TIMEOUT_MS = 10_000;
 export const TERMINAL_WAIT_MS = 10 * 60_000;
 
@@ -56,42 +53,8 @@ export function binary(backend: Backend) {
   return path;
 }
 
-function message(err: unknown) {
-  return err instanceof Error ? err.message : String(err);
-}
-
-// Exported for ./login-status, which reuses these helpers.
-export { message, clean as cleanOutput };
-
-// --- Output ---------------------------------------------------------------------------------
-
-const OSC = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?/g;
-const CSI = /\x1b\[[0-?]*[ -/]*[@-~]/g;
-const OTHER_ESCAPE = /\x1b[ -/]*[0-~]?/g;
-const CONTROL = /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g;
-const OSC8_URL = /\x1b\]8;[^;\x07\x1b]*;(https:\/\/[^\x07\x1b\s]+)/g;
-const PLAIN_URL = /https:\/\/[^\s"'<>`]+/g;
-
-function clean(raw: string) {
-  return raw
-    .replace(OSC, "")
-    .replace(CSI, "")
-    .replace(OTHER_ESCAPE, "")
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .replace(CONTROL, "")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n");
-}
-
-// The login page: a terminal hyperlink's target if the CLI printed one (it survives line
-// wrapping), otherwise the last plain https URL in the output.
-function lastUrl(raw: string, text: string) {
-  const linked = [...raw.matchAll(OSC8_URL)].map((m) => m[1]);
-  const plain = text.match(PLAIN_URL) ?? [];
-  const url = linked.at(-1) ?? plain.at(-1);
-  return url?.replace(/[)\].,;:!?'"]+$/, "");
-}
+// Exported for ./login-status, which reuses these helpers (kept as aliases so callers can keep importing from this module).
+export { errMessage as message, clean as cleanOutput, isNotLoggedInError, isRateLimitError };
 
 function refresh(run: LoginRun) {
   const text = clean(run.raw);
@@ -143,15 +106,11 @@ export function stopPolling(run: LoginRun) {
   run.polling = false;
 }
 
-// Starts a polling loop on the run that re-checks `auth status` until it reports
-// `loggedIn: true`, the run is no longer current, or the timeout elapses. Used
-// after the `auth login` child has exited but its credential may not yet be
-// visible to a fresh `auth status` call.
+// Re-checks `auth status` until it reports `loggedIn: true`, the run is no longer current, or the deadline passes.
 function startPolling(run: LoginRun, deadline: number) {
   if (run.poll || run.polling) return;
   run.polling = true;
-  // The interval's first tick fires after POLL_MS, so do the first check now to
-  // avoid an extra wait when the credential is already visible.
+  // Do the first check now so we don't wait POLL_MS when the credential is already visible.
   const tick = () => {
     if (!stillRunning(run) || !run.polling) {
       stopPolling(run);
@@ -176,9 +135,8 @@ function startPolling(run: LoginRun, deadline: number) {
         }
       })
       .catch((err: unknown) => {
-        // A status check erroring out is not the same as the login failing; try
-        // again next tick rather than giving up.
-        if (stillRunning(run)) append(run, `\n${message(err)}\n`);
+        // A status check erroring out isn't a login failure; try again next tick.
+        if (stillRunning(run)) append(run, `\n${errMessage(err)}\n`);
       });
   };
   run.poll = setInterval(tick, POLL_MS);
@@ -244,13 +202,6 @@ export function addCallback(run: LoginRun, onDone?: () => void) {
   return snapshot(run);
 }
 
-// Ink-based logins can refuse to start without a terminal.
-function needsTty(text: string) {
-  return /raw mode is not supported|not a tty|isn't a tty|setRawMode|inappropriate ioctl|stdin is not a terminal|ERR_TTY/i.test(
-    text,
-  );
-}
-
 async function onExit(run: LoginRun, child: ChildProcess, code: number | null, signal: NodeJS.Signals | null) {
   // Superseded, cancelled, or switched to Terminal while this process was running.
   if (run.child !== child || !isCurrent(run) || run.view.state !== "running") return;
@@ -266,24 +217,11 @@ async function onExit(run: LoginRun, child: ChildProcess, code: number | null, s
     append(run, "\nThe CLI needs a terminal for this login, so it's opening in Terminal.\n");
     openLoginInTerminal(run.view.backend);
   } else if (code === 0 && !signal) {
-    // The CLI exited cleanly but its credential isn't visible yet to a fresh
-    // status check. Poll for a short window before declaring the login failed,
-    // so a card that's mid-login doesn't pop the dialog again the moment you
-    // click "accept" in the browser.
+    // Clean exit but the credential isn't visible yet: poll before declaring the login failed.
     startPolling(run, Date.now() + LOGIN_POLL_TIMEOUT_MS);
   } else {
     failRun(run, signal ? `auth login stopped (${signal}).` : `auth login exited with code ${code ?? "unknown"}.`);
   }
-}
-
-export function isNotLoggedInError(text: string): boolean {
-  return /not logged in|not authenticated|please run (?:\/login|codex login)|invalid api key|oauth token has expired|authentication_error/i.test(text);
-}
-
-// Distinct from a transient error or a not-logged-in: when the CLI's last turn hit the
-// plan's rate limit, the card menu offers a one-click switch to the other backend.
-export function isRateLimitError(text: string): boolean {
-  return /rate.?limit|hit your limit|usage limit|limit reached|limit exceeded/i.test(text);
 }
 
 export function startLogin(backend: Backend, onDone?: () => void): LoginView {
@@ -323,7 +261,7 @@ export function startLogin(backend: Backend, onDone?: () => void): LoginView {
   });
   child.on("close", (code, signal) => {
     void onExit(run, child, code, signal).catch((err: unknown) => {
-      if (stillRunning(run)) failRun(run, message(err));
+      if (stillRunning(run)) failRun(run, errMessage(err));
     });
   });
 

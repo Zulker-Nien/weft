@@ -1,0 +1,189 @@
+// The sync loop: walks every Claude Code session, decides what each one's card should
+// be doing now, and applies that to the board.
+
+import { randomUUID } from "node:crypto";
+import os from "node:os";
+import { listSessions } from "@anthropic-ai/claude-agent-sdk";
+import { dismissedSessions } from "./settings";
+import { firstLine } from "./format";
+import { addCards, listCards, updateCard } from "./store";
+import { type Card, type Column } from "./types";
+import { LIVE_LINES, g, liveCards, type Tail } from "./import-state";
+import { openSessions } from "./import-ps";
+import { parseTitle, readTail, sessionFiles, sessionMode } from "./import";
+
+const RECENT_MS = 3 * 24 * 60 * 60_000;
+// A session mid-turn counts as running if it changed this recently, even when no open app shows it.
+const RUNNING_QUIET_MS = 2 * 60_000;
+const TEMP_DIRS = [os.tmpdir(), "/tmp/", "/private/tmp/", "/private/var/folders/"];
+
+function columnFor(stage: string | undefined, lastActivity: number, live?: Column): Column {
+  if (live) return live;
+  if (stage === "Done") return "done";
+  if (stage) return "review";
+  return Date.now() - lastActivity < RECENT_MS ? "review" : "done";
+}
+
+// Where a session that's live in another app belongs: Running while a turn runs, Needs you while it
+// waits for an answer there. Without Claude Code's report, an unfinished turn in the session file
+// counts if the session is open or changed in the last two minutes (a CLI that quit mid-turn leaves
+// its last turn unfinished for good).
+function liveColumn(sessionId: string, tail: Tail | undefined, open: { ids: Set<string>; status: Map<string, "busy" | "idle" | "waiting"> }): Column | undefined {
+  const status = open.status.get(sessionId);
+  if (status) return status === "busy" ? "running" : status === "waiting" ? "needs_you" : undefined;
+  return tail?.busy && (open.ids.has(sessionId) || Date.now() - tail.at < RUNNING_QUIET_MS) ? "running" : undefined;
+}
+
+// Moves a picked-up card when its session changed outside Weft, or went live or quiet there.
+// Otherwise it stays where the user put it. Weft's own runs (warm) and pending requests are left alone.
+function columnPatch(card: Card, activity: number, live: Column | undefined, stage = card.stage, reply?: string): Partial<Card> {
+  if (card.warm || card.pending) return {};
+  const outside = activity > (card.lastActivity ?? 0) + 1000;
+  if (!outside && !live && !liveCards.has(card.id)) return {};
+  if (live) liveCards.add(card.id);
+  else liveCards.delete(card.id);
+  const column = columnFor(stage, activity, live);
+  const patch: Partial<Card> = column === card.column ? {} : { column };
+  const line = live ? LIVE_LINES[live] : reply;
+  if (line && line !== card.lastLine) patch.lastLine = line;
+  return patch;
+}
+
+export interface SyncResult {
+  sessions: number;
+  added: number;
+  updated: number;
+}
+
+async function runSync(): Promise<SyncResult> {
+  const [sessions, open] = await Promise.all([
+    listSessions({ includeProgrammatic: false, limit: 10_000 }),
+    openSessions(),
+  ]);
+  const files = sessionFiles();
+  const cards = indexCards();
+  const dismissed = new Set(dismissedSessions());
+  const added: Card[] = [];
+  let updated = 0;
+
+  for (const session of sessions) {
+    if (dismissed.has(session.sessionId)) continue;
+    // Sessions in temporary folders are tooling runs (tests, subagents), not the user's threads.
+    if (TEMP_DIRS.some((dir) => (session.cwd ?? "").startsWith(dir))) continue;
+    const tail = readSessionTail(files, session.sessionId);
+    const activity = tail?.at || session.createdAt || session.lastModified;
+    const { title, stage } = parseTitle(session.customTitle || session.summary || session.firstPrompt || "Untitled thread");
+    const openElsewhere = open.ids.has(session.sessionId);
+    const live = liveColumn(session.sessionId, tail, open);
+    const file = files.get(session.sessionId);
+    const existing = cards.get(session.sessionId);
+
+    if (!existing) {
+      added.push(newCardFromSession(session, { title, stage, activity, openElsewhere, live, file, tail }));
+      continue;
+    }
+    // Weft's own cards, and cards that continued a session as a copy, don't follow the original.
+    if (existing.source !== "claude-code" || existing.forkedFrom === session.sessionId) continue;
+    const patch = patchForExisting(existing, { title, stage, activity, openElsewhere, live, tail });
+    if (Object.keys(patch).length) {
+      updateCard(existing.id, patch);
+      updated += 1;
+    }
+  }
+
+  if (added.length) addCards(added);
+  return { sessions: sessions.length, added: added.length, updated };
+}
+
+function indexCards(): Map<string, Card> {
+  const cards = new Map<string, Card>();
+  for (const c of listCards()) {
+    if (c.sessionId) cards.set(c.sessionId, c);
+    if (c.forkedFrom) cards.set(c.forkedFrom, c);
+  }
+  return cards;
+}
+
+function readSessionTail(files: Map<string, string>, sessionId: string) {
+  const file = files.get(sessionId);
+  return file ? readTail(file) : undefined;
+}
+
+// What a brand-new card should look like for this session, before the loop adds it.
+function newCardFromSession(
+  session: { sessionId: string; cwd?: string; firstPrompt?: string; createdAt?: number },
+  { title, stage, activity, openElsewhere, live, file, tail }: { title: string; stage?: string; activity: number; openElsewhere: boolean; live: Column | undefined; file: string | undefined; tail: ReturnType<typeof readTail> },
+): Card {
+  return {
+    id: randomUUID(),
+    title,
+    prompt: session.firstPrompt ?? "",
+    cwd: session.cwd ?? os.homedir(),
+    backend: "claude",
+    permissionMode: sessionMode(file, tail?.mode),
+    column: columnFor(stage, activity, live),
+    sessionId: session.sessionId,
+    stage,
+    source: "claude-code",
+    lastActivity: activity,
+    openElsewhere,
+    lastLine: (live && LIVE_LINES[live]) || (session.firstPrompt ? firstLine(session.firstPrompt) : undefined),
+    createdAt: session.createdAt ?? activity,
+    updatedAt: activity,
+  };
+}
+
+// What a card the user already has should look like now: column/lastLine when the session moved
+// outside Weft or went live or quiet, and stage/title/lastActivity when it picked up new messages.
+function patchForExisting(
+  existing: Card,
+  { title, stage, activity, openElsewhere, live, tail }: { title: string; stage?: string; activity: number; openElsewhere: boolean; live: Column | undefined; tail: ReturnType<typeof readTail> },
+): Partial<Card> {
+  const patch: Partial<Card> = {};
+  if (Boolean(existing.openElsewhere) !== openElsewhere) patch.openElsewhere = openElsewhere;
+  // New messages or a new title from outside Weft move the card, unless Weft has the thread open.
+  Object.assign(patch, columnPatch(existing, activity, live, stage, tail?.reply));
+  const outside = activity > (existing.lastActivity ?? 0) + 1000;
+  // A title you or Weft's retitle chose (lib/retitle.ts) stays; only the stage follows Claude Code.
+  const name = existing.titleBy ? {} : { title };
+  if (outside && !existing.warm) {
+    Object.assign(patch, { stage, lastActivity: activity }, name);
+  } else if (!existing.warm && (stage !== existing.stage || (!existing.titleBy && title !== existing.title))) {
+    Object.assign(patch, { stage }, name);
+  }
+  return patch;
+}
+
+// One sync at a time; callers share the one in progress.
+export function syncSessions(): Promise<SyncResult> {
+  g.__weftSync ??= runSync().finally(() => {
+    g.__weftSync = undefined;
+  });
+  return g.__weftSync as Promise<SyncResult>;
+}
+
+// A quick look between full syncs, so a session that starts or ends a turn in another app, or stops
+// there to ask the user something, moves its card within seconds.
+async function checkLive() {
+  if (g.__weftSync) return;
+  const files = sessionFiles();
+  const open = await openSessions();
+  for (const card of listCards()) {
+    if (card.source !== "claude-code" || !card.sessionId || card.forkedFrom) continue;
+    const file = files.get(card.sessionId);
+    const tail = file ? readTail(file) : undefined;
+    if (!tail) continue;
+    const patch = columnPatch(card, tail.at, liveColumn(card.sessionId, tail, open), card.stage, tail.reply);
+    if (!card.warm && tail.at > (card.lastActivity ?? 0) + 1000) patch.lastActivity = tail.at;
+    if (Boolean(card.openElsewhere) !== open.ids.has(card.sessionId)) patch.openElsewhere = open.ids.has(card.sessionId);
+    if (Object.keys(patch).length) updateCard(card.id, patch);
+  }
+}
+
+// Syncs now and then every minute, once per server process, checking for live sessions in between.
+export function startSessionSync() {
+  if (g.__weftSyncTimer) return;
+  g.__weftSyncTimer = setInterval(() => void syncSessions().catch(() => {}), 60_000);
+  g.__weftCheckTimer = setInterval(() => void checkLive().catch(() => {}), 5_000);
+  void syncSessions().catch((err: unknown) => console.error("Session sync failed:", err));
+}

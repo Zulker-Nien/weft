@@ -1,145 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { projectHue } from "@/lib/format";
-import { keyCaps } from "@/lib/hotkeys";
-import type { Column } from "@/lib/types";
-import Icon, { type IconName } from "./Icon";
+import { type PaletteItem, paletteResults } from "@/lib/palette";
+import Icon from "./Icon";
 import Modal from "./Modal";
+import { COLUMN_LABEL, COLUMN_PILL, ItemText, KeyCaps, ProjectChip, projectInk } from "./PaletteRows";
 
-export type PaletteItem = {
-  id: string;
-  group: "Recently changed" | "Commands" | "Projects" | "Cards" | "Prompts";
-  // The card a card or prompt item opens, so one card isn't listed twice.
-  cardId?: string;
-  label: string;
-  // Dimmer text after the label, e.g. a project's path.
-  detail?: string;
-  // The project folder a card belongs to, drawn as a colored chip; on a project item it tints the icon.
-  project?: string;
-  // A card's column, drawn as a colored status pill.
-  column?: Column;
-  // The project folder a card or prompt sits in, for the "only this project" scope.
-  root?: string;
-  // Extra words that match the search without being shown.
-  keywords?: string;
-  icon: IconName;
-  // A line of the prompt that matched, with the matched words between \u0001 and \u0002.
-  snippet?: string;
-  // A card's last line of output (or its error), on a second line.
-  preview?: string;
-  // How long ago the card last changed, at the row's right edge.
-  when?: string;
-  // A key spec from the shortcut registry, drawn as key caps.
-  keys?: string;
-  run: () => void;
-};
-
-const GROUPS: PaletteItem["group"][] = ["Commands", "Projects", "Cards", "Prompts"];
 const PROMPT_DELAY_MS = 200;
 const PROMPT_MIN_CHARS = 2;
-const CARD_LIMIT = 30;
-const RECENT_CARDS = 6;
 
-export const COLUMN_PILL: Record<Column, string> = {
-  running: "bg-accent-soft text-accent",
-  needs_you: "bg-warn-soft text-warn",
-  review: "bg-ok-soft text-ok",
-  backlog: "bg-sunken text-muted",
-  done: "bg-sunken text-muted",
-};
-export const COLUMN_LABEL: Record<Column, string> = {
-  running: "Running",
-  needs_you: "Needs you",
-  review: "Review",
-  backlog: "Backlog",
-  done: "Done",
-};
-
-// The project's own color: deeper on light themes, lighter on dark, same hue on both.
-function projectInk(name: string) {
-  const hue = projectHue(name);
-  return `light-dark(oklch(0.5 0.15 ${hue}), oklch(0.8 0.12 ${hue}))`;
-}
-
-function ProjectChip({ name }: { name: string }) {
-  const hue = projectHue(name);
-  return (
-    <span
-      title={`Project: ${name}`}
-      className="flex max-w-[180px] shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[13.5px] font-semibold"
-      style={{ color: projectInk(name), background: `oklch(0.65 0.14 ${hue} / 0.16)` }}
-    >
-      <span className="size-1.5 shrink-0 rounded-full" style={{ background: "currentColor" }} />
-      <span className="truncate">{name}</span>
-    </span>
-  );
-}
-
-// Every word typed must appear somewhere; earlier and label matches rank higher. null means no match.
-function score(item: PaletteItem, words: string[]): number | null {
-  const label = item.label.toLowerCase();
-  const rest = `${item.detail ?? ""} ${item.keywords ?? ""}`.toLowerCase();
-  let total = 0;
-  for (const word of words) {
-    const at = label.indexOf(word);
-    if (at >= 0) total += at === 0 || label[at - 1] === " " ? 0 : 1;
-    else if (rest.includes(word)) total += 3;
-    else return null;
-  }
-  return total;
-}
-
-// A snippet with its matched words in bold.
-function Snippet({ text }: { text: string }) {
-  return (
-    <>
-      {text.split("\u0001").map((part, i) => {
-        const [hit, rest] = i === 0 ? ["", part] : part.split("\u0002");
-        return (
-          <span key={i}>
-            {hit && <mark className="rounded-[3px] bg-accent-soft px-0.5 font-semibold text-ink">{hit}</mark>}
-            {rest}
-          </span>
-        );
-      })}
-    </>
-  );
-}
-
-// The row's title with its status pill and detail, and the matched prompt line or the card's last output below.
-function ItemText({ item }: { item: PaletteItem }) {
-  return (
-    <span className="min-w-0 flex-1 truncate text-[16px] font-medium text-ink">
-      {item.label}
-      {item.column && (
-        <span className={`ml-2 rounded px-1.5 py-px align-[1px] text-[12.5px] font-semibold ${COLUMN_PILL[item.column]}`}>
-          {COLUMN_LABEL[item.column]}
-        </span>
-      )}
-      {item.detail && <span className="ml-2 text-[14px] font-normal text-faint">{item.detail}</span>}
-      {item.snippet ? (
-        <span className="mt-1 block truncate text-[14.5px] font-normal text-muted">
-          <Snippet text={item.snippet} />
-        </span>
-      ) : (
-        item.preview && <span className="mt-0.5 block truncate text-[14.5px] font-normal text-muted">{item.preview}</span>
-      )}
-    </span>
-  );
-}
-
-function KeyCaps({ keys }: { keys: string }) {
-  return (
-    <span className="flex shrink-0 items-center gap-0.5">
-      {keyCaps(keys).map((cap, i) => (
-        <kbd key={i} className="min-w-[24px] rounded border border-line-strong bg-canvas px-1 py-px text-center font-mono text-[13px] text-muted">
-          {cap}
-        </kbd>
-      ))}
-    </span>
-  );
-}
+export { COLUMN_LABEL, COLUMN_PILL };
+export type { PaletteItem };
 
 export default function CommandPalette({
   initialQuery = "",
@@ -186,28 +57,7 @@ export default function CommandPalette({
     };
   }, [query]);
 
-  const results = useMemo(() => {
-    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-    const inScope = (i: PaletteItem) => !scope || i.root === undefined || i.root === scope;
-    const byGroup = (group: PaletteItem["group"]) => items.filter((i) => i.group === group && inScope(i));
-    if (words.length === 0) {
-      // Nothing typed: the cards that just changed column, every command and project, and the latest
-      // other cards (items arrive newest first).
-      const moved = byGroup("Recently changed");
-      const shown = new Set(moved.map((i) => i.cardId));
-      const latest = byGroup("Cards").filter((i) => !shown.has(i.cardId));
-      return [...moved, ...byGroup("Commands"), ...byGroup("Projects"), ...latest.slice(0, RECENT_CARDS)];
-    }
-    const promptItems = prompts.query === query.trim() ? prompts.items.filter(inScope) : [];
-    return GROUPS.flatMap((group) => {
-      if (group === "Prompts") return promptItems;
-      const hits = byGroup(group)
-        .map((item, order) => ({ item, order, rank: score(item, words) }))
-        .filter((h): h is { item: PaletteItem; order: number; rank: number } => h.rank !== null)
-        .sort((a, b) => a.rank - b.rank || a.order - b.order);
-      return (group === "Cards" ? hits.slice(0, CARD_LIMIT) : hits).map((h) => h.item);
-    });
-  }, [items, query, prompts, scope]);
+  const results = useMemo(() => paletteResults(items, query, prompts, scope), [items, query, prompts, scope]);
 
   const current = Math.min(active, Math.max(0, results.length - 1));
 

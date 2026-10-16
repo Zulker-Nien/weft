@@ -1,6 +1,6 @@
 # BlastCP drawer
 
-BlastCP's rocket logo on the left rail (`components/BlastcpLogo.tsx`, from the BlastCP repo's `public/brand/rocket-180.png`), under 🔐 and ▲, opens a drawer showing the [BlastCP](https://blastcp.com) property each board
+BlastCP's rocket logo on the left rail (`components/BlastcpLogo.tsx`, from `rocket-180.png` in the BlastCP repo's brand folder), under 🔐 and ▲, opens a drawer showing the [BlastCP](https://blastcp.com) property each board
 project posts as, and what that property has queued. BlastCP is a posting queue (LinkedIn, Substack, Threads,
 Instagram, YouTube, email…); a property is one brand you post as, inside a workspace.
 

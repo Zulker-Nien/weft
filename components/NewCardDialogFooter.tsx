@@ -1,0 +1,104 @@
+"use client";
+
+// The New thread dialog's footer: the CLI toggle, the busy-folder / error / started status line, the
+// Add-to-backlog button, and the Start button. Extracted from NewCardDialog.tsx so the dialog
+// body can stay focused on its own state.
+
+import type { Backend } from "@/lib/types";
+import { BACKENDS } from "@/lib/new-thread";
+import { startButton } from "@/lib/new-thread";
+import type { Card } from "@/lib/types";
+import { alsoHereLine } from "@/lib/overlap";
+import Icon, { Spinner } from "./Icon";
+
+export function NewCardDialogFooter({
+  backend,
+  onPickBackend,
+  error,
+  alsoHere,
+  started,
+  busy,
+  startBtn,
+  onSubmit,
+}: {
+  backend: Backend;
+  onPickBackend: (b: Backend) => void;
+  error: string | null;
+  alsoHere: Card[];
+  started: string | null;
+  busy: false | "start" | "backlog";
+  startBtn: ReturnType<typeof startButton>;
+  onSubmit: (start: boolean) => void;
+}) {
+  return (
+    <div className="flex shrink-0 items-center gap-3 px-5 pb-4 pt-3">
+      <div
+        className="flex rounded-md border border-line-strong p-0.5"
+        role="group"
+        aria-label="CLI"
+      >
+        {BACKENDS.map((b) => (
+          <button
+            key={b.id}
+            type="button"
+            title={b.id === "codex" ? "Requires Codex CLI and login. Weft's browser, board, secrets and webhook tools are unavailable." : undefined}
+            onClick={() => onPickBackend(b.id)}
+            aria-pressed={backend === b.id}
+            className={`rounded px-2.5 py-1 text-[12px] ${backend === b.id ? "bg-sunken font-medium text-ink" : "text-muted hover:text-ink"}`}
+          >
+            {b.label}
+          </button>
+        ))}
+      </div>
+      <p className="min-w-0 flex-1 truncate text-[12px]">
+        {error ? (
+          <span className="text-danger">{error}</span>
+        ) : alsoHere.length > 0 ? (
+          <span
+            className="flex min-w-0 items-center gap-1.5 text-warn"
+            title={`These threads share this folder's working tree:\n${alsoHere.map((c) => c.title).join("\n")}`}
+          >
+            <Icon name="alert" size={12} className="shrink-0" />
+            <span className="truncate">{alsoHereLine(alsoHere)}</span>
+          </span>
+        ) : started ? (
+          <span className="text-muted">
+            Started &ldquo;{started}&rdquo; · write the next one
+          </span>
+        ) : (
+          <span className="text-faint">
+            <kbd className="font-sans">⌘↵</kbd> starts it ·{" "}
+            <kbd className="font-sans">⌃↵</kbd> starts it and stays open
+          </span>
+        )}
+      </p>
+      <button
+        onClick={() => onSubmit(false)}
+        disabled={!!busy}
+        className="flex shrink-0 items-center gap-1.5 rounded-md border border-line-strong px-3 py-1.5 text-[13px] text-ink hover:bg-sunken disabled:cursor-wait disabled:opacity-40 disabled:hover:bg-transparent"
+      >
+        {busy === "backlog" && <Spinner size={12} />}
+        {busy === "backlog" ? "Adding…" : "Add to backlog"}
+      </button>
+      <button
+        onClick={() => onSubmit(true)}
+        disabled={!!busy}
+        className="flex shrink-0 items-center gap-1.5 rounded-md bg-accent px-3.5 py-1.5 text-[13px] font-medium text-on-accent hover:opacity-90 disabled:cursor-wait disabled:opacity-40 disabled:saturate-0"
+      >
+        {busy === "start" ? (
+          <>
+            <Spinner size={12} />
+            Starting…
+          </>
+        ) : (
+          <>
+            {startBtn.label}
+            <kbd aria-hidden="true" className="font-sans font-normal opacity-60">
+              {startBtn.key}
+            </kbd>
+          </>
+        )}
+      </button>
+    </div>
+  );
+}

@@ -270,3 +270,36 @@ describe("mergeThread", () => {
     expect(snapshot).toEqual([item("a")]);
   });
 });
+
+describe("api calls the board makes less often", () => {
+  it("switches one card's CLI and a column's cards", async () => {
+    let fetch = respond({ card: { id: "c1" } });
+    await api.switchBackend("c1", "codex", true, "gpt");
+    expect(lastCall(fetch)[0]).toBe("/api/cards/c1/switch-backend");
+    expect(JSON.parse(lastCall(fetch)[1].body as string)).toEqual({ backend: "codex", replay: true, model: "gpt" });
+
+    fetch = respond({ switched: ["a"], failed: [], pending: [] });
+    await api.switchBackends(["a", "b"], "puku");
+    expect(lastCall(fetch)[0]).toBe("/api/cards/switch-backend");
+    expect(JSON.parse(lastCall(fetch)[1].body as string)).toEqual({ ids: ["a", "b"], backend: "puku" });
+  });
+
+  it("signs in with or without a next page", async () => {
+    let fetch = respond({ url: "u" });
+    await api.signIn("github", "/board");
+    expect(JSON.parse(lastCall(fetch)[1].body as string)).toEqual({ action: "oauth", provider: "github", next: "/board" });
+    fetch = respond({ url: "u" });
+    await api.signIn("github");
+    expect(JSON.parse(lastCall(fetch)[1].body as string)).toEqual({ action: "oauth", provider: "github" });
+  });
+
+  it("starts and stops a folder's issue sync", async () => {
+    let fetch = respond({ folder: "/f", added: 1, updated: 0, archived: 0 });
+    await api.importIssues("/f");
+    expect(lastCall(fetch)[1].method).toBe("POST");
+    fetch = respond({ folders: [] });
+    await api.stopIssues("/f");
+    expect(lastCall(fetch)[1].method).toBe("DELETE");
+    expect(lastCall(fetch)[0]).toBe("/api/github/issues");
+  });
+});

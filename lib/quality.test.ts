@@ -72,6 +72,16 @@ describe("documentation section", () => {
     ]);
   });
 
+  it("skips design docs, whose paths are files still to build", () => {
+    const root = project({
+      "README.md": "",
+      "docs/architecture/plan.md": "# Plan\n\nStatus: design. Builds `src/new.ts`.",
+      "docs/architecture/late.md": "x\n".repeat(12) + "Status: design\n`src/gone.ts`",
+      "src/a.ts": "",
+    });
+    expect(docs(root)?.summary).toBe("README, 2 architecture docs; 100% of files explained, 1 stale path");
+  });
+
   it("says stale path, singular, and fails the path check with no guides at all", () => {
     expect(docs(project({ "README.md": "`src/gone.ts`", "src/a.ts": "" }))?.summary).toContain(", 1 stale path");
     expect(failing(project({ "src/a.ts": "" }))).toContain("every file path the docs name exists");

@@ -1,24 +1,26 @@
 "use client";
 
-import { useEffect, useEffectEvent, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { api } from "@/lib/client";
-import { readDraft, replyDraftKey, writeDraft } from "@/lib/drafts";
-import { bangCommand, isBang } from "@/lib/bang";
-import { sendLaterOptions, type PlanResets } from "@/lib/schedule";
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
+import { bangCommand } from "@/lib/bang";
+import { type PlanResets } from "@/lib/schedule";
+import { replyPlaceholder } from "@/lib/reply-placeholder";
+import { useReplyDraft } from "@/lib/use-reply-draft";
+import { useReplyKeys } from "@/lib/use-reply-keys";
+import { useReplySchedule } from "@/lib/use-reply-schedule";
 import { useNow } from "@/lib/use-now";
 import type { Backend, ScheduledMessage } from "@/lib/types";
 import Composer, { type ComposerHandle } from "./Composer";
 import QuestionForm, { type QuestionFormHandle, type QuestionProps } from "./QuestionForm";
-import ReplyButtons from "./ReplyButtons";
+import ReplyBoxActions from "./ReplyBoxActions";
 import { EditingNote, ReplyQueue } from "./ReplyQueue";
-import SendLater from "./SendLater";
 
-// While a turn runs, the box says the next message waits; idle, it shows the thread's suggested next message.
-function replyPlaceholder(live: boolean, suggestion: string | undefined, fallback: string, question: boolean) {
-  if (question) return "Type your own answer, or a note on your pick. Enter answers.";
-  if (live) return "Working. Write the next message and it'll send when this turn is done.";
-  return suggestion ? `${suggestion}  ⇥ Tab` : fallback;
-}
+// Board threads can take a message to send at a set time; the copilot can't, so it leaves this out.
+// resets are the plan's next 5-hour and weekly resets, the default times on a Claude thread.
+type SendLater = { backend: Backend; resets: PlanResets; scheduled: ScheduledMessage[] };
+
+// Your last sent message, for ↑ to edit (board threads only). canRewind: Enter replaces it and its
+// turn; otherwise the edit goes out as a new message. fileEdits: what its turn changed on disk, which stays.
+type EditLast = { text: string; canRewind: boolean; fileEdits: number; onEdit: (text: string) => Promise<void> };
 
 // A thread's reply box: the same composer as a new thread (Markdown, pasted images and videos,
 // dictation), sized for a reply. Enter sends; Shift+Enter starts a new line. A message starting with "!"
@@ -41,37 +43,19 @@ export default function ReplyBox({
 }: {
   cardId: string;
   cwd: string;
-  // A turn is running or waiting on a permission answer, so a reply can't go yet.
   live: boolean;
   placeholder: string;
-  // The thread's guess at your next message: shown as the placeholder, and Tab in an empty box fills it in (not sends).
   suggestion?: string;
-  // Board threads can take a message to send at a set time; the copilot can't, so it leaves this out.
-  // resets are the plan's next 5-hour and weekly resets, the default times on a Claude thread.
-  sendLater?: {
-    backend: Backend;
-    resets: PlanResets;
-    scheduled: ScheduledMessage[];
-  };
-  // The thread's statusline (context, tokens, plan limits), under the box where you scope the next message.
+  sendLater?: SendLater;
   status?: ReactNode;
-  // Focused as it opens: the card was just started, so the keyboard stays in the board (Escape closes it).
   autoFocus?: boolean;
-  // Your last sent message, for ↑ to edit (board threads only). canRewind: Enter replaces it and its turn;
-  // otherwise the edit goes out as a new message. fileEdits: what its turn changed on disk, which stays.
-  editLast?: { text: string; canRewind: boolean; fileEdits: number; onEdit: (text: string) => Promise<void> };
-  // Tells the thread when an edit starts or ends, so it can mark the message and the reply it replaces.
+  editLast?: EditLast;
   onEditing?: (editing: boolean) => void;
-  // The agent asked a question (AskUserQuestion): it shows above the box, and the box is where you type your
-  // own answer or a note on your pick, so there's one place to write. Text already in the box carries over.
-  // key: the request, so each question starts fresh.
   question?: QuestionProps & { key: string };
   onSend: (text: string) => Promise<void>;
-  // Runs a "!" command (board threads; the copilot leaves it out, so "!" there is just text).
   onShell?: (command: string) => Promise<void>;
   onStop: () => Promise<void>;
 }) {
-  const [initial] = useState(() => readDraft(replyDraftKey(cardId)));
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Messages written while the thread was working; they go out together once the turn ends.
@@ -81,41 +65,17 @@ export default function ReplyBox({
   const [laterOpen, setLaterOpen] = useState(false);
   // ↑ pulled your last sent message back into the box; Enter replaces it, Escape lets it be.
   const [editing, setEditingState] = useState(false);
-  // The box starts with "!": Enter runs it as a shell command.
-  const [shell, setShell] = useState(() => Boolean(onShell) && isBang(initial));
   const now = useNow();
   const composer = useRef<ComposerHandle>(null);
   const form = useRef<QuestionFormHandle>(null);
-  const draftTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // The queued messages on their way out, numbered so each batch is sent exactly once.
   const [outgoing, setOutgoing] = useState<{ id: number; text: string } | null>(null);
   const sentId = useRef(0);
 
-  // The draft not yet written. Closing the thread writes it, so Escape can close with text in the box.
-  const unsaved = useRef<{ cardId: string; markdown: string } | null>(null);
-
-  // Also clears a shown error: you are typing again, or the message just went out.
-  function saveDraft(markdown: string, now = false) {
-    setError(null);
-    setShell(Boolean(onShell) && isBang(markdown));
-    clearTimeout(draftTimer.current);
-    unsaved.current = { cardId, markdown };
-    const write = () => {
-      if (unsaved.current) writeDraft(replyDraftKey(unsaved.current.cardId), unsaved.current.markdown);
-      unsaved.current = null;
-    };
-    if (now) write();
-    else draftTimer.current = setTimeout(write, 300);
-  }
-
-  useEffect(
-    () => () => {
-      clearTimeout(draftTimer.current);
-      if (unsaved.current) writeDraft(replyDraftKey(unsaved.current.cardId), unsaved.current.markdown);
-    },
-    [],
-  );
+  const setErrorWrap = (err: unknown) => setError(err instanceof Error ? err.message : String(err));
+  const clearError = () => setError(null);
+  const { initial, save: saveDraft, shell } = useReplyDraft(cardId, onShell, clearError);
 
   // The turn ended and nothing is being edited: what was queued leaves the queue as one message.
   // Moved during render, in the same pass that sees the turn end, so it can't be picked up twice.
@@ -129,7 +89,7 @@ export default function ReplyBox({
     onSend(text).catch((err: unknown) => {
       setQueue((q) => [text, ...q]);
       setPaused(true);
-      setError(err instanceof Error ? err.message : String(err));
+      setErrorWrap(err);
     });
   });
 
@@ -144,7 +104,7 @@ export default function ReplyBox({
     try {
       return composer.current?.read() ?? "";
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setErrorWrap(err);
       return null;
     }
   }
@@ -171,24 +131,10 @@ export default function ReplyBox({
       await editLast.onEdit(text);
       cancelEdit();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setErrorWrap(err);
     } finally {
       setSending(false);
     }
-  }
-
-  // A scheduled message back into an empty box to edit; it stops being scheduled until you schedule it again.
-  function takeBackScheduled(m: ScheduledMessage) {
-    if (!composer.current?.isEmpty()) {
-      setError("Clear the box first to edit a scheduled message.");
-      return;
-    }
-    composer.current.write(m.text);
-    unschedule(m.id);
-  }
-
-  function unschedule(messageId: string) {
-    api.unschedule(cardId, messageId).catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
   }
 
   // Runs the "!" command in the box; it doesn't wait for a running turn.
@@ -204,7 +150,7 @@ export default function ReplyBox({
       saveDraft("", true);
       composer.current?.clear();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setErrorWrap(err);
     } finally {
       setSending(false);
     }
@@ -242,7 +188,7 @@ export default function ReplyBox({
       saveDraft("", true);
       composer.current?.clear();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setErrorWrap(err);
     } finally {
       setSending(false);
     }
@@ -263,28 +209,9 @@ export default function ReplyBox({
       setPaused(false);
     } catch (err) {
       setQueue((q) => [text, ...q]);
-      setError(err instanceof Error ? err.message : String(err));
+      setErrorWrap(err);
     } finally {
       setSending(false);
-    }
-  }
-
-  // Sends the message at `at` from the server, so it goes even if this thread is closed by then.
-  async function scheduleAt(at: number) {
-    setLaterOpen(false);
-    const text = readBox();
-    if (text === null) return;
-    if (!text) {
-      setError("Write a message first.");
-      composer.current?.focus();
-      return;
-    }
-    try {
-      await api.schedule(cardId, text, at);
-      saveDraft("", true);
-      composer.current?.clear();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -294,68 +221,30 @@ export default function ReplyBox({
     else void submit(now);
   }
 
-  // Tab in an empty box takes the suggested next message, to edit or send.
-  function takeSuggestion(e: KeyboardEvent) {
-    const plainTab = e.key === "Tab" && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey;
-    if (!plainTab || !suggestion || live || !composer.current?.isEmpty()) return false;
-    e.preventDefault();
-    e.stopPropagation();
-    composer.current.write(suggestion);
-    return true;
-  }
+  const { scheduleAt, unschedule, takeBackScheduled } = useReplySchedule(cardId, composer, saveDraft, setErrorWrap);
+  const { onKeyDownCapture, onKeyDown } = useReplyKeys({
+    composer,
+    form,
+    question,
+    live,
+    suggestion,
+    editing,
+    editLast,
+    queue,
+    sendLater,
+    setLaterOpen,
+    cancelEdit,
+    setEditing,
+    setQueue,
+    setPaused,
+    onStop,
+    setError: setErrorWrap,
+  });
 
   const scheduled = sendLater?.scheduled ?? [];
 
   return (
-    <div
-      className="border-t border-line p-3"
-      onKeyDownCapture={(e) => {
-        // While a question waits, the arrows, numbers and space in an empty box move through its options.
-        if (question && form.current?.key(e, composer.current?.isEmpty() ?? true)) {
-          e.preventDefault();
-          e.stopPropagation();
-          return;
-        }
-        // Alt+Enter opens Send later with the default time focused, so a second Enter schedules it.
-        if (sendLater && e.key === "Enter" && e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
-          e.preventDefault();
-          e.stopPropagation();
-          setLaterOpen(true);
-          return;
-        }
-        if (takeSuggestion(e)) return;
-        // Escape drops an edit and leaves the message as it was sent (before it would close the thread).
-        if (editing && e.key === "Escape") {
-          e.preventDefault();
-          e.stopPropagation();
-          cancelEdit();
-          return;
-        }
-        if (e.key !== "ArrowUp" || !composer.current?.isEmpty()) return;
-        // Up in an empty box pulls the last queued message back to edit; the queue holds meanwhile.
-        const last = queue.at(-1);
-        if (last !== undefined) {
-          e.preventDefault();
-          e.stopPropagation();
-          composer.current.write(last);
-          setQueue((q) => q.slice(0, -1));
-          setPaused(true);
-        } else if (editLast && !editing) {
-          // With nothing queued, it pulls back the last message you sent.
-          e.preventDefault();
-          e.stopPropagation();
-          composer.current.write(editLast.text);
-          setEditing(true);
-        }
-      }}
-      onKeyDown={(e) => {
-        // Ctrl+C stops the running turn, unless text is selected (then it's a copy).
-        if (live && e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "c" && !window.getSelection()?.toString()) {
-          e.preventDefault();
-          void onStop().catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
-        }
-      }}
-    >
+    <div className="border-t border-line p-3" onKeyDownCapture={onKeyDownCapture} onKeyDown={onKeyDown}>
       {question && <QuestionForm {...question} key={question.key} ref={form} cardId={cardId} composer={composer} />}
       <ReplyQueue
         scheduled={scheduled}
@@ -382,26 +271,20 @@ export default function ReplyBox({
         sizeClass="min-h-[44px] max-h-[40vh]"
         className={shell ? "border-warn! focus-within:border-warn!" : ""}
         actions={
-          <>
-            {sendLater && (
-              <SendLater
-                open={laterOpen}
-                onOpenChange={setLaterOpen}
-                options={sendLaterOptions(sendLater.backend, sendLater.resets, now)}
-                now={now}
-                onPick={(at) => void scheduleAt(at)}
-                disabled={sending}
-              />
-            )}
-            <ReplyButtons
-              live={live}
-              answering={Boolean(question)}
-              sending={sending}
-              shell={shell}
-              onStop={() => void onStop().catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))}
-              onSend={send}
-            />
-          </>
+          <ReplyBoxActions
+            live={live}
+            question={Boolean(question)}
+            sending={sending}
+            shell={shell}
+            sendLater={sendLater ? { backend: sendLater.backend, resets: sendLater.resets } : undefined}
+            laterOpen={laterOpen}
+            setLaterOpen={setLaterOpen}
+            now={now}
+            onPick={(at) => void scheduleAt(at)}
+            onSend={(now) => send(now)}
+            onStop={onStop}
+            onStopError={setErrorWrap}
+          />
         }
       />
       {status && <div className="mt-1.5 px-1">{status}</div>}

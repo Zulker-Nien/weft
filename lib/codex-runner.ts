@@ -4,16 +4,16 @@ import readline from "node:readline";
 import type { EventEmitter } from "node:events";
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 import { spawnCli } from "./cli-process";
+import { CODEX_PROMPT_CODE, argsFor, promptFor } from "./codex-runner-prompt";
 import { CODEX_INPUT_CODE, codexInput, writeImages } from "./codex-input";
-import { permissionArgs } from "./codex-permissions";
+
+// Re-exports for tests and existing callers of codex-runner.ts. The prompt/argv code moved to
+// lib/codex-runner-prompt.ts; lib/codex-runner.ts drives the process and converts the events.
+export { argsFor, promptFor };
 import { BRIDGE_TOKEN_ENV, codexMcpArgs, openBridge } from "./mcp-bridge";
-import { codexProjectInstructions } from "./puku-context";
 import { weftMcpServers } from "./weft-mcp";
 import { CODEX_DEFAULT_MODEL } from "./new-thread";
 import { cliEnv } from "./env";
-import { subagentModel, threadPrompt } from "./settings";
-import { subagentPrompt } from "./subagents";
-import { skillIndex, skillInvocation } from "./skills";
 import { handle } from "./runner-turn";
 import { getCard, getThread, replaceThreadItem, updateCard } from "./store";
 import { touchFile } from "./overlap";
@@ -160,46 +160,6 @@ async function result(session: Session, event: CodexEvent, error?: string) {
   }));
 }
 
-// Codex has no slash commands for skills, so `/name args` becomes the skill's own instructions.
-function skillPrompt(text: string, cwd: string) {
-  return skillInvocation(text, cwd, { weft: true });
-}
-
-export function promptFor(session: Session, text: string) {
-  const weftInstructions = `You are a Codex CLI thread managed by Weft. Work in the card's project folder using Codex's native tools. Weft's tools (browser, board, secrets, webhooks, board_view) are MCP servers: call them as mcp__browser__open_url and so on. Never read .env files, credential stores or environment dumps. Never restart or kill Weft. Codex's sandbox enforces this card's permission mode.\n\n${subagentPrompt(subagentModel(), "codex")}\n\n${threadPrompt()}`;
-  // Codex reads AGENTS.md on its own but not CLAUDE.md; a resumed session already has it in its history.
-  const resumed = Boolean(session.sessionId ?? session.spec.sessionId);
-  const claudeMd = resumed ? "" : codexProjectInstructions(session.spec.cwd);
-  const skills = resumed ? "" : skillIndex(session.spec.cwd, { weft: true });
-  const project = claudeMd ? `Codex doesn't load CLAUDE.md, so Weft puts the project's here. Treat it like AGENTS.md.\n\n${claudeMd}\n\n` : "";
-  const reminder = project || skills ? `<system-reminder>\n${project}${skills}\n</system-reminder>\n\n` : "";
-  return `${reminder}${weftInstructions}\n\n${skillPrompt(text, session.spec.cwd)}`;
-}
-
-function modelArgs(model: string | undefined) {
-  return model && model !== CODEX_DEFAULT_MODEL ? ["--model", model] : [];
-}
-
-function imageArgs(images: string[]) {
-  return images.flatMap((image) => ["--image", image]);
-}
-
-// `mcp` is the `--config` pairs that point Codex at Weft's tools for this turn (lib/mcp-bridge.ts).
-function argsFor(session: Session, images: string[], mcp: string[] = []) {
-  const card = session.cardId ? getCard(session.cardId) : undefined;
-  const model = card?.model ?? session.spec.model;
-  const sessionId = session.sessionId ?? session.spec.sessionId;
-  if (sessionId) {
-    // `exec resume` keeps the saved sandbox and reasoning effort; it only accepts a model override.
-    return ["exec", "resume", "--json", ...mcp, ...modelArgs(model), ...imageArgs(images), sessionId, "-"];
-  }
-
-  const args = ["exec", "--json", "--cd", session.spec.cwd, "--skip-git-repo-check", ...mcp, ...modelArgs(model), ...imageArgs(images)];
-  const effort = card?.effort ?? session.spec.effort;
-  if (effort) args.push("--config", `model_reasoning_effort=${JSON.stringify(effort)}`);
-  return [...args, ...permissionArgs(card?.permissionMode ?? session.spec.permissionMode), "-"];
-}
-
 async function handleItemEvent(session: Session, event: CodexEvent) {
   const item = event.item;
   if (!item) return;
@@ -302,6 +262,6 @@ export async function driveCodex(session: Session, executable: string) {
 }
 
 export const CODEX_CODE = [
-  driveCodex, assistant, toolStart, toolFinish, noteFileChanges, result, skillPrompt, promptFor, permissionArgs,
-  modelArgs, imageArgs, argsFor, ...CODEX_INPUT_CODE, handleItemEvent, handleEvent, readEvents, assertTurnCompleted,
+  driveCodex, assistant, toolStart, toolFinish, noteFileChanges, result, ...CODEX_PROMPT_CODE, ...CODEX_INPUT_CODE,
+  handleItemEvent, handleEvent, readEvents, assertTurnCompleted,
 ];

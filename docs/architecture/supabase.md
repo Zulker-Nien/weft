@@ -17,7 +17,7 @@ board project to a Supabase project, the same way ▲ links one to Vercel (docs/
 
 ## The link
 
-A link is `supabase/.temp/project-ref`, the file `supabase link` writes, plus `.temp` in `supabase/.gitignore` (as
+A link is `supabase/.temp/project-ref`, the file `supabase link` writes, plus `.temp` in the `.gitignore` of the project's `supabase/` folder (as
 `supabase init` does). No Weft-side state: the Supabase CLI in a thread (`supabase db push`, `supabase gen types
 --linked`, `supabase migration list`) works on the right project with no prompt, and a folder linked by the CLI shows
 up linked in the drawer.

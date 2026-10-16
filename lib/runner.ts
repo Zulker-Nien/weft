@@ -4,29 +4,30 @@ import { isDoneCommand, skillsForPrompt } from "./automations";
 import { lastSent } from "./edit-last";
 import { showStarter } from "./glance";
 import { isOpenElsewhere } from "./import";
-import { cancelLogin, noteTrial, startLogin } from "./login";
-import { fetchTrialToken, hasOwnPukuLogin, trialJustFetched } from "./puku-trial";
 import { holdForRestart } from "./restart-when-idle";
 import { sessionRewindPoint } from "./rewind";
 import { addScheduled } from "./schedule";
 import { answerPermission, settle } from "./runner-ask";
+import { needLogin } from "./runner-login";
 import { adoptSpare, currentSession, open } from "./runner-session";
 import { withShellContext } from "./shell";
 import { switchSpare } from "./spare-switch";
-import { archiveAfter, CLI_NAMES, close, errorText, hooks, isBusy, loginWaiters, queued, safeUpdate, sessions, specFor, type Session } from "./runner-state";
+import { archiveAfter, close, errorText, hooks, isBusy, queued, safeUpdate, sessions, specFor, type Session } from "./runner-state";
 import { panePage } from "./pane-page";
 import { skillInvocation } from "./skills";
 import { appendThread, foldThread, getCard, getThread, updateCard } from "./store";
-import type { Backend, Card, LoginTrial, PermissionMode } from "./types";
+import type { Card, PermissionMode } from "./types";
 
 // One Agent SDK query() per thread: what the board and the API call to send, stop, queue and answer.
 // The parts behind it: lib/runner-state.ts (sessions and the shared maps), lib/runner-session.ts (starting
 // and driving a CLI, spares), lib/runner-turn.ts (what the CLI sends during a turn), lib/runner-ask.ts
-// (permission requests).
+// (permission requests), lib/runner-login.ts (auth wall).
 export { switchBackend } from "./backend-switch";
 export { answerPermission } from "./runner-ask";
 export { ensureSpare, warmUp } from "./runner-session";
 export { isBusy } from "./runner-state";
+// Re-exports for the login module (used by app/api/login and lib/copilot.ts).
+export { clearLoginWaiters, retryAfterLogin, retryPukuWithTrial } from "./runner-login";
 
 // A picked-up session that's open in another app, or that changed outside Weft in the last 10 minutes.
 function activeElsewhere(card: Card) {
@@ -261,73 +262,6 @@ export async function retry(cardId: string) {
   await endSession(cardId);
   const last = [...getThread(cardId)].reverse().find((item) => item.kind === "user");
   if (last?.kind === "user" && getCard(cardId) && !isBusy(cardId)) sendMessage(cardId, last.text, { echo: false });
-}
-
-// Runs every card that was waiting on this CLI's login. Safe to call more than once.
-export function retryAfterLogin(backend: Backend) {
-  const waiting = loginWaiters.get(backend);
-  if (!waiting?.size) return;
-  loginWaiters.delete(backend);
-  for (const cardId of waiting) {
-    retry(cardId).catch((err: unknown) => safeUpdate(cardId, { error: errorText(err) }));
-  }
-}
-
-// Drops the cards that were waiting on this CLI's login, so a cancelled login
-// doesn't drag the next card into the same loop when it hits the same auth error.
-export function clearLoginWaiters(backend: Backend) {
-  loginWaiters.delete(backend);
-}
-
-function needLogin(cardId: string, backend: Backend, message: string) {
-  // The CLI's last turn hit an auth error and persisted it into the session transcript. If we
-  // keep the card's sessionId, retryAfterLogin resumes the same session and puku-cli short-
-  // circuits on the cached authentication_failed entry instead of calling the API again —
-  // so the user can be logged in and the card still says "Not logged in". Drop the sessionId
-  // so the retry starts a fresh session.
-  const card = getCard(cardId);
-  if (card?.sessionId) updateCard(cardId, { sessionId: undefined });
-  safeUpdate(cardId, {
-    column: "needs_you",
-    pending: null,
-    error: message,
-    lastLine: `Log in to ${CLI_NAMES[backend]} to run this thread`,
-  });
-  const waiting = loginWaiters.get(backend) ?? new Set<string>();
-  waiting.add(cardId);
-  loginWaiters.set(backend, waiting);
-  if (backend === "puku" && !hasOwnPukuLogin()) void pukuTrialOrLogin(cardId, message);
-  else login(cardId, backend);
-}
-
-function login(cardId: string, backend: Backend, trial?: LoginTrial) {
-  try {
-    startLogin(backend, () => retryAfterLogin(backend));
-    if (trial) noteTrial(backend, trial);
-  } catch (err) {
-    safeUpdate(cardId, { error: errorText(err) });
-  }
-}
-
-// A puku thread with no Puku login runs on Weft's Puku trial when it can (lib/puku-trial.ts); otherwise Puku's
-// own login opens, and its pop-up says why the trial didn't cover it.
-async function pukuTrialOrLogin(cardId: string, message: string) {
-  if (trialJustFetched()) {
-    login(cardId, "puku", { reason: "failed", message: `Weft's Puku trial didn't work for this thread: ${message}` });
-    return;
-  }
-  const result = await fetchTrialToken();
-  if (result.ok) retryAfterLogin("puku");
-  else login(cardId, "puku", { reason: result.reason, message: result.message });
-}
-
-// You signed in to your Weft account: puku threads waiting on a login run on the trial instead.
-export async function retryPukuWithTrial() {
-  if (!loginWaiters.get("puku")?.size || hasOwnPukuLogin()) return;
-  const result = await fetchTrialToken();
-  if (!result.ok) return;
-  cancelLogin("puku");
-  retryAfterLogin("puku");
 }
 
 // What the session and turn modules call back into (lib/runner-state.ts hooks), and the board tools' actions.

@@ -2,33 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/client";
+import { type Choice, buildSections, errorText } from "@/lib/repo-picker";
 import type { GithubRepo, LocalRepo } from "@/lib/types";
-import Icon, { Spinner, type IconName } from "./Icon";
+import Icon, { Spinner } from "./Icon";
 import NewProjectForm from "./NewProjectForm";
-import RepoPickerButton, { PickerRow, shortPath } from "./RepoPickerButton";
+import RepoChoiceRow from "./RepoChoiceRow";
+import RepoPickerButton, { PickerRow } from "./RepoPickerButton";
 
 // Where a new thread runs: a recent project, a git repo on this Mac, a GitHub repo (cloned into
 // ~/dev on the spot), a new empty project in ~/dev, a folder from the Finder, or a pasted path.
-
-type Choice =
-  | { kind: "local"; repo: LocalRepo }
-  | { kind: "github"; repo: GithubRepo }
-  | { kind: "path"; path: string }
-  | { kind: "new" }
-  | { kind: "browse" };
-
-function matches(query: string, ...fields: (string | undefined)[]) {
-  if (!query) return true;
-  const haystack = fields.filter(Boolean).join(" ").toLowerCase();
-  return query
-    .toLowerCase()
-    .split(/\s+/)
-    .every((word) => haystack.includes(word));
-}
-
-function errorText(err: unknown) {
-  return err instanceof Error ? err.message : String(err);
-}
 
 export default function RepoPicker({
   value,
@@ -79,19 +61,7 @@ export default function RepoPicker({
   const current = local?.find((r) => r.path === value);
   const q = query.trim();
 
-  const sections = useMemo(() => {
-    const out: { title: string; icon: IconName; choices: Choice[] }[] = [];
-    if (/^(~|\/)/.test(q)) out.push({ title: "Folder", icon: "folder", choices: [{ kind: "path", path: q }] });
-    const all = local ?? [];
-    const recent = all.filter((r) => r.recentAt !== undefined && matches(q, r.name, r.path, r.github, r.branch));
-    const repos = all.filter((r) => r.recentAt === undefined && matches(q, r.name, r.path, r.github, r.branch));
-    if (recent.length) out.push({ title: "Recent", icon: "clock", choices: recent.slice(0, q ? 20 : 8).map((repo) => ({ kind: "local", repo })) });
-    if (repos.length) out.push({ title: "On this Mac", icon: "branch", choices: repos.slice(0, q ? 40 : 25).map((repo) => ({ kind: "local", repo })) });
-    // GitHub repos that aren't cloned yet; cloned ones are already listed above.
-    const remote = (github ?? []).filter((r) => !r.localPath && matches(q, r.fullName, r.description));
-    if (remote.length) out.push({ title: "Clone from GitHub", icon: "github", choices: remote.slice(0, q ? 40 : 15).map((repo) => ({ kind: "github", repo })) });
-    return out;
-  }, [q, local, github]);
+  const sections = useMemo(() => buildSections(q, local, github), [q, local, github]);
 
   const flat = useMemo<Choice[]>(() => [...sections.flatMap((s) => s.choices), { kind: "new" }, { kind: "browse" }], [sections]);
 
@@ -222,66 +192,18 @@ export default function RepoPicker({
                 {section.choices.map((choice) => {
                   index++;
                   const i = index;
-                  const on = i === active;
-                  const rowClass = `flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-left ${on ? "bg-sunken" : ""}`;
-                  if (choice.kind === "path") {
-                    return (
-                      <button key="path" type="button" role="option" aria-selected={on} data-active={on} onMouseEnter={() => setActive(i)} onClick={() => void pick(choice)} className={rowClass}>
-                        <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-ink">{choice.path}</span>
-                        {busy === "path" ? <Spinner size={11} /> : <span className="text-[11px] text-faint">Use this folder</span>}
-                      </button>
-                    );
-                  }
-                  if (choice.kind === "local") {
-                    const r = choice.repo;
-                    const selected = r.path === value;
-                    return (
-                      <button key={r.path} type="button" role="option" aria-selected={on} data-active={on} onMouseEnter={() => setActive(i)} onClick={() => void pick(choice)} className={rowClass}>
-                        <span className="min-w-0 flex-1">
-                          <span className="flex items-center gap-2">
-                            <span className={`truncate text-[12.5px] ${selected ? "font-medium text-accent" : "text-ink"}`}>{r.name}</span>
-                            {r.branch && (
-                              <span className="flex shrink-0 items-center gap-1 font-mono text-[10.5px] text-muted">
-                                <Icon name="branch" size={10} />
-                                {r.branch}
-                              </span>
-                            )}
-                          </span>
-                          <span className="block truncate font-mono text-[11px] text-faint">
-                            {r.github ?? shortPath(r.path, home)}
-                          </span>
-                        </span>
-                        {selected && <Icon name="check" size={13} className="text-accent" />}
-                      </button>
-                    );
-                  }
-                  if (choice.kind === "github") {
-                    const r = choice.repo;
-                    const cloning = busy === r.fullName;
-                    return (
-                      <button key={r.fullName} type="button" role="option" aria-selected={on} data-active={on} disabled={Boolean(busy)} onMouseEnter={() => setActive(i)} onClick={() => void pick(choice)} className={`${rowClass} disabled:opacity-70`}>
-                        <span className="min-w-0 flex-1">
-                          <span className="flex items-center gap-2">
-                            <span className="truncate text-[12.5px] text-ink">{r.fullName}</span>
-                            {r.private && <span className="shrink-0 rounded border border-line-strong px-1 text-[10px] text-muted">private</span>}
-                          </span>
-                          {r.description && <span className="block truncate text-[11px] text-faint">{r.description}</span>}
-                        </span>
-                        <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted">
-                          {cloning ? (
-                            <>
-                              <Spinner size={11} /> Cloning…
-                            </>
-                          ) : (
-                            <>
-                              <Icon name="download" size={11} /> Clone to ~/dev
-                            </>
-                          )}
-                        </span>
-                      </button>
-                    );
-                  }
-                  return null;
+                  return (
+                    <RepoChoiceRow
+                      key={choice.kind === "path" ? "path" : choice.kind === "local" ? choice.repo.path : choice.kind === "github" ? choice.repo.fullName : i}
+                      choice={choice}
+                      on={i === active}
+                      busy={busy}
+                      value={value}
+                      home={home}
+                      onHover={() => setActive(i)}
+                      onPick={() => void pick(choice)}
+                    />
+                  );
                 })}
               </div>
             ))}
