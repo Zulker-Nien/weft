@@ -91,8 +91,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   `lib/question-preview.ts`: a thread's AskUserQuestion, asked the Claude Code way above the reply box, whose composer is its
   one input (own answer or a note, sent as `annotations`); option previews open in the card's browser pane; text typed on the
   Submit tab goes with the answers as a note on all of them (`buildReply`'s `general`).
-- `components/SettingsDialog.tsx` + `lib/settings-nav.ts`: Settings, full window over a scene, six pages down the left (General, Models,
-  Threads, Automations, Shortcuts, Accounts); Models holds every model pick, new threads' through `components/NewThreadDefaults.tsx`.
+- `components/SettingsDialog.tsx` + `lib/settings-nav.ts`: Settings, full window over a scene, eight pages down the left (General, Models,
+  Threads, Automations, Shortcuts, Accounts, Team, Sync); Models holds every model pick, new threads' through `components/NewThreadDefaults.tsx`.
 - `lib/subagents.ts` + `components/SubagentPicker.tsx`: when threads delegate to subagents and on which model (Settings → Models → Use for subagents,
   any Claude or Puku model: forced through `CLAUDE_CODE_SUBAGENT_MODEL` / `PUKU_CLI_SUBAGENT_MODEL` on its own CLI, a headless `-p` run on the other).
 - `lib/automations.ts` `doneOverrides` + `components/DonePicker.tsx`: Settings → Models → Run /weft:done on picks the model (any Claude or
@@ -209,7 +209,9 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `lib/store.ts`: storage in `~/.weft` (board.json, threads/, attachments/).
 - `lib/cloud-sync.ts` + `lib/cloud-outbox.ts` + `lib/cloud-sync-start.ts` + `lib/blob-store.ts` + `lib/device-id.ts` + `lib/cloud-sync-types.ts`:
   server-side cards, opt-in per folder (settings `syncFolders`): an outbox in `~/.weft/sync-outbox.jsonl` uploads cards, thread items
-  and long tool outputs to Supabase (`supabase/migrations/20261015140000_card_sync.sql`), images and pages by content hash.
+  and long tool outputs to Supabase (`supabase/migrations/20261015140000_card_sync*.sql`), images and pages by content hash.
+  Settings → Sync turns folders on and shows how it's going (`components/SyncSettings.tsx` + `lib/use-cloud-sync.ts` + `app/api/cloud-sync`);
+  `app/[orgSlug]/board` + `components/web-board/*` + `lib/web-board.ts` read the rows back on weft.zip, live over Realtime, read-only.
   `lib/thread-page.ts` + `app/api/cards/[id]/thread/**` + `lib/use-tool-result.ts`: threads page from the newest item back and fetch
   a tool output over 2 KB when its row opens (docs/architecture/cloud-sync.md).
 - `app/api/*` + `lib/guard.ts`: localhost-only Host check, writes need `x-threadboard: 1`.
@@ -260,7 +262,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - `updates.md` — the Squirrel.Mac JSON feed, the download fallback, the tag-triggered signed release, `CHANGELOG.md` notes.
   - `keep-working.md` — the menu bar icon's switch to keep the Mac awake with the lid shut so threads keep running in a bag.
   - `analytics.md` — GA4 on the home page only; `GoogleAnalytics` is gated on the home being mounted, so the board route never calls home.
-  - `cloud-sync.md` — server-side cards: the outbox, the content-addressed blob store, thread paging, the `cloud_*` tables and their policies.
+  - `cloud-sync.md` — server-side cards: the outbox, Settings → Sync, the content-addressed blob store, thread paging, the web board, the `cloud_*` tables and their policies.
 
   When a new doc lands in this folder, add it here on the same change.
 

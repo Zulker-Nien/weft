@@ -475,6 +475,16 @@ minutes: a closed issue archives its card if the card never started, and a card 
 card you delete stays deleted. It's one direction for now; Weft never edits an issue. More in
 [docs/architecture/github-issues.md](docs/architecture/github-issues.md).
 
+### Server-side cards (off by default)
+
+Settings → Sync lists your recent projects with a switch each. A project that's on uploads its cards and threads to your
+workspace on Supabase while you're signed in: an outbox sends a batch when a turn ends (never on the way to starting one),
+pictures and pages go up once each by content, and the page shows the last sync, how many items went up, how many wait and the
+last error, with **Sync now**. At `weft.zip/<workspace>/board` the same cards show in their columns, live, and a click opens the
+thread, newest first, with tool outputs loading when you open them. It's read-only for now, and thread text isn't encrypted yet, so
+turn it on only for projects you're fine storing on Weft's servers. Separately, a long thread opens on its newest 50 items
+and loads older ones as you scroll up. More in [docs/architecture/cloud-sync.md](docs/architecture/cloud-sync.md).
+
 ## Secrets vault
 
 🔐 sits on the rail under ★ and 🏷 and opens the same drawer, with a vault for every project on the board. Its

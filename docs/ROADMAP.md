@@ -244,6 +244,9 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `P2` **Project config file** — a `.weft.json` in a repo with default CLI, setup command, templates, and allow rules, shared by everyone who clones it.
 - `P3` **Hand off a card** — export a card and its session so a teammate can resume it on their machine.
 - `P3` **Shared board** — sync one board between people; each card shows whose machine is running it.
+- `P2` **Server-side cards** — built (docs/architecture/cloud-sync.md): Settings → Sync uploads opted-in projects' cards and threads to the
+  workspace, and `weft.zip/<workspace>/board` shows them live, read-only. Next: seal item bodies with the workspace key, replies from the web
+  board queued to the Mac that runs the card, and maybe session logs so another Mac can carry a thread on.
 - `P3` **Card comments** — notes from teammates on a card that the agent doesn't see.
 - `P3` **Read-only thread link** — share a snapshot of a thread as a page for someone to review.
 

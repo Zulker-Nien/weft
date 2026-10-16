@@ -1,8 +1,8 @@
 # Cloud sync
 
-Status: first shot, 2026-10-15. The outbox runs from `prewarm()` but does nothing until a folder is in settings
-`syncFolders` (no switch for it yet), and `supabase/migrations/20261015140000_card_sync.sql` isn't applied. Item
-bodies go up as plain JSON, so this isn't offered to anyone until they're sealed (see Gaps).
+Status: usable, off by default, 2026-10-16. Settings → Sync turns a project on, and the web board at
+`weft.zip/<workspace>/board` reads its cards back live. The migration is applied. Item bodies go up as plain JSON, so
+this isn't offered to anyone else until they're sealed (see Gaps).
 
 The goal: a card's thread reads the same on another device as on the Mac that runs it. `lib/cloud-sync-types.ts`
 is the contract between the parts:
@@ -22,6 +22,20 @@ is the contract between the parts:
   `resultBytes`, and `/thread/tool/[toolId]` (or `cloud_tool_outputs` remotely) serves it when the row opens
   (`lib/use-tool-result.ts`). Tool output is ~70% of a thread's bytes.
 - `lib/device-id.ts`: a random id for this Mac in `~/.weft/device-id`.
+- Settings → Sync (`components/SyncSettings.tsx`, a page after Team in `lib/settings-nav.ts`): a status card ("Last sync 2m ago ·
+  341 items uploaded · 0 waiting", "Sign in to Weft to sync", "Open the web board to claim your workspace", or the last error)
+  with **Sync now**, then one switch per recent project, with a caution that thread text is uploaded unencrypted. It polls
+  `/api/cloud-sync` every 5 s through `lib/use-cloud-sync.ts` (`GET` → `{ folders, status }`; `POST { folder, on }` switches a folder
+  and, when on, `queueFolder()` queues its existing cards and items; `POST { sync: true }` flushes now). The status
+  (`cloudSyncStatus()`, type in `lib/cloud-sync-view.ts`) is `waiting` (outbox lines), `lastSyncAt`, `uploaded` since start,
+  `lastError`, `signedOut`, `noWorkspace`. Folders live in settings `syncFolders` (`setSyncFolder`).
+- The web board (`app/[orgSlug]/board/page.tsx`, `components/web-board/*`, pure logic in `lib/web-board.ts`): behind the same
+  `requireTeam` gate as Team and Billing, read as the visitor through their cookie session, so RLS decides what they see.
+  The server renders the workspace's non-deleted `cloud_cards` into the board's columns; a client component subscribes to
+  Realtime `postgres_changes` on `cloud_cards` and `cloud_thread_items` (filter `org_id=eq.<id>`) and moves, adds and removes
+  cards in place, with a Live dot that goes grey when the channel drops. `?card=<id>` opens a card's thread in a side panel,
+  newest 50 first with older ones on request, tool outputs from `cloud_tool_outputs` when a row opens, and blob refs
+  resolved to hour-long signed URLs from `weft-blobs`. Read-only.
 
 ## Ownership
 
@@ -94,11 +108,11 @@ opened.
 
 - Item bodies go up as plain JSON. Sealing them with the workspace key (teams-vault.md) has to land before
   sync is offered to anyone else.
-- Nothing reads the rows back yet: the remote reader (another device's board, live over Realtime, replies
-  queued to the owner) is the next sprint.
+- The web board is read-only: a reply typed there can't reach the Mac that runs the card yet.
+- Settings → Sync's "Open the web board" opens `weft.zip/team`, because the app doesn't know the workspace slug; the
+  workspace header there has the Board link.
 - Two Macs on one account can both write the same card: the policies check the account, not `owner_device`.
 - Blobs are never pruned.
-- No switch for `syncFolders` in the UI yet; it's only in `~/.weft/settings.json`.
 - `Board.tsx` still fetches a card's whole thread and hands it to ThreadView as a seed, so paging doesn't yet save the
   first load; ThreadView then opens its own event stream (`useBoardEvents`) to keep its window live.
 - An HTML page uploaded as a blob still points at its images by their local relative paths.
