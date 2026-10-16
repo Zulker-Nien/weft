@@ -2,15 +2,16 @@
 
 import { api } from "@/lib/client";
 import type { SubagentModel } from "@/lib/subagents";
-import ModelSelect, { useSavedPick } from "./ModelSelect";
+import { ModelPicker } from "./Pickers";
+import { useSavedPick } from "./ModelSelect";
 
 const LEADING = [
   { value: "choose", label: "Let the model choose" },
   { value: "inherit", label: "Same model as the thread" },
 ];
 
-// Settings' "Use … for subagents" row. It saves as soon as it changes; new and idle threads pick it up on
-// their next message (lib/runner-session.ts).
+// Settings' "Use … for subagents" row. It saves as soon as it changes; new and idle threads
+// pick it up on their next message (lib/runner-session.ts).
 export default function SubagentPicker({ value }: { value: SubagentModel }) {
   const [model, pick, error] = useSavedPick(value, (next) => api.saveSettings({ subagentModel: next }));
   return (
@@ -21,7 +22,7 @@ export default function SubagentPicker({ value }: { value: SubagentModel }) {
           {error ?? "Letting the model choose picks per task. The other CLI's models run it headless as the subagent."}
         </p>
       </div>
-      <ModelSelect value={model} label="Use for subagents" leading={LEADING} onChange={pick} />
+      <ModelPicker value={model} label="Use for subagents" leading={LEADING} onChange={pick} />
     </section>
   );
 }

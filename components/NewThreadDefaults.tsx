@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { BACKENDS, EFFORTS, MODELS, lastEffort, modelFor, setLastEffort, setModelFor } from "@/lib/new-thread";
+import { lastEffort, modelFor, setLastEffort, setModelFor } from "@/lib/new-thread";
 import type { Backend, Effort } from "@/lib/types";
-import { SELECT_CLASS } from "./ModelSelect";
+import { BackendPicker, EffortPicker, ModelPicker } from "./Pickers";
 
-// Settings → Models → New threads: the CLI, model and effort a new thread starts on. The CLI waits for Save
-// (it's a server setting the API and copilot use too); the model and effort are the New thread dialog's own
-// remembered picks, so they change right away, and picking something else in that dialog moves them again.
+// Settings → Models → New threads: the CLI, model and effort a new thread starts on. The CLI
+// waits for Save (it's a server setting the API and copilot use too); the model and effort
+// are the New thread dialog's own remembered picks, so they change right away, and picking
+// something else in that dialog moves them again.
 export default function NewThreadDefaults({
   backend,
   onBackend,
@@ -31,49 +32,25 @@ export default function NewThreadDefaults({
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        <select
-          value={backend}
-          aria-label="Default CLI"
-          onChange={(e) => onBackend(e.target.value as Backend)}
-          className={SELECT_CLASS}
-        >
-          {BACKENDS.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.label}
-            </option>
-          ))}
-        </select>
-        <select
+        <BackendPicker value={backend} onChange={onBackend} label="Default CLI" />
+        <ModelPicker
           value={models[backend]}
-          aria-label="Default model"
-          onChange={(e) => {
-            setModelFor(backend, e.target.value);
-            setModels((m) => ({ ...m, [backend]: e.target.value }));
+          onChange={(next) => {
+            setModelFor(backend, next);
+            setModels((m) => ({ ...m, [backend]: next }));
           }}
-          className={SELECT_CLASS}
-        >
-          {MODELS[backend].map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-        <select
+          label="Default model"
+          // Hide the backends the New thread dialog doesn't offer — keeps the menu tight to what's runnable.
+          groups={[{ label: backend === "codex" ? "Codex" : "Models", backends: [backend] }]}
+        />
+        <EffortPicker
           value={effort}
-          aria-label="Default effort"
-          onChange={(e) => {
-            const next = e.target.value as Effort | "";
+          onChange={(next) => {
             setLastEffort(next);
             setEffort(next);
           }}
-          className={SELECT_CLASS}
-        >
-          {EFFORTS.map((e) => (
-            <option key={e.id} value={e.id}>
-              {e.label}
-            </option>
-          ))}
-        </select>
+          label="Default effort"
+        />
       </div>
     </section>
   );

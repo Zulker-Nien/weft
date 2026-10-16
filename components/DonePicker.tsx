@@ -1,15 +1,17 @@
 "use client";
 
 import { api } from "@/lib/client";
-import { EFFORTS } from "@/lib/new-thread";
 import type { Effort } from "@/lib/types";
-import ModelSelect, { SELECT_CLASS, useSavedPick } from "./ModelSelect";
+import { useSavedPick } from "./ModelSelect";
+import { EffortPicker, ModelPicker } from "./Pickers";
 
-// Settings' "Run /weft:done on …" row: the same model menu as subagents (Claude and Puku headings) and an
-// effort menu, each starting with the card's own (id ""). A turn-scoped override: the Done move
-// snapshots the card's picks and patches them in for the /weft:done turn (app/api/cards/[id] moveCard,
-// lib/automations.ts doneOverrides), and lib/runner restoreDoneOverride puts the originals back after.
-const LEADING = [{ value: "", label: "Card's own model" }];
+// Settings' "Run /weft:done on …" row: the same model menu as subagents (Claude, Puku, Codex)
+// and an effort menu, each starting with the card's own (id ""). A turn-scoped override: the
+// Done move snapshots the card's picks and patches them in for the /weft:done turn
+// (app/api/cards/[id] moveCard, lib/automations.ts doneOverrides), and lib/runner
+// restoreDoneOverride puts the originals back after.
+const MODEL_LEADING = [{ value: "", label: "Card's own model" }];
+const EFFORT_LEADING = { value: "", label: "Card's own effort" };
 
 export default function DonePicker({ model, effort }: { model: string; effort: Effort | "" }) {
   const [currentModel, pickModel, modelError] = useSavedPick(model, (next) => api.saveSettings({ doneModel: next }));
@@ -27,19 +29,18 @@ export default function DonePicker({ model, effort }: { model: string; effort: E
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        <ModelSelect value={currentModel} label="Model for /weft:done" leading={LEADING} onChange={pickModel} />
-        <select
+        <ModelPicker
+          value={currentModel}
+          onChange={pickModel}
+          label="Model for /weft:done"
+          leading={MODEL_LEADING}
+        />
+        <EffortPicker
           value={currentEffort}
-          aria-label="Effort for /weft:done"
-          onChange={(e) => pickEffort(e.target.value as Effort | "")}
-          className={SELECT_CLASS}
-        >
-          {EFFORTS.map((e) => (
-            <option key={e.id} value={e.id}>
-              {e.id === "" ? "Card's own effort" : e.label}
-            </option>
-          ))}
-        </select>
+          onChange={pickEffort}
+          label="Effort for /weft:done"
+          leading={EFFORT_LEADING}
+        />
       </div>
     </section>
   );
