@@ -140,9 +140,9 @@ function forwardHeaders(req: Request, apiKey: string) {
   req.headers.forEach((value, name) => {
     if (!DROP_REQUEST.test(name)) headers.set(name, value);
   });
-  // puku-cli sends its key both ways, so the gateway gets it both ways too.
+  // puku-cli sends its key both ways; api-cli.puku.sh's /v1/messages answers `multiple_credentials`
+  // when it gets both, so the proxy forwards only x-api-key (Anthropic's header for /v1/messages).
   headers.set("x-api-key", apiKey);
-  headers.set("authorization", `Bearer ${apiKey}`);
   return headers;
 }
 

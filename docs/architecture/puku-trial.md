@@ -46,17 +46,21 @@ never overrides it.
    `settings: { apiKeyHelper: "/bin/cat '<token file>'" }`, which the Agent SDK passes as `--settings`.
 5. **Proxy.** puku-cli sends the helper's output as both `x-api-key` and `Authorization: Bearer` to
    `…/api/puku/v1/messages?beta=true`. `lib/puku-proxy.ts` checks the token, counts the request, swaps in
-   `PUKU_TRIAL_API_KEY` (both headers) and forwards to `https://api-cli.puku.sh/v1/…`.
+   `PUKU_TRIAL_API_KEY` (only `x-api-key`, Anthropic's header for `/v1/messages`) and forwards to
+   `https://api-cli.puku.sh/v1/…`. The proxy used to forward both headers; `api-cli.puku.sh` answers
+   `multiple_credentials` when it gets both, so `lib/puku-proxy.ts` now forwards just `x-api-key`.
 
 Warm CLIs live for hours, so no token is baked into a CLI's env: puku-cli re-runs the helper every 5 minutes (and
 after a 401), and the file always holds the current token.
 
-### Verified against puku-cli 1.8.56
+### Verified against puku-cli 1.8.56 (outbound) and api-cli.puku.sh (inbound)
 
 With `HOME` pointed at an empty folder (no Puku login), `PUKU_AI_BASE_URL` at a local mock gateway and
 `--settings '{"apiKeyHelper":"cat <file>"}'`, every request arrived as `POST /v1/messages?beta=true` with
 `x-api-key: <file contents>` and `Authorization: Bearer <file contents>`, `stream: true`, model `puku-ai-2.8`.
 puku-cli reads `apiKeyHelper` from flag settings (`--settings`) as well as from its settings files.
+`api-cli.puku.sh`'s `/v1/messages` rejects both headers together as `multiple_credentials`, so the proxy
+forwards only `x-api-key` upstream.
 
 ## The proxy
 

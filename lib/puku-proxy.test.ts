@@ -220,7 +220,7 @@ describe("proxy", () => {
     expect(url).toBe("https://up.example/v1/messages?beta=true");
     const sent = new Headers(init?.headers);
     expect(sent.get("x-api-key")).toBe("real-key");
-    expect(sent.get("authorization")).toBe("Bearer real-key");
+    expect(sent.has("authorization")).toBe(false);
     expect(sent.get("anthropic-version")).toBe("2023-06-01");
     for (const h of ["host", "cookie", "x-forwarded-for", "x-vercel-id"]) expect(sent.has(h)).toBe(false);
     expect(Buffer.from(init?.body as ArrayBuffer).toString()).toBe('{"model":"m"}');
