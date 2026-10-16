@@ -17,7 +17,8 @@ pnpm dev            # board only, in a normal browser at http://127.0.0.1:1024 (
 pnpm test           # unit tests (Vitest), about a second; pnpm lint for ESLint
 ```
 
-The app ships local copies of its fonts, so builds do not need to fetch fonts from Google. The home page's GitHub release-feed lookup times out after three seconds and falls back to the releases page.
+The app ships local copies of its fonts, so builds do not need to fetch fonts from Google. The home page's
+GitHub release-feed lookup times out after three seconds and falls back to the releases page.
 
 The first `pnpm desktop` downloads the Electron binary. Don't run `dev` and `desktop` at the
 same time; Next.js allows one dev server per project folder.
@@ -485,7 +486,9 @@ pictures and pages go up once each by content, and the page shows the last sync,
 last error, with **Sync now**. At `weft.zip/<workspace>/board` the same cards show in the board's own columns and cards (stage,
 tags, model, picture or emoji, what's left), live, with the project chips, filter and sort above them, and a click opens the
 thread the way the desktop draws it, oldest first with tool runs folded, Markdown, screenshots and tool outputs loading when you
-open them. It's read-only for now, and thread text isn't encrypted yet, so
+open them. **New thread** on the web board starts a card on your Mac: pick one of your synced folders, write the prompt, and the Mac that
+owns the folder makes the card and runs it, then the board opens it (the Mac has to be on and running Weft). Replying to a running
+thread from the web isn't built yet, and thread text isn't encrypted yet, so
 turn it on only for projects you're fine storing on Weft's servers. Separately, a long thread opens on its newest 50 items
 and loads older ones as you scroll up. More in [docs/architecture/cloud-sync.md](docs/architecture/cloud-sync.md).
 

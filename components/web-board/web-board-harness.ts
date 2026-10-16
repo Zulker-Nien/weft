@@ -1,16 +1,20 @@
 // Shared by the weft.zip board's component tests: a stand-in for @supabase/ssr's browser client whose
 // Realtime handlers a test fires by hand and whose queries answer from `db`, plus card and thread-row builders.
 import { vi } from "vitest";
+import type { CloudCommandRow } from "@/lib/cloud-commands";
 import type { CloudCardRow, CloudThreadItemRow } from "@/lib/cloud-sync-types";
 import type { Card, ThreadItem } from "@/lib/types";
 
-export type Table = "cloud_cards" | "cloud_thread_items";
+export type Table = "cloud_cards" | "cloud_thread_items" | "cloud_commands";
 
 // What the mocked client answers a query with, by table; a test sets these before it renders.
 export const db = {
   items: [] as CloudThreadItemRow[],
   toolOutput: null as string | null,
   signed: {} as Record<string, string>,
+  // Why an insert into or delete from cloud_commands fails, or null to let it through.
+  insertError: null as string | null,
+  deleteError: null as string | null,
 };
 
 // A module-scoped object the mock factory closes over: each created client's Realtime handlers, so a
@@ -18,15 +22,37 @@ export const db = {
 export const mockState = {
   clients: [] as Array<{ trigger: (table: Table, payload: unknown) => void }>,
   queries: [] as Array<{ table: string; filters: Array<[string, unknown]> }>,
+  // What the board wrote: the row of each insert, the filters of each delete.
+  inserts: [] as Array<{ table: string; row: Record<string, unknown> }>,
+  deletes: [] as Array<{ table: string; filters: Array<[string, unknown]> }>,
 };
 
 // A chainable stand-in for the query builder: every filter returns it, and awaiting it answers.
 function query(table: string) {
   const filters: Array<[string, unknown]> = [];
   mockState.queries.push({ table, filters });
-  const answer = () => ({ data: table === "cloud_thread_items" ? db.items : [], error: null });
+  let deleting = false;
+  let inserted: Record<string, unknown> | null = null;
+  const answer = () => ({ data: table === "cloud_thread_items" ? db.items : [], error: deleting && db.deleteError ? { message: db.deleteError } : null });
   const builder: Record<string, unknown> = {
     select: () => builder,
+    in: (k: string, v: unknown) => (filters.push([`${k} in`, v]), builder),
+    insert: (row: Record<string, unknown>) => {
+      inserted = row;
+      mockState.inserts.push({ table, row });
+      return builder;
+    },
+    delete: () => {
+      deleting = true;
+      mockState.deletes.push({ table, filters });
+      return builder;
+    },
+    single: () =>
+      Promise.resolve(
+        db.insertError
+          ? { data: null, error: { message: db.insertError } }
+          : { data: { ...inserted, id: "cmd-1", created_by: "u1", status: "pending", card_id: null, error: null, created_at: NOW, updated_at: NOW }, error: null },
+      ),
     eq: (k: string, v: unknown) => (filters.push([k, v]), builder),
     lt: (k: string, v: unknown) => (filters.push([`${k}<`, v]), builder),
     order: () => builder,
@@ -77,6 +103,7 @@ export function cardRow(over: Partial<{
   column: Card["column"];
   folder: string;
   owner_device: string;
+  owner_user: string;
   deleted: boolean;
   updated_at: string;
   card: Partial<Card>;
@@ -87,6 +114,7 @@ export function cardRow(over: Partial<{
     org_id: "o1",
     card_id: id,
     owner_device: over.owner_device ?? "mac-1",
+    owner_user: over.owner_user ?? "u1",
     folder,
     card: {
       id,
@@ -105,6 +133,24 @@ export function cardRow(over: Partial<{
   };
 }
 
+export function commandRow(over: Partial<CloudCommandRow> = {}): CloudCommandRow {
+  return {
+    id: "cmd-1",
+    org_id: "o1",
+    created_by: "u1",
+    kind: "new_card",
+    target_device: "mac-1",
+    folder: "/Users/me/dev/app",
+    payload: { prompt: "Add a dark mode" },
+    status: "pending",
+    card_id: null,
+    error: null,
+    created_at: NOW,
+    updated_at: NOW,
+    ...over,
+  };
+}
+
 export function itemRow(seq: number, item: ThreadItem, card_id = "c1"): CloudThreadItemRow {
   return { org_id: "o1", card_id, seq, kind: item.kind, item, at: NOW };
 }
@@ -117,4 +163,8 @@ export function resetHarness() {
   db.items = [];
   db.toolOutput = null;
   db.signed = {};
+  db.insertError = null;
+  db.deleteError = null;
+  mockState.inserts.length = 0;
+  mockState.deletes.length = 0;
 }

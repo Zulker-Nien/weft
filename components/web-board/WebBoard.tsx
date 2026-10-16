@@ -6,22 +6,28 @@
 // useWebBoard keeps both live over Supabase Realtime.
 import { useMemo, useState } from "react";
 import { groupByColumn, summarizeProjects, type SortKey } from "@/lib/board-view";
+import type { CloudCommandRow } from "@/lib/cloud-commands";
 import type { CloudCardRow, CloudThreadItemRow } from "@/lib/cloud-sync-types";
 import { useNow } from "@/lib/use-now";
 import { ToolResultSourceContext } from "@/lib/use-tool-result";
 import { busyHere } from "@/lib/overlap";
 import { COLUMNS, type Column } from "@/lib/types";
 import { boardCounts, webCards } from "@/lib/web-board";
+import { webTargets } from "@/lib/web-commands";
 import CardView from "../CardView";
 import ColumnHeader from "../ColumnHeader";
 import ColumnPlaceholder from "../ColumnPlaceholder";
 import { useWebBoard, type LiveStatus } from "./useWebBoard";
+import { WebCommandStrip } from "./WebCommandStrip";
+import { WebNewCardDialog } from "./WebNewCardDialog";
 import { WebProjectBar } from "./WebProjectBar";
 import { WebThreadPanel } from "./WebThreadPanel";
 
 export interface WebBoardProps {
   orgId: string;
   orgSlug: string;
+  userId: string;
+  initialCommands: CloudCommandRow[];
   initialCards: CloudCardRow[];
   openCardId: string | null;
   initialThread: CloudThreadItemRow[];
@@ -44,19 +50,21 @@ function LiveDot({ status }: { status: LiveStatus }) {
   );
 }
 
-export function WebBoard({ orgId, orgSlug, initialCards, openCardId, initialThread, initialBlobUrls }: WebBoardProps) {
-  const board = useWebBoard({ orgId, initialCards, openCardId, initialThread, initialBlobUrls });
+export function WebBoard({ orgId, orgSlug, userId, initialCommands, initialCards, openCardId, initialThread, initialBlobUrls }: WebBoardProps) {
+  const board = useWebBoard({ orgId, userId, initialCommands, initialCards, openCardId, initialThread, initialBlobUrls });
   const now = useNow();
   const [project, setProject] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("newest");
   const [showArchived, setShowArchived] = useState(false);
   const [expanded, setExpanded] = useState<Column[]>([]);
+  const [composing, setComposing] = useState(false);
 
   const cards = useMemo(() => webCards(board.cards), [board.cards]);
   const byColumn = useMemo(() => groupByColumn(cards, { project, query, sort, showArchived }, identity), [cards, project, query, sort, showArchived]);
   const projects = useMemo(() => summarizeProjects([], cards, identity), [cards]);
   const { running, waiting } = boardCounts(cards);
+  const targets = useMemo(() => webTargets(board.cards, userId), [board.cards, userId]);
   const archivedCount = cards.filter((c) => c.archived).length;
   const filtering = project !== null || query.trim() !== "";
 
@@ -73,7 +81,11 @@ export function WebBoard({ orgId, orgSlug, initialCards, openCardId, initialThre
           </span>
           <div className="flex-1" />
           <LiveDot status={board.live} />
+          <button onClick={() => setComposing(true)} className="rounded-md bg-accent px-2.5 py-1 text-[12px] font-medium text-on-accent hover:opacity-90">
+            New thread
+          </button>
         </header>
+        <WebCommandStrip commands={board.commands} onDrop={(id) => void board.dropCommand(id)} />
 
         {cards.length === 0 ? (
           <p className="m-6 rounded-lg border border-line bg-sunken p-6 text-[13.5px] leading-relaxed text-muted">
@@ -116,6 +128,8 @@ export function WebBoard({ orgId, orgSlug, initialCards, openCardId, initialThre
             </main>
           </>
         )}
+
+        {composing && <WebNewCardDialog targets={targets} defaultFolder={project} onSend={board.startCard} onClose={() => setComposing(false)} />}
 
         {active && board.thread && (
           <WebThreadPanel card={active.card} ownerDevice={active.owner_device} window={board.thread} blobUrls={board.blobUrls} onClose={board.closeCard} onLoadOlder={() => void board.loadOlder()} />

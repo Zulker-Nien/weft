@@ -4,6 +4,7 @@
 // harness's (components/web-board/web-board-harness.ts).
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { CloudCommandRow } from "@/lib/cloud-commands";
 import type { CloudCardRow, CloudThreadItemRow } from "@/lib/cloud-sync-types";
 import "../test-utils";
 import { cardRow, db, itemRow, mockState, resetHarness } from "./web-board-harness";
@@ -15,7 +16,7 @@ async function loadBoard() {
   return import("./WebBoard");
 }
 
-const props = { orgId: "o1", orgSlug: "ada", openCardId: null, initialThread: [] as CloudThreadItemRow[], initialBlobUrls: {} };
+const props = { orgId: "o1", orgSlug: "ada", userId: "u1", initialCommands: [] as CloudCommandRow[], openCardId: null, initialThread: [] as CloudThreadItemRow[], initialBlobUrls: {} };
 
 afterEach(() => {
   resetHarness();

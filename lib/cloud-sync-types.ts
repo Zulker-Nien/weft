@@ -26,6 +26,9 @@ export interface CloudCardRow {
   card_id: string;
   // The Mac that runs this card (lib/device-id.ts). Other devices read it and queue replies.
   owner_device: string;
+  // The account that runs it; the database fills it in (auth.uid()), the outbox never sends it. The web board
+  // reads it to offer only the folders of the Macs you own as places to start a card.
+  owner_user?: string;
   folder: string;
   card: Card;
   deleted: boolean;

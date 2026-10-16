@@ -1,6 +1,6 @@
 # Cloud sync
 
-Status: usable, off by default, 2026-10-16. Settings → Sync turns a project on, and the web board at
+Status: usable, off by default, 2026-10-16. A card can be started from the web board (see Commands); the `cloud_commands` migration is applied. Settings → Sync turns a project on, and the web board at
 `weft.zip/<workspace>/board` reads its cards back live. The migration is applied. Item bodies go up as plain JSON, so
 this isn't offered to anyone else until they're sealed (see Gaps).
 
@@ -43,7 +43,27 @@ is the contract between the parts:
   blob refs resolved to hour-long signed URLs from `weft-blobs` as items arrive (live ones too), and a tool output over 2 KB
   read from `cloud_tool_outputs` when its row opens, through `ToolResultSourceContext` in `lib/use-tool-result.ts` (the desktop
   fetches the same row from its own server). A signed blob link has no file extension, so `mediaKind` takes it for an image.
-  Read-only.
+  The cards' own controls (drag, stop, answer, star, archive) are absent; the board's one write is **New thread** (see Commands).
+
+## Commands: starting a card from the web
+
+The web can't run a thread, so a card made there is a request to a Mac. `public.cloud_commands`
+(`supabase/migrations/20261016130000_card_commands.sql`, contract in `lib/cloud-commands.ts`) holds one row per request:
+`kind` (`new_card`), `target_device` and `folder` (a `cloud_cards.owner_device`/`folder` pair of the author's own cards), a `payload`
+(`prompt`, `backend`, `model`, `effort`; never the permission mode) and a `status` (`pending` → `claimed` → `done`, or `failed` with an
+`error`, plus the `card_id` made).
+
+- **Web** (`components/web-board/WebNewCardDialog.tsx`, `useWebBoard.startCard`, `lib/web-commands.ts`): the header's New thread offers
+  `webTargets` (folders of cards whose `owner_user` is you), inserts the row as you, and `WebCommandStrip` follows it ("Waiting for your Mac",
+  "Starting…", the failure, Cancel/Dismiss) over Realtime. When the command is done and the card's row has synced back, the board opens the card.
+- **Mac** (`lib/cloud-inbox.ts`, started with the outbox from `cloud-sync-start.ts`): while you're signed in and a folder syncs it listens on
+  `cloud_commands` filtered to this device, and checks every 30 s as well (a socket can drop while the Mac sleeps). A Realtime event is only a
+  nudge: it reads this device's pending commands made by the signed-in account, claims each with an update that only matches `pending`
+  (so one runs once), refuses it unless the folder is in `syncFolders` and `org_id` is the workspace this Mac syncs to, then
+  `createCardFromBody` (shared with `POST /api/cards`, `lib/new-card.ts`) and `startCard` run it with the Mac's own default permission mode.
+  It reports `done` + `card_id` or `failed` + a short reason; a claimed command is never retried, so a card can't be made twice.
+- **Policies**: members read; a member inserts as themselves (only `org_id, kind, target_device, folder, payload` are grantable, so a client can't
+  write its own status); only the author updates `status, card_id, error` or deletes (cancel before it runs, clear after).
 
 ## Ownership
 
@@ -116,7 +136,10 @@ opened.
 
 - Item bodies go up as plain JSON. Sealing them with the workspace key (teams-vault.md) has to land before
   sync is offered to anyone else.
-- The web board is read-only: a reply typed there can't reach the Mac that runs the card yet.
+- A reply typed on the web can't reach a running thread yet (the commands table has room for a `reply` kind). A thread the Mac starts for the web that needs a yes waits in Needs you; there is no answering it from the web.
+- A teammate's Mac never acts on your requests and yours never acts on theirs: the Mac only runs commands its own account made. Sending work to a teammate would need an explicit opt-in.
+- Finished commands stay in `cloud_commands`; nothing prunes them yet. A command whose Mac crashed between claiming and reporting stays `claimed` until it's cancelled.
+- The Mac must be on and running Weft for a command to run; the web says "Waiting for your Mac" until it is.
 - Settings → Sync's "Open the web board" opens `weft.zip/team`, because the app doesn't know the workspace slug; the
   workspace header there has the Board link.
 - Two Macs on one account can both write the same card: the policies check the account, not `owner_device`.

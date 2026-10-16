@@ -199,7 +199,8 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 
 ## Speed and reliability
 
-- `Done` **Faster home-page builds** — bundle the board and home page's fonts locally, including the social preview's TrueType face, and cap the GitHub release-feed lookup at three seconds.
+- `Done` **Faster home-page builds** — bundle the board and home page's fonts locally, including the social preview's TrueType
+  face, and cap the GitHub release-feed lookup at three seconds.
 - `Now` **Warm, pre-started CLIs** — keep a spare CLI loaded per project so a new card's first turn skips the 12–50 s wait for MCP servers, plugins, and hooks.
 - `Now` **Error boundaries** — each card, the thread, the browser pane, the rail, the terminal and the footer sit in their own boundary (`components/CrashGuard.tsx`), and so do smaller pieces: every dialog's body (its header and ✕ stay), each rail drawer, each header badge, the Copilot and account buttons, the project bar, the New thread dialog, and inside a thread each message and tool run, the reply in progress, the permission request, the review panel and the reply box (small spots get an inline chip with the error on hover); Board's pieces, the header badges, the reply box and the review panel load through `guarded()` (`components/guarded.tsx`), so a module that throws while loading is caught in its spot too, and `app/error.tsx` hides the browser pane so its message shows, with `app/error.tsx` and `app/global-error.tsx` behind them, so a thread's half-written edit breaks one piece, not the whole board. A build error, which no boundary can catch, swaps Next's overlay for a small bar over the last version that built (`components/BuildErrorBar.tsx`). At startup a failed load or a crashed renderer shows the start screen's error with Retry (`electron/startup-screen.cjs`).
 - `Done` **Import guard** — a build error is past any boundary (nothing compiles), so a PostToolUse hook on every thread (`lib/import-check.ts`, in `guardedCli()`) reports imports an edit just broke: an export removed that another file still imports, or a name or module that isn't there. ~20ms per edit, text matching, no type-checker. Came from a star+tag card whose parallel subagents removed `starMenu` while the board still imported it.
@@ -246,8 +247,8 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `P3` **Hand off a card** — export a card and its session so a teammate can resume it on their machine.
 - `P3` **Shared board** — sync one board between people; each card shows whose machine is running it.
 - `P2` **Server-side cards** — built (docs/architecture/cloud-sync.md): Settings → Sync uploads opted-in projects' cards and threads to the
-  workspace, and `weft.zip/<workspace>/board` shows them live, read-only, through the desktop's own `CardView`, project bar, filter and thread components. Next: seal item bodies with the workspace key, replies from the web
-  board queued to the Mac that runs the card, and maybe session logs so another Mac can carry a thread on.
+  workspace, and `weft.zip/<workspace>/board` shows them live, read-only, through the desktop's own `CardView`, project bar, filter and thread components, and **New thread** on the web board starts a card on your Mac (`cloud_commands`, `lib/cloud-inbox.ts`). Next: seal item bodies with the workspace key, replies from the web
+  board queued to the Mac that runs the card (the same commands table, a `reply` kind), and maybe session logs so another Mac can carry a thread on.
 - `P3` **Card comments** — notes from teammates on a card that the agent doesn't see.
 - `P3` **Read-only thread link** — share a snapshot of a thread as a page for someone to review.
 

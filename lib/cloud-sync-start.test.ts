@@ -11,6 +11,8 @@ const bundle = {
 };
 const createBlobStore = vi.fn(() => bundle);
 const stop = vi.fn();
+const stopInbox = vi.fn();
+const startCloudInbox = vi.fn(() => stopInbox);
 let passed: BlobStore | undefined;
 
 vi.mock("./account", () => ({ accountClient: () => accountClient() }));
@@ -22,6 +24,8 @@ vi.mock("./cloud-sync", () => ({
   },
 }));
 
+vi.mock("./cloud-inbox", () => ({ startCloudInbox: () => startCloudInbox() }));
+
 const { startAccountCloudSync } = await import("./cloud-sync-start");
 
 beforeEach(() => {
@@ -30,9 +34,13 @@ beforeEach(() => {
 });
 
 describe("startAccountCloudSync", () => {
-  it("starts the outbox and returns its stop", () => {
-    expect(startAccountCloudSync()).toBe(stop);
+  it("starts the outbox and the inbox, and the stop it returns ends both", () => {
+    const end = startAccountCloudSync();
     expect(passed).toBeDefined();
+    expect(startCloudInbox).toHaveBeenCalledTimes(1);
+    end();
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(stopInbox).toHaveBeenCalledTimes(1);
   });
 
   it("makes no client or blob store until a flush needs one", () => {

@@ -70,6 +70,11 @@ interface SyncState {
   getClient: () => SupabaseClient | null;
 }
 
+// The workspace this Mac's cards go to; the inbox checks a command is for it (lib/cloud-inbox.ts).
+export function syncOrgId(client: SupabaseClient, userId: string): Promise<string | null> {
+  return resolveOrgId(state(), client, userId);
+}
+
 function safeAccountClient(): SupabaseClient | null {
   try {
     return accountClient();

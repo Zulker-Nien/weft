@@ -15,6 +15,7 @@ import { Suspense } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isDeployed } from "@/lib/home";
 import { requireTeam } from "@/lib/teams";
+import { isOpenCommand, type CloudCommandRow } from "@/lib/cloud-commands";
 import { BLOB_BUCKET, BLOB_REF_PREFIX, THREAD_PAGE_SIZE, type CloudCardRow, type CloudThreadItemRow } from "@/lib/cloud-sync-types";
 import {
   batchBlobRefs,
@@ -79,6 +80,18 @@ async function BoardPageBody({ orgSlug, searchParams }: { orgSlug: string; searc
   }
   const cardRows: CloudCardRow[] = cards ?? [];
 
+  // The visitor's own commands that haven't become cards (or failed), for the strip under the header.
+  const { data: commandRows } = await supabase
+    .from("cloud_commands")
+    .select("*")
+    .eq("org_id", ctx.org.id)
+    .eq("created_by", ctx.user.id)
+    .in("status", ["pending", "claimed", "failed"])
+    .order("created_at", { ascending: true })
+    .limit(20)
+    .overrideTypes<CloudCommandRow[]>();
+  const commands = (commandRows ?? []).filter((c) => isOpenCommand(c) || c.status === "failed");
+
   // When the page is opened with a ?card=…, fetch its first page of thread items too. The
   // client can reload it after mount for live updates; this is the seed for SSR.
   let threadRows: CloudThreadItemRow[] = [];
@@ -104,6 +117,8 @@ async function BoardPageBody({ orgSlug, searchParams }: { orgSlug: string; searc
     <WebBoard
       orgId={ctx.org.id}
       orgSlug={orgSlug}
+      userId={ctx.user.id}
+      initialCommands={commands}
       initialCards={cardRows}
       openCardId={cardId}
       initialThread={threadRows}

@@ -1,22 +1,11 @@
 import os from "node:os";
 import { connection } from "next/server";
-import { firstMessage } from "@/lib/automations";
 import { prewarm } from "@/lib/copilot";
-import { resolveFolder } from "@/lib/folders";
-import { asText, shortTitle, titleFromPrompt } from "@/lib/format";
 import { fail, guard } from "@/lib/guard";
 import { projectRoot } from "@/lib/repos";
-import { sendMessage } from "@/lib/runner";
-import { defaultPermissionMode, listProjects, touchProject } from "@/lib/settings";
-import { createCard, getCard, listCards } from "@/lib/store";
-import { rememberTags } from "@/lib/tag-store";
-import { normalizeTags } from "@/lib/tags";
-import { MODES, type Backend, type Effort, type PermissionMode } from "@/lib/types";
-import { effortFor } from "@/lib/new-thread";
-
-const BACKENDS: Backend[] = ["claude", "puku", "codex"];
-
-const MODEL_ID = /^[\w.\-\[\]]{1,60}$/;
+import { createCardFromBody, startCard } from "@/lib/new-card";
+import { listProjects } from "@/lib/settings";
+import { getCard, listCards } from "@/lib/store";
 
 export async function GET(req: Request) {
   const denied = guard(req, { write: false });
@@ -39,39 +28,8 @@ export async function POST(req: Request) {
   if (denied) return denied;
   try {
     const body = (await req.json()) as Record<string, unknown>;
-    const prompt = asText(body.prompt).trim();
-    if (!prompt) throw new Error("Write a prompt for this thread.");
-    const typedTitle = shortTitle(asText(body.title));
-    const title = typedTitle || titleFromPrompt(prompt);
-
-    const cwd = resolveFolder(body.cwd);
-
-    const backend = BACKENDS.includes(body.backend as Backend) ? (body.backend as Backend) : "claude";
-    const permissionMode = MODES.includes(body.permissionMode as PermissionMode)
-      ? (body.permissionMode as PermissionMode)
-      : defaultPermissionMode();
-
-    const model = typeof body.model === "string" && MODEL_ID.test(body.model) ? body.model : undefined;
-
-    const effort = effortFor(backend, body.effort as Effort | "");
-
-    // Tags given here are yours, so retitle won't pick others (lib/retitle.ts); new ones join the catalog.
-    const tags = Array.isArray(body.tags) ? normalizeTags(body.tags.map((t) => asText(t))) : [];
-    rememberTags(tags);
-
-    const card = createCard({
-      title,
-      ...(typedTitle ? { titleBy: "user" as const } : {}),
-      prompt,
-      cwd,
-      backend,
-      permissionMode,
-      model,
-      effort,
-      ...(tags.length ? { tags, tagsBy: "user" as const } : {}),
-    });
-    touchProject(cwd);
-    if (body.start) sendMessage(card.id, firstMessage(card));
+    const card = createCardFromBody(body);
+    if (body.start) startCard(card);
     return Response.json({ card: getCard(card.id) });
   } catch (err) {
     return fail(err);
