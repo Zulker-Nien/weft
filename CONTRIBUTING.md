@@ -3,6 +3,29 @@
 Thanks for helping. Weft is a desktop kanban board where each card is a Claude Code or puku-cli
 thread. Read [SOUL.md](SOUL.md) first: it says what Weft values and where things live.
 
+## What the license means for you
+
+Weft is [FSL-1.1-ALv2](LICENSE). In short:
+
+- **Your contribution stays yours.** You keep the copyright; there's no CLA to sign.
+- **You can use Weft for anything but a competing product.** Fork it, run it at work, build on it,
+  do client work with it.
+- **Your code becomes Apache-2.0 two years after the release it ships in,** like the rest of Weft.
+  Nobody can lock it up for good, us included.
+- **The one rule is aimed at big companies, not you:** nobody gets to take Weft and sell it as their
+  own board.
+
+## Where to start
+
+- Issues labeled [`good first issue`](https://github.com/aimhuge/weft/labels/good%20first%20issue)
+  or [`help wanted`](https://github.com/aimhuge/weft/labels/help%20wanted).
+- The **Known gaps** in [README.md](README.md#known-gaps) and [SOUL.md](SOUL.md).
+- Tests for `components/` and `electron/`, which are mostly untested.
+- Use Weft on Weft: open this folder as a project and let a card do the work. It's how most of Weft
+  gets built.
+
+Your name goes on the CHANGELOG line for anything you ship.
+
 ## Setup
 
 ```bash
@@ -45,4 +68,6 @@ especially to `lib/`. The runner, store and UI are still untested, so tests ther
 
 Open an issue using the templates. For security problems, see [SECURITY.md](SECURITY.md) instead.
 
-By contributing you agree your work is released under the [Apache License 2.0](LICENSE).
+By contributing you agree your work is released under Weft's license, [FSL-1.1-ALv2](LICENSE),
+which turns into Apache-2.0 two years after each release. Sign off your commits (`git commit -s`)
+to say you wrote the change or have the right to submit it ([DCO](https://developercertificate.org/)).

@@ -4,7 +4,7 @@
   "version": "0.3.0",
   "description": "A board for your AI",
   "author": "Alex Miller <fotoflo@gmail.com>",
-  "license": "Apache-2.0",
+  "license": "FSL-1.1-ALv2",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/aimhuge/weft.git"

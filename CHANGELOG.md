@@ -10,6 +10,8 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Added
 
+- **License: FSL-1.1-ALv2.** Weft moves from Apache-2.0 to the Functional Source License: fork, change, self-host and use it at work, but don't ship it as a competing product or service. Each release becomes Apache-2.0 two years after it ships; v0.3.0 and earlier stay Apache-2.0. New `TRADEMARKS.md`: forks you share need their own name and icon.
+
 - **Dropped-import guard.** An edit that removes an import the file still uses (the board's "columnMinWidth is not defined") is reported to the thread right away (`lib/dropped-imports.ts`). The `.claude/settings.json` guards now also run for a `puku-cli -p` or `claude -p` a thread starts, which used to skip them (`lib/weft-thread.ts`).
 
 - Settings → Models → **Review all** picks the Claude model the Review column's "Review all" card runs on (default: the CLI's own).

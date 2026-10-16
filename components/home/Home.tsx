@@ -60,7 +60,7 @@ export default async function Home() {
           <a href={COFFEE} title="Buy me a coffee">
             ☕
           </a>{" "}
-          by <a href={AIMHUGE}>aimhuge.com</a> · Free and open source on <a href={REPO}>GitHub</a>
+          by <a href={AIMHUGE}>aimhuge.com</a> · Weft™ is free, with its source on <a href={REPO}>GitHub</a>
         </footer>
       </div>
     </>

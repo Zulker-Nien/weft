@@ -1,4 +1,4 @@
-# Weft
+# Weft™
 
 A board for your AI. Weft is a Trello-style board where each card is an AI CLI
 thread (Claude Code, puku-cli or Codex), with a browser pane on the side that you and the agents can both
@@ -718,8 +718,17 @@ a Weft account without the desktop app first. It has its own cookie session (`/a
 
 ## Contributing and license
 
-Issues and PRs are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
-Weft is released under the [Apache License 2.0](LICENSE).
+Contributions are welcome, and the license is built so they stay open: you keep your copyright,
+there's no CLA, and your code becomes Apache-2.0 two years after it ships. Start with
+[CONTRIBUTING.md](CONTRIBUTING.md); security reports go to [SECURITY.md](SECURITY.md).
+Weft is source-available under the [Functional Source License 1.1, ALv2 Future License](LICENSE)
+(FSL-1.1-ALv2). You can fork it, change it, self-host it, use it at work and build client work on it.
+You can't offer it, or something built mainly on it, as a product or service that competes with Weft.
+Each release becomes Apache-2.0 two years after it ships. Versions up to and including v0.3.0 were
+released under Apache-2.0 and stay that way.
+
+Weft™ and the Weft logo aren't covered by the license: a fork you share needs its own name and icon
+(see [TRADEMARKS.md](TRADEMARKS.md)).
 
 ## Known gaps
 
