@@ -6,7 +6,10 @@ import type { Card } from "./types";
 
 // What the rail's drawer can show: every tag (components/TagsDrawer.tsx), the secrets vault
 // (components/VaultDrawer.tsx), the webhooks (components/WebhooksDrawer.tsx), Vercel, Supabase, Cloudflare, BlastCP or GitHub. ★ has no drawer: it filters the board.
-export type RailPanel = "tags" | "vault" | "webhooks" | "vercel" | "supabase" | "cloudflare" | "blastcp" | "github";
+// "admin" is the SuperAdmin group (Users + Settings) — visible only when the signed-in Weft
+// account is on SUPER_ADMIN_EMAILS (lib/admin.ts). It doesn't open a drawer; it renders a
+// popover with the two admin links, since the pages live at /admin/users and /admin/settings.
+export type RailPanel = "tags" | "vault" | "webhooks" | "vercel" | "supabase" | "cloudflare" | "blastcp" | "github" | "admin";
 
 // The board narrowed to starred cards, a tag, or both. Empty shows everything.
 export interface RailFilter {

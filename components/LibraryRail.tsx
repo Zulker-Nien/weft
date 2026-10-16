@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { railPinned, setRailPinned, starredCount, toggleTag, type RailFilter, type RailPanel } from "@/lib/rail-view";
 import type { Card } from "@/lib/types";
+import { useSuperAdminGate } from "@/lib/use-admin-gate";
 import { useVault } from "@/lib/use-vault";
 import { filterVaults, railBadge } from "@/lib/vault-view";
 import { useWebhooks } from "@/lib/use-webhooks";
@@ -89,6 +91,8 @@ export default function SideRail({
   const [pinned, setPinned] = useState(() => typeof window !== "undefined" && railPinned());
   // A card is being dragged somewhere on the board: ★ and 🏷 light up to show they take drops.
   const [cardDrag, setCardDrag] = useState(false);
+  const router = useRouter();
+  const isSuperAdmin = useSuperAdminGate();
   const vault = useVault(folders);
   const vaultBadge = railBadge(filterVaults(vault.overview?.vaults ?? [], project));
   const webhooks = useWebhooks(folders, open === "webhooks");
@@ -189,6 +193,20 @@ export default function SideRail({
         <RailIconButton icon={<CloudflareLogo />} label="Cloudflare" open={open === "cloudflare"} title={cloudflareTitle(cloudflare.status, project)} onClick={toggle("cloudflare")} />
         <RailIconButton icon={<BlastcpLogo />} label="BlastCP" open={open === "blastcp"} title={blastcpTitle(blastcp.status, project)} onClick={toggle("blastcp")} />
         <RailIconButton icon={<GithubLogo />} label="GitHub" open={open === "github"} title={githubTitle(github.status, project)} onClick={toggle("github")} />
+        {isSuperAdmin ? (
+          <>
+            <span className="my-1 h-px w-5 bg-line" aria-hidden />
+            <RailIconButton
+              icon="🛡"
+              label="Admin"
+              open={false}
+              title="Weft admin: Weft users, local install"
+              onClick={() => {
+                router.push("/admin/users");
+              }}
+            />
+          </>
+        ) : null}
       </nav>
       {cardDrag && !open && (
         <span className="pointer-events-none absolute left-full top-2 z-30 ml-1.5 whitespace-nowrap rounded-md bg-ink px-2 py-1 text-[11.5px] text-canvas shadow-lg">

@@ -431,3 +431,26 @@ button:disabled {
 html[data-build-error] nextjs-portal {
   display: none;
 }
+
+/* /admin/* (app/(admin)/admin/…) renders on top of Weft's design tokens but uses the package's
+   --admin-* names so the AdminTablePage styles land cleanly. The defaults follow the board's
+   light theme; the dark theme overrides are below. */
+:root {
+  --admin-bg: var(--canvas);
+  --admin-surface: var(--panel);
+  --admin-border: var(--line-strong);
+  --admin-text: var(--ink);
+  --admin-muted: var(--muted);
+  --admin-accent: var(--accent);
+  --admin-error: var(--danger);
+}
+
+:root[data-theme="dark"] {
+  --admin-bg: var(--canvas);
+  --admin-surface: var(--panel);
+  --admin-border: var(--line-strong);
+  --admin-text: var(--ink);
+  --admin-muted: var(--muted);
+  --admin-accent: var(--accent);
+  --admin-error: var(--danger);
+}
