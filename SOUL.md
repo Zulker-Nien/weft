@@ -244,6 +244,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - `desktop-shell.md` — `electron/` itself: main, preload, tray, dock, `weft://` links, the start screen, the terminal drawer.
   - `threads-and-sessions.md` — the runner: one Agent SDK `query()` per Claude Code/puku thread, the Codex runner, sessions, queues, rewind, warm spares.
   - `thread-guards.md` — what `guardedCli()` strips and hooks: secret/restart/git/check/route-import/claim guards, per-CLI limits.
+  - `questions.md` — a thread's AskUserQuestion end to end: the panel above the reply box, keys, previews in the pane, answers and `annotations` back to the CLI.
   - `subagents.md` — how threads delegate to subagents and how Settings → Models picks their model.
   - `account.md` — the optional Weft account (Supabase Auth, PKCE, `weft://account-callback`, `~/.weft/account.json` in the Keychain).
   - `teams.md` — workspaces, members, roles, email invites on weft.zip; the `requireOrg` gate and why it's not `@aimhuge/teams`'s.
