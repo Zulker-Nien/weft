@@ -136,27 +136,33 @@ export default function CopilotLane(props: {
       style={{ width: LANE_WIDTH.open }}
       className="relative flex shrink-0 flex-col overflow-hidden border-l border-line-strong bg-canvas"
     >
-      {/* The cockpit fills the top and fades into the canvas, so the conversation below stays readable. */}
+      {/* The cockpit sits in a small modal window at the top, behind a header bar on a dark surface,
+          so the copilot photo reads like a framed card rather than a background the chat sits on. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[78%]"
-        style={{ background: `url(${COCKPIT.src}) 75% 30% / cover` }}
+        className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[44%]"
+        style={{ background: "linear-gradient(180deg, rgb(0 0 0 / 0.92) 0, rgb(0 0 0 / 0.85) 100%)" }}
       />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            "linear-gradient(180deg, rgb(10 8 8 / 0.55) 0, rgb(10 8 8 / 0) 12%, rgb(10 8 8 / 0) 24%, var(--canvas) 54%, var(--canvas) 100%)",
-        }}
-      />
-      {header}
-      {/* A window onto the cockpit above the conversation. */}
-      <div className="h-[26%] shrink-0" />
-      {error && <p className="relative mx-3 rounded-md bg-danger-soft px-3 py-2 text-[12px] text-danger">{error}</p>}
+      <div className="pointer-events-none absolute inset-x-3 top-[3.25rem] z-0 h-[26%] overflow-hidden rounded-xl ring-1 ring-white/10 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.7)]">
+        <div
+          aria-hidden="true"
+          className="absolute inset-0"
+          style={{ background: `url(${COCKPIT.src}) 75% 30% / cover` }}
+        />
+        <div
+          aria-hidden="true"
+          className="absolute inset-0"
+          style={{ background: "linear-gradient(180deg, rgb(0 0 0 / 0.15) 0, rgb(0 0 0 / 0.45) 100%)" }}
+        />
+      </div>
+      <div className="relative z-10">{header}</div>
+      {/* Spacer for the framed cockpit panel above. */}
+      <div className="h-[26%] shrink-0" aria-hidden="true" />
+      {error && <p className="relative z-10 mx-3 rounded-md bg-danger-soft px-3 py-2 text-[12px] text-danger">{error}</p>}
       {card ? (
-        // Older messages fade out as they scroll up into the cockpit, rather than run over the copilot.
-        <div className="relative flex min-h-0 flex-1 flex-col [mask-image:linear-gradient(to_bottom,transparent,black_14%)]">
+        // Conversation lives on the light canvas below the modal — every line stays fully visible, no
+        // fade-out as messages scroll up.
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col bg-canvas">
           <CrashGuard what="conversation" className="m-3">
             <ThreadView
               card={card}
