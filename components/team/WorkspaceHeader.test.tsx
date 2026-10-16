@@ -85,10 +85,13 @@ describe("WorkspaceHeader", () => {
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
-  it("renders the nav with Team and Billing links and marks the current one", () => {
+  it("renders the nav with Board, Team and Billing links and marks the current one", () => {
     render(<WorkspaceHeader ctx={makeCtx()} current="team" />);
+    const board = screen.getByRole("link", { name: "Board" });
     const team = screen.getByRole("link", { name: "Team" });
     const billing = screen.getByRole("link", { name: "Billing" });
+    expect(board).toHaveAttribute("href", "/ada/board");
+    expect(board).not.toHaveAttribute("aria-current");
     expect(team).toHaveAttribute("href", "/ada/team");
     expect(team).toHaveAttribute("aria-current", "page");
     expect(billing).toHaveAttribute("href", "/ada/billing");
@@ -99,6 +102,12 @@ describe("WorkspaceHeader", () => {
     render(<WorkspaceHeader ctx={makeCtx()} current="billing" />);
     const billing = screen.getByRole("link", { name: "Billing" });
     expect(billing).toHaveAttribute("aria-current", "page");
+  });
+
+  it("marks Board as current when the current prop is board", () => {
+    render(<WorkspaceHeader ctx={makeCtx()} current="board" />);
+    const board = screen.getByRole("link", { name: "Board" });
+    expect(board).toHaveAttribute("aria-current", "page");
   });
 
   it("shows the signed-in user name and email tooltip", () => {

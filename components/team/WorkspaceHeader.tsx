@@ -96,12 +96,19 @@ function WorkspaceSwitcher({ ctx }: { ctx: HeaderContext }) {
   );
 }
 
-function WorkspaceNav({ orgSlug, current }: { orgSlug: string; current: "team" | "billing" | "other" }) {
+function WorkspaceNav({ orgSlug, current }: { orgSlug: string; current: "team" | "billing" | "board" | "other" }) {
   // aria-current is on whichever page is rendering; the layout doesn't know
   // the segment, so the page passes it. The page is rendered at /[orgSlug]/*
   // — the nav stays the same for any future page that wants in.
   return (
     <nav className="wz-workspaceNav" aria-label="Workspace sections">
+      <a
+        className="wz-workspaceNavLink"
+        href={`/${orgSlug}/board`}
+        aria-current={current === "board" ? "page" : undefined}
+      >
+        Board
+      </a>
       <a
         className="wz-workspaceNavLink"
         href={`/${orgSlug}/team`}
@@ -132,7 +139,7 @@ function WorkspaceUser({ user }: { user: TeamContext["user"] }) {
   );
 }
 
-export function WorkspaceHeader({ ctx, current = "other" }: { ctx: HeaderContext; current?: "team" | "billing" | "other" }) {
+export function WorkspaceHeader({ ctx, current = "other" }: { ctx: HeaderContext; current?: "team" | "billing" | "board" | "other" }) {
   return (
     <header className="wz-workspaceHeader">
       <WorkspaceSwitcher ctx={ctx} />

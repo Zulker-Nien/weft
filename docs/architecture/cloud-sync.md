@@ -1,24 +1,33 @@
 # Cloud sync
 
-Status: schema-only, 2026-10-15. The tables, the storage bucket and the policies in
-`supabase/migrations/20261015140000_card_sync.sql` go live with the next migration push; the outbox in
-`lib/cloud-sync.ts` and the blob store in `lib/blob-store.ts` are not yet wired up.
+Status: first shot, 2026-10-15. The outbox runs from `prewarm()` but does nothing until a folder is in settings
+`syncFolders` (no switch for it yet), and `supabase/migrations/20261015140000_card_sync.sql` isn't applied. Item
+bodies go up as plain JSON, so this isn't offered to anyone until they're sealed (see Gaps).
 
-A Weft card is a thread, and a thread is a long file. Most of the time that file is enough — the Mac the
-card is open on has it. But a teammate in the same workspace, on another Mac, can also open that card,
-see the thread as it stood when the last sync happened, and queue replies the owner will see. Sync is
-opt-in per folder (Settings → Threads → **Sync folders**, off by default) and lives in the org the card's
-folder belongs to. `lib/cloud-sync-types.ts` is the type contract; this document is the rest.
+The goal: a card's thread reads the same on another device as on the Mac that runs it. `lib/cloud-sync-types.ts`
+is the contract between the parts:
+
+- `lib/cloud-sync.ts`: the outbox. A bus listener (no network, no awaits) turns `card`, `card_deleted` and `thread`
+  events for opted-in folders into lines in `~/.weft/sync-outbox.jsonl` (`lib/cloud-outbox.ts`). A turn's `result`
+  item flushes at once; everything else waits for a 10 s tick, so a streaming turn is one batch. A flush compacts the
+  file, then uploads from the store's current state (not the event), one upsert per table, and drops the lines it
+  read by position, so an update that lands mid-upload stays queued. Signed out or no workspace: entries wait. An
+  error: backoff from 1 s doubling to 5 min, one warning per streak. Cards go to the user's personal workspace (the
+  first org they own).
+- `lib/blob-store.ts`: images, attachments and `~/.weft/show` pages referenced by an item are hashed (sha256),
+  uploaded once to `weft-blobs/<org>/<sha>` and swapped for `blob:sha256:…` in the uploaded copy. Never anything
+  outside home, in the vault, a token file or a `.env*`.
+- `lib/thread-page.ts` + `app/api/cards/[id]/thread`: the reader side's shape, already used locally. `?before=&limit=`
+  pages from the newest item back; a tool result over 2 KB (`TOOL_RESULT_INLINE_MAX`) is left out with
+  `resultBytes`, and `/thread/tool/[toolId]` (or `cloud_tool_outputs` remotely) serves it when the row opens
+  (`lib/use-tool-result.ts`). Tool output is ~70% of a thread's bytes.
+- `lib/device-id.ts`: a random id for this Mac in `~/.weft/device-id`.
 
 ## Ownership
 
-The Mac running a card **owns** it. owner_user on the card row is the account that has it open;
-owner_device is the Mac itself (`lib/device-id.ts`). Every other Mac in the org can read that card; only
-the owner's Mac can write to it. A teammate queueing a reply does it on their own card (the reply is
-uploaded to the owner's `cloud_thread_items` as the owner, because the outbox on the owner's Mac writes
-it; a Mac that hasn't opened the card yet has no row to write into). When the owner closes the card the
-row stays — `deleted` flips, the items stay readable until the next sync sweep, and the row is what
-someone opening the card again would land on.
+The Mac running a card owns it: `owner_user` is the account that runs it and the only one that may write its rows,
+`owner_device` is which of that account's Macs. Everyone else in the workspace can read. A deleted card keeps its row
+with `deleted` set.
 
 ## Schema
 
@@ -89,3 +98,7 @@ opened.
   queued to the owner) is the next sprint.
 - Two Macs on one account can both write the same card: the policies check the account, not `owner_device`.
 - Blobs are never pruned.
+- No switch for `syncFolders` in the UI yet; it's only in `~/.weft/settings.json`.
+- `Board.tsx` still fetches a card's whole thread and hands it to ThreadView as a seed, so paging doesn't yet save the
+  first load; ThreadView then opens its own event stream (`useBoardEvents`) to keep its window live.
+- An HTML page uploaded as a blob still points at its images by their local relative paths.
