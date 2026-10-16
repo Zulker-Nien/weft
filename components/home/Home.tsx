@@ -3,14 +3,15 @@ import { Fraunces, Instrument_Sans } from "next/font/google";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
 import emblem from "@/electron/assets/emblem.png";
 import twinSuns from "@/electron/assets/splash-speeder.jpg";
-import { AIMHUGE, COFFEE, REPO, downloadLink } from "@/lib/home";
+import { AIMHUGE, COFFEE, REPO, TAGLINE, downloadLink } from "@/lib/home";
 import { latestRelease } from "@/lib/home-release";
 import board from "@/public/brand/board.png";
+import Pillars from "./Pillars";
 import "./home.css";
 
-// The weft.zip home page (lib/home.ts has what it says and links to). One screen, on purpose: the name, one
-// sentence, the download, and a real screenshot of the board (public/brand/board.png) over the start screen's
-// twin suns. A server component with no client JS. Fraunces for display, Instrument Sans for text.
+// The weft.zip home page (lib/home.ts has what it says and links to). The name, one
+// sentence, the download, a real screenshot of the board (public/brand/board.png) over the start screen's
+// twin suns, then the five pillars. A server component with no client JS. Fraunces for display, Instrument Sans for text.
 const fraunces = Fraunces({ subsets: ["latin"], axes: ["SOFT", "WONK", "opsz"], variable: "--font-fraunces", display: "swap" });
 const instrument = Instrument_Sans({ subsets: ["latin"], variable: "--font-instrument", display: "swap" });
 
@@ -34,8 +35,9 @@ export default async function Home() {
           <Image src={twinSuns} alt="" fill priority sizes="100vw" className="wz-photo" />
           <div className="wz-scrim" />
           <div className="wz-wrap wz-heroInner">
+            <p className="wz-eyebrow wz-rise">Agentic engineering, on your Mac</p>
             <h1 className="wz-h1 wz-rise">
-              A board for <em>your AI.</em>
+              {TAGLINE},<br /> <em>one thread at a time.</em>
             </h1>
             <p className="wz-lede wz-rise wz-d1">
               A Mac kanban board where every card is a Claude Code thread. You bring the idea; Weft plans it, builds it and shows it to you.
@@ -54,6 +56,8 @@ export default async function Home() {
             <Image src={board} alt="The Weft board: Backlog, Running, Needs you, Review and Done, each card a thread" priority sizes="(max-width: 1216px) 100vw, 1104px" />
           </div>
         </div>
+
+        <Pillars />
 
         <footer className="wz-wrap wz-footer">
           Made with{" "}

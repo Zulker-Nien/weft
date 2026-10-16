@@ -26,6 +26,7 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 - The web board: `weft.zip/<workspace>/board` shows the synced cards in their columns, live, and opens a card's thread (read-only). It draws the desktop's own `CardView` (read-only), column headers, project chips, filter box, sort and archived toggle, and a card's thread through `ThreadEntries` and `Markdown` (oldest first, tool runs folded to "Ran 3 commands", tables and code blocks, pictures through signed links, a trimmed tool output loading from `cloud_tool_outputs` when its row opens), so the two boards stay in step.
 - Threads load their newest 50 items first and older ones as you scroll up; a tool's output over 2 KB loads when you open its row.
 - Settings → Models has a Copilot row: pick which Claude model the copilot thread runs on. The copilot is locked to Claude Code, so only Claude models appear; the default follows the model you last picked for new threads. The pick is read once when the copilot card is first made, so it takes effect on the next "New chat" in the copilot lane.
+- A new tagline, "Engineering the future, one thread at a time": on weft.zip's hero (under an "Agentic engineering, on your Mac" eyebrow), its title and social card, the start screen, About and the README. Under the screenshot, five pillars: code review, the copilot, social, connectors and the vault.
 
 ### Fixed
 

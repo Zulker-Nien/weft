@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   DESCRIPTION,
+  PILLARS,
   REPO,
   SITE,
   _resetLoadHomeCacheForTests,
@@ -27,7 +28,7 @@ describe("isDeployed", () => {
 describe("homeMetadata", () => {
   it("names the site, the description and the version", () => {
     const meta = homeMetadata("0.3.0");
-    expect(meta.title).toBe("Weft: A board for your AI");
+    expect(meta.title).toBe("Weft: Engineering the future");
     expect(meta.description).toBe(DESCRIPTION);
     expect(String(meta.metadataBase)).toBe(`${SITE}/`);
     expect(meta.alternates).toEqual({ canonical: "/" });
@@ -130,5 +131,12 @@ describe("loadHome", () => {
       expect(result.error.message).toMatch(/no default export/);
       expect(result.error.file).toBeNull();
     }
+  });
+});
+
+describe("PILLARS", () => {
+  it("lists the five things Weft stands on, each with a kicker, title and body", () => {
+    expect(PILLARS.map((p) => p.kicker)).toEqual(["Code review", "Copilot", "Social", "Connectors", "Vault"]);
+    for (const p of PILLARS) expect(p.title && p.body).toBeTruthy();
   });
 });

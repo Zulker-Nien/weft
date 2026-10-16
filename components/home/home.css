@@ -103,6 +103,16 @@
   padding-bottom: 200px;
 }
 
+/* The category line over the h1: carries "agentic engineering" so the headline can stay short. */
+.wz-eyebrow {
+  margin: 0 0 18px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--clay-2);
+}
+
 .wz-h1 {
   margin: 0;
   font-family: var(--display);
@@ -184,6 +194,72 @@
   height: auto;
 }
 
+/* The five pillars (PILLARS in lib/home.ts): review and copilot wide on top, social, connectors and vault below. */
+.wz-pillars {
+  padding-top: 112px;
+}
+
+.wz-h2 {
+  margin: 0 0 40px;
+  max-width: 14em;
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: clamp(34px, 4.2vw, 56px);
+  line-height: 1;
+  letter-spacing: -0.024em;
+  font-variation-settings: "SOFT" 50, "WONK" 1, "opsz" 144;
+}
+
+.wz-h2 em {
+  font-style: italic;
+  color: var(--clay-2);
+  font-variation-settings: "SOFT" 100, "WONK" 1, "opsz" 144;
+}
+
+.wz-pillarGrid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 16px;
+}
+
+.wz-pillar {
+  grid-column: span 2;
+  padding: 26px 26px 28px;
+  border-radius: 14px;
+  border: 1px solid rgb(236 229 216 / 0.1);
+  background: linear-gradient(180deg, rgb(236 229 216 / 0.045), rgb(236 229 216 / 0.01));
+}
+
+.wz-pillar:nth-child(-n + 2) {
+  grid-column: span 3;
+}
+
+.wz-pillarKicker {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--clay-2);
+}
+
+.wz-pillarTitle {
+  margin: 12px 0 0;
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 26px;
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+  font-variation-settings: "SOFT" 50, "WONK" 1, "opsz" 72;
+}
+
+.wz-pillarBody {
+  margin: 10px 0 0;
+  font-size: 15.5px;
+  color: var(--thread-2);
+  text-wrap: pretty;
+}
+
 .wz-footer {
   padding-top: 40px;
   padding-bottom: 48px;
@@ -225,6 +301,29 @@
 
   .wz-shotWrap {
     margin-top: -90px;
+  }
+
+  .wz-pillarGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .wz-pillar,
+  .wz-pillar:nth-child(-n + 2) {
+    grid-column: span 1;
+  }
+
+  .wz-pillar:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 600px) {
+  .wz-pillars {
+    padding-top: 72px;
+  }
+
+  .wz-pillarGrid {
+    grid-template-columns: 1fr;
   }
 }
 

@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Weft",
-  description: "A board for your AI",
+  description: "Engineering the future, one thread at a time",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

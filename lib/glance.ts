@@ -115,7 +115,7 @@ function askHtml(ask: string) {
 
 // Beside the New thread dialog while you write the prompt.
 export function newThreadPage(scene = "splash-speeder.jpg") {
-  return splashPage({ title: "New thread", note: "A board for your AI", status: "Waiting for your prompt…", scene });
+  return splashPage({ title: "New thread", note: "Engineering the future, one thread at a time", status: "Waiting for your prompt…", scene });
 }
 
 function splashPage({ title, note, ask, status, scene = "splash-speeder.jpg" }: { title: string; note: string; ask?: string; status: string; scene?: string }) {

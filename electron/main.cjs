@@ -37,7 +37,7 @@ const { argvLink } = require("./argv-link.cjs");
 const { createMenuPopup } = require("./main-menu-popup.cjs");
 
 const APP_NAME = "Weft";
-const TAGLINE = "A board for your AI";
+const TAGLINE = "Engineering the future, one thread at a time";
 const ASSETS = path.join(__dirname, "assets");
 const PRELOAD = path.join(__dirname, "preload.cjs");
 const TOKEN = crypto.randomBytes(24).toString("hex");

@@ -12,10 +12,46 @@ export const FEED = `${RELEASES}/latest/download/update.json`;
 // The footer's credits, as on the board's footer (components/BoardFooter.tsx).
 export const COFFEE = "https://buymeacoffee.com/alexmiller";
 export const AIMHUGE = "https://aimhuge.com";
-export const TAGLINE = "A board for your AI";
+export const TAGLINE = "Engineering the future";
 export const DESCRIPTION =
   "Weft is a Mac kanban board where every card is a Claude Code thread, with a browser pane beside it. " +
   "You bring the idea; it runs the threads that plan it, build it, show it and walk you through the review.";
+
+// The five things Weft stands on, drawn as the section under the screenshot. Claims stay to what's built:
+// leagues and a public builder card are still on the roadmap.
+export interface Pillar {
+  kicker: string;
+  title: string;
+  body: string;
+}
+
+export const PILLARS: Pillar[] = [
+  {
+    kicker: "Code review",
+    title: "Review is built in",
+    body: "Every finished card hands you a tour of what it built, step by step in the browser pane, and you reply on each step. A quality score and a refactor scout keep the codebase honest.",
+  },
+  {
+    kicker: "Copilot",
+    title: "A copilot that runs the board",
+    body: "Plan the backlog into sprints of cards that won't collide, start the next one, and turn every quality finding into a card that fixes it.",
+  },
+  {
+    kicker: "Social",
+    title: "Build in good company",
+    body: "Streaks, XP and a builder card from your GitHub. Share a workspace with your team and follow the board from any browser.",
+  },
+  {
+    kicker: "Connectors",
+    title: "Your stack, on the rail",
+    body: "GitHub, Vercel, Supabase and Cloudflare a click away: issues become cards, migrations and deploys land without leaving the board.",
+  },
+  {
+    kicker: "Vault",
+    title: "Keys your agents never see",
+    body: "Secrets stay encrypted on your Mac behind Touch ID. Agents fill fields and run commands with them, and only ever see the name.",
+  },
+];
 
 // Vercel sets VERCEL=1 on every deployment; WEFT_HOME=1 shows the home page at / on a local server too.
 export function isDeployed(env: Record<string, string | undefined> = process.env): boolean {
