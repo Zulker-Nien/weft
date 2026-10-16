@@ -14,6 +14,7 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 - **Dropped-import guard.** An edit that removes an import the file still uses (the board's "columnMinWidth is not defined") is reported to the thread right away (`lib/dropped-imports.ts`). The `.claude/settings.json` guards now also run for a `puku-cli -p` or `claude -p` a thread starts, which used to skip them (`lib/weft-thread.ts`).
 
+- **New thread on the weft.zip board.** Pick one of your synced folders, write a prompt and your Mac makes the card and runs it, then the board opens it. The request is a `cloud_commands` row the Mac claims over Realtime (and a 30 s check); it only obeys your own account's requests for a folder switched on in Settings → Sync, and uses its own permission setting. `POST /api/cards` and the inbox now share `lib/new-card.ts`.
 - Settings → Models → **Review all** picks the Claude model the Review column's "Review all" card runs on (default: the CLI's own).
 - Pasted and dropped PNG, JPEG and GIF chat attachments are converted to WebP on upload to reduce disk and prompt image size.
 - Codex and Puku threads match Claude Code outside Weft's own folder. Codex gets Weft's browser, board, secrets, webhook and board-view tools (a per-turn token and `/api/mcp/[server]`, shown in the thread as `mcp__server__tool`), the project's `CLAUDE.md` (Codex loads `AGENTS.md` only, and DeckCP keeps its instructions in `CLAUDE.md`), and both Codex and Puku get the folder's and your `.claude/skills` as an index plus `/name` expanded to the skill. Puku's project instructions also stop cutting at 60,000 characters (now 100,000), so DeckCP's 66 KB `CLAUDE.md` arrives whole.
@@ -27,13 +28,19 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Fixed
 
-- The board, home page and social preview use locally hosted fonts, so production builds no longer wait on Google Fonts requests; the home page's GitHub release-feed lookup now times out after three seconds.
+- The board, home page and social preview use locally hosted fonts, so production builds no longer wait on Google Fonts requests;
+  the home page's GitHub release-feed lookup now times out after three seconds.
 - A review step that points at a local page with an anchor or query (`tour.html#built`) now opens that section;
   the `#` used to be encoded into the filename and the pane showed nothing.
 - The Supabase drawer counted a migration applied through the MCP (which stamps its own version) as not applied; it
   now matches by name too and says how many sit under another version.
+- The Puku trial proxy on the deployed Weft used to forward both `x-api-key` and `Authorization: Bearer` upstream;
+  `api-cli.puku.sh` answers `multiple_credentials` when it gets both, so the proxy now forwards only `x-api-key`
+  (`lib/puku-proxy.ts`). Inbound still accepts either header from puku-cli.
 
 ### Changed
+
+- **Smaller files.** 21 of the 26 files over 300 lines were split into focused modules, behavior unchanged (`Board.tsx` 1,078 → 849, `Composer.tsx` 614 → 281, `lib/import.ts`, `lib/types.ts`, `lib/secret-guard.ts`, `lib/client.ts` now re-export from `lib/import-*`, `lib/types-*`, `lib/secret-guard-*`, `lib/client-*`); Settings pages are one file each (`components/Settings*Page.tsx`). The quality checker no longer counts paths in a `Status: design` doc as stale.
 
 - The copilot is a lane on the right of the board instead of a card: minimized it's a column with what finished, what needs you, its latest reply and an ask box; open (⌘J or the ✨ button) it's the chat over a cockpit picture, the copilot in a flight helmet in the seat beside you, while the five columns narrow to stay in view.
 - The copilot's lane has three states now (Intercom-style hider): the default is a 36px pill pinned to the right edge (avatar, needs-you dot, news count, vertical "Copilot" label) so it doesn't eat board width; ⌘J cycles it to a 236px peek (the digest column) and then to the 520px chat. The peek auto-closes 6s after the mouse leaves; the columns keep their 170px floor when hidden, 120px when peek or open.
@@ -78,6 +85,10 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
   place; unseen cards keep the accent border, tint and dot.
 - **Model on the card**: a card's footer names the model its thread runs on ("Opus 5.5") beside the CLI dot, in the
   CLI's colour; hover it for the full id and effort.
+- **Login page redesign**: `/login` on weft.zip is two panels: Weft's twin-suns speeder with "Pick up the thread."
+  over the sky on the left, and on the right the cockpit picture (the copilot's pilot) with the sign-in as a glass
+  card over the dash and a cream **Continue with GitHub** button. It stacks on a phone. Replaces the slide-editor
+  framing (crop handles, coordinates).
 - **Sign in on weft.zip**: the deployed site has a real `/login` page (`app/login/page.tsx`) with
   **Continue with GitHub** (no Google, no magic link on the new page). The board's top-bar sign-in,
   Settings → Weft account, and the Puku-trial upgrade prompt keep the same flow. A new
