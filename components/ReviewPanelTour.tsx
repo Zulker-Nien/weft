@@ -28,8 +28,10 @@ export function ReviewPanelTour({
   items: ThreadItem[];
   onSend: (text: string) => Promise<void>;
 }) {
-  // A tour that left out its url still has an app to show: the one the thread talked about.
-  const guess = written.url ? undefined : lastLocalUrl(items);
+  // A tour that left out its url still has an app to show: the one the thread talked about. Not when every
+  // step names its own page (an HTML file, a full URL): the thread prompt leaves url out when there's no app.
+  const needsApp = !written.url && written.steps.some((s) => !stepUrl(written, s));
+  const guess = needsApp ? lastLocalUrl(items) : undefined;
   const plan = useMemo(() => (guess ? { ...written, url: guess } : written), [written, guess]);
   const [index, setIndex] = useState(0);
   const [approved, setApproved] = useState<Set<number>>(new Set());

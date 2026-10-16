@@ -26,11 +26,21 @@ describe("lastLocalUrl", () => {
     expect(lastLocalUrl(items)).toBe("http://localhost:5173/");
   });
 
-  it("counts tool result text the same as assistant text", () => {
+  it("counts the pages the thread opened in the pane", () => {
     const items: ThreadItem[] = [
-      { kind: "tool", id: "t1", name: "Bash", summary: "curl", result: "served on http://localhost:8080", at: 1 },
+      { kind: "tool", id: "t1", name: "mcp__browser__open_url", summary: "http://localhost:8080/login", at: 1 },
     ];
     expect(lastLocalUrl(items)).toBe("http://localhost:8080/");
+  });
+
+  it("ignores addresses in other tools' output, like a grep over test fixtures", () => {
+    const grep = Array.from({ length: 12 }, (_, i) => `lib/x.test.ts:${i}: http://127.0.0.1:4567/secrets`).join("\n");
+    const items: ThreadItem[] = [
+      { kind: "tool", id: "t1", name: "Bash", summary: "grep -rn 127.0.0.1 lib", result: grep, at: 1 },
+      { kind: "tool", id: "t2", name: "Bash", summary: "curl http://127.0.0.1:4567", result: "", at: 2 },
+      { kind: "assistant", text: "The app is up at http://localhost:5173", at: 3 },
+    ];
+    expect(lastLocalUrl(items)).toBe("http://localhost:5173/");
   });
 
   it("ties go to the last seen (>=), not the first", () => {

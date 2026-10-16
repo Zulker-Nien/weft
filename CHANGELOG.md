@@ -17,7 +17,7 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 - **New thread on the weft.zip board.** Pick one of your synced folders, write a prompt and your Mac makes the card and runs it, then the board opens it. The request is a `cloud_commands` row the Mac claims over Realtime (and a 30 s check); it only obeys your own account's requests for a folder switched on in Settings → Sync, and uses its own permission setting. `POST /api/cards` and the inbox now share `lib/new-card.ts`.
 - Settings → Models → **Review all** picks the Claude model the Review column's "Review all" card runs on (default: the CLI's own).
-- Pasted and dropped PNG, JPEG and GIF chat attachments are converted to WebP on upload to reduce disk and prompt image size.
+- Pasted and dropped PNG, JPEG and GIF chat attachments are converted to WebP on upload to reduce disk and prompt image size. Tool screenshots and the pane thumbnail after each turn are saved as WebP too, and images Weft picks up from a session it reads (pasted into Claude Code, or shown with `![...](path)`) get a WebP beside them that later reads use.
 - Codex and Puku threads match Claude Code outside Weft's own folder. Codex gets Weft's browser, board, secrets, webhook and board-view tools (a per-turn token and `/api/mcp/[server]`, shown in the thread as `mcp__server__tool`), the project's `CLAUDE.md` (Codex loads `AGENTS.md` only, and DeckCP keeps its instructions in `CLAUDE.md`), and both Codex and Puku get the folder's and your `.claude/skills` as an index plus `/name` expanded to the skill. Puku's project instructions also stop cutting at 60,000 characters (now 100,000), so DeckCP's 66 KB `CLAUDE.md` arrives whole.
 - Super-admin pages on the left rail: a 🛡 **Admin** icon (visible only to addresses on `SUPER_ADMIN_EMAILS`) opens `/admin/users`, a paginated, searchable list of every weft.zip account, with a companion `/admin/settings` page that shows the local install's data dir, version, uptime, card and thread counts, activity log size and keep-alive setting. Built on `@aimhuge/admin`'s `AdminTablePage`, gated by `@aimhuge/teams`'s `isSuperAdmin` via `lib/admin.ts`; the check is server-side and the routes 404 for non-admins.
 - Server-side cards, off by default: Settings → Sync turns on a project, and its cards and threads upload to your workspace on
@@ -30,6 +30,7 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Fixed
 
+- A Review card no longer opens the browser pane on a dead port like `127.0.0.1:4567`. When a tour left out its `url`, Weft guessed the app from every local address in the thread, tool output included, so a grep over Weft's own tests (which use a fake `127.0.0.1:4567`) won. Now the guess counts only the thread's replies and the pages it opened, and it doesn't run when every step already names its own page (`lib/review-tour.ts`).
 - The board, home page and social preview use locally hosted fonts, so production builds no longer wait on Google Fonts requests;
   the home page's GitHub release-feed lookup now times out after three seconds.
 - A review step that points at a local page with an anchor or query (`tour.html#built`) now opens that section;
