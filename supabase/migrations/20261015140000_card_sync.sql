@@ -62,11 +62,7 @@ alter table public.cloud_tool_outputs enable row level security;
 -- exists; is_card_owner is new and runs as its owner (security definer) so a policy on cloud_thread_items
 -- or cloud_tool_outputs can ask "does the caller own this card?" without recursing through the items'
 -- own policies or hitting cloud_cards' policy at row-read time.
---
--- The card_id parameter is named c_id (not card) so it doesn't shadow the jsonb column named card on
--- public.cloud_cards; the prior version tripped on "operator does not exist: text = jsonb" in the
--- exists() body because the unqualified name resolved to the column, not the parameter.
-create or replace function private.is_card_owner(org uuid, c_id text)
+create or replace function private.is_card_owner(org uuid, card text)
 returns boolean
 language sql
 stable
@@ -75,7 +71,7 @@ set search_path = ''
 as $$
   select exists (
     select 1 from public.cloud_cards c
-    where c.org_id = org and c.card_id = c_id and c.owner_user = (select auth.uid())
+    where c.org_id = org and c.card_id = card and c.owner_user = (select auth.uid())
   );
 $$;
 
