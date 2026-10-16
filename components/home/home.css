@@ -681,3 +681,56 @@
     animation: none;
   }
 }
+
+/* The /terms page (app/terms/page.tsx): one readable column under a small brand bar. */
+.wz-legalBar {
+  display: flex;
+  align-items: center;
+  height: 72px;
+}
+
+.wz-legal {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 28px 96px;
+  color: var(--thread-2);
+  font-size: 16px;
+}
+
+.wz-legal h1 {
+  font-family: var(--display);
+  font-size: 44px;
+  font-weight: 500;
+  color: var(--thread);
+  margin: 6px 0 20px;
+}
+
+.wz-legal h2 {
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--thread);
+  margin: 36px 0 10px;
+}
+
+.wz-legal p,
+.wz-legal ul {
+  margin: 0 0 14px;
+}
+
+.wz-legal ul {
+  padding-left: 20px;
+  list-style: disc;
+}
+
+.wz-legal li {
+  margin-bottom: 6px;
+}
+
+.wz-legal strong {
+  color: var(--thread);
+}
+
+.wz-root .wz-legal a {
+  color: var(--clay-2);
+}
