@@ -8,6 +8,8 @@ import ThreadPanel from "./ThreadPanel";
 const api = vi.hoisted(() => ({ skills: vi.fn(() => Promise.resolve({ skills: [] })), stop: vi.fn(() => Promise.resolve()) }));
 vi.mock("@/lib/client", () => ({ api }));
 vi.mock("./Composer", () => import("./composer-mock"));
+// ThreadView listens for live thread events itself; jsdom has no EventSource.
+vi.mock("@/lib/use-events", () => ({ useBoardEvents: () => {} }));
 
 const resets = {};
 
