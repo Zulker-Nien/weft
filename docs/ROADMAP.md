@@ -45,7 +45,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 
 ## Cards and threads
 
-- `Done` **Codex CLI backend** — new threads can run and resume Codex sessions, with Codex sandbox and reasoning effort settings, backend switching, and login status. Weft's custom MCP tools and per-tool guards are not available to Codex threads.
+- `Done` **Codex CLI backend** — new threads can run and resume Codex sessions, with Codex sandbox and reasoning effort settings, backend switching, and login status. Weft's MCP tools reach Codex over HTTP (`/api/mcp/[server]`), its folder's `CLAUDE.md` and `.claude/skills` are passed along; per-tool guards are not available to Codex threads.
 - `Now` **Auto-retitle cards** — after a turn, a card named "Image attachment", "Untitled thread" or just its prompt's first line gets a Haiku title with an emoji (`lib/retitle.ts`, hooked in `lib/glance.ts`); `titleBy` marks a card named by you or by Weft so neither it nor Claude Code's sync renames it again. Still open: retitling when the thread's topic drifts, and a "rename with AI" card menu item.
 - `Now` **Summary-first cards with a picture** — the card leads with the thread's last line in plain text, a 52 px thumbnail of its latest picture (thread screenshots and images, or a pane capture after each turn; hover to enlarge), an 8-dot stage bar with what's left, and a one-line footer. No picture yet: a Haiku emoji tile, or the folder's initial. Still open: emoji for cards that haven't had a turn since, and a setting to hide thumbnails.
 
