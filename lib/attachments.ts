@@ -5,6 +5,7 @@ import path from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
+import sharp from "sharp";
 import { ATTACHMENT_NAME, IMAGE_EXTENSIONS, MEDIA_REF, extensionOf, mediaKind, type MediaKind } from "./media";
 import { DATA_DIR } from "./store";
 
@@ -78,7 +79,8 @@ export async function saveAttachment(
 ): Promise<SavedAttachment> {
   fs.mkdirSync(ATTACHMENTS_DIR, { recursive: true });
   const name = fileNameFor(originalName, type, randomUUID().slice(0, 8));
-  const file = path.join(ATTACHMENTS_DIR, name);
+  let savedName = name;
+  let file = path.join(ATTACHMENTS_DIR, savedName);
   let bytes = 0;
   const limit = new Transform({
     transform(chunk: Buffer, _encoding, done) {
@@ -96,8 +98,29 @@ export async function saveAttachment(
     fs.rmSync(file, { force: true });
     throw new Error("That file is empty.");
   }
-  if (mediaKind(name) === "image" && bytes > MAX_IMAGE_BYTES) makePreview(file);
-  return { name, path: file, url: `/api/attachments/${name}`, kind: mediaKind(name), bytes };
+  // Convert uploaded raster images once, so composer previews, stored thread refs and model image
+  // blocks all use WebP. SVGs and non-images keep their original bytes and extension.
+  let convertedFile: string | undefined;
+  if (mediaKind(name) === "image") {
+    try {
+      const image = sharp(file, { animated: true });
+      const metadata = await image.metadata();
+      if (["jpeg", "png", "gif"].includes(metadata.format)) {
+        const webpName = `${name.slice(0, name.lastIndexOf("."))}.webp`;
+        const webpFile = (convertedFile = path.join(ATTACHMENTS_DIR, webpName));
+        await image.rotate().webp({ quality: 85, effort: 4 }).toFile(webpFile);
+        bytes = fs.statSync(webpFile).size;
+        fs.rmSync(file, { force: true });
+        savedName = webpName;
+        file = webpFile;
+      }
+    } catch {
+      // Keep the original upload if it is malformed or the local image codec cannot decode it.
+      if (convertedFile) fs.rmSync(convertedFile, { force: true });
+    }
+  }
+  if (mediaKind(savedName) === "image" && bytes > MAX_IMAGE_BYTES) makePreview(file);
+  return { name: savedName, path: file, url: `/api/attachments/${savedName}`, kind: mediaKind(savedName), bytes };
 }
 
 // Saves bytes the server already has (a screenshot in a tool result, say). The name comes from the

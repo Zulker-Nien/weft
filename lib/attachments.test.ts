@@ -81,10 +81,12 @@ describe("saveAttachment", () => {
   });
 
   it("takes the extension from the content type when the name has none", async () => {
-    const { saveAttachment } = await load();
+    const { saveAttachment, mimeFor } = await load();
     const saved = await saveAttachment(body(PNG), "clipboard", "image/png");
-    expect(saved.name).toMatch(/^clipboard-[0-9a-f]{8}\.png$/);
+    expect(saved.name).toMatch(/^clipboard-[0-9a-f]{8}\.webp$/);
     expect(saved.kind).toBe("image");
+    expect(mimeFor(saved.name)).toBe("image/webp");
+    expect(fs.readFileSync(saved.path).subarray(8, 12).toString("ascii")).toBe("WEBP");
   });
 
   it("uses .bin for an unknown type and 'pasted' for a name with no letters", async () => {
