@@ -11,6 +11,7 @@ import type { CloudflareBridge } from "./cloudflare-view";
 import type { GithubStatus } from "./github-view";
 import type { Webhook, WebhookInput, WebhookPatch } from "./webhooks";
 import type { SubagentModel } from "./subagents";
+import type { CloudSyncStatus } from "./cloud-sync-view";
 import type {
   AccountProvider,
   AccountView,
@@ -303,6 +304,8 @@ export const api = {
     subagentModel?: SubagentModel;
     doneModel?: string;
     doneEffort?: Effort | "";
+    copilotModel?: string;
+    reviewAllModel?: string;
   }) =>
     call<SettingsView>("PATCH", "/api/settings", patch),
   addProject: (path: string) => call<{ path: string; projects: Project[] }>("POST", "/api/projects", { path }),
@@ -350,6 +353,10 @@ export const api = {
   removeVercelHook: (folder: string) => call<{ ok: true }>("DELETE", "/api/vercel/hooks", { folder }),
   // The GitHub drawer: who gh is signed in as, and each folder's repo and issue sync (lib/github-status.ts).
   github: (folders: string[]) => call<GithubStatus>("GET", `/api/github?${new URLSearchParams(folders.map((f) => ["folder", f]))}`),
+  // The Settings → Sync page (lib/use-cloud-sync.ts): opt-in folders and the live flush status.
+  cloudSync: () => call<{ folders: string[]; status: CloudSyncStatus }>("GET", "/api/cloud-sync"),
+  cloudSyncSetFolder: (folder: string, on: boolean) => call<{ folder: string; on: boolean; folders: string[]; status: CloudSyncStatus }>("POST", "/api/cloud-sync", { folder, on }),
+  cloudSyncNow: () => call<{ status: CloudSyncStatus }>("POST", "/api/cloud-sync", { sync: true }),
   // The 🪝 drawer: each folder's webhooks, and a public relay URL for one (lib/webhooks.ts; signedIn: the relay needs a Weft account).
   webhooks: (folders: string[]) => call<{ hooks: Webhook[]; signedIn: boolean }>("GET", `/api/webhooks?${new URLSearchParams(folders.map((f) => ["folder", f]))}`),
   addWebhook: (input: WebhookInput) => call<{ hook: Webhook; existed: boolean }>("POST", "/api/webhooks", input),

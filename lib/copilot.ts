@@ -12,9 +12,18 @@ import { startPukuTrial } from "./puku-trial";
 import { endSession, ensureSpare, retryPukuWithTrial, sendUserMessage, warmUp } from "./runner";
 import { resumeInterrupted } from "./resume";
 import { startScheduler } from "./scheduler";
-import { defaultPermissionMode, listProjects } from "./settings";
+import { modelFor } from "./new-thread";
+import { copilotModel, defaultPermissionMode, listProjects } from "./settings";
 import { clearThread, createCard, getCard, listCards, updateCard } from "./store";
 import { COPILOT_ID } from "./types";
+
+// The model the copilot card should be created with: Settings → Models → Copilot's pick, or the user's
+// last-picked Claude model when that says "default". Set once when the card is first made; the user
+// changes the model again by editing the pick and starting a new chat.
+function copilotInitialModel() {
+  const picked = copilotModel();
+  return picked || modelFor("claude");
+}
 
 export function ensureCopilot() {
   return (
@@ -26,6 +35,7 @@ export function ensureCopilot() {
         cwd: os.homedir(),
         backend: "claude",
         permissionMode: defaultPermissionMode(),
+        model: copilotInitialModel(),
         role: "copilot",
       },
       COPILOT_ID,

@@ -45,6 +45,11 @@ interface Settings {
   doneModel?: string;
   // The effort /weft:done runs on; "" means use the card's own effort.
   doneEffort?: Effort;
+  // The model the copilot starts on; "" means use the user's last-picked Claude model (lib/copilot.ts).
+  // The copilot is one long-lived thread (id: "copilot", role: "copilot") and is locked to Claude Code.
+  copilotModel?: string;
+  // The Claude model the Review column's "Review all" card runs on; "" means the default (components/Board.tsx).
+  reviewAllModel?: string;
   projects: Project[];
   // Claude Code sessions whose cards were deleted, so syncing doesn't bring them back.
   dismissedSessions?: string[];
@@ -68,6 +73,8 @@ function settings(): Settings {
       subagentModel: saved.subagentModel,
       doneModel: saved.doneModel,
       doneEffort: saved.doneEffort,
+      copilotModel: saved.copilotModel,
+      reviewAllModel: saved.reviewAllModel,
       projects: saved.projects ?? [],
       dismissedSessions: saved.dismissedSessions ?? [],
       issueFolders: saved.issueFolders ?? [],
@@ -184,6 +191,33 @@ export function setDoneEffort(effort: Effort | "") {
   save();
 }
 
+// The copilot is one long-lived Claude Code thread (lib/copilot.ts), so its model is a Claude id only.
+// "" means "use the user's last-picked Claude model" (lib/new-thread.ts modelFor).
+function isCopilotModel(value: unknown): value is string {
+  return value === "" || (typeof value === "string" && backendFor(value) === "claude");
+}
+
+export function copilotModel(): string {
+  const saved = settings().copilotModel;
+  return isCopilotModel(saved) ? saved : "";
+}
+
+export function setCopilotModel(model: string) {
+  settings().copilotModel = model === "" ? undefined : model;
+  save();
+}
+
+// "Review all" starts a Claude Code card, so its model is a Claude id. "" means the CLI's default.
+export function reviewAllModel(): string {
+  const saved = settings().reviewAllModel;
+  return isCopilotModel(saved) ? saved : "";
+}
+
+export function setReviewAllModel(model: string) {
+  settings().reviewAllModel = model === "" ? undefined : model;
+  save();
+}
+
 export function dismissedSessions(): string[] {
   return settings().dismissedSessions ?? [];
 }
@@ -211,7 +245,9 @@ export function syncFolders(): string[] {
   return [...(settings().syncFolders ?? [])];
 }
 
-export function setSyncSync(folder: string, on: boolean) {
+// Sync to the cloud is opt-in per folder (lib/cloud-sync.ts); the board's Settings → Sync page turns it on,
+// and the per-folder switch on the same page turns it off. Folder list stays in the order they were turned on.
+export function setSyncFolder(folder: string, on: boolean) {
   const s = settings();
   const rest = (s.syncFolders ?? []).filter((f) => f !== folder);
   s.syncFolders = on ? [...rest, folder] : rest;
@@ -252,6 +288,10 @@ export function settingsView(): SettingsView {
     subagentModel: subagentModel(),
     doneModel: doneModel(),
     doneEffort: doneEffort(),
+    copilotModel: copilotModel(),
+    reviewAllModel: reviewAllModel(),
     projects: listProjects(),
+    issueFolders: issueFolders(),
+    syncFolders: syncFolders(),
   };
 }

@@ -1,7 +1,7 @@
 import { SCENES, sceneOf, type Base, type Scene } from "./theme";
 
 // The Settings screen's pages, down the left. Each is one scrolling page of cards; no tabs.
-export type SettingsPage = "general" | "models" | "threads" | "automations" | "shortcuts" | "accounts" | "team";
+export type SettingsPage = "general" | "models" | "threads" | "automations" | "shortcuts" | "accounts" | "team" | "sync";
 
 export const SETTINGS_PAGES: { id: SettingsPage; label: string; hint: string }[] = [
   { id: "general", label: "General", hint: "How the board looks and sounds." },
@@ -11,6 +11,7 @@ export const SETTINGS_PAGES: { id: SettingsPage; label: string; hint: string }[]
   { id: "shortcuts", label: "Shortcuts", hint: "Keys for the board's global actions." },
   { id: "accounts", label: "Accounts", hint: "Your Weft account and the CLIs' logins." },
   { id: "team", label: "Team", hint: "Your Weft workspace and the people in it." },
+  { id: "sync", label: "Sync", hint: "Which projects upload their cards to your workspace, and how it's going." },
 ];
 
 const BY_ID = Object.fromEntries(SETTINGS_PAGES.map((p) => [p.id, p])) as Record<SettingsPage, (typeof SETTINGS_PAGES)[number]>;

@@ -21,6 +21,9 @@ vi.mock("./LaptopModeCard", () => ({ default: () => <p>laptop mode card</p> }));
 // TeamSettings is a real component but reads from lib/use-team, which would need a board-side
 // data fetch. Here it just needs to be reachable without throwing.
 vi.mock("./TeamSettings", () => ({ default: () => <p>team settings</p> }));
+// SyncSettings is the real component on the new "sync" page; it has its own test. Here it just
+// needs to render so we can reach the page without firing useCloudSync / useAccount.
+vi.mock("./SyncSettings", () => ({ default: () => <p>sync settings</p> }));
 
 const SETTINGS: SettingsView = {
   threadPrompt: "be nice",
@@ -33,7 +36,11 @@ const SETTINGS: SettingsView = {
   subagentModel: "choose",
   doneModel: "",
   doneEffort: "",
+  copilotModel: "",
+  reviewAllModel: "",
   projects: [],
+  issueFolders: [],
+  syncFolders: [],
 };
 
 beforeEach(() => {

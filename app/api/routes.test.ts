@@ -60,8 +60,8 @@ vi.mock("@/lib/settings", () => ({
   setSubagentModel: vi.fn(),
   setDoneModel: vi.fn(),
   setDoneEffort: vi.fn(),
-  doneModel: vi.fn(() => ""),
-  doneEffort: vi.fn(() => ""),
+  setCopilotModel: vi.fn(), setReviewAllModel: vi.fn(),
+  doneModel: vi.fn(() => ""), doneEffort: vi.fn(() => ""), copilotModel: vi.fn(() => ""),
   settingsView: vi.fn(() => ({ threadPrompt: "tp", keepAliveMinutes: 5, automations: [] })),
 }));
 
@@ -721,8 +721,7 @@ describe("/settings", () => {
       threadPrompt: "be brief",
       pushOnDone: false,
       subagentModel: "opus-4.8",
-      doneModel: "claude-opus-5-5",
-      doneEffort: "xhigh",
+      doneModel: "claude-opus-5-5", doneEffort: "xhigh", copilotModel: "claude-haiku-5-5", reviewAllModel: "claude-sonnet-5-5",
       keepAliveMinutes: 10,
       defaultPermissionMode: "acceptEdits",
       automations: [
@@ -738,6 +737,7 @@ describe("/settings", () => {
     expect(settings.setSubagentModel).toHaveBeenCalledWith("opus-4.8");
     expect(settings.setDoneModel).toHaveBeenCalledWith("claude-opus-5-5");
     expect(settings.setDoneEffort).toHaveBeenCalledWith("xhigh");
+    expect([vi.mocked(settings.setCopilotModel).mock.calls[0], vi.mocked(settings.setReviewAllModel).mock.calls[0]]).toEqual([["claude-haiku-5-5"], ["claude-sonnet-5-5"]]);
     const [rules] = vi.mocked(settings.setAutomations).mock.calls[0]!;
     expect(rules[0]).toEqual({ id: "a1", on: "done", skill: "weft:done" });
     expect(rules[1]).toMatchObject({ on: "prompt-matches", skill: "deploy", pattern: "ship it" });
@@ -753,7 +753,7 @@ describe("/settings", () => {
       { pushOnDone: "no" },
       { subagentModel: "gpt-5" },
       { doneModel: "gpt-5" },
-      { doneEffort: "extreme" },
+      { doneEffort: "extreme" }, { copilotModel: "opus-4.8" }, { reviewAllModel: "opus-4.8" },
       { automations: "nope" },
       { automations: [{ on: "sometimes", skill: "x" }] },
       { automations: [{ on: "done", skill: "bad skill!" }] },
@@ -827,9 +827,9 @@ describe("POST /import", () => {
 describe("/login", () => {
   const post = (body: unknown) => loginRoute.POST(req("/login", { method: "POST", body }));
 
-  it("GET returns both CLIs' status and runs", async () => {
+  it("GET returns every CLI's status and runs", async () => {
     const json = await body(await loginRoute.GET(req("/login")));
-    expect(json).toEqual({ status: { claude: { loggedIn: true }, puku: { loggedIn: true } }, runs: [] });
+    expect(json).toEqual({ status: { claude: { loggedIn: true }, puku: { loggedIn: true }, codex: { loggedIn: true } }, runs: [] });
   });
 
   it("start begins a login that retries the CLI's cards when done", async () => {

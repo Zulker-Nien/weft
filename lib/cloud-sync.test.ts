@@ -13,11 +13,15 @@ const settings: { syncFolders: string[] } = { syncFolders: ["/sync"] };
 vi.mock("./store", () => ({
   getCard: (id: string) => cards.get(id),
   getThread: (id: string) => threads.get(id) ?? [],
+  listCards: () => [...cards.values()],
   // Use a getter so DATA_DIR is read fresh on every access — the vi.mock factory
   // is only called once, but each test gets its own THREADBOARD_DATA temp dir.
   get DATA_DIR() { return process.env.THREADBOARD_DATA; },
 }));
 vi.mock("./settings", () => ({ syncFolders: () => [...settings.syncFolders] }));
+// What accountClient() does when startCloudSync gets no client: return the fake, or throw like a build with no accounts.
+const account: { client: () => unknown } = { client: () => null };
+vi.mock("./account", () => ({ accountClient: () => account.client() }));
 
 const busListeners = new Set<(e: BoardEvent) => void>();
 vi.mock("./bus", () => ({
@@ -272,8 +276,9 @@ describe("startCloudSync", () => {
     threads.set("a", [tool]);
     await start();
     publish({ type: "thread", cardId: "a", item: tool, index: 0 });
-    // The tool item is not a `result` so the flush waits for the 10s tick.
-    await vi.advanceTimersByTimeAsync(10_000);
+    // The tool item is not a `result` so the flush waits for the 10s tick. A timeout set inside the tick lands
+    // 1 ms later under fake timers, so step past it.
+    await vi.advanceTimersByTimeAsync(10_001);
     for (let i = 0; i < 50; i++) await vi.advanceTimersByTimeAsync(0);
     const out = firstWrite("cloud_tool_outputs") as CloudToolOutputRow | undefined;
     expect(out).toBeDefined();
@@ -283,7 +288,8 @@ describe("startCloudSync", () => {
     expect(out!.result).toBe(long);
     const itemRow = firstWrite("cloud_thread_items") as CloudThreadItemRow | undefined;
     expect(itemRow).toBeDefined();
-    expect(itemRow!.item).toMatchObject({ kind: "tool", result: undefined, resultBytes: 3000 });
+    expect(itemRow!.item).toMatchObject({ kind: "tool", resultBytes: 3000 });
+    expect(itemRow!.item).not.toHaveProperty("result");
   });
 
   it("a truncate thread event queues a truncate + item and the flush issues a delete gte seq", async () => {
@@ -334,7 +340,7 @@ describe("startCloudSync", () => {
     const { appendOutbox, readOutbox } = await import("./cloud-outbox");
     appendOutbox([{ op: "card", cardId: "a", at: 1 } satisfies OutboxEntry]);
     expect(readOutbox()).toHaveLength(1);
-    await vi.advanceTimersByTimeAsync(10_000);
+    await vi.advanceTimersByTimeAsync(10_001);
     for (let i = 0; i < 20; i++) await vi.advanceTimersByTimeAsync(0);
     expect(allRows("cloud_cards")).toHaveLength(1);
   });
@@ -342,10 +348,17 @@ describe("startCloudSync", () => {
   it("a second trigger while a flush is in flight just sets dirty and runs one follow-up flush", async () => {
     cardInStore("a");
     const resultItem: ThreadItem = { kind: "result", text: "done", isError: false, at: 5 };
-    const secondItem: ThreadItem = { kind: "assistant", text: "second", at: 6 };
+    // A result, so it triggers (and finds the first flush in flight) rather than waiting for the tick.
+    const secondItem: ThreadItem = { kind: "result", text: "second", isError: false, at: 6 };
     threads.set("a", [resultItem, secondItem]);
+    // Hold only the first upload's rewrite; later flushes go straight through.
     let resolveRewrite: (v: ThreadItem) => void = () => {};
-    blobsRewrite = () => new Promise<ThreadItem>((resolve) => (resolveRewrite = resolve));
+    let held = false;
+    blobsRewrite = (item) => {
+      if (held) return Promise.resolve(item);
+      held = true;
+      return new Promise<ThreadItem>((resolve) => (resolveRewrite = resolve));
+    };
     await start();
     publish({ type: "thread", cardId: "a", item: resultItem, index: 0 });
     await vi.advanceTimersByTimeAsync(0);
@@ -482,14 +495,21 @@ describe("startCloudSync", () => {
     cardInStore("a");
     const first: ThreadItem = { kind: "result", text: "first", isError: false, at: 1 };
     const second: ThreadItem = { kind: "result", text: "second", isError: false, at: 2 };
-    threads.set("a", [first, second]);
+    threads.set("a", [first]);
+    // Hold only the first upload's rewrite; later flushes go straight through.
     let resolveRewrite: (v: ThreadItem) => void = () => {};
-    blobsRewrite = () => new Promise<ThreadItem>((resolve) => (resolveRewrite = resolve));
+    let held = false;
+    blobsRewrite = (item) => {
+      if (held) return Promise.resolve(item);
+      held = true;
+      return new Promise<ThreadItem>((resolve) => (resolveRewrite = resolve));
+    };
     await start();
     // First event triggers the flush; the rewrite is held.
     publish({ type: "thread", cardId: "a", item: first, index: 0 });
     await vi.advanceTimersByTimeAsync(0);
-    // Mid-flush, append a newer entry for the same (card, seq). The ack must keep it.
+    // Mid-flush, the item at seq 0 changes and a newer entry for the same (card, seq) lands. The ack must keep it.
+    threads.set("a", [second]);
     publish({ type: "thread", cardId: "a", item: second, index: 0 });
     // Let the first flush complete; the second flush will be triggered by dirty.
     resolveRewrite(first);
@@ -549,4 +569,29 @@ describe("startCloudSync", () => {
     await vi.advanceTimersByTimeAsync(11_000);
     expect(allRows("cloud_cards")).toHaveLength(0);
   });
+
+  it("uses the account's client when none is passed", async () => {
+    cardInStore("a");
+    account.client = () => fakeClient;
+    const mod = await import("./cloud-sync");
+    stop = mod.startCloudSync({ blobs, now: NOW });
+    publish({ type: "card", card: cards.get("a")! });
+    await flush();
+    expect(allRows("cloud_cards")).toHaveLength(1);
+  });
+
+  it("treats a build with no accounts as signed out and keeps the entries", async () => {
+    cardInStore("a");
+    account.client = () => {
+      throw new Error("Weft accounts aren't set up in this build yet.");
+    };
+    const mod = await import("./cloud-sync");
+    stop = mod.startCloudSync({ blobs, now: NOW });
+    publish({ type: "card", card: cards.get("a")! });
+    await flush();
+    expect(allRows("cloud_cards")).toHaveLength(0);
+    expect(await outboxEntries()).toHaveLength(1);
+  });
 });
+
+// Tests for the public cloudSyncStatus / syncNow / queueFolder APIs live in cloud-sync-public.test.ts.

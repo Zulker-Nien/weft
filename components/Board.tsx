@@ -742,18 +742,19 @@ export default function Board() {
 
   // The header badges' cards: the quality badge's fixes and the pile counter's commit walk-through.
   // Resolves to the new card's id, so a caller can open it.
-  async function improveQuality(cwd: string, prompt: string, title: string): Promise<string | undefined> {
-    const { card } = await api.create({ title, prompt, cwd, backend: "claude", start: true });
+  async function improveQuality(cwd: string, prompt: string, title: string, model?: string): Promise<string | undefined> {
+    const { card } = await api.create({ title, prompt, cwd, backend: "claude", model, start: true });
     return card.id;
   }
 
   // "Review all" on the Review column: the same commit walk-through card the pile counter starts, opened
-  // right away (in a busy Review column it got lost among the others).
+  // right away (in a busy Review column it got lost among the others), on Settings → Models → Review all.
   async function reviewAll() {
     const cwd = selected?.cwd ?? project ?? latest?.cwd;
     if (!cwd) return;
     try {
-      await startPileReview(cwd, improveQuality, select);
+      const { reviewAllModel } = await api.settings();
+      await startPileReview(cwd, (c, prompt, title) => improveQuality(c, prompt, title, reviewAllModel || undefined), select);
     } catch (err) {
       notify(err);
     }

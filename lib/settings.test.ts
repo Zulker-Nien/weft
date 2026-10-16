@@ -129,6 +129,37 @@ describe("settings", () => {
     expect(s.doneEffort()).toBe("");
   });
 
+  it("the copilot model defaults to empty and only accepts Claude ids", async () => {
+    let s = await load();
+    expect(s.copilotModel()).toBe("");
+    expect(s.settingsView().copilotModel).toBe("");
+    s.setCopilotModel("claude-haiku-5-5");
+    s = await load();
+    expect(s.copilotModel()).toBe("claude-haiku-5-5");
+    s.setCopilotModel("");
+    const saved = JSON.parse(fs.readFileSync(path.join(dir, "settings.json"), "utf8")) as Record<string, unknown>;
+    expect("copilotModel" in saved).toBe(false);
+  });
+
+  it("a non-Claude saved copilot model reads as empty", async () => {
+    fs.writeFileSync(path.join(dir, "settings.json"), JSON.stringify({ copilotModel: "opus-4.8" }));
+    expect((await load()).copilotModel()).toBe("");
+  });
+
+  it("the Review all model defaults to empty, only accepts Claude ids, and clears on empty", async () => {
+    let s = await load();
+    expect(s.reviewAllModel()).toBe("");
+    expect(s.settingsView().reviewAllModel).toBe("");
+    s.setReviewAllModel("claude-sonnet-5-5");
+    s = await load();
+    expect(s.reviewAllModel()).toBe("claude-sonnet-5-5");
+    s.setReviewAllModel("");
+    const saved = JSON.parse(fs.readFileSync(path.join(dir, "settings.json"), "utf8")) as Record<string, unknown>;
+    expect("reviewAllModel" in saved).toBe(false);
+    fs.writeFileSync(path.join(dir, "settings.json"), JSON.stringify({ reviewAllModel: "opus-4.8" }));
+    expect((await load()).reviewAllModel()).toBe("");
+  });
+
   it("an empty automations list is kept, not replaced by the defaults", async () => {
     const s = await load();
     s.setAutomations([]);
@@ -206,14 +237,23 @@ describe("settings", () => {
   it("turns cloud sync on and off per folder, without duplicates, and keeps it across a reload", async () => {
     let s = await load();
     expect(s.syncFolders()).toEqual([]);
-    s.setSyncSync("/a", true);
-    s.setSyncSync("/b", true);
-    s.setSyncSync("/a", true);
+    s.setSyncFolder("/a", true);
+    s.setSyncFolder("/b", true);
+    s.setSyncFolder("/a", true);
     expect(s.syncFolders()).toEqual(["/b", "/a"]);
     s = await load();
     expect(s.syncFolders()).toEqual(["/b", "/a"]);
-    s.setSyncSync("/b", false);
+    s.setSyncFolder("/b", false);
     expect(s.syncFolders()).toEqual(["/a"]);
+  });
+
+  it("settingsView exposes syncFolders alongside issueFolders", async () => {
+    const s = await load();
+    s.setIssueSync("/iss", true);
+    s.setSyncFolder("/sync", true);
+    const view = s.settingsView();
+    expect(view.issueFolders).toEqual(["/iss"]);
+    expect(view.syncFolders).toEqual(["/sync"]);
   });
 
   it("settings survive a reload and settingsView bundles them", async () => {

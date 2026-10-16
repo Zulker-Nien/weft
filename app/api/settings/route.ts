@@ -4,7 +4,7 @@ import { patternRegex } from "@/lib/automations";
 import { asText } from "@/lib/format";
 import { fail, guard } from "@/lib/guard";
 import { EFFORTS, MODELS } from "@/lib/new-thread";
-import { setAutomations, setDefaultBackend, setDefaultPermissionMode, setDoneEffort, setDoneModel, setKeepAliveMinutes, setPushOnDone, setSubagentModel, setThreadPrompt, settingsView } from "@/lib/settings";
+import { setAutomations, setCopilotModel, setDefaultBackend, setDefaultPermissionMode, setDoneEffort, setDoneModel, setKeepAliveMinutes, setPushOnDone, setReviewAllModel, setSubagentModel, setThreadPrompt, settingsView } from "@/lib/settings";
 import { SKILL_NAME } from "@/lib/skills";
 import { isSubagentModel } from "@/lib/subagents";
 import { AUTOMATION_TRIGGERS, MODES, type Automation, type Backend, type PermissionMode } from "@/lib/types";
@@ -12,6 +12,7 @@ import { AUTOMATION_TRIGGERS, MODES, type Automation, type Backend, type Permiss
 const BACKENDS: Backend[] = ["claude", "puku", "codex"];
 const DONE_MODEL_IDS = new Set<string>([...MODELS.claude, ...MODELS.puku].map((m) => m.id));
 const DONE_EFFORT_IDS = new Set<string>(EFFORTS.map((e) => e.id));
+const COPILOT_MODEL_IDS = new Set<string>(MODELS.claude.map((m) => m.id));
 
 // The rules as sent, checked; a leading slash on a skill name is dropped.
 function readAutomations(value: unknown): Automation[] {
@@ -47,6 +48,20 @@ function validateDone(field: "doneModel" | "doneEffort", value: unknown) {
   }
 }
 
+function validateCopilotModel(value: unknown) {
+  if (value === undefined) return;
+  if (typeof value !== "string" || !(value === "" || COPILOT_MODEL_IDS.has(value))) {
+    throw new Error(`copilotModel must be one of ${[...COPILOT_MODEL_IDS].join(", ")}, or "" for the user's last-picked.`);
+  }
+}
+
+function validateReviewAllModel(value: unknown) {
+  if (value === undefined) return;
+  if (typeof value !== "string" || !(value === "" || COPILOT_MODEL_IDS.has(value))) {
+    throw new Error(`reviewAllModel must be one of ${[...COPILOT_MODEL_IDS].join(", ")}, or "" for the default.`);
+  }
+}
+
 function validate(body: {
   threadPrompt?: unknown;
   keepAliveMinutes?: unknown;
@@ -57,6 +72,8 @@ function validate(body: {
   subagentModel?: unknown;
   doneModel?: unknown;
   doneEffort?: unknown;
+  copilotModel?: unknown;
+  reviewAllModel?: unknown;
 }): Automation[] | undefined {
   if (body.threadPrompt !== undefined && typeof body.threadPrompt !== "string") {
     throw new Error("threadPrompt must be text.");
@@ -79,6 +96,8 @@ function validate(body: {
   }
   validateDone("doneModel", body.doneModel);
   validateDone("doneEffort", body.doneEffort);
+  validateCopilotModel(body.copilotModel);
+  validateReviewAllModel(body.reviewAllModel);
   // Validate automations now so a bad rule 400s before any settings setter runs.
   return body.automations === undefined ? undefined : readAutomations(body.automations);
 }
@@ -92,6 +111,8 @@ function commit(body: {
   subagentModel?: unknown;
   doneModel?: unknown;
   doneEffort?: unknown;
+  copilotModel?: unknown;
+  reviewAllModel?: unknown;
 }, rules: Automation[] | undefined) {
   if (typeof body.threadPrompt === "string") setThreadPrompt(body.threadPrompt);
   if (typeof body.keepAliveMinutes === "number") setKeepAliveMinutes(body.keepAliveMinutes);
@@ -101,6 +122,8 @@ function commit(body: {
   if (isSubagentModel(body.subagentModel)) setSubagentModel(body.subagentModel);
   if (typeof body.doneModel === "string") setDoneModel(body.doneModel);
   if (typeof body.doneEffort === "string") setDoneEffort(body.doneEffort as "" | "low" | "medium" | "high" | "xhigh" | "max");
+  if (typeof body.copilotModel === "string") setCopilotModel(body.copilotModel);
+  if (typeof body.reviewAllModel === "string") setReviewAllModel(body.reviewAllModel);
   if (rules) setAutomations(rules);
 }
 

@@ -354,7 +354,15 @@ export interface SettingsView {
   // The model and effort /weft:done runs on; "" means use the card's own (lib/automations.ts doneOverrides).
   doneModel: string;
   doneEffort: Effort | "";
+  // The model the copilot starts on; "" means use the user's last-picked Claude model.
+  copilotModel: string;
+  // The Claude model "Review all" runs on; "" means the CLI's default.
+  reviewAllModel: string;
   projects: Project[];
+  // Project folders whose cards sync to the cloud (lib/cloud-sync.ts). Off by default; mirrors the
+  // saved settings, the same shape /api/settings sends.
+  issueFolders: string[];
+  syncFolders: string[];
 }
 
 export type LoginState ="running" | "terminal" | "done" | "failed" | "cancelled";

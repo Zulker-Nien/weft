@@ -26,7 +26,14 @@ vi.mock("@/lib/settings", () => ({
   setThreadPrompt: vi.fn(),
   setKeepAliveMinutes: vi.fn(),
   setDefaultPermissionMode: vi.fn(),
+  setDefaultBackend: vi.fn(),
   setAutomations: vi.fn(),
+  setPushOnDone: vi.fn(),
+  setSubagentModel: vi.fn(),
+  setDoneModel: vi.fn(),
+  setDoneEffort: vi.fn(),
+  setCopilotModel: vi.fn(),
+  setReviewAllModel: vi.fn(),
   settingsView: vi.fn(() => ({})),
 }));
 

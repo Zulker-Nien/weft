@@ -18,10 +18,11 @@ import AccountSettings from "./AccountSettings";
 import AppearancePicker from "./AppearancePicker";
 import AutomationSettings from "./AutomationSettings";
 import CliLogins from "./CliLogins";
+import CopilotPicker from "./CopilotPicker";
 import DonePicker from "./DonePicker";
+import ReviewAllPicker from "./ReviewAllPicker";
 import Icon, { Spinner } from "./Icon";
 import LaptopModeCard from "./LaptopModeCard";
-import TeamSettings from "./TeamSettings";
 import Modal from "./Modal";
 import { SELECT_CLASS } from "./ModelSelect";
 import ModePicker from "./ModePicker";
@@ -30,6 +31,8 @@ import ShortcutSettings from "./ShortcutSettings";
 import SoundSettings from "./SoundSettings";
 import SubagentPicker from "./SubagentPicker";
 import SwitchRow from "./SwitchRow";
+import SyncSettings from "./SyncSettings";
+import TeamSettings from "./TeamSettings";
 
 const KEEP_ALIVE: { minutes: number; label: string }[] = [
   { minutes: 0, label: "Until the app quits" },
@@ -191,6 +194,9 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
         return (
           <>
             <Card>
+              <LaptopModeCard />
+            </Card>
+            <Card>
               <section className="flex flex-col gap-3">
                 <SectionHeader title="Appearance" hint="Changes right away. System follows your computer&apos;s setting; a scene puts its picture behind the board." />
                 <AppearancePicker />
@@ -219,9 +225,6 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
             <Card>
               <SoundSettings titleClass={TITLE} hintClass={HINT} />
             </Card>
-            <Card>
-              <LaptopModeCard />
-            </Card>
           </>
         );
       case "models":
@@ -235,6 +238,8 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
               }}
             />
             <SubagentPicker value={s.subagentModel} />
+            <CopilotPicker value={s.copilotModel} />
+            <ReviewAllPicker value={s.reviewAllModel} />
             <DonePicker model={s.doneModel} effort={s.doneEffort} />
           </Card>
         );
@@ -329,6 +334,9 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
       case "team":
         // TeamSettings draws its own cards, one per section.
         return <TeamSettings />;
+      case "sync":
+        // SyncSettings draws its own cards, one per section. The recent folders live in s.projects.
+        return <SyncSettings recentProjects={s.projects.map((p) => p.path)} />;
     }
   }
 

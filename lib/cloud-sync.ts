@@ -19,8 +19,9 @@ import {
 import { deviceId } from "./device-id";
 import { globalSingleton } from "./global-singleton";
 import { syncFolders } from "./settings";
-import { getCard, getThread } from "./store";
+import { getCard, getThread, listCards } from "./store";
 import type { BoardEvent, ThreadItem } from "./types";
+import type { CloudSyncStatus } from "./cloud-sync-view";
 import { subscribe } from "./bus";
 
 const FLUSH_INTERVAL_MS = 10_000;
@@ -34,6 +35,9 @@ export interface CloudSyncOptions {
   now?: () => number;
 }
 
+// A live view of the outbox + the last flush, polled by the Sync page (lib/use-cloud-sync.ts).
+// (The shape lives in lib/types.ts so the client can import it without pulling in this server-only module.)
+
 interface SyncState {
   inFlight: boolean;
   dirty: boolean;
@@ -43,6 +47,35 @@ interface SyncState {
   timer: ReturnType<typeof setTimeout> | null;
   // Each signed-in user's personal org, so a flush doesn't re-query and a new account gets its own.
   orgs: Map<string, string | null>;
+  // Has startCloudSync run yet? syncNow / queueFolder are no-ops without it, so a board with no
+  // settings.json (or no opt-in folders) can still be probed.
+  started: boolean;
+  // The blob store the bus listener bound; syncNow / queueFolder share it through the state, so
+  // a triggered flush can still rewrite item paths the same way the bus path does.
+  blobs: BlobStore | null;
+  // The clock the bus listener bound; same reason as blobs.
+  now: () => number;
+  // Set when the last flush found no account, so the Sync page can say "Sign in to Weft to sync".
+  lastSignedOut: boolean;
+  // Set when the last flush found an account but no workspace yet.
+  lastNoWorkspace: boolean;
+  // The last successful flush's end time (unix ms).
+  lastSyncAt: number | null;
+  // Items uploaded since cloud sync started.
+  uploaded: number;
+  // The last error's message; cleared on the next success.
+  lastError: string | null;
+  // The client the bus listener bound; syncNow / queueFolder share it through the state, so
+  // a triggered flush uses the same account / fake the listener was given. Defaults to safeAccountClient.
+  getClient: () => SupabaseClient | null;
+}
+
+function safeAccountClient(): SupabaseClient | null {
+  try {
+    return accountClient();
+  } catch {
+    return null;
+  }
 }
 
 const freshState = (): SyncState => ({
@@ -52,6 +85,15 @@ const freshState = (): SyncState => ({
   warnedThisStreak: false,
   timer: null,
   orgs: new Map(),
+  started: false,
+  blobs: null,
+  now: Date.now,
+  lastSignedOut: false,
+  lastNoWorkspace: false,
+  lastSyncAt: null,
+  uploaded: 0,
+  lastError: null,
+  getClient: safeAccountClient,
 });
 
 const state = () => globalSingleton("__weftCloudSync", freshState);
@@ -64,7 +106,15 @@ interface Ctx {
 }
 
 export function startCloudSync(opts: CloudSyncOptions): () => void {
-  const ctx: Ctx = { s: state(), getClient: opts.client ?? safeAccountClient, blobs: opts.blobs, now: opts.now ?? Date.now };
+  const s = state();
+  const getClient = opts.client ?? safeAccountClient;
+  const ctx: Ctx = { s, getClient, blobs: opts.blobs, now: opts.now ?? Date.now };
+  // The blob store, clock and client live on the singleton too, so syncNow / queueFolder (called
+  // without a ctx) arm a flush the bus listener's flush can actually serve.
+  s.blobs = opts.blobs;
+  s.now = opts.now ?? Date.now;
+  s.getClient = getClient;
+  s.started = true;
   // The bus listener is sync: it appends to the outbox and arms a flush. No network here.
   const stop = subscribe((event: BoardEvent) => {
     const entries = entriesForEvent(event, ctx.now());
@@ -82,6 +132,11 @@ export function startCloudSync(opts: CloudSyncOptions): () => void {
     stop();
     clearInterval(tick);
     clearTimer(ctx.s);
+    // The next start (in this process) sees a clean state. The status fields stay so a re-mount of the
+    // Sync page doesn't briefly show "never synced".
+    s.started = false;
+    s.inFlight = false;
+    s.dirty = false;
   };
 }
 
@@ -90,11 +145,9 @@ function cardInSyncedFolder(event: BoardEvent): boolean {
   if (!folders.length) return false;
   if (event.type === "card") return folders.includes(event.card.cwd);
   if (event.type === "card_deleted") return true; // the card is gone; the flush checks what it knew.
-  if (event.type === "thread") {
-    const card = getCard(event.cardId);
-    return !!card && folders.includes(card.cwd);
-  }
-  return false;
+  // Only thread events are left: entriesForEvent gives nothing for the other kinds.
+  const card = event.type === "thread" ? getCard(event.cardId) : undefined;
+  return !!card && folders.includes(card.cwd);
 }
 
 // A thread event with truncate replaces the item at index and drops everything after it (a rewind, an edit with ↑).
@@ -131,21 +184,40 @@ async function flush(ctx: Ctx) {
     // Write the compacted list back first, so the file stays small while signed out or offline.
     if (pending.length < raw.length) replaceOutboxHead(raw.length, pending);
     const client = ctx.getClient();
-    if (!client) return; // signed out: keep entries, no backoff (signing in is a user action).
+    if (!client) {
+      s.lastSignedOut = true;
+      s.lastNoWorkspace = false;
+      return; // signed out: keep entries, no backoff (signing in is a user action).
+    }
     const userId = await currentUserId(client);
-    if (!userId) return;
+    if (!userId) {
+      s.lastSignedOut = true;
+      s.lastNoWorkspace = false;
+      return;
+    }
     const orgId = await resolveOrgId(s, client, userId);
-    if (!orgId) return; // no workspace yet: keep entries, no backoff.
-    await uploadPending(ctx, client, orgId, pending);
+    if (!orgId) {
+      s.lastSignedOut = false;
+      s.lastNoWorkspace = true;
+      return; // no workspace yet: keep entries, no backoff.
+    }
+    s.lastSignedOut = false;
+    s.lastNoWorkspace = false;
+    const uploaded = await uploadPending(ctx, client, orgId, pending);
     replaceOutboxHead(pending.length, []);
+    s.uploaded += uploaded;
+    s.lastSyncAt = ctx.now();
+    s.lastError = null;
     s.backoffMs = 0;
     s.warnedThisStreak = false;
   } catch (err) {
     // A failure keeps the entries and bumps the backoff. The warning fires once until the next success.
+    const message = err instanceof Error ? err.message : String(err);
     if (!s.warnedThisStreak) {
-      console.warn(`Cloud sync failed: ${err instanceof Error ? err.message : String(err)}`);
+      console.warn(`Cloud sync failed: ${message}`);
       s.warnedThisStreak = true;
     }
+    s.lastError = message;
     s.backoffMs = Math.min(s.backoffMs ? s.backoffMs * 2 : 1_000, BACKOFF_MAX_MS);
     s.dirty = false;
     s.inFlight = false;
@@ -156,14 +228,6 @@ async function flush(ctx: Ctx) {
   if (s.dirty) {
     s.dirty = false;
     trigger(ctx);
-  }
-}
-
-function safeAccountClient(): SupabaseClient | null {
-  try {
-    return accountClient();
-  } catch {
-    return null;
   }
 }
 
@@ -190,7 +254,8 @@ async function resolveOrgId(s: SyncState, client: SupabaseClient, userId: string
 }
 
 // Cards first (items reference them), then deletes and truncates, then items and tool outputs in one upsert each.
-async function uploadPending(ctx: Ctx, client: SupabaseClient, orgId: string, pending: OutboxEntry[]) {
+// Returns the number of items shipped — every entry that was actually uploaded, not the outbox count.
+async function uploadPending(ctx: Ctx, client: SupabaseClient, orgId: string, pending: OutboxEntry[]): Promise<number> {
   const cards = cardRows(ctx, orgId, pending);
   if (cards.length) check(await client.from("cloud_cards").upsert(cards));
   for (const entry of pending) {
@@ -215,6 +280,7 @@ async function uploadPending(ctx: Ctx, client: SupabaseClient, orgId: string, pe
   }
   if (outputs.length) check(await client.from("cloud_tool_outputs").upsert(outputs));
   if (items.length) check(await client.from("cloud_thread_items").upsert(items));
+  return items.length;
 }
 
 // Every live card the batch touches, not just those with a card entry: a card that changed before its folder
@@ -249,4 +315,46 @@ function splitToolResult(item: ThreadItem): { item: ThreadItem; output?: Omit<Cl
   if (item.kind !== "tool" || !item.result || item.result.length <= TOOL_RESULT_INLINE_MAX) return { item };
   const { result, ...rest } = item;
   return { item: { ...rest, resultBytes: result.length }, output: { tool_id: item.id, result, bytes: result.length } };
+}
+
+// A live view for the Sync page (lib/use-cloud-sync.ts): how many outbox entries are waiting, when
+// the last flush ended, how many items the outbox has shipped since cloud sync started, and the
+// latest failure (cleared on the next success). A status is always safe to read, even before
+// startCloudSync runs — `uploaded` is 0 and the rest are null / false.
+export function cloudSyncStatus(): CloudSyncStatus {
+  const s = state();
+  return {
+    waiting: readOutbox().length,
+    lastSyncAt: s.lastSyncAt,
+    uploaded: s.uploaded,
+    lastError: s.lastError,
+    signedOut: s.lastSignedOut,
+    noWorkspace: s.lastNoWorkspace,
+  };
+}
+
+// A no-op when cloud sync hasn't been started (e.g. a test imported the module but never called
+// startCloudSync). With it started, the flush picks up the current outbox straight away; the same
+// path the bus listener uses for a `result` item.
+export function syncNow() {
+  const s = state();
+  if (!s.started || !s.blobs) return;
+  trigger({ s, getClient: s.getClient, blobs: s.blobs, now: s.now });
+}
+
+// queueFolder is the Sync page's "turn this folder on, sync its existing cards" path: it appends
+// an outbox entry for every live card and every thread item the folder holds, then arms a flush.
+// A no-op for an unknown folder (a card whose cwd never landed in listCards) or before start.
+export function queueFolder(folder: string) {
+  const s = state();
+  if (!s.started || !s.blobs) return;
+  const at = s.now();
+  const entries: OutboxEntry[] = [];
+  for (const card of listCards()) {
+    if (card.cwd !== folder) continue;
+    entries.push({ op: "card", cardId: card.id, at });
+    getThread(card.id).forEach((_, seq) => entries.push({ op: "item", cardId: card.id, seq, at }));
+  }
+  if (entries.length) appendOutbox(entries);
+  trigger({ s, getClient: s.getClient, blobs: s.blobs, now: s.now });
 }

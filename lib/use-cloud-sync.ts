@@ -1,0 +1,62 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { CloudSyncStatus } from "./cloud-sync-view";
+import { api } from "./client";
+
+// The Settings → Sync page (components/SyncSettings.tsx) polls this every POLL_MS while open. The page
+// itself is what shows the status: waiting, lastSyncAt, uploaded, the last error, and the signed-out /
+// no-workspace flags. A failing fetch surfaces the server's error to the page; the empty-state shape
+// is what the page shows before the first answer lands.
+export const POLL_MS = 5000;
+
+const EMPTY: CloudSyncStatus = { waiting: 0, lastSyncAt: null, uploaded: 0, lastError: null, signedOut: false, noWorkspace: false };
+
+export function useCloudSync(active = false) {
+  const [folders, setFolders] = useState<string[]>([]);
+  const [status, setStatus] = useState<CloudSyncStatus>(EMPTY);
+  const [error, setError] = useState<string | null>(null);
+  // The newest fetch wins; the answer is dropped if folders have since changed (we don't filter on folders,
+  // but the latest-ref pattern matches the other polling hooks in lib/).
+  const latest = useRef(0);
+
+  const reload = useCallback(async () => {
+    const mine = ++latest.current;
+    try {
+      const answer = await api.cloudSync();
+      if (mine !== latest.current) return;
+      setFolders(answer.folders);
+      setStatus(answer.status);
+      setError(null);
+    } catch (err) {
+      if (mine === latest.current) setError(err instanceof Error ? err.message : String(err));
+    }
+  }, []);
+
+  useEffect(() => {
+    const load = () => void reload();
+    load();
+    window.addEventListener("focus", load);
+    const poll = active ? setInterval(load, POLL_MS) : null;
+    return () => {
+      window.removeEventListener("focus", load);
+      if (poll) clearInterval(poll);
+    };
+  }, [reload, active]);
+
+  // Turn a folder on or off. The server replies with the new list and the live status, so we apply both
+  // optimistically only after it confirms (a folder that isn't on the board still 400s on the server).
+  const setFolder = useCallback(async (folder: string, on: boolean) => {
+    const answer = await api.cloudSyncSetFolder(folder, on);
+    setFolders(answer.folders);
+    setStatus(answer.status);
+  }, []);
+
+  // Ask for an immediate flush. The page shows the status from the answer; the poll will catch up.
+  const syncNow = useCallback(async () => {
+    const answer = await api.cloudSyncNow();
+    setStatus(answer.status);
+  }, []);
+
+  return { folders, status, error, reload, setFolder, syncNow };
+}

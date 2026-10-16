@@ -27,7 +27,17 @@ vi.mock("./vercel-hooks", () => ({ startVercelListener: vi.fn() }));
 vi.mock("./webhook-forward", () => ({ startWebhookRelay: vi.fn() }));
 vi.mock("./cloud-sync-start", () => ({ startAccountCloudSync: vi.fn() }));
 vi.mock("./cli-reaper", () => ({ reapStrayClis: vi.fn(() => Promise.resolve([])) }));
-vi.mock("./settings", () => ({ listProjects: vi.fn(() => db.projects), defaultPermissionMode: () => "auto" }));
+vi.mock("./settings", () => ({
+  listProjects: vi.fn(() => db.projects),
+  defaultPermissionMode: () => "auto",
+  copilotModel: vi.fn(() => ""),
+}));
+// localStorage in node is undefined; modelFor() reads it. Stub a no-op store.
+vi.stubGlobal("localStorage", {
+  getItem: () => null,
+  setItem: () => {},
+  removeItem: () => {},
+});
 
 const store = await import("./store");
 const runner = await import("./runner");
@@ -55,13 +65,31 @@ beforeEach(() => {
 });
 
 describe("ensureCopilot", () => {
-  it("creates the copilot card in the home folder the first time", () => {
+  it("creates the copilot card in the home folder the first time, with the chosen model", () => {
     const c = ensureCopilot();
     expect(store.createCard).toHaveBeenCalledWith(
-      { title: "Copilot", prompt: "", cwd: os.homedir(), backend: "claude", permissionMode: "auto", role: "copilot" },
+      {
+        title: "Copilot",
+        prompt: "",
+        cwd: os.homedir(),
+        backend: "claude",
+        permissionMode: "auto",
+        model: "claude-opus-5-5",
+        role: "copilot",
+      },
       COPILOT_ID,
     );
     expect(c.id).toBe(COPILOT_ID);
+  });
+
+  it("uses the pick from Settings when one is set", async () => {
+    const settings = await import("./settings");
+    vi.mocked(settings.copilotModel).mockReturnValueOnce("claude-haiku-5-5");
+    ensureCopilot();
+    expect(store.createCard).toHaveBeenCalledWith(
+      expect.objectContaining({ model: "claude-haiku-5-5", role: "copilot" }),
+      COPILOT_ID,
+    );
   });
 
   it("returns the existing card after that", () => {
