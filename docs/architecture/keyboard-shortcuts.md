@@ -2,7 +2,7 @@
 
 ## Overview
 
-One registry holds the board's keyboard shortcuts. Components register theirs, a single window listener dispatches key presses, and the `?` dialog lists whatever is registered, so a new shortcut shows up in the list with no extra work.
+One registry holds the board's keyboard shortcuts. Components register theirs, a single window listener dispatches key presses, and the `?` dialog lists whatever is registered, so a new shortcut shows up in the list with no extra work. Settings → Shortcuts renders the same list inline (with the rebindable dictation row above it), so users who land on the settings page for shortcut help see every shortcut without first learning the `?` key — the two views share `useShortcutList`/`shortcutSections`/`KeyCaps` from one source.
 
 Other pieces share the name and are separate: `lib/shortcuts.ts` holds user-rebindable bindings (dictation) kept in localStorage, and the native menu accelerators in `electron/main.cjs` (⌘N, ⌘F, ⌘, and so on) are handled by Electron. Keys handled where they apply (the composer, reply box, terminal, palette, app menu) are written down in `lib/shortcut-catalog.ts` so the dialog can list them too.
 
@@ -13,6 +13,7 @@ Discoverability is built on the same registry: tooltips, key badges, native righ
 - `lib/hotkeys.ts`: the registry, `useShortcuts`, `useShortcutListener`, `useShortcutList`; `keyCaps`/`keyLabel` for drawing keys, `useShortcutHint` for tooltips ("Copilot (C)"), `toAccelerator` for native menus.
 - `lib/shortcut-catalog.ts`: what the dialog lists. `shortcutSections` merges the registry with the fixed shortcuts handled elsewhere (`FIXED_SHORTCUTS`) and the app menu's keys (`MENU_ALIASES`, desktop only); `filterSections` searches by words or by key ("cmd k", "esc"). Update `FIXED_SHORTCUTS` when a key handled outside the registry changes.
 - `components/ShortcutsDialog.tsx`: the `?` dialog, a searchable two-column list of `shortcutSections`, up to 1100px wide; `splitDescription` puts a description's fine print on a dim second line.
+- `components/ShortcutSettings.tsx`: the same `shortcutSections` rendered inline on the Settings → Shortcuts page, with the rebindable row(s) above it.
 - `components/KeyCaps.tsx`: `Cap` and `KeyCaps`, the one way to draw a key spec as key caps.
 - `components/submit-keys.ts` + `lib/new-thread.ts` + `lib/use-mod-held.ts`: the New thread dialog's start keys. Enter is a new line; ⌘↵ starts the thread and closes the dialog; ⌃↵ (macOS only, since Ctrl is the mod key elsewhere) starts it and keeps the dialog open, emptied, for the next one (`onCreate`'s `{ stay }`: the board doesn't open the new card). `useHeldModifiers()` tells ⌘ from ⌃ while held, and `startButton()` relabels the Start button to match ("Start & close ⌘↵", "Start, keep open ⌃↵"). `submitFor()` decides what Enter does in the raw Markdown box.
 - `components/ModifierHint.tsx`: hold Shift, or ⌘ (Ctrl off macOS) for 0.6s, and a card bottom-left lists the registered shortcuts that use it.
