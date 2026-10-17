@@ -25,8 +25,19 @@ async function probe(dir, readdir = fs.promises.readdir) {
 }
 
 /**
+ * The app macOS counts when a thread reads a folder: the running binary's own bundle, not the launcher that opened it.
+ * Dev Weft is node_modules/electron/dist/Electron.app (the ~/Applications/Weft.app launcher only runs `open -a` on it),
+ * so a grant given to a "Weft" entry there doesn't cover it.
+ * @param {{ isPackaged?: boolean, getPath: (key: string) => string }} app
+ */
+function grantee(app) {
+  const bundle = /^(.*?\.app)\//.exec(app.getPath("exe"))?.[1];
+  return { name: app.isPackaged ? "Weft" : "Electron", path: bundle ?? "" };
+}
+
+/**
  * @param {{
- *   app: { getPath: (key: string) => string },
+ *   app: { isPackaged?: boolean, getPath: (key: string) => string },
  *   dialog: { showMessageBox: (win: unknown, options: object) => Promise<{ response: number }> },
  *   shell: { openExternal: (url: string) => unknown },
  *   window?: () => unknown,
@@ -46,22 +57,24 @@ function createFolderAccess({ app, dialog, shell, window = () => undefined, plat
     const status = await probe(app.getPath(key), readdir);
     if (status !== "denied") return { status };
     const name = key[0].toUpperCase() + key.slice(1);
+    const who = grantee(app);
     const { response } = await dialog.showMessageBox(window(), {
       type: "info",
       message: `Allow Weft to read your ${name} folder`,
       detail:
-        `A thread asked for files in ${name}, and macOS is blocking it. ` +
-        `Turn on “${name} Folder” for Weft under Privacy & Security → Files and Folders, then restart Weft.`,
+        `A thread asked for files in ${name}, and macOS is blocking it for ${who.name}${who.path ? ` (${who.path})` : ""}. ` +
+        `Turn on “${name} Folder” (under Files and Folders) or Full Disk Access for ${who.name}, then restart Weft.` +
+        (app.isPackaged ? "" : " A “Weft” entry in the list is the launcher, a different app: macOS counts the one that's running."),
       buttons: ["Open Settings", "Not now"],
       defaultId: 0,
       cancelId: 1,
     });
     const openedSettings = response === 0;
     if (openedSettings) shell.openExternal(SETTINGS_URL);
-    return { status, openedSettings };
+    return { status, openedSettings, grantee: who.name };
   }
 
   return { ask };
 }
 
-module.exports = { createFolderAccess, probe, FOLDERS, SETTINGS_URL };
+module.exports = { createFolderAccess, grantee, probe, FOLDERS, SETTINGS_URL };

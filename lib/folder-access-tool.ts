@@ -15,6 +15,7 @@ export function folderAccessTool() {
       const { shell, text } = await import("./browser-tools");
       try {
         const r = await shell("/folder-access/ask", { folder });
+        const app = typeof r.grantee === "string" ? r.grantee : "Weft";
         switch (r.status) {
           case "granted":
             return text(`Weft can already read ${folder}. If a read still fails, restart Weft so its threads pick the access up, then retry.`);
@@ -25,7 +26,7 @@ export function folderAccessTool() {
           case "denied":
             return text(
               r.openedSettings
-                ? `macOS is blocking ${folder}. I opened System Settings → Privacy & Security → Files and Folders for the user: tell them to turn on “${folder}” for Weft and restart Weft, then retry.`
+                ? `macOS is blocking ${folder} for the running app, ${app}. I opened System Settings → Privacy & Security for the user: tell them to turn on “${folder}” (Files and Folders) or Full Disk Access for ${app}, which isn't the same entry as a "Weft" launcher, and restart Weft, then retry.`
                 : `macOS is blocking ${folder} and the user chose Not now. Don't ask again this turn; tell them how to allow it (System Settings → Privacy & Security → Files and Folders) or to copy the files somewhere else.`,
             );
           default:

@@ -8,7 +8,7 @@ function setup({ readdir = vi.fn().mockRejectedValue(eperm()), response = 0, pla
   const dialog = { showMessageBox: vi.fn().mockResolvedValue({ response }) };
   const shell = { openExternal: vi.fn() };
   const getPath = vi.fn((key: string) => `/Users/me/${key}`);
-  const access = createFolderAccess({ app: { getPath }, dialog, shell, platform, readdir });
+  const access = createFolderAccess({ app: { getPath: (key: string) => (key === "exe" ? "/r/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron" : getPath(key)), isPackaged: false }, dialog, shell, platform, readdir });
   return { access, dialog, shell, getPath, readdir };
 }
 
@@ -55,14 +55,15 @@ describe("ask", () => {
 
   it("explains a refused folder and opens Files and Folders on Open Settings", async () => {
     const { access, dialog, shell } = setup();
-    expect(await access.ask("downloads")).toEqual({ status: "denied", openedSettings: true });
+    expect(await access.ask("downloads")).toEqual({ status: "denied", openedSettings: true, grantee: "Electron" });
+    expect(dialog.showMessageBox).toHaveBeenCalledWith(undefined, expect.objectContaining({ detail: expect.stringContaining("/r/node_modules/electron/dist/Electron.app") as string }));
     expect(dialog.showMessageBox).toHaveBeenCalledWith(undefined, expect.objectContaining({ message: expect.stringContaining("Downloads") as string }));
     expect(shell.openExternal).toHaveBeenCalledWith(SETTINGS_URL);
   });
 
   it("asks every time a thread asks, and leaves Settings closed on Not now", async () => {
     const { access, dialog, shell } = setup({ response: 1 });
-    expect(await access.ask("downloads")).toEqual({ status: "denied", openedSettings: false });
+    expect(await access.ask("downloads")).toEqual({ status: "denied", openedSettings: false, grantee: "Electron" });
     await access.ask("downloads");
     expect(dialog.showMessageBox).toHaveBeenCalledTimes(2);
     expect(shell.openExternal).not.toHaveBeenCalled();
