@@ -8,8 +8,10 @@ The goal: a card's thread reads the same on another device as on the Mac that ru
 is the contract between the parts:
 
 - `lib/cloud-sync.ts`: the outbox. A bus listener (no network, no awaits) turns `card`, `card_deleted` and `thread`
-  events for opted-in folders into lines in `~/.weft/sync-outbox.jsonl` (`lib/cloud-outbox.ts`). A turn's `result`
-  item flushes at once; everything else waits for a 10 s tick, so a streaming turn is one batch. A flush compacts the
+  events for opted-in folders into lines in `~/.weft/sync-outbox.jsonl` (`lib/cloud-outbox.ts`). A card change, a `user`
+  item (a message you sent, from the Mac or the web) and a turn's `result` flush at once; a turn's other items arm a flush
+  1 s out (`FLUSH_SOON_MS`) that later items don't push back, so a burst of tool calls is one request and the web reads a
+  turn as it runs. A 10 s tick picks up whatever is left (entries from before a restart). A flush compacts the
   file, then uploads from the store's current state (not the event; the upload half is `lib/cloud-sync-upload.ts`):
   cards, deletes and truncates first, then thread items 100 to a request, each chunk dropped from the outbox by
   position as it lands, so an update that lands mid-upload stays queued and a backlog of tens of thousands makes
@@ -49,24 +51,33 @@ is the contract between the parts:
   It is the desktop board drawn read-only, not a lookalike: the cards are `components/CardView.tsx` with `readOnly` (no drag,
   stop, answer, resume, star or archive), the columns and their counts are `ColumnHeader` and `ColumnPlaceholder`, and what a
   column holds comes from the desktop's own `lib/board-view.ts` (`groupByColumn`, `summarizeProjects`, `SORTERS`), so a change
-  to the board reaches both. `WebProjectBar` is its project chips, filter box and sort; `.wz-desk` (`web-board.css`) gives the
+  to the board reaches both, and the columns themselves are the desktop's `BoardColumn` (drag handlers no-ops, Backlog's **Add a
+  thread** opens New thread). The window around them is the desktop's too: `WorkspaceHeader` returns null on `/board`, and
+  `WebBoardHeader` (logo, counts, workspace, Live, New thread on N, `WebAccountMenu` with workspaces, Team, Billing and Sign out)
+  and `WebRail` (★ starred filter, Board, Team, Billing) take its place. `WebProjectBar` is its project chips, filter box and sort; `.wz-desk` (`web-board.css`) gives the
   subtree the dark desktop tokens and the full window instead of the workspace shell's 880px column. The server renders the
   workspace's non-deleted cards (the copilot is left out); `useWebBoard` subscribes to Realtime `postgres_changes` on
   `cloud_cards` and `cloud_thread_items` (filter `org_id=eq.<id>`) and moves, adds and removes cards in place, with a Live dot
-  that goes grey when the channel drops. `?card=<id>` opens a card's thread in `WebThreadPanel`: `groupThread` and
+  that goes grey when the channel drops. `?card=<id>` opens a card in `WebThreadPanel`, framed over the board like the desktop's open card (`fixed inset-4`): the
+  thread at 44% with the desktop ThreadPanel's header (CLI, folder, session, live, tags, stage and what's left) and, on the right,
+  `WebPane`, the browser pane as of the thread's last `open_url` (`paneFor` from `lib/share-types.ts`): a synced page framed
+  sandboxed from `app/api/web-board/[orgId]/page/[sha]` (the visitor's cookie client downloads it, so the bucket's member
+  policy is the gate), a site framed with Open ↗, a localhost or file page as the card's last capture. The thread: `groupThread` and
   `ThreadEntries` from the desktop (oldest first, tool runs folded, `Markdown`), newest 50 first with "Load earlier messages",
   blob refs resolved to hour-long signed URLs from `weft-blobs` as items arrive (live ones too), and a tool output over 2 KB
   read from `cloud_tool_outputs` when its row opens, through `ToolResultSourceContext` in `lib/use-tool-result.ts` (the desktop
   fetches the same row from its own server). A signed blob link has no file extension, so `mediaKind` takes it for an image.
-  The cards' own controls (drag, stop, answer, star, archive) are absent; the board's one write is **New thread** (see Commands).
+  The cards' own controls (drag, star, archive) are absent; the board's writes are **New thread**, and a reply, an answer or Stop in an open card (see Commands).
 
-## Commands: starting a card from the web
+## Commands: starting a card and replying from the web
 
-The web can't run a thread, so a card made there is a request to a Mac. `public.cloud_commands`
+The web can't run a thread, so a card made there, or a reply typed there, is a request to a Mac. `public.cloud_commands`
 (`supabase/migrations/20261016130000_card_commands.sql`, contract in `lib/cloud-commands.ts`) holds one row per request:
-`kind` (`new_card`), `target_device` and `folder` (a `cloud_cards.owner_device`/`folder` pair of the author's own cards), a `payload`
-(`prompt`, `backend`, `model`, `effort`; never the permission mode) and a `status` (`pending` → `claimed` → `done`, or `failed` with an
+`kind` (`new_card` or `reply`, `supabase/migrations/20261017140000_reply_commands.sql`), `target_device` and `folder` (a `cloud_cards.owner_device`/`folder` pair of the author's own cards), a `payload`
+(a new card's `prompt`, `backend`, `model`, `effort`, never the permission mode; a reply's `cardId` and `text`) and a `status` (`pending` → `claimed` → `done`, or `failed` with an
 `error`, plus the `card_id` made).
+
+- **Ownership.** A `BEFORE INSERT` trigger (`private.check_cloud_command_device`, `20261018130000_cloud_commands_device_ownership.sql`) refuses a row whose `device_id` isn't a device of the row's `account_id` in `public.devices`, so a signed-in user of one account can't insert a command aimed at someone else's Mac. The receiver's check on `lib/cloud-inbox.ts` also cross-checks the row's `account_id` against its own session, not just the `device_id`. `card_id` is set only by the receiver after `createCardFromBody` accepts the request; an insert that writes a non-null `card_id` is rewritten to `NULL` by a `BEFORE INSERT` step, so the client can't pre-claim a card.
 
 - **Web** (`components/web-board/WebNewCardDialog.tsx`, `useWebBoard.startCard`, `lib/web-commands.ts`): the header's New thread offers
   `webTargets` (folders of cards whose `owner_user` is you), inserts the row as you, and `WebCommandStrip` follows it ("Waiting for your Mac",
@@ -77,8 +88,39 @@ The web can't run a thread, so a card made there is a request to a Mac. `public.
   (so one runs once), refuses it unless the folder is in `syncFolders` and `org_id` is the workspace this Mac syncs to, then
   `createCardFromBody` (shared with `POST /api/cards`, `lib/new-card.ts`) and `startCard` run it with the Mac's own default permission mode.
   It reports `done` + `card_id` or `failed` + a short reason; a claimed command is never retried, so a card can't be made twice.
+- **Replies** (the desktop's `components/ReplyBox.tsx` over the cloud transport, `useWebBoard.sendReply`, `replyCommand`/`replyBody`): the open card's reply box
+  shows only when `owner_user` is you (`canReply`), and sends a `reply` addressed to the card's `owner_device` and `folder`. The Mac
+  runs the same checks as for a new card, then refuses a card that isn't on it or isn't in that folder (and the copilot), and calls
+  `sendUserMessage`, the reply box's own path: now, or held as "after this turn" while one runs (the web shows `card.scheduled`'s
+  `afterTurn` messages above the box). A reply shows above the box (`components/web-board/WebReplyStatus.tsx`, `cardReplies`, not in
+  the strip: `boardCommands`) until it's done; then the web deletes its row, and the `user` item, flushed at once, is the message in the
+  thread. While the card runs, the reply box holds what you write and sends it when the turn ends, as on the desktop; its **Send now**
+  sends a `stop` first.
+- **Answers and Stop** (`answer` / `stop`, `supabase/migrations/20261017150000_answer_stop_commands.sql`, `answerCommand`/`answerBody`,
+  `stopCommand`/`stopBody`): the permission request or question a card waits on is answered from the web through the desktop's own
+  `PermissionActions` and `QuestionForm`; the answer carries the request's `pendingId`, so the Mac's `answerPermission` refuses it once
+  that request isn't waiting anymore. Stop (the reply box's ■) ends the running turn through `stop()`. Same checks as a reply.
 - **Policies**: members read; a member inserts as themselves (only `org_id, kind, target_device, folder, payload` are grantable, so a client can't
   write its own status); only the author updates `status, card_id, error` or deletes (cancel before it runs, clear after).
+
+## One thread view, two transports
+
+The open card on weft.zip is the desktop's own `ThreadPanel` → `ThreadView` → `ReplyBox`, not a lookalike: what differs is where the
+thread comes from and where its actions go, `lib/thread-transport.ts`'s `ThreadTransport`, read from `ThreadTransportContext`.
+
+| | Desktop (`localTransport`, the default) | weft.zip (`components/web-board/useCloudTransport.ts`) |
+|---|---|---|
+| A page | `GET /api/cards/<id>/thread?before=&limit=` | `cloud_thread_items` by `seq`, through the visitor's session (`lib/cloud-thread-page.ts` `pageFromRows`) |
+| Live | `/api/events` "thread" events (`applyThreadEvent`) | the board's one Realtime channel, handed on by `useWebBoard`'s item bus (`pageUpdateFor`; a DELETE cuts the window at its seq) |
+| Drawing | items as they are | blob refs → signed URLs (`CloudBlobContext`, so a URL landing redraws without a new transport) |
+| Stop | `POST /api/cards/<id>/stop` | a `stop` command |
+| `!` shell, ↑ edit, folder grants, Wait, a subagent's Stop | the card routes | left out, so the views don't offer them |
+
+`desktop: false` also makes `ThreadPanel` read-only in its header (the CLI as a badge, no mode picker, no rename, no card actions) and
+drops the review panel and Send later; the web's `footer` (WebReplyStatus) stands in. Sending and answering stay the panel's `onSend` /
+`onAnswer` props, as on the desktop board. A teammate's card opens `readOnly`: no reply box and no answers. The composer is the
+desktop's too; a pasted image, dictation and the `/skill` typeahead call the local server's routes, which weft.zip refuses, so
+there they fail (a paste shows the refusal) until the transport carries an upload.
 
 ## Ownership
 
@@ -151,7 +193,7 @@ opened.
 
 - Item bodies go up as plain JSON. Sealing them with the workspace key (teams-vault.md) has to land before
   sync is offered to anyone else.
-- A reply typed on the web can't reach a running thread yet (the commands table has room for a `reply` kind). A thread the Mac starts for the web that needs a yes waits in Needs you; there is no answering it from the web.
+- A question or permission a thread asks waits in Needs you; a reply from the web doesn't answer it (it queues for after the turn). The assistant's text doesn't stream to the web either: it arrives as a whole item when written (`delta` events stay on the Mac).
 - A teammate's Mac never acts on your requests and yours never acts on theirs: the Mac only runs commands its own account made. Sending work to a teammate would need an explicit opt-in.
 - Finished commands stay in `cloud_commands`; nothing prunes them yet. A command whose Mac crashed between claiming and reporting stays `claimed` until it's cancelled.
 - The Mac must be on and running Weft for a command to run; the web says "Waiting for your Mac" until it is.

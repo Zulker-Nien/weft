@@ -23,7 +23,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - **I'm always showing you something, every turn.** The browser pane is never idle and never stale.
   Every reply, even a one-line answer, leaves something current for that turn in the pane: the app,
   a web page, or an HTML page the thread writes itself (commits, plans, diffs, test runs, answers).
-  The rule lives in `BROWSER_PROMPT` (`lib/browser-tools.ts`); `lib/glance.ts` backs it up with a
+  The rule lives in `BROWSER_PROMPT` (`lib/browser-tools.ts`); `lib/show.ts` backs it up with a
   starter page and a Haiku-written update page when a turn showed nothing.
 - **I fix myself.** Every thread working in me should be looking for ways I could be better. When
   you spot one, you may start a card to fix it without asking: call `mcp__board__list_cards`
@@ -33,7 +33,10 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - tests before refactoring; small behavior-preserving steps
   - "make the change easy, then make the easy change"
   - name the smell (Long Function, Large Class, Duplicated Code, Feature Envy) before fixing it
-  - hotspots: components/Board.tsx (~850 lines), electron/main.cjs (~490), electron/vault.cjs (~390), electron/browser-pane.cjs (~345), lib/cloud-sync.ts (~365).
+  - the 300-line `max-lines` cap and the per-file ratchet in `eslint.config.mjs` are there to force that refactor.
+    A file at its cap gets code moved out (Extract Function or Module) and its number lowered; never joined lines,
+    dropped blank lines or deleted comments, which only hide the smell
+  - hotspots: components/Board.tsx (~850 lines), electron/main.cjs (~475; its control routes are `electron/pane-routes.cjs`), electron/vault.cjs (~390), electron/browser-pane.cjs (~345), lib/cloud-sync.ts (~365).
     Everything else is under 300 (2026-10-16): big files became re-exporting fronts (`lib/types.ts` → `lib/types-*.ts`,
     `lib/import.ts` → `lib/import-*.ts`, `lib/secret-guard.ts` → `lib/secret-guard-*.ts`, `lib/client.ts` → `lib/client-*.ts`).
     Pure logic already moved out: `lib/board-view.ts` (columns, project chips, chime/unseen rules) and
@@ -44,7 +47,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - My Vitest suite (`pnpm test`, ~3,500 tests) covers every line of `lib/` and `app/api/` (98.6% of branches,
     `pnpm coverage`): a test file beside each module, routes with their libs mocked, the runner's SDK loop
     against a fake `query()` (`lib/runner.harness.ts`, shared by `lib/runner*.test.ts`), and browser code and React hooks under happy-dom +
-    @testing-library/react (`// @vitest-environment happy-dom`). `lib/prerender-check.test.ts` walks app/**/page|layout|route for what only `next build` refuses under cacheComponents (segment config exports, `await params`/`cookies()` before `<Suspense>`; two failed deploys on 2026-10-17), and `lib/route-import-guard.ts` runs the same check on each edit. Component tests have started under jsdom
+    @testing-library/react (`// @vitest-environment happy-dom`). `lib/client-graph.test.ts` walks every "use client" file's imports and fails on a chain into "use cache", cacheLife/cacheTag or "server-only" (2026-10-17's build error). `lib/prerender-check.test.ts` walks app/**/page|layout|route for what only `next build` refuses under cacheComponents (segment config exports, `await params`/`cookies()` before `<Suspense>`; two failed deploys on 2026-10-17), and `lib/route-import-guard.ts` runs the same check on each edit. Component tests have started under jsdom
     (`components/*.test.tsx`: CardView, ReplyBox, NewCardDialog, TagsDialog, TagsDrawer, ThreadPanel, ColumnHeader, SettingsDialog, LibraryRail; Composer stubbed by `components/composer-mock.tsx`);
     `electron/main-menu-popup.test.ts` is the first test in `electron/`. The rest of `components/` and `electron/`
     are untested and outside the coverage set; add tests with any risky change, and keep new lib code at 100%.
@@ -103,6 +106,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   (`BackendPicker`, `ModelPicker`, `EffortPicker`) on top of `components/ModelSelect.tsx` (Claude / Puku / Codex optgroups driven by `MODELS` in `lib/new-thread.ts`; Copilot passes `groups=Claude` to stay Claude-only).
 - `lib/subagents.ts` + `components/SubagentPicker.tsx`: when threads delegate to subagents and on which model (Settings → Models → Use for subagents,
   any Claude or Puku model: forced through `CLAUDE_CODE_SUBAGENT_MODEL` / `PUKU_CLI_SUBAGENT_MODEL` on its own CLI, a headless `-p` run on the other).
+  `lib/tasks.ts` + `lib/task-ledger.ts` + `lib/tasks-view.ts` + `components/TaskStrip.tsx`: each thread's subagents and background commands from the CLI's
+  task events, on `card.tasks` (the strip above the reply box, ⑂N on the card); idle CLIs with live ones stay open, and ones a CLI exit cut off are named to the thread's next message.
 - `lib/automations.ts` `doneOverrides` + `components/DonePicker.tsx`: Settings → Models → Run /weft:done on picks the model (any Claude or
   Puku model, applied to cards on its own CLI) and effort `/weft:done` uses on a Done move; both model menus are `components/ModelSelect.tsx`; `app/api/cards/[id]` moveCard snapshots the card's own picks into `preDoneModel` /
   `preDoneEffort` and `lib/runner.ts` `restoreDoneOverride` puts them back after the wrap-up.
@@ -126,7 +131,11 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `lib/file-drop.ts` + `lib/use-file-drop.ts` + `components/FileDrop.tsx`: files dragged from Finder anywhere in the window; a composer takes
   its own drop, a card opens with them in its reply box, an open thread (`data-drop-target`) gets them, empty board opens New thread; files wait
   in the store until the target composer (`dropTarget`) mounts.
-- `lib/review.ts`, `lib/devserver.ts`: `weft-review` tour blocks and the card's dev server.
+- `lib/review.ts`: `weft-review` tour blocks. `lib/devserver.ts` + `lib/devserver-list.ts` + `lib/devserver-tools.ts` + `components/DevServersDrawer.tsx`:
+  dev servers Weft runs for threads (`mcp__devservers__*`) and review tours; `lib/task-stop.ts` is the task strip's per-task Stop (docs/architecture/dev-servers.md).
+  `lib/services.ts` + `lib/services-snapshot.ts` + `lib/services-kill.ts` + `app/api/services` + `lib/use-services.ts` + `lib/services-view.ts` + `lib/services-prefs.ts` + `components/ServicesDrawer.tsx`:
+  the rail's 🖥 Services drawer, every process Weft spawned (one `ps` of the tree under Electron, split by thread CLI, dev server, terminal and other) with CPU, memory, End and a refresh-rate cookie.
+  `lib/dev-commands.ts` + `lib/dev-launchers.ts` + `lib/dev-launchers-view.ts` + `components/DevLaunchers.tsx`: its Dev servers section, each working folder's dev command (package.json, Procfile, Rails, Django, deno, Makefile, wrangler) with Start/Restart and whether it started or restarted.
 - `plugin/skills/*`: my own skills (`/weft:done`, `/weft:commit`, `/weft:preview`, `/weft:setup-done`,
   which installs tests, docs and strict lint on a project before `/done`; `/weft:done` also keeps this file current);
   `lib/skills.ts` lists skills, `lib/automations.ts` turns "When … run …" rules into turns.
@@ -145,7 +154,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `lib/sprint-plan.ts` + `app/api/sprint` + `components/BacklogBadge.tsx`: the "☰ N" Backlog counter beside it and the card it starts,
   a read-only planner that sizes each Backlog card, flags duplicates and finished ones, and groups the rest into sprints of cards
   touching different files (no worktrees, so overlap is the constraint); starts a sprint's cards only on your OK.
-- `lib/card-pictures.ts`: a card's thumbnail (latest thread image, or a pane capture after each turn from `lib/glance.ts`) and its Haiku emoji tile; `lib/retitle.ts` renames a card with a placeholder title ("Image attachment") after its turn (`titleBy` marks a name Weft or you chose) and gives an untagged card 1 to 3 tags in the same Haiku call (`tagsBy`); `components/CardView.tsx` draws the card.
+- `lib/card-pictures.ts`: a card's thumbnail (latest thread image, or a pane capture after each turn from `lib/show.ts`) and its Haiku emoji tile; `lib/retitle.ts` renames a card with a placeholder title ("Image attachment") after its turn (`titleBy` marks a name Weft or you chose) and gives an untagged card 1 to 3 tags in the same Haiku call (`tagsBy`); `components/CardView.tsx` draws the card.
 - `lib/tags.ts` + `lib/tag-store.ts` + `app/api/tags` + `lib/rail-view.ts` + `components/LibraryRail.tsx` (`SideRail`) + `components/TagsDrawer.tsx` +
   `components/TagsDialog.tsx` + `components/CardMarks.tsx` + `components/StarButton.tsx`: ★ star (never auto-archived; the rail's ★ filters
   the board) and tags (GitHub label rules, catalog in `~/.weft/tags.json`, the 🏷 drawer, pills on the card's stage line); they replaced the
@@ -202,14 +211,16 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   `weft-copilot-lane` / `weft-copilot-peek` cookies in `lib/board-prefs.ts`. The board's columns
   keep their 170px floor when hidden and narrow to 120px when peek or open (`columnMinWidth(state)`);
   the peek auto-closes 6s after the mouse leaves so the board reclaims the width. They
-  are `@container`s that drop thumbnails and header extras.
+  are `@container`s that drop thumbnails and header extras. `lib/copilot-personas.ts` + `components/CopilotPersonaMenu.tsx`: who the copilot is (Wingman, Founder after
+  founder-skill, Captain after gstack), picked from its name in the lane header; `card.persona` → `Spec.persona` → its prompt after
+  `COPILOT_PROMPT`, and a switch starts a new chat (docs/architecture/copilot-personas.md).
 - `lib/workspace-layout.ts` + `components/CardWorkspace.tsx` + `components/EditorColumn.tsx` + `lib/file-access.ts` + `app/api/cards/[id]/files` + `lib/open-file.ts`: the open card's four columns and the editor column (CodeMirror, TipTap markdown, Changes vs. HEAD); any file path in the thread opens it (docs/architecture/editor.md).
 - `lib/browser-tools.ts`: `mcp__browser__*` tools every thread gets.
 - `lib/mini-apps.ts` + `lib/mini-app-store.ts` + `app/api/apps` + `lib/use-mini-apps.ts` + `components/AppsRail.tsx` + `components/SaveAppButton.tsx`: mini apps, pages
   saved from the browser pane (its toolbar's grid button) as tiles on the left rail below 🖥 Services (rendered inside `components/LibraryRail.tsx`), in `~/.weft/apps.json`; a tile opens its page in the board's pane. No apps, nothing on the rail (docs/architecture/mini-apps.md).
 - Browser pane: `components/BrowserPane.tsx` draws the toolbar and the placeholder the native view (`electron/browser-pane.cjs`)
-  lies over; `components/GlanceRail.tsx` + `lib/glance-rail.ts` + `lib/glance-events.ts` + `lib/pane-page.ts` (stamps each sent message with the pane's page) are the 72 px glance rail right of the page,
-  one mini per turn and per page the pane showed (the thread's `open_url` calls plus pages opened by hand, in memory), synced with the chat by two window events (`glance:scroll-to`, `glance:pulse`) on rows tagged `data-turn` (docs/architecture/glance-rail.md).
+  lies over; `components/ShowRail.tsx` + `lib/show-rail.ts` + `lib/show-events.ts` + `lib/pane-page.ts` (stamps each sent message with the pane's page) are the 72 px show rail right of the page,
+  one mini per turn and per page the pane showed (the thread's `open_url` calls plus pages opened by hand, in memory), synced with the chat by two window events (`show:scroll-to`, `show:pulse`) on rows tagged `data-turn` (docs/architecture/show-rail.md).
 - `lib/board-view-tools.ts` + `electron/board-view.cjs` + `electron/control-server.cjs`: `mcp__board_view__*`, a thread's eyes and hands
   on the board window itself (screenshot, click, hover, type, read; fixed scripts, no arbitrary JS; `data-secret` reads as ‹secret›,
   `data-secret-action` can't be clicked) through the pane's token-guarded control server (docs/architecture/board-view.md).
@@ -227,11 +238,15 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   `lib/thread-page.ts` + `app/api/cards/[id]/thread/**` + `lib/use-tool-result.ts`: threads page from the newest item back and fetch
   a tool output over 2 KB when its row opens (docs/architecture/cloud-sync.md).
   `app/[orgSlug]/board` + `components/web-board/*` + `lib/web-board.ts`: the weft.zip board is the desktop's own `CardView` (`readOnly`),
-  `ColumnHeader`, `lib/board-view.ts` and `ThreadEntries` over Realtime, not a lookalike; change the desktop card or thread and the web follows.
-  `lib/cloud-commands.ts` + `lib/cloud-inbox.ts` + `lib/new-card.ts` + `lib/web-commands.ts` + `components/web-board/WebNewCardDialog.tsx`: **New thread** on the web board
-  inserts a `cloud_commands` row (`supabase/migrations/20261016130000_card_commands.sql`); the Mac it names hears it over Realtime, checks it (its device, its account, a
-  synced folder, its workspace), makes the card through the same `createCardFromBody` as `POST /api/cards`, starts it and reports back; the card syncs up like any other.
-  `lib/share-types.ts` + `lib/card-share.ts` + `components/ShareCardDialog.tsx` + `app/s/[id]` + `app/api/s/[id]/*` + `lib/share-*.ts` + `components/share-view/*`: **Share…** on a card gives `weft.zip/s/<id>`,
+  `BoardColumn`, `ColumnHeader`, `lib/board-view.ts`, and an open card is the desktop's own `ThreadPanel` → `ThreadView` → `ReplyBox` over a different
+  transport (`lib/thread-transport.ts`: `localTransport` for the desktop, `components/web-board/useCloudTransport.ts` + `lib/cloud-thread-page.ts` for Supabase rows,
+  Realtime and commands), not a lookalike; change the desktop card or thread and the web follows. New thread-view code reads the transport, never `fetch`/`api` directly.
+  `lib/cloud-commands.ts` + `lib/cloud-inbox.ts` + `lib/new-card.ts` + `lib/web-commands.ts` + `components/web-board/WebNewCardDialog.tsx` + `components/web-board/WebReplyStatus.tsx`: **New thread**, the open card's reply box, its answers and Stop on the web board
+  insert a `cloud_commands` row (`supabase/migrations/20261016130000_card_commands.sql`; a `BEFORE INSERT` trigger
+  in `20261018130000_cloud_commands_device_ownership.sql` requires the row's `device_id` to be a device row
+  of the same `account_id`); the Mac it names hears it over Realtime, checks it (its device, its account, a
+  synced folder, its workspace), makes the card through the same `createCardFromBody` as `POST /api/cards`, starts it and reports back; the card syncs up like any other. `card_id` is set only by the receiver after `createCardFromBody` accepts the request. A `reply` goes to the card through `sendUserMessage`, as if typed on the Mac; an `answer` through `answerPermission` (by `pendingId`), a `stop` through `stop()`.
+  `lib/share-types.ts` + `lib/card-share.ts` + `components/ShareCardDialog.tsx` + `components/ShareBoardDialog.tsx` + `components/web-board/WebShareBoard.tsx` over one `components/BoardSharePanel.tsx` (the board's link, `weft.zip/<slug>/board`, and invites: `lib/use-team.ts` on the desktop, `boardShareTeam` in `lib/team-actions.ts` on the web) + `app/s/[id]` + `app/api/s/[id]/*` + `lib/share-*.ts` + `components/share-view/*`: **Share…** on a card gives `weft.zip/s/<id>`,
   its thread and its pane side by side, live (polled), private / public / email / password from `@aimhuge/share`; reads the synced rows (docs/architecture/sharing.md).
 - `app/api/*` + `lib/guard.ts`: localhost-only Host check, writes need `x-threadboard: 1`.
 - `lib/restart-guard.ts`: turns away Bash that would kill or restart Weft itself (its server pid, port, `next dev`, the app)
@@ -272,8 +287,9 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - `github-issues.md` — a project's open GitHub issues become Backlog cards, one direction, polled every 5 min, instant sync via the deployed relay.
   - `mini-apps.md` — pages saved from the browser pane as tiles on the left rail below Services: `~/.weft/apps.json`, `/api/apps`, the pane's Save as app button, right-click menu.
   - `tags.md` — ★ star and tags (the GitHub-label-style rules, the catalog in `~/.weft/tags.json`, the 🏷 drawer, pills on the card); replaced the library.
-  - `editor.md` — the open card's four columns (thread, editor, pane, glance), the editor (CodeMirror, TipTap markdown with diff3 saves, Changes vs. HEAD), the files route and its safety, `weft:open-file`, inline diffs.
-  - `glance-rail.md` — the browser pane's 72 px rail of one mini per turn and per page, its dots, fallbacks and browser history, and the two events that sync it with the chat.
+  - `dev-servers.md` — Weft-owned dev servers and the rail's 🖥 Services drawer: `mcp__devservers__*`, why not Bash `run_in_background`, how the process tree is split and killed, the task strip's per-task Stop.
+  - `editor.md` — the open card's four columns (thread, editor, pane, show), the editor (CodeMirror, TipTap markdown with diff3 saves, Changes vs. HEAD), the files route and its safety, `weft:open-file`, inline diffs.
+  - `show-rail.md` — the browser pane's 72 px rail of one mini per turn and per page, its dots, fallbacks and browser history, and the two events that sync it with the chat.
   - `board-view.md` — `mcp__board_view__*`: a thread's eyes and hands on the board window itself, fixed scripts, the token-guarded control server.
   - `keyboard-shortcuts.md` — the shortcut registry, the `?` sheet, tooltips, key badges, the `ModifierHint` component.
   - `themes.md` — System/Light/Dark and a scene (one of Weft's pictures behind the board with its own palette).
@@ -285,8 +301,10 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - `keep-working.md` — the menu bar icon's switch to keep the Mac awake with the lid shut so threads keep running in a bag.
   - `analytics.md` — GA4 on the home page only; `GoogleAnalytics` is gated on the home being mounted, so the board route never calls home.
   - `cloud-sync.md` — server-side cards: the outbox, the content-addressed blob store, thread paging, the `cloud_*` tables and their policies.
+  - `profiles.md` — public profiles at `weft.zip/@username`: `profiles.username`, the `/@` → `/u/[username]` rewrite, what the page shows and never shows.
   - `sharing.md` — a card's share link on weft.zip: thread + pane, live; the `@aimhuge/share` modes and gate, `cloud_shares`, the sandboxed pane, redaction.
   - `copilot-suggestions.md` — the copilot's empty-chat chips: what Haiku reads, the one run per board labeled by project, the client filter, setup gaps and `setup_status`.
+  - `copilot-personas.md` — the copilot's personas (Wingman, Founder, Captain): the prompt each adds, the lane header picker, why a switch starts a new chat.
 
   When a new doc lands in this folder, add it here on the same change.
 

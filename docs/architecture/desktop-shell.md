@@ -44,11 +44,19 @@ lives in `electron/server.cjs`.
 - `weft://` links (`handleLink`):
   - `weft://copilot` → `showCopilot()`
   - `weft://card/<id>` → `sendMenu("open-card", id)`
-  - `weft://new?prompt=…&folder=…&title=…&cli=puku&start=1` → POSTs
-    `/api/cards` (with `x-threadboard: 1`) and then opens the new card. If
-    `folder` is missing, the most recent project's path is read from
-    `/api/settings` (falling back to `os.homedir()`).
-- IPC handlers at the bottom: `browser:open` (url, card key), `browser:active`, `browser:prune`, `browser:state`, `browser:visible`,
+  - `weft://new?prompt=…&folder=…&title=…&cli=puku` → POSTs `/api/cards`
+    (with `x-threadboard: 1`) and then opens the new card. `start=1` is
+    ignored on purpose: the card is always created with `start: false` and
+    the New Thread dialog opens pre-filled, so a clickjacked link can't
+    fire a thread (L-3). The handler is in `electron/new-thread-link.cjs`
+    (`createNewThreadLink`); main injects the dialog so the test can pass
+    a mock. If `folder` is missing, the most recent project's path is
+    read from `/api/settings` (falling back to `os.homedir()`).
+- IPC handlers at the bottom: `browser:open` (url, card key; the handler only
+  answers the board window's `webContents` — `e.sender === appView?.webContents`
+  — so a compromised renderer can't navigate the pane to an arbitrary URL
+  (L-5); per-card origin allowlists in `electron/pane-origins.cjs` further
+  constrain where a thread can navigate), `browser:active`, `browser:prune`, `browser:state`, `browser:visible`,
   `browser:bounds`, `browser:back/forward/reload`, `copilot:toggle`,
   `dialog:openFolder`, `shell:openExternal` (http/https only), `shell:reveal` (opens an existing
   absolute folder in Finder), `menu:popup` (shows a native context menu from the items the board
@@ -127,7 +135,7 @@ A native `WebContentsView` overlaid on the board. Lazily created on first
   `click`, `type_text`). The board itself drives the pane over IPC
   (`electron/preload.cjs`).
 - `POST /browser/url` returns the URL a card's page shows ("" with no page).
-  `lib/glance.ts` uses it, with `paneUrl()` / `openInPane()` in
+  `lib/show.ts` uses it, with `paneUrl()` / `openInPane()` in
   `lib/browser-tools.ts`, to keep the pane from being empty or stale: a working
   page when a card's turn starts with no page (a dimmed scene picked per card id by
   `backdropFor()` from `electron/assets/backdrop-*.jpg` plus the splash's own, with the

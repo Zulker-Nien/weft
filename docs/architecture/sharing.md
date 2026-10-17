@@ -58,7 +58,7 @@ the whole thread, as one of three kinds:
   The type comes from the file, not from Storage, which answers HTML as `text/plain` (`lib/share-page.ts`; bug-fixes/022).
 - `site`: a public URL, framed directly, with an Open link for the sites that refuse to be framed.
 - `local`: only reachable on the owner's Mac (localhost, a file that didn't upload). The viewer shows the card's pane
-  capture instead: the thumbnail `lib/glance.ts` takes after each turn, which the outbox now uploads as a blob too.
+  capture instead: the thumbnail `lib/show.ts` takes after each turn, which the outbox now uploads as a blob too.
 
 ## Live
 
@@ -73,7 +73,10 @@ merge by seq, so one that changed in place is replaced. `?before=<seq>` pages ba
   never its folder, session id, pending question or task command lines; a `local` pane keeps its label but not its address
   (`publicPane`).
 - Key-shaped text: every string in every item goes through `lib/share-redact.ts`, which replaces what
-  `lib/secret-detect.ts` finds with `‹hidden: <kind>›`.
+  `lib/secret-detect.ts` finds with `‹hidden: <kind>›`, then a second pass
+  (`lib/share-redact-entropy.ts`) flags any 40+ char run whose Shannon entropy is above 4.7 bits/char
+  and isn't a known safe shape (UUID, hex hash, ULID, Snowflake) — a custom in-house API key, a
+  freshly minted one-off, an internal SaaS token — and replaces it with `‹hidden: an opaque value›`.
 - Long tool outputs: an output over 2 KB is cut from the item by cloud sync anyway, and the viewer's tool-result
   source answers "Long output isn't shared." instead of fetching it from `cloud_tool_outputs`.
 - The password hash: `authenticated` can't select `cloud_shares.password_hash` (column grants); clients read
@@ -88,11 +91,47 @@ merge by seq, so one that changed in place is replaced. `?before=<seq>` pages ba
   (`private.is_card_owner`) writes.
 - `cloud_share_visits`: `share_id`, `email`, `at`. Written by the deployed Weft with the service role; the card's owner reads.
 
+## Rate limit
+
+`POST /api/s/[id]/unlock` answers a share gate's password or email; the route itself is open. A
+per-(ip, share_id) cap of 10 attempts per 10 minutes lives in Supabase, not in the route's
+memory, so a Vercel redeploy or a new instance doesn't reset it.
+
+- `share_unlock_attempts` (one row per (ip_hash, share_id); `20261018120000_share_unlock_attempts.sql`):
+  `ip_hash`, `share_id`, `count`, `first_at`. RLS off; only the service role reads or writes.
+- `ip_hash` is `SHA-256(ip || SHARE_UNLOCK_PEPPER)` (`lib/share-unlock-rate.ts` `hashIp`), so two
+  Weft deployments don't share a bucket space and a stolen DB row can't be matched back to a
+  viewer without the pepper. The route reads the real remote address off `x-real-ip` (set by
+  Vercel at the edge), not the `x-forwarded-for` chain, which a client can forge.
+- The window rolls on the first attempt after a quiet period (`upsert` resets `count` to 1 and
+  `first_at` to now); further attempts in the same window bump `count` atomically; over the
+  limit answers 429 with a `Retry-After` set to the seconds until the existing row's `first_at`
+  ages out. Fails open on a Supabase error so a rate-limit outage doesn't lock out share
+  visitors; the route still 503s when no service key is configured (the only path that makes
+  the limit unreachable).
+
+## Sharing the board
+
+**Share the board** (the share icon beside the avatar and its menu in `components/AccountButton.tsx`, and ⌘K's `share-board` command in
+`components/board-palette.ts`) opens `components/ShareBoardDialog.tsx` in the same `@aimhuge/share` frame. Its body,
+`components/BoardSharePanel.tsx`, is shared with the weft.zip board: **Share** in its header
+(`components/web-board/WebShareBoard.tsx`) opens the same panel on the visitor's cookie session, loading the team when the
+dialog opens through the `boardShareTeam` server action (`lib/team-actions.ts`, behind the team page's gate) and inviting
+through the team page's actions (`components/team/web-actions.ts`), then reloading the list. There is no share
+row: the web board (`app/[orgSlug]/board`) already shows a workspace's synced cards to its members, so the link is
+`weft.zip/<slug>/board` and sharing it means adding people to the workspace. The dialog reads the team through
+`lib/use-team.ts` (prefetched by the top bar), lists members and pending invites, and its email box calls the same
+`invite` op as Settings → Team, which weft.zip's `runInvite` (`lib/team-ops.ts`) answers: an address with a profile joins
+at once ("Added …"), one without gets an invite email (`createInvite` + `inviteMailer`) to sign up and join. It invites as
+Member (or the first role the viewer may hand out); members who can't manage the team see the link and the list only. Signed
+out, it asks you to sign in first, like Share…. A workspace switcher shows when you're in more than one.
+
 ## Gaps
+
+- An invitee lands on `/<slug>/team?joined=1` after accepting, not on the board they were shared.
 
 - Item bodies are plain JSON on Supabase (cloud-sync.md's gap), and a public link puts them in front of anyone with it.
   Redaction catches known key shapes, not everything a tool printed.
 - An uploaded page still points at its images by local relative paths, so a show page's own pictures don't load remotely.
-- The unlock route's rate limit (10 tries per 10 minutes per IP and share) lives in one server instance's memory, so each Vercel instance counts on its own; a password is brute-forceable only as fast as new instances spin up, but a shared store (Supabase or KV) is the fix.
 - No per-share expiry or revoke-all; making a card private, or deleting it, is how a link stops working.
 - The owner can't see the visits list in the app yet.
