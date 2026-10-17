@@ -45,7 +45,7 @@ running, what needs you and what's ready to review.
 
 ### Why is it called Weft?
 
-![Cards as vertical warp threads, crossed by the weft thread that binds them into cloth](faq/weave.svg)
+![Cards as vertical warp threads, crossed by the weft thread that binds them into cloth](../public/brand/faq/weave.svg)
 
 On a loom, the warp threads run lengthwise and the weft is the thread that crosses them, over and under, binding them
 into cloth. On the board, every card is a warp thread, and Weft is the thread across them: the board, the pane and
@@ -56,7 +56,7 @@ shows up as woven stitches.
 ### What's with the cars anyway?
 
 <p>
-<img src="../electron/assets/splash-speeder.jpg" alt="A white finned hovercar skimming a desert at sunset under twin suns" width="49%">
+<img src="../public/brand/scenes/twin-suns.jpg" alt="A white finned hovercar skimming a desert at sunset under twin suns" width="49%">
 <img src="../public/copilots/wingman.jpg" alt="The copilot in a flight helmet, in the passenger seat beside you" width="49%">
 </p>
 
@@ -111,26 +111,26 @@ A quick tour, with the real app, left to right.
 **The board.** Your cards in Backlog, Running, Needs you, Review and Done, with the project chips on top, the
 code-quality score, the uncommitted pile (**+N/−N**), your streak and, at the bottom, the plan limits.
 
-![The Weft board over the Canyon scene: five columns of cards, project chips, code quality, the uncommitted counter and streak in the header](faq/tour-board.jpg)
+![The Weft board over the Canyon scene: five columns of cards, project chips, code quality, the uncommitted counter and streak in the header](../public/brand/faq/tour-board.jpg)
 
 **An open card.** The thread on the left, the page its thread opened on the right (here a chart it drew), and the
 glance rail of every turn and page beside it. A finished card hands you a review step to try and a **Done** button.
 
-![An open card: the conversation and review step on the left, the burndown page the thread drew on the right, the glance rail at the edge](faq/tour-open-card.jpg)
+![An open card: the conversation and review step on the left, the burndown page the thread drew on the right, the glance rail at the edge](../public/brand/faq/tour-open-card.jpg)
 
 **The copilot, code quality, connectors and your loom.**
 
 <p>
-<img src="faq/tour-copilot.jpg" alt="The copilot lane: what finished since you last asked, what needs you, and the cockpit" width="32%">
-<img src="faq/tour-quality.jpg" alt="Hovering the code quality badge: tests, file size, lint, types, guardrails and docs, plus the scout's top findings" width="32%">
-<img src="faq/tour-connectors.jpg" alt="The Supabase drawer on the rail: linked project, healthy, one migration not applied, with a Migrate button" width="32%">
+<img src="../public/brand/faq/tour-copilot.jpg" alt="The copilot lane: what finished since you last asked, what needs you, and the cockpit" width="32%">
+<img src="../public/brand/faq/tour-quality.jpg" alt="Hovering the code quality badge: tests, file size, lint, types, guardrails and docs, plus the scout's top findings" width="32%">
+<img src="../public/brand/faq/tour-connectors.jpg" alt="The Supabase drawer on the rail: linked project, healthy, one migration not applied, with a Migrate button" width="32%">
 </p>
 
 Left: the copilot lane tells you what finished and what's waiting on you. Middle: hover the quality badge for the
 checklist and the scout's top findings. Right: a connector drawer, here Supabase with its unapplied migration and a
 **Migrate** button.
 
-![Your loom: your wefter card, streak, attributes, stack levels and 26 weeks of activity as woven stitches](faq/tour-loom.jpg)
+![Your loom: your wefter card, streak, attributes, stack levels and 26 weeks of activity as woven stitches](../public/brand/faq/tour-loom.jpg)
 
 **Your loom** is the progress dialog behind the 🔥 chip: your streak, what you're good at, the stack you ship in, and
 a woven cloth of your last 26 weeks.
@@ -369,7 +369,7 @@ Accounts shows each CLI's login status.
 
 ### What can the reply box do?
 
-<img src="faq/thread.png" alt="An open thread: model, mode and tags in the header, the conversation, the reply box with Stop and Send now, and the status strip with context, cache and plan limits" width="520">
+<img src="../public/brand/faq/thread.png" alt="An open thread: model, mode and tags in the header, the conversation, the reply box with Stop and Send now, and the status strip with context, cache and plan limits" width="520">
 
 - Markdown, formatted as you type (the Markdown button shows the raw text the agent gets).
 - Paste or drop images and videos where you want them; images reach the agent as image blocks at that spot.

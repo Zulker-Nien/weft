@@ -116,7 +116,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `lib/billing/*` + `lib/billing-actions.ts` + `app/[orgSlug]/billing` + `app/api/billing/*` + `components/BillingStatus.tsx`:
   Free and Pro per workspace (@aimhuge/billing; Pro meters Puku tokens in the proxy through PlanMeter; docs/architecture/billing.md).
 - `lib/home.ts` + `lib/home-release.ts` + `components/home/*` + `components/GoogleAnalytics.tsx` + `components/HomeErrorFallback.tsx` +
-  `app/home/page.tsx` + `app/opengraph-image.tsx` + `public/brand/board.png`: the weft.zip home page, which `app/page.tsx` renders at
+  `app/home/page.tsx` + `app/opengraph-image.tsx` + `public/brand/board.png` + `lib/faq.ts` + `app/faq/page.tsx`: the weft.zip home page (its short FAQ links to `/faq`, which renders `docs/FAQ.md`; the FAQ's pictures are `public/brand/faq/`), which `app/page.tsx` renders at
   `/` instead of the board when `isDeployed()` (`VERCEL` or `WEFT_HOME`); the home is loaded through `loadHome()` (a cached dynamic
   import in `lib/home.ts`) so a parse error in it can't 500 the board route — the parse-error companion to
   `lib/route-import-guard.ts`; `home.css` is plain prefixed CSS because `next.config.ts` sends every `.css` through the Tailwind loader,

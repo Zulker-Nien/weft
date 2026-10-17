@@ -15,6 +15,8 @@ const nextConfig: NextConfig = {
       "./node_modules/@anthropic-ai/claude-agent-sdk/**/*",
       `./node_modules/@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/**/*`,
     ],
+    // app/faq/page.tsx reads the FAQ from disk.
+    "/faq": ["./docs/FAQ.md"],
   },
   // lib/login.ts runs a CLI by a runtime path, which makes tracing pull in the whole project
   // folder; keep electron-builder's output (dist/) out of it. These globs match anywhere in a path,

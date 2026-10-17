@@ -727,7 +727,7 @@ load and the board's first cards. The times go to `~/.weft/startup.jsonl` (the l
 well over your usual time (1.5x and at least 2s more), the board shows a toast that names the slowest phase. To see
 recent launches, run `node electron/startup-timer.cjs`.
 
-See [docs/ROADMAP.md](docs/ROADMAP.md) for the feature list.
+See [docs/ROADMAP.md](docs/ROADMAP.md) for the feature list, and [docs/FAQ.md](docs/FAQ.md) (also at [weft.zip/faq](https://weft.zip/faq)) for common questions.
 
 ## weft.zip
 
@@ -739,6 +739,11 @@ shared-link picture is `app/opengraph-image.tsx`. The page is one screen, on pur
 `electron/assets/` (through `next/image`), one sentence, the download button, and a real screenshot of the board in
 `public/brand/board.png`; retake that one when the board changes a lot (`mcp__board_view__screenshot` with the thread
 panel and drawers closed).
+
+Under the five pillars sits a short FAQ (`components/home/FaqTeaser.tsx`, six questions in `FAQ_HIGHLIGHTS` in
+`lib/faq.ts`), each linking to its full answer on `weft.zip/faq`. That page renders `docs/FAQ.md` itself
+(`app/faq/page.tsx`, `components/home/FaqDoc.tsx`) with the home page's nav and footer, so the repo and the site never
+drift; the FAQ's pictures live in `public/brand/faq/` so GitHub and the site show the same files.
 
 `weft.zip/login` is a real sign-in page (GitHub only) so a visitor can leave the marketing site with
 a Weft account without the desktop app first. It has its own cookie session (`/auth/sign-in`, `/auth/callback`,

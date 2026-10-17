@@ -8,6 +8,10 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ## [Unreleased]
 
+### Added
+
+- **FAQ, in the repo and on weft.zip.** `docs/FAQ.md` answers the questions people ask about Weft in plain words, from installing and the columns to CLIs, guardrails, the vault, connectors, the copilot, weft.zip, pricing, privacy and troubleshooting, with a visual tour of the real app. The home page now ends with six of them as open/close rows, each linking to its full answer on `weft.zip/faq`, which renders the same file with the home page's nav and footer (`app/faq/page.tsx`, `components/home/FaqDoc.tsx`, `lib/faq.ts`); the nav and footer link it too.
+
 ## [0.4.0] - 2026-10-17
 
 ### Added
