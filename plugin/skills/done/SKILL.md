@@ -10,9 +10,11 @@ Wrap up the current coding session: commit it, document it, and scout it for wha
 ## On a Weft card
 
 Weft runs this in the card's own thread when the user moves the card to Done, so the session is this
-thread's conversation. Nobody is watching the turn: don't stop to ask unless something blocks the
-commit. Committed (and pushed, when Push on Done is on) → `column=done`; tests fail, lint errors
-remain or the push fails → `column=review` with what's left. Show the wrap-up in the browser pane, not as ASCII art.
+thread's conversation. Moving a card to Done means "commit, push and deploy this". Nobody is watching
+the turn: never end it with a question or a menu of options ("Pick one: …"). Decide, do it, report.
+Committed, pushed and deploying (or nothing to deploy) → `column=done`; tests fail, lint errors remain
+in your own code, or the push or deploy check fails → `column=review` with what's left (Weft keeps a
+Review wrap-up on the board instead of archiving it). Show the wrap-up in the browser pane, not as ASCII art.
 
 Every `Agent` call names its `model` (`"haiku"`): an agent without one inherits the parent's model,
 and a 1M-context parent bills 1M-context credits.
@@ -111,18 +113,44 @@ or conventions, hotspot sizes, the "Known gaps" list (refresh its verified date)
 First person, the file's terse style, current state only. No `SOUL.md` → say `/weft:setup-done`
 can create one.
 
-## Phase 4: Commit (you)
+## Phase 4: Commit, push, deploy (you)
 
 1. Message: conventional commits; `$ARGUMENTS` as the first line if given. Body: what changed and
    why, in a few lines. End with the session's Co-Authored-By line.
 2. `${CLAUDE_SKILL_DIR}/commit.sh "message" file1 file2 ...` with exactly: the session files, the
    docs and lint fixes you verified, `SOUL.md` if it changed. It `git add`s each path and commits
    only those paths, so other sessions' staged work stays out.
-3. Only after a clean commit: `${CLAUDE_SKILL_DIR}/push.sh`. It follows Weft's "Push on Done" setting
-   (on by default) and pushes the branch with a plain `git push`, so commits other sessions made on
-   it go too. It exits 0 when it pushed or skipped on purpose (setting off, no remote); report which.
-   A failed push (rejected, offline, auth) keeps the commit local: don't force, pull, rebase or retry;
-   say why and end with `column=review`, `remaining=push by hand`.
+   - **Shared files go whole.** A session file other cards also edited (README.md, CHANGELOG.md,
+     docs/ROADMAP.md, SOUL.md, a shared component) is committed whole, their lines with yours. Their
+     lines ship a little early; that's fine, and the pre-commit hook still checks them. Name those
+     files in the report. Never leave your own lines behind to dodge theirs.
+   - Never a temp index (`GIT_INDEX_FILE`), hunk-picking, `git apply --cached` or a commit script of
+     your own: they skip or fight the hook.
+   - The hook fails on another card's unfinished code in a shared file: drop just that file, commit
+     the rest, and end with `column=review`, `remaining=commit <file> after <card>`.
+   - Nothing of yours left to commit (another card or commit already took it): say so and go on.
+3. `${CLAUDE_SKILL_DIR}/push.sh`, after a clean commit and also when there was nothing to commit. It
+   follows Weft's "Push on Done" setting (on by default) and pushes the branch with a plain
+   `git push`; carrying commits other sessions made on it is intended, never a reason to skip. It
+   exits 0 when it pushed or skipped on purpose (setting off, no remote); report which. A failed
+   push (rejected, offline, auth) keeps the commit local: don't force, pull, rebase or retry; say why
+   and end with `column=review`, `remaining=push by hand`.
+4. After the push: `node ${CLAUDE_SKILL_DIR}/deploy.mjs`, in the background (Bash `run_in_background`):
+   it waits for the build, ~15 min for Weft. Write the report page meanwhile and finish it when the
+   result arrives. With a Vercel link (`.vercel/project.json`) the push is the deploy, and it checks
+   that it went out: the project deploys from origin's repo (by id, so a renamed or re-created repo
+   is caught), git deploys are on, and the deployment of HEAD finishes, waiting behind deploys
+   already running. Never run `vercel deploy` from this tree: it uploads other cards' uncommitted work.
+   - **Exit 0:** deployed (its url), or nothing to deploy and why. Report it.
+   - **Exit 3, the build failed:** production is still on the last good deploy. Read the log tail it
+     printed (`vercel inspect --logs <url>` for more). When the cause is in this session's files,
+     or a plain build fix (a missing import, a type error, a file not committed), fix it, run the
+     related tests, commit with `commit.sh`, `push.sh`, and run `deploy.mjs` again: at most two
+     rounds. Still failing, or the cause is another card's work: start a card to fix the build
+     (`mcp__board__list_cards` first, then `mcp__board__create_card` with the url and the error) and
+     end with `column=review`, `remaining=build fails: <error, a few words>`.
+   - **Exit 2:** pushes don't deploy (the link), it was canceled, or it's still building after 30
+     min. Report its line and fix, and end with `column=review`, `remaining=fix deploy`.
 
 ## Phase 5: Report (you)
 
@@ -131,8 +159,15 @@ folder: `${CLAUDE_SKILL_DIR}/scratch.sh clean <dir>` (it only deletes a `~/.weft
 run that dies before this is pruned by the next `new` after a day).
 
 Show it in the browser pane as one HTML page, and say it in a few lines: the commit (hash, files,
-+/- from `${CLAUDE_SKILL_DIR}/session-stats.sh <session files>`), pushed or not and why, tests passed/failed, docs touched,
++/- from `${CLAUDE_SKILL_DIR}/session-stats.sh <session files>`), pushed or not and why, the deploy (url, or why not), tests passed/failed, docs touched,
 SOUL.md change, and the scout's top three with their fixes.
+
+End the report with the goodbye banner, on its own lines: the literal line
+"Committed, refactored, deployed and done," followed by a short snarky poem — four lines,
+rhyming or near-rhyming, in the voice of the work just done. Plain ASCII only
+(`+ - | = * # / \`, letters, digits); no Unicode box-drawing, block elements, braille or arrows.
+The banner is the sign-off, the unmistakable "this is finished" marker you can spot from
+across the room while scrolling back, without reading a word.
 
 ## Rules
 
@@ -140,4 +175,4 @@ SOUL.md change, and the scout's top three with their fixes.
   other sessions share this index and tree.
 - Fix lint only in session files; no codebase-wide cleanup. The scout reports, it doesn't fix.
 - Never write scratch files (prompts, tasks.json, reports, scripts) inside the project; use `<dir>`.
-- Never commit `.env`, secrets or credentials. Push only through `push.sh`, which honors the setting.
+- Never commit `.env`, secrets or credentials. Push only through `push.sh`, which honors the setting; deploy only by that push (`deploy.mjs` checks it).
