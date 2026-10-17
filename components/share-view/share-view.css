@@ -121,8 +121,11 @@
 
 .wz-shareScroller {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 12px;
+  /* Takes the column's height and scrolls inside it; without these a long thread grows past the column and is clipped. */
+  min-height: 0;
   overflow-y: auto;
   padding: 16px;
 }
@@ -196,8 +199,9 @@
   color: var(--ink);
 }
 
+/* Only below 900px, where one half shows at a time (the media query below turns it on). */
 .wz-shareToggle {
-  display: flex;
+  display: none;
   flex-shrink: 0;
   gap: 4px;
   border-bottom: 1px solid var(--line);
@@ -230,6 +234,9 @@
 @media (max-width: 900px) {
   .wz-shareMain {
     flex-direction: column;
+  }
+  .wz-shareToggle {
+    display: flex;
   }
   .wz-shareThread {
     flex: 1 1 auto;
