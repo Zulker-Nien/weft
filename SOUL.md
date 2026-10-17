@@ -63,6 +63,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   feed, a download fallback when unsigned) and the tag-triggered signed release; `CHANGELOG.md` holds each version's notes (docs/architecture/updates.md).
   `scripts/bundle-toolchain.mjs` stages what the app ships for a fresh Mac (node, npm, pnpm, puku-cli without telemetry, claude, all on
   my own Electron), which `appendToolchain()` in `electron/env.cjs` puts at the end of PATH.
+- `electron/folder-access.cjs` + `lib/folder-access-tool.ts`: `mcp__board__request_folder_access`, called by a thread that got "Operation not permitted" on
+  Downloads, Documents or Desktop (never on launch): lists the folder so macOS shows its allow prompt, else a dialog with an Open Settings button.
 - `electron/terminal.cjs` + `components/TerminalDrawer.tsx`: the terminal drawer (node-pty shell over IPC, xterm.js).
 - `lib/runner.ts`: one Agent SDK `query()` per Claude Code or puku thread, its public API (send, queue, stop, retry, login); Codex uses `lib/codex-runner.ts` with `codex exec --json` and resumes by session id. Behind it
   `lib/runner-state.ts` (sessions, shared maps, `hooks` back into runner.ts), `lib/runner-session.ts` (start and drive a CLI,

@@ -4,6 +4,7 @@ import { firstMessage } from "./automations";
 import { boardCard, cardLine, LIST_LIMIT, readThreadText } from "./board-tools-format";
 import { markSeen } from "./copilot-digest";
 import { resolveFolder } from "./folders";
+import { folderAccessTool } from "./folder-access-tool";
 import { restartTool } from "./restart-tool";
 import { shortTitle, titleFromPrompt } from "./format";
 import { defaultPermissionMode, touchProject } from "./settings";
@@ -139,6 +140,7 @@ export function threadBoardMcpServer(
           }),
       ),
       restartTool(),
+      folderAccessTool(),
     ],
   });
 }

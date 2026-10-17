@@ -10,7 +10,7 @@ You're in a small chat window, so keep replies short.`;
 
 // The copilot uses these without asking: they read the board or only rearrange it.
 // Starting, replying to, and answering for a thread run agents, so the user approves those.
-export const SAFE_BOARD_TOOLS = new Set(["list_cards", "read_thread", "create_card", "move_card", "stop_card", "set_tags"]);
+export const SAFE_BOARD_TOOLS = new Set(["list_cards", "read_thread", "create_card", "move_card", "stop_card", "set_tags", "request_folder_access"]);
 
 // This app's own tools (the browser pane, and the board tools: list_cards, create_card, and the copilot's others) skip the prompt.
 // source is the MCP server's type; only in-process ("sdk") servers are Weft's own.

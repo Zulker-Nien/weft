@@ -157,6 +157,7 @@
       "hardenedRuntime": true,
       "extendInfo": {
         "NSAppleEventsUsageDescription": "Weft opens Terminal to run a command-line tool's login when it needs a real terminal.",
+        "NSDownloadsFolderUsageDescription": "Weft's threads read files you save to Downloads, like audio to transcribe or screenshots to look at.",
         "NSMicrophoneUsageDescription": "Weft listens when you press the mic button, to type your prompt for you. The audio is transcribed on this Mac.",
         "LSUIElement": false
       },

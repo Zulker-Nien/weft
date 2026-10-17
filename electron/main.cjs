@@ -35,6 +35,7 @@ const { loadWindowState, trackWindowState } = require("./window-state.cjs");
 const { createAccountLink } = require("./account-link.cjs");
 const { argvLink } = require("./argv-link.cjs");
 const { createMenuPopup } = require("./main-menu-popup.cjs");
+const { createFolderAccess } = require("./folder-access.cjs");
 
 const APP_NAME = "Weft";
 const TAGLINE = "Engineering the future, one thread at a time";
@@ -85,6 +86,8 @@ const pane = createBrowserPane({
       await vault?.addBlanks(String(folder), [String(name)], [String(environment || "development")], { source: "a thread" }).catch(() => null);
       return { added: true };
     },
+    // mcp__board__request_folder_access: a thread that got "Operation not permitted" on Downloads asks; macOS prompts, or a dialog opens Settings.
+    "POST /folder-access/ask": ({ folder }) => createFolderAccess({ app, dialog, shell, window: () => win }).ask(folder),
     "POST /app/restart": ({ then }) => require("./restart-when-idle.cjs").restartFor({ then, updater: menus.updater, app }), // the server's restart when idle, once nothing runs
     "POST /webhooks/ask-add": ({ folder, id }) => (sendMenu("add-webhook", JSON.stringify({ folder, id })), { ok: true }), // mcp__webhooks__ask_add: the board opens 🪝 on a recorded webhook
     // mcp__secrets__push_to_vercel: a vault value onto the card's linked Vercel project, after Touch ID.

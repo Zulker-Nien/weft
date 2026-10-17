@@ -254,6 +254,16 @@ restart). In dev that PID is `next dev`'s launcher, not necessarily the process 
   tool's login when it needs a real terminal."` (used by the AppleScript in
   `lib/login.ts`).
 
+**Folder access.** macOS (TCC) refuses `~/Downloads`, `~/Documents` and `~/Desktop` to a process that was never
+allowed, and every thread's tools run as children of Weft, so Weft's grant covers them. Weft never asks on launch:
+a thread that gets "Operation not permitted" (or is told to use files there) calls `mcp__board__request_folder_access`
+(`lib/folder-access-tool.ts`, in every thread's board tools, no permission prompt since it only asks the user), which
+posts to the control server's `/folder-access/ask`. `electron/folder-access.cjs` lists the folder, which is what makes
+macOS show its own prompt the first time. If the answer is already No (`EPERM`/`EACCES`) macOS won't ask again, so a
+dialog explains it and **Open Settings** opens `Privacy_FilesAndFolders`; the tool tells the thread which button the user
+took (and to retry after a restart). The packaged app's Info.plist carries `NSDownloadsFolderUsageDescription`; the dev
+Electron binary has none, so its prompt has no purpose line.
+
 `pnpm dist` runs `THREADBOARD_DIST=.next-dist THREADBOARD_STANDALONE=1 next
 build && node scripts/prepare-standalone.mjs .next-dist && electron-builder --mac
 --dir`. The build flow:
