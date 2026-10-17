@@ -35,7 +35,9 @@ gated links answer "Sharing isn't set up on this server" rather than trusting a 
   the signed-in account, in the workspace cloud sync uploads to. The states: `signed-out`, `no-workspace`, `not-synced`
   (with the folder), `pending` (the card's `cloud_cards` row isn't up yet, so a flush is asked for), `ok`.
   `components/ShareCardDialog.tsx` is the package's `ShareDialog` + `ShareAccessFields` + `CopyLinkButton` over
-  `useShareAccess`, opened from **Share…** in `lib/card-menu.ts`.
+  `useShareAccess`, opened from **Share…** in `lib/card-menu.ts`. It never shows a loading state: the state read takes
+  a few Supabase round-trips (~2 s), so the dialog draws at once from `card.share` (the last answer, kept on the card by
+  `lib/card-share.ts`, through `seedShareState`; private when there's none, the sign-in when signed out) and the answer replaces it.
 - Deployed: `app/s/[id]/page.tsx` loads the share with the service client (`lib/share-access.ts`), decides
   ok / gate / login / denied / missing, and renders `ShareGateForm` or `components/share-view/SharedCard.tsx`.
   `app/api/s/[id]/unlock` checks a password or records an email, then grants the pass. `app/api/s/[id]/live` is the

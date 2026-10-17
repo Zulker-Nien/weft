@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CARD_SHARE_MODES, isCardShareMode, newShareId, paneFor, paneFromUrl, SHARE_ID_RE, shareUrl } from "./share-types";
+import { CARD_SHARE_MODES, isCardShareMode, newShareId, paneFor, paneFromUrl, seedShareState, SHARE_ID_RE, shareUrl } from "./share-types";
 import type { ThreadItem } from "./types";
 
 const SHA = "a".repeat(64);
@@ -74,5 +74,14 @@ describe("paneFor", () => {
     const other: ThreadItem = { kind: "tool", id: "x", name: "Bash", summary: "https://nope.com", at: 9 };
     expect(paneFor([other, user(undefined, 9), open("about:blank", 9)])).toBeNull();
     expect(paneFor([])).toBeNull();
+  });
+});
+
+describe("seedShareState", () => {
+  it("draws the remembered share, a private one without it, or the sign-in", () => {
+    expect(seedShareState({ share: { id: "abc", mode: "email", hasPassword: false } }, false)).toEqual({ kind: "ok", id: "abc", url: "https://weft.zip/s/abc", mode: "email", hasPassword: false });
+    expect(seedShareState({ share: { id: null, mode: "private", hasPassword: false } }, false)).toMatchObject({ url: null });
+    expect(seedShareState({}, false)).toEqual({ kind: "ok", id: null, url: null, mode: "private", hasPassword: false });
+    expect(seedShareState({ share: { id: "abc", mode: "public", hasPassword: false } }, true)).toEqual({ kind: "signed-out" });
   });
 });

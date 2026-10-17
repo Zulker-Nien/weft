@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { CopyLinkButton, ShareAccessFields, ShareDialog, useShareAccess, type SaveShareAccess } from "@aimhuge/share/client";
 import { api } from "@/lib/client";
 import { useOverlay } from "@/lib/overlay";
-import { isCardShareMode, type CardShareState } from "@/lib/share-types";
+import { isCardShareMode, seedShareState, type CardShareState } from "@/lib/share-types";
 import type { Card } from "@/lib/types";
 import { useAccount } from "@/lib/use-account";
 import { useEscape } from "@/lib/use-escape";
@@ -15,7 +15,8 @@ import Icon, { Spinner } from "./Icon";
 // Share… (the card's right-click menu): one weft.zip link that shows this thread and its browser pane, live,
 // behind one of @aimhuge/share's modes (never editing: that would run turns on this Mac). The link reads the
 // card from cloud sync, so until the card is on Supabase the dialog says why and offers the next step
-// (lib/card-share.ts answers the state). The package's dialog draws the frame and closes on Escape itself.
+// (lib/card-share.ts answers the state). It never waits on that answer (~2 s): it draws at once from the share the
+// card remembers (card.share, else private) and the answer replaces it. The package's dialog draws the frame and closes on Escape itself.
 // It goes to document.body, centered over the whole window, and counts as an overlay so the browser pane (a native
 // view drawn above the page) steps aside while it's open.
 const POLL_MS = 2000;
@@ -26,11 +27,16 @@ function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+function hydrateFrom(state: CardShareState, hydrate: ReturnType<typeof useShareAccess>["hydrate"]) {
+  if (state.kind === "ok") hydrate({ shareMode: state.mode, editRequiresEmail: false, hasPassword: state.hasPassword });
+}
+
 export default function ShareCardDialog({ card, onClose }: { card: Card; onClose: () => void }) {
-  const [state, setState] = useState<CardShareState | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const account = useAccount();
   const userId = account.state.kind === "ready" ? account.state.view.user?.id : undefined;
+  const signedOut = account.state.kind === "ready" && !userId;
+  const [state, setState] = useState<CardShareState>(() => seedShareState(card, signedOut));
+  const [error, setError] = useState<string | null>(null);
 
   // The package's ShareDialog listens for Escape on its own. This layer only keeps Weft's own (the open thread,
   // the browser, a drawer under it) from also closing, so one Escape closes just the dialog.
@@ -50,12 +56,15 @@ export default function ShareCardDialog({ card, onClose }: { card: Card; onClose
   const access = useShareAccess({ save });
   const { hydrate } = access;
 
+  // The seed's fields before the first paint, so the dialog never opens empty.
+  useLayoutEffect(() => hydrateFrom(state, hydrate), []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const load = useCallback(async () => {
     try {
       const answer = await api.getShare(card.id);
       setState(answer);
       setError(null);
-      if (answer.kind === "ok") hydrate({ shareMode: answer.mode, editRequiresEmail: false, hasPassword: answer.hasPassword });
+      hydrateFrom(answer, hydrate);
     } catch (err) {
       setError(message(err));
     }
@@ -69,7 +78,7 @@ export default function ShareCardDialog({ card, onClose }: { card: Card; onClose
 
   // The outbox flushes within seconds; ask again until the card's row is up.
   useEffect(() => {
-    if (state?.kind !== "pending") return;
+    if (state.kind !== "pending") return;
     const timer = setTimeout(() => void load(), POLL_MS);
     return () => clearTimeout(timer);
   }, [state, load]);
@@ -84,7 +93,7 @@ export default function ShareCardDialog({ card, onClose }: { card: Card; onClose
     }
   }
 
-  const url = state?.kind === "ok" ? state.url : null;
+  const url = state.kind === "ok" ? state.url : null;
   return createPortal(
     <ShareDialog
       title={`Share “${card.title}”`}
@@ -110,12 +119,11 @@ function ShareBody({
   account,
   onSyncOn,
 }: {
-  state: CardShareState | null;
+  state: CardShareState;
   access: ReturnType<typeof useShareAccess>;
   account: ReturnType<typeof useAccount>;
   onSyncOn: (folder: string) => Promise<void>;
 }) {
-  if (!state) return <Note>Loading…</Note>;
   switch (state.kind) {
     case "ok":
       return (

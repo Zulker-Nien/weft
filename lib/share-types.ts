@@ -66,6 +66,15 @@ export type CardShareState =
   | { kind: "pending" }
   | { kind: "ok"; id: string | null; url: string | null; mode: CardShareMode; hasPassword: boolean };
 
+// What the Share dialog draws before the server answers: the share the card remembers (card.share, kept by
+// lib/card-share.ts), or a private one; signed out, the sign-in. The server's answer replaces it a moment later.
+export function seedShareState(card: Pick<Card, "share">, signedOut: boolean): CardShareState {
+  if (signedOut) return { kind: "signed-out" };
+  const memo = card.share;
+  if (!memo) return { kind: "ok", id: null, url: null, mode: "private", hasPassword: false };
+  return { kind: "ok", id: memo.id, url: memo.id ? shareUrl(memo.id) : null, mode: memo.mode, hasPassword: memo.hasPassword };
+}
+
 // PUT /api/cards/[id]/share. A password is hashed on the Mac and only its hash goes up; omitted keeps the old one.
 export interface CardShareUpdate {
   mode: CardShareMode;

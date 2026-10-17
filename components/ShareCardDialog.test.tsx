@@ -10,9 +10,10 @@ import { makeCard } from "./test-utils";
 
 const api = vi.hoisted(() => ({ getShare: vi.fn(), setShare: vi.fn(), cloudSyncSetFolder: vi.fn() }));
 const account = vi.hoisted(() => ({ signIn: vi.fn(), busy: null as string | null, waiting: null as object | null, error: null as string | null }));
+const signedIn = vi.hoisted(() => ({ user: null as { id: string } | null }));
 const openTeamPage = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/client", () => ({ api }));
-vi.mock("@/lib/use-account", () => ({ useAccount: () => ({ state: { kind: "ready", view: { configured: true, user: null } }, ...account }) }));
+vi.mock("@/lib/use-account", () => ({ useAccount: () => ({ state: { kind: "ready", view: { configured: true, user: signedIn.user } }, ...account }) }));
 vi.mock("./board-palette", () => ({ openTeamPage }));
 
 const { default: ShareCardDialog } = await import("./ShareCardDialog");
@@ -30,6 +31,7 @@ function setup(...answers: CardShareState[]) {
 beforeEach(() => {
   Object.values(api).forEach((fn) => fn.mockReset());
   Object.assign(account, { busy: null, waiting: null, error: null });
+  signedIn.user = { id: "u1" };
   account.signIn.mockReset();
   openTeamPage.mockReset();
 });
@@ -99,6 +101,27 @@ describe("ShareCardDialog", () => {
     await act(() => vi.advanceTimersByTimeAsync(2000));
     expect(api.getShare).toHaveBeenCalledTimes(2);
     expect(screen.getByRole("combobox", { name: "Who can open this thread" })).toBeInTheDocument();
+  });
+
+  it("draws the card's remembered link at once, before the server answers", () => {
+    api.getShare.mockReturnValueOnce(new Promise(() => {}));
+    render(<ShareCardDialog card={makeCard({ share: { id: "s1", mode: "email", hasPassword: false } })} onClose={vi.fn()} />);
+    expect(screen.getByRole("combobox", { name: "Who can open this thread" })).toHaveValue("link");
+    expect(screen.getAllByRole("button", { name: /Copy link/ })).toHaveLength(2);
+    expect(screen.queryByText("Loading…")).not.toBeInTheDocument();
+  });
+
+  it("draws private fields at once when the card remembers no share", () => {
+    api.getShare.mockReturnValueOnce(new Promise(() => {}));
+    render(<ShareCardDialog card={makeCard()} onClose={vi.fn()} />);
+    expect(screen.getByRole("combobox", { name: "Who can open this thread" })).toHaveValue("private");
+  });
+
+  it("draws the sign-in at once when signed out", () => {
+    signedIn.user = null;
+    api.getShare.mockReturnValueOnce(new Promise(() => {}));
+    render(<ShareCardDialog card={makeCard({ share: { id: "s1", mode: "public", hasPassword: false } })} onClose={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Sign in with GitHub" })).toBeInTheDocument();
   });
 
   it("signs in with GitHub when signed out", async () => {

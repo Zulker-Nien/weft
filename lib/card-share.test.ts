@@ -87,7 +87,9 @@ vi.mock("./cloud-sync", () => ({
   syncOrgId: () => Promise.resolve(db.org),
 }));
 vi.mock("./settings", () => ({ syncFolders: () => db.folders }));
-vi.mock("./store", () => ({ getCard: (id: string) => (id === "c1" || id === "c2" ? { id, cwd: "/w" } : undefined) }));
+const cards = vi.hoisted(() => new Map<string, { id: string; cwd: string; share?: object }>());
+const decorateCard = vi.hoisted(() => vi.fn((id: string, patch: object) => Object.assign(cards.get(id)!, patch)));
+vi.mock("./store", () => ({ getCard: (id: string) => cards.get(id), decorateCard }));
 vi.mock("@aimhuge/share/server", () => ({ hashSharePassword: (p: string) => `hash(${p})` }));
 
 const { CardShareError, getCardShare, setCardShare } = await import("./card-share");
@@ -95,6 +97,9 @@ const { CardShareError, getCardShare, setCardShare } = await import("./card-shar
 beforeEach(() => {
   Object.assign(db, { user: "u1", org: "o1", folders: ["/w"], cards: new Set(["c1"]), share: null, error: null, configured: true, queries: [], writes: [] });
   syncNow.mockClear();
+  cards.clear();
+  for (const id of ["c1", "c2"]) cards.set(id, { id, cwd: "/w" });
+  decorateCard.mockClear();
 });
 
 describe("getCardShare", () => {
@@ -138,6 +143,19 @@ describe("getCardShare", () => {
   it("throws what Supabase refused", async () => {
     db.error = { message: "denied" };
     await expect(getCardShare("c1")).rejects.toThrow("denied");
+  });
+
+  it("remembers the share on the card, writing only when it changed", async () => {
+    await getCardShare("c1");
+    expect(decorateCard).toHaveBeenCalledWith("c1", { share: { id: null, mode: "private", hasPassword: false } });
+    await getCardShare("c1");
+    expect(decorateCard).toHaveBeenCalledTimes(1);
+    db.share = { id: "abcdefghijklmnopqrstuv", mode: "public", has_password: false };
+    await getCardShare("c1");
+    expect(cards.get("c1")?.share).toEqual({ id: "abcdefghijklmnopqrstuv", mode: "public", hasPassword: false });
+    db.folders = [];
+    await getCardShare("c1");
+    expect(decorateCard).toHaveBeenCalledTimes(2);
   });
 });
 

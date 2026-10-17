@@ -8,7 +8,7 @@ import { hashSharePassword } from "@aimhuge/share/server";
 import { accountClient } from "./account";
 import { syncNow, syncOrgId } from "./cloud-sync";
 import { syncFolders } from "./settings";
-import { getCard } from "./store";
+import { decorateCard, getCard } from "./store";
 import { isCardShareMode, newShareId, shareUrl, type CardShareMode, type CardShareState, type CardShareUpdate } from "./share-types";
 
 // A refusal the route turns into its status (a missing card is a 404, a bad request a 400).
@@ -77,10 +77,19 @@ function stateOf(row: ShareRead | null): CardShareState {
   return { kind: "ok", id: row.id, url: shareUrl(row.id), mode, hasPassword: Boolean(row.has_password) };
 }
 
+// Keeps card.share current, so the next Share dialog draws from it without waiting on Supabase.
+function remember(cardId: string, state: CardShareState): CardShareState {
+  if (state.kind !== "ok") return state;
+  const memo = { id: state.id, mode: state.mode, hasPassword: state.hasPassword };
+  const had = getCard(cardId)?.share;
+  if (had?.id !== memo.id || had.mode !== memo.mode || had.hasPassword !== memo.hasPassword) decorateCard(cardId, { share: memo });
+  return state;
+}
+
 export async function getCardShare(cardId: string): Promise<CardShareState> {
   const t = await target(cardId);
   if (t.kind === "blocked") return t.state;
-  return stateOf(await readShare(t.client, t.orgId, cardId));
+  return remember(cardId, stateOf(await readShare(t.client, t.orgId, cardId)));
 }
 
 export async function setCardShare(cardId: string, update: CardShareUpdate): Promise<CardShareState> {
@@ -102,5 +111,5 @@ export async function setCardShare(cardId: string, update: CardShareUpdate): Pro
     ? await shares.update(change).eq("org_id", t.orgId).eq("card_id", cardId)
     : await shares.insert({ ...change, id: newShareId(), org_id: t.orgId, card_id: cardId });
   check(error);
-  return stateOf(await readShare(t.client, t.orgId, cardId));
+  return remember(cardId, stateOf(await readShare(t.client, t.orgId, cardId)));
 }
