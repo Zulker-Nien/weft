@@ -80,6 +80,8 @@ export default function ThreadView({
   const answered = answeredId !== null && answeredId === card.pending?.id;
   const { editLast, editFrom, onEditing } = useEditLast(card, page.items, () => (stick.current = true));
   const question = questionFor(card, onAnswer);
+  const showReply = !replaceReply || Boolean(question);
+  const status = <StatusStrip stats={card.stats} cwd={card.cwd} backend={card.backend} />;
 
   // Fetch one page of the thread, newest (`before` omitted) or older (with `before=start`).
   // A non-JSON body would throw at res.json() and reject the promise, so guard it: the caller
@@ -262,12 +264,15 @@ export default function ThreadView({
       )}
 
       {footer}
-      {(!replaceReply || question) && (
+      {showReply ? (
         <ReplyBox key={card.id} question={question} cardId={card.id} cwd={card.cwd} live={live} placeholder={placeholder} suggestion={card.suggestion}
           sendLater={scheduling && { backend: card.backend, resets: scheduling.resets, scheduled: card.scheduled ?? [] }}
-          status={<StatusStrip stats={card.stats} cwd={card.cwd} backend={card.backend} />}
+          status={status}
           editLast={editLast} onEditing={onEditing}
           onSend={send} onShell={(command) => api.shell(card.id, command).then(() => {})} onStop={() => api.stop(card.id).then(() => {})} />
+      ) : (
+        // The review panel stands in for the reply box; keep the context and limits in view under it.
+        <div className="shrink-0 border-t border-line px-4 py-1.5">{status}</div>
       )}
     </>
   );

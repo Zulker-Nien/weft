@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { type NewCardInput } from "@/lib/client";
 import type { Card } from "@/lib/types";
 import { busyInFolder } from "@/lib/overlap";
+import { planLimitsFor } from "@/lib/board-view";
 import { startButton } from "@/lib/new-thread";
 import { useEscape } from "@/lib/use-escape";
 import { useHeldModifiers } from "@/lib/use-mod-held";
@@ -13,6 +14,7 @@ import Composer, { type ComposerHandle } from "./Composer";
 import Icon from "./Icon";
 import { NewCardDialogControls } from "./NewCardDialogControls";
 import { NewCardDialogFooter } from "./NewCardDialogFooter";
+import StatusStrip from "./StatusStrip";
 
 export default function NewCardDialog({
   cards = [],
@@ -103,6 +105,9 @@ export default function NewCardDialog({
         startBtn={startBtn}
         onSubmit={(start) => void submit(start, false)}
       />
+      {/* The board's footer sits under this dialog, so its folder and plan limits show here instead. */}
+      <StatusStrip stats={planLimitsFor(cards, dialog.backend)} cwd={dialog.cwd} backend={dialog.backend}
+        className="shrink-0 border-t border-line px-5 py-1.5" />
     </aside>
   );
 }

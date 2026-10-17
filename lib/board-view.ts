@@ -90,6 +90,15 @@ export function latestLimits(cards: Card[]): (CardStats & { cwd: string; backend
   return { ...latest.stats, cwd: latest.cwd, backend: latest.backend };
 }
 
+// One CLI's 5-hour and weekly plan limits, from its most recent thread that reported them: what the
+// New thread dialog shows before you start a thread on it. Each CLI has its own plan.
+export function planLimitsFor(cards: Card[], backend: Card["backend"]): CardStats {
+  const latest = cards
+    .filter((c) => c.backend === backend && (c.stats?.fiveHour || c.stats?.sevenDay))
+    .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  return latest ? { fiveHour: latest.stats?.fiveHour, sevenDay: latest.stats?.sevenDay } : {};
+}
+
 // Whether a thread on the board hit its CLI's plan limit, so the Running and Needs you columns
 // offer "Switch all" to the other CLI only when there's a reason to switch.
 export function hitPlanLimit(cards: Card[]): boolean {
