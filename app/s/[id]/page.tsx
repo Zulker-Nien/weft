@@ -55,7 +55,9 @@ function Unconfigured() {
   );
 }
 
-async function PageBody({ id }: { id: string }) {
+// params is runtime data too, so it's awaited here, inside the <Suspense>, not in Page: the shell prerenders.
+async function PageBody({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const access = await shareAccess(id);
   if (access.kind === "unconfigured") return <Unconfigured />;
   if (access.kind === "missing") notFound();
@@ -87,12 +89,11 @@ function PageFallback() {
   return <p className="wz-boardLoading">Loading the shared thread…</p>;
 }
 
-export default async function Page({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export default function Page({ params }: { params: Promise<{ id: string }> }) {
   if (!isDeployed()) return <NotDeployed />;
   return (
     <Suspense fallback={<PageFallback />}>
-      <PageBody id={id} />
+      <PageBody params={params} />
     </Suspense>
   );
 }

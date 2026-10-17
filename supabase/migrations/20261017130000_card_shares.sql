@@ -35,7 +35,7 @@ create table public.cloud_share_visits (
   at       timestamptz not null default now()
 );
 
-create index cloud_share_visits_share_at_desc
+create index cloud_share_visits_by_share
   on public.cloud_share_visits (share_id, at desc);
 
 alter table public.cloud_shares       enable row level security;
