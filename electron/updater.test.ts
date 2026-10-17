@@ -106,6 +106,36 @@ describe("createUpdater", () => {
     expect(updater.menuItem().label).toBe("Restart to Update to 0.4.0");
   });
 
+  it("with a window, the menu item opens it, and checks when idle", async () => {
+    const openWindow = vi.fn();
+    const { updater, tell } = make({ openWindow });
+    const item = updater.menuItem() as { label: string; enabled: boolean; click: () => void };
+    expect(item).toMatchObject({ label: "Check for Updates…", enabled: true });
+    item.click();
+    expect(openWindow).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(updater.state().phase).toBe("downloading"));
+    expect(tell).not.toHaveBeenCalled();
+    expect(updater.menuItem()).toMatchObject({ label: "Downloading Weft 0.4.0…", enabled: true });
+    (updater.menuItem() as { click: () => void }).click();
+    expect(openWindow).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps what a check found for the window: notes, when, and errors", async () => {
+    const ok = make();
+    await ok.updater.check();
+    expect(ok.updater.info() as object).toMatchObject({
+      currentVersion: "0.3.0",
+      packaged: true,
+      state: { phase: "downloading", version: "0.4.0", notes: "### Added\n- things", checkedAt: expect.any(Number) as number },
+    });
+    const missing = make({ fetchJson: () => Promise.reject(new Error("update feed: HTTP 404")) });
+    await missing.updater.check();
+    expect(missing.updater.state()).toMatchObject({ phase: "idle", error: "update feed: HTTP 404" });
+    const current = make({ fetchJson: () => Promise.resolve(feed("0.3.0")) });
+    await current.updater.check();
+    expect(current.updater.state()).toMatchObject({ phase: "idle", upToDate: true });
+  });
+
   it("sets Squirrel's feed and listeners only once", async () => {
     const { updater, squirrel } = make();
     await updater.check();

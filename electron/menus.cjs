@@ -7,14 +7,20 @@ const { showAboutWindow } = require("./about.cjs");
 const { createKeepWorking } = require("./keep-working.cjs");
 const { armRestart } = require("./restart-when-idle.cjs");
 const { createAppUpdater } = require("./updater.cjs");
+const { pushUpdateState, registerUpdateBridge, showUpdateWindow } = require("./update-window.cjs");
 
 function createMenus({ APP_NAME, ASSETS, COPILOT_SHORTCUT, mac, pane, getWin, getAppView, getServer, showMain, sendMenu, showCopilot, toggleCopilot, dataDir }) {
   let tray;
   let lastWaiting = [];
   // Keep Working (keep-working.cjs): awake with the lid shut, from the menu bar icon.
   const keepWorking = mac ? createKeepWorking({ getServer, onChange: () => updateTray() }) : null;
-  // Updates (updater.cjs): its state is an item in the app menu.
-  const updater = createAppUpdater({ getServer, onChange: () => buildMenu() });
+  // Updates (updater.cjs): its state is an item in the app menu, which opens the Software Update window.
+  const onUpdate = () => {
+    buildMenu();
+    pushUpdateState();
+  };
+  const updater = createAppUpdater({ getServer, onChange: onUpdate, openWindow: showUpdateWindow });
+  registerUpdateBridge(updater);
 
   function focusedContents() {
     return webContents.getFocusedWebContents() ?? getAppView()?.webContents;

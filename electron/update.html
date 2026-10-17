@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- The Software Update window (update-window.cjs). Inline styles, one local script, no network:
+         the updater in main does the fetching. Everything it shows is written with textContent. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; script-src 'self'" />
+    <title>Software Update</title>
+    <style>
+      :root {
+        --bg: #f4f3ef;
+        --ink: #1c1b18;
+        --muted: #64625c;
+        --line: rgb(20 20 15 / 0.12);
+        --well: rgb(20 20 15 / 0.04);
+        --accent: #d9774b;
+        --ok: #2f8f4e;
+        --error: #c4473a;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #131312;
+          --ink: #ecebe6;
+          --muted: #a3a19a;
+          --line: rgb(255 255 245 / 0.12);
+          --well: rgb(255 255 245 / 0.04);
+          --ok: #7fd18b;
+          --error: #ef7d6b;
+        }
+      }
+      * { box-sizing: border-box; }
+      [hidden] { display: none !important; }
+      html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); }
+      body {
+        font: 13px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -webkit-user-select: none;
+        user-select: none;
+        cursor: default;
+      }
+      main { display: flex; flex-direction: column; height: 100%; padding: 22px 24px 18px; gap: 14px; }
+      header { display: grid; grid-template-columns: 56px 1fr; gap: 14px; align-items: center; }
+      header img { width: 56px; height: 56px; }
+      h1 { font-size: 16px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 8px; }
+      h1::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+      [data-tone="ok"] h1::before { background: var(--ok); }
+      [data-tone="new"] h1::before { background: var(--accent); }
+      [data-tone="error"] h1::before { background: var(--error); }
+      [data-tone="busy"] h1::before { background: var(--accent); animation: pulse 1s ease-in-out infinite alternate; }
+      @keyframes pulse { to { opacity: 0.25; } }
+      .detail { color: var(--muted); margin: 3px 0 0; }
+      dl { margin: 0; }
+      .row { display: grid; grid-template-columns: 90px 1fr; gap: 12px; padding: 5px 0; border-top: 1px solid var(--line); }
+      dt { color: var(--muted); }
+      dd { margin: 0; -webkit-user-select: text; user-select: text; }
+      .notes-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+      .notes-wrap h2 { font-size: 12px; font-weight: 600; color: var(--muted); margin: 0; text-transform: uppercase; letter-spacing: 0.04em; }
+      pre {
+        flex: 1; min-height: 0; overflow: auto; margin: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
+        background: var(--well); font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace; white-space: pre-wrap;
+        -webkit-user-select: text; user-select: text; cursor: text;
+      }
+      .spacer { flex: 1; }
+      .notes-wrap:not([hidden]) + .spacer { display: none; }
+      footer { display: flex; justify-content: flex-end; gap: 8px; }
+      footer button {
+        font: inherit; font-weight: 600; cursor: pointer; border: 1px solid var(--line); border-radius: 6px;
+        padding: 6px 14px; background: transparent; color: var(--ink);
+      }
+      footer button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+      footer button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      footer button[disabled] { opacity: 0.5; cursor: default; }
+    </style>
+  </head>
+  <body data-tone="idle">
+    <main>
+      <header>
+        <img src="assets/icon.png" alt="" />
+        <div>
+          <h1 id="title">Software Update</h1>
+          <p class="detail" id="detail"></p>
+        </div>
+      </header>
+      <dl>
+        <div class="row"><dt>This Mac</dt><dd id="current"></dd></div>
+        <div class="row" id="latest-row" hidden><dt>Newest</dt><dd id="latest"></dd></div>
+        <div class="row"><dt>Last check</dt><dd id="checked"></dd></div>
+      </dl>
+      <section class="notes-wrap" id="notes-wrap" hidden>
+        <h2>What's new</h2>
+        <pre id="notes"></pre>
+      </section>
+      <div class="spacer"></div>
+      <footer id="buttons"></footer>
+    </main>
+    <script src="update.js"></script>
+  </body>
+</html>

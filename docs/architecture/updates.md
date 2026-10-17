@@ -80,11 +80,17 @@ from Alex Miller's individual membership, not Flexbike Inc's.
   control server's `POST /app/restart`, which runs `updater.installNow()`; **Restart Now** installs at once.
 - Squirrel only installs into a signed app. An unsigned build (or any Squirrel error) falls back to **Download Weft
   X…**, which opens the release page.
-- The Weft menu always has the item: **Check for Updates…** says what it found, even "You're up to date".
+- The Weft menu always has the item, and in the app it opens the **Software Update** window (`electron/update-window.cjs`,
+  `update.html`, `update.js`, `update-preload.cjs`; the About window's pattern): this Mac's version, the newest, the last
+  check, the release notes and one button for the next step (Check Now, Download…, Restart to Update). Opening it while
+  idle checks right away. `electron/update-view.cjs` words each state (a feed 404 reads as "no release published yet");
+  the updater keeps `notes`, `checkedAt`, `error` and `upToDate` in its state for it, and `updater.info()` hands it over.
+  Without a window (`openWindow` unset) **Check for Updates…** falls back to message boxes.
 
 ## Gaps
 
-- Not yet run end to end: the first signed release proves the signing, notarization and Squirrel path.
+- Not yet run end to end: aimhuge/weft has no release and no signing secrets yet (2026-10-17), so the feed 404s. The
+  first signed release proves the signing, notarization and Squirrel path.
 - arm64 only. Intel Macs would need an `x64` (or `universal`) target and their own zip in the feed.
 - No delta updates: each update downloads the full zip.
 - `countRunning` in `updater.cjs` repeats the one in `keep-working.cjs`.

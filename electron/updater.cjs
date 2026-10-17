@@ -77,6 +77,8 @@ function createUpdater({
   openExternal = () => {},
   onBeforeInstall = () => {},
   onChange = () => {},
+  // The Software Update window (update-window.cjs): when given, the menu item opens it instead of acting.
+  openWindow = null,
   feed = FEED,
   log = console,
 }) {
@@ -91,7 +93,12 @@ function createUpdater({
 
   function fallBack(release, err) {
     if (err) log.warn?.(`Weft updater: ${err.message || err}; offering the download instead`);
-    set({ phase: "available", version: release.version, page: release.page });
+    set({ ...found(release), phase: "available" });
+  }
+
+  // What a check found, carried through every phase after it so the update window can show it.
+  function found(release) {
+    return { version: release.version, page: release.page, notes: release.notes || "", checkedAt: Date.now() };
   }
 
   // Hands the feed to Squirrel once; its events move the state from here on.
@@ -99,7 +106,7 @@ function createUpdater({
     if (!squirrelReady) {
       squirrelReady = true;
       autoUpdater.on("update-downloaded", () => {
-        set({ phase: "ready", version: state.version, page: state.page });
+        set({ ...state, phase: "ready" });
         notify(`Weft ${state.version} is ready`, "Restart Weft to update, or it updates the next time you quit.");
       });
       autoUpdater.on("error", (err) => {
@@ -108,7 +115,7 @@ function createUpdater({
       autoUpdater.on("before-quit-for-update", onBeforeInstall);
       autoUpdater.setFeedURL({ url: feed, serverType: "json" });
     }
-    set({ phase: "downloading", version: release.version, page: release.page });
+    set({ ...found(release), phase: "downloading" });
     try {
       autoUpdater.checkForUpdates();
     } catch (err) {
@@ -126,12 +133,13 @@ function createUpdater({
     try {
       release = newerRelease(await fetchJson(feed), currentVersion);
     } catch (err) {
-      set(before.phase === "available" ? before : { phase: "idle" });
-      say("Couldn't check for updates", String(err.message || err));
+      const error = String(err.message || err);
+      set(before.phase === "available" ? before : { phase: "idle", error, checkedAt: Date.now() });
+      say("Couldn't check for updates", error);
       return state;
     }
     if (!release) {
-      set({ phase: "idle" });
+      set({ phase: "idle", upToDate: true, checkedAt: Date.now() });
       say("You're up to date", `Weft ${currentVersion} is the newest version.`);
       return state;
     }
@@ -189,12 +197,22 @@ function createUpdater({
     start,
     stop,
     state: () => state,
-    menuItem: () => menuItem(state, { install: () => install(), download, check: () => check({ manual: true }) }),
+    // Everything the update window draws (electron/update-view.cjs turns it into words and buttons).
+    info: () => ({ state, currentVersion, packaged, feed }),
+    menuItem: () => {
+      const item = menuItem(state, { install: () => install(), download, check: () => check({ manual: true }) });
+      if (!openWindow) return item;
+      const click = () => {
+        openWindow();
+        if (state.phase === "idle") check().catch(() => {});
+      };
+      return { ...item, enabled: true, click };
+    },
   };
 }
 
 // The updater with Electron's own pieces: Squirrel, dialogs, a notification, and the board's running count.
-function createAppUpdater({ getServer, onChange }) {
+function createAppUpdater({ getServer, onChange, openWindow }) {
   const { armRestart } = require("./restart-when-idle.cjs");
   const { BaseWindow, Notification, app, autoUpdater, dialog, shell } = require("electron");
   return createUpdater({
@@ -222,6 +240,7 @@ function createAppUpdater({ getServer, onChange }) {
     // quitAndInstall closes every window first, and the board's close handler only hides it; destroying skips that.
     onBeforeInstall: () => BaseWindow.getAllWindows().forEach((w) => w.destroy()),
     onChange,
+    openWindow,
   });
 }
 
