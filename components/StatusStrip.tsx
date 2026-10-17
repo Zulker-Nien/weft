@@ -1,5 +1,6 @@
 "use client";
 
+import LimitBurndown from "./LimitBurndown";
 import Tip from "./Tip";
 import { cacheMinutesLeft, folderName, formatReset, formatTokens } from "@/lib/format";
 import { BACKEND_LABELS, type Backend, type CacheState, type CardStats, type LimitWindow } from "@/lib/types";
@@ -25,22 +26,12 @@ function BackendFallback({ backend }: { backend: Backend }) {
   );
 }
 
-function Limit({
-  label,
-  name,
-  window,
-}: {
-  label: string;
-  name: string;
-  window?: LimitWindow;
-}) {
+// One plan window's share left and reset; the hover over both is the burndown chart (LimitBurndown).
+function Limit({ label, window }: { label: string; window?: LimitWindow }) {
   if (!window) return null;
   const left = Math.max(0, 100 - window.used);
-  const reset = window.resetsAt
-    ? `Resets ${new Date(window.resetsAt * 1000).toLocaleString("en-US", { weekday: "long", hour: "numeric", minute: "2-digit" })}.`
-    : "";
   return (
-    <Tip text={`${name}: ${left}% left (${window.used}% used). ${reset}`.trim()}>
+    <span>
       {label}:<span className={tone(left)}>{left}%</span>
       {window.resetsAt && (
         <span className="text-faint">
@@ -48,7 +39,7 @@ function Limit({
           reset {formatReset(window.resetsAt)}
         </span>
       )}
-    </Tip>
+    </span>
   );
 }
 
@@ -120,10 +111,10 @@ export default function StatusStrip({
           </Tip>
         )}
         {limits && (
-          <>
-            <Limit label="5hr" name="5-hour plan limit" window={stats.fiveHour} />
-            <Limit label="7d" name="Weekly plan limit" window={stats.sevenDay} />
-          </>
+          <Tip text={<LimitBurndown backend={backend} stats={stats} />} width={444} className="inline-flex gap-x-3">
+            <Limit label="5hr" window={stats.fiveHour} />
+            <Limit label="7d" window={stats.sevenDay} />
+          </Tip>
         )}
       </div>
     </div>
