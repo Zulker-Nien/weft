@@ -12,22 +12,10 @@ export const contentType = "image/png";
 
 const ASSETS = path.join(process.cwd(), "electron", "assets");
 
-// Fraunces, the home page's display face, when Google Fonts answers; the default sans otherwise.
-async function displayFont(): Promise<ArrayBuffer | null> {
-  try {
-    const css = await (
-      // No browser user-agent, so Google answers with a TrueType file; satori can't read woff2.
-      await fetch("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&text=WeftAboardforyourAI.", {
-        headers: { "user-agent": "curl/8" },
-      })
-    ).text();
-    const url = css.match(/src: url\((https:[^)]+)\) format\('(?:truetype|opentype)'\)/)?.[1];
-    if (!url) return null;
-    const res = await fetch(url);
-    return res.ok ? await res.arrayBuffer() : null;
-  } catch {
-    return null;
-  }
+// Satori needs a TrueType font; use the vendored variable font instead of fetching Google Fonts during builds.
+async function displayFont(): Promise<ArrayBuffer> {
+  const bytes = await readFile(path.join(process.cwd(), "public", "fonts", "fraunces-variable.ttf"));
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 }
 
 async function dataUrl(file: string, type: string): Promise<string> {
@@ -53,7 +41,7 @@ export default async function Image() {
           padding: 64,
           background: "#151a29",
           color: "#ece5d8",
-          fontFamily: font ? "Fraunces" : "sans-serif",
+          fontFamily: "Fraunces",
         }}
       >
         <img src={scene} alt="" width={1200} height={1200} style={{ position: "absolute", left: 0, top: -420, objectFit: "cover" }} />
@@ -81,6 +69,6 @@ export default async function Image() {
         </div>
       </div>
     ),
-    { ...size, fonts: font ? [{ name: "Fraunces", data: font, style: "normal", weight: 500 }] : undefined },
+    { ...size, fonts: [{ name: "Fraunces", data: font, style: "normal", weight: 500 }] },
   );
 }

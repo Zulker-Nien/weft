@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { Fraunces, Instrument_Sans } from "next/font/google";
+import Link from "next/link";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
 import emblem from "@/electron/assets/emblem.png";
 import twinSuns from "@/electron/assets/splash-speeder.jpg";
@@ -9,24 +9,21 @@ import board from "@/public/brand/board.png";
 import Pillars from "./Pillars";
 import "./home.css";
 
-// The weft.zip home page (lib/home.ts has what it says and links to). The name, one
+// The weft.zip home page (lib/home.ts has what it says and links to): the name, one
 // sentence, the download, a real screenshot of the board (public/brand/board.png) over the start screen's
 // twin suns, then the five pillars. A server component with no client JS. Fraunces for display, Instrument Sans for text.
-const fraunces = Fraunces({ subsets: ["latin"], axes: ["SOFT", "WONK", "opsz"], variable: "--font-fraunces", display: "swap" });
-const instrument = Instrument_Sans({ subsets: ["latin"], variable: "--font-instrument", display: "swap" });
-
 export default async function Home() {
   const download = downloadLink(await latestRelease());
   return (
     <>
       <GoogleAnalytics />
-      <div className={`${fraunces.variable} ${instrument.variable} wz-root`}>
+      <div className="wz-root">
         <nav className="wz-wrap wz-nav">
           <span className="wz-brand">
             <Image src={emblem} alt="" width={28} height={28} className="wz-emblem" /> Weft
           </span>
           <div className="flex items-center gap-5">
-            <a href="/login">Sign in</a>
+            <Link href="/login">Sign in</Link>
             <a href={REPO}>GitHub</a>
           </div>
         </nav>

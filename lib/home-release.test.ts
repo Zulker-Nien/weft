@@ -14,7 +14,13 @@ describe("latestRelease", () => {
   it("fetches the feed, caches for hours and returns the newest release", async () => {
     const fetchFn = respond(200, { releases: [{ version: "0.3.0", dmg, page: "https://x/tag" }] });
     await expect(latestRelease(fetchFn)).resolves.toEqual({ version: "0.3.0", dmg, page: "https://x/tag" });
-    expect(fetchFn).toHaveBeenCalledWith(FEED, { headers: { accept: "application/json" } });
+    expect(fetchFn).toHaveBeenCalledWith(FEED, expect.objectContaining({ headers: { accept: "application/json" } }));
+    // AbortSignal is an interface, not a class, so `expect.any(AbortSignal)` is `any` and trips the lint rule;
+    // reach into the call's options to check the timeout signal is wired up.
+    const [, options] = vi.mocked(fetchFn).mock.calls[0]!;
+    const signal = (options as { signal?: unknown }).signal;
+    expect(signal).toBeInstanceOf(AbortSignal);
+    expect((signal as AbortSignal).aborted).toBe(false);
     expect(cacheLife).toHaveBeenCalledWith("hours");
   });
 
