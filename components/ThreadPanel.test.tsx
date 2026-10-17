@@ -13,7 +13,7 @@ vi.mock("@/lib/use-events", () => ({ useBoardEvents: () => {} }));
 
 const resets = {};
 
-function renderPanel(over: Parameters<typeof makeCard>[0] = {}) {
+function renderPanel(over: Parameters<typeof makeCard>[0] = {}, props: { editorOpen?: boolean } = {}) {
   const handlers = {
     onSend: vi.fn(() => Promise.resolve()),
     onAnswer: vi.fn(),
@@ -25,8 +25,9 @@ function renderPanel(over: Parameters<typeof makeCard>[0] = {}) {
     onRename: vi.fn(),
     onMode: vi.fn(),
     onNewChat: vi.fn(),
+    onEditor: vi.fn(),
   };
-  render(<ThreadPanel card={makeCard(over)} items={[]} streaming="" resets={resets} {...handlers} />);
+  render(<ThreadPanel card={makeCard(over)} items={[]} streaming="" resets={resets} {...handlers} {...props} />);
   return handlers;
 }
 
@@ -60,5 +61,16 @@ describe("ThreadPanel", () => {
     renderPanel({ id: "copilot", role: "copilot", title: "Copilot" });
     await userEvent.click(screen.getByRole("heading", { name: "Copilot" }));
     expect(screen.queryByDisplayValue("Copilot")).not.toBeInTheDocument();
+  });
+
+  it("opens the editor column from the ✏︎ in its header, lit while the editor is open", async () => {
+    const { onEditor } = renderPanel();
+    const pencil = screen.getByRole("button", { name: "Open editor" });
+    expect(pencil).toHaveAttribute("aria-pressed", "false");
+    await userEvent.click(pencil);
+    expect(onEditor).toHaveBeenCalledOnce();
+    cleanup();
+    renderPanel({}, { editorOpen: true });
+    expect(screen.getByRole("button", { name: "Close editor" })).toHaveAttribute("aria-pressed", "true");
   });
 });

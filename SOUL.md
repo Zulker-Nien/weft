@@ -203,6 +203,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   keep their 170px floor when hidden and narrow to 120px when peek or open (`columnMinWidth(state)`);
   the peek auto-closes 6s after the mouse leaves so the board reclaims the width. They
   are `@container`s that drop thumbnails and header extras.
+- `lib/workspace-layout.ts` + `components/CardWorkspace.tsx` + `components/EditorColumn.tsx` + `lib/file-access.ts` + `app/api/cards/[id]/files` + `lib/open-file.ts`: the open card's four columns and the editor column (CodeMirror, TipTap markdown, Changes vs. HEAD); any file path in the thread opens it (docs/architecture/editor.md).
 - `lib/browser-tools.ts`: `mcp__browser__*` tools every thread gets.
 - `lib/mini-apps.ts` + `lib/mini-app-store.ts` + `app/api/apps` + `lib/use-mini-apps.ts` + `components/AppsRail.tsx` + `components/SaveAppButton.tsx`: mini apps, pages
   saved from the browser pane (its toolbar's grid button) as tiles on the left rail below 🖥 Services (rendered inside `components/LibraryRail.tsx`), in `~/.weft/apps.json`; a tile opens its page in the board's pane. No apps, nothing on the rail (docs/architecture/mini-apps.md).
@@ -271,6 +272,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - `github-issues.md` — a project's open GitHub issues become Backlog cards, one direction, polled every 5 min, instant sync via the deployed relay.
   - `mini-apps.md` — pages saved from the browser pane as tiles on the left rail below Services: `~/.weft/apps.json`, `/api/apps`, the pane's Save as app button, right-click menu.
   - `tags.md` — ★ star and tags (the GitHub-label-style rules, the catalog in `~/.weft/tags.json`, the 🏷 drawer, pills on the card); replaced the library.
+  - `editor.md` — the open card's four columns (thread, editor, pane, glance), the editor (CodeMirror, TipTap markdown with diff3 saves, Changes vs. HEAD), the files route and its safety, `weft:open-file`, inline diffs.
   - `glance-rail.md` — the browser pane's 72 px rail of one mini per turn and per page, its dots, fallbacks and browser history, and the two events that sync it with the chat.
   - `board-view.md` — `mcp__board_view__*`: a thread's eyes and hands on the board window itself, fixed scripts, the token-guarded control server.
   - `keyboard-shortcuts.md` — the shortcut registry, the `?` sheet, tooltips, key badges, the `ModifierHint` component.

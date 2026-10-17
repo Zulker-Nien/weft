@@ -146,6 +146,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 ## Browser pane
 
 - `Now` **Mini apps** — the pane's grid button saves its page as an app, a tile on the left rail below 🖥 Services; click to open it in the pane, right-click to rename, move, copy or remove; `~/.weft/apps.json` (`lib/mini-apps.ts`, `components/AppsRail.tsx`). Next: `mcp__browser__save_app` so a thread can offer its page as an app, drag to reorder, favicons, apps per project.
+- `Now` **Editor column** — click a file path in the thread (or ⌘P) to open it beside the thread: CodeMirror, TipTap markdown that saves only what you changed, a Changes view vs. HEAD, live reload and save conflicts; inline diffs on Edit/Write rows (docs/architecture/editor.md). Next: take a symbol claim while a file is open, the web board.
 - `Now` **Glance rail** — a 72 px column right of the page: one mini per turn of the open thread (dot, first words, relative time) and per page the pane showed (the agent's `open_url` calls, and pages you opened this session), click to scroll the chat there and put the pane back on that turn's page, chat scrolling lights the turn on top; hidden under 980 px (`lib/glance-rail.ts`, `components/GlanceRail.tsx`). Next: keep hand-opened pages across a restart.
 - `Now` **Always show something** — a working page in a card's blank pane when a turn starts (the card's own hovercar scene, dimmed, with the title, ask and a running clock), and a Haiku-written update page (how it's going, what we did, what's next) after any turn that showed nothing (`lib/glance.ts`). Measured 2026-10-10: Haiku with a bare CLI ~8-15s and steady; puku-ai-2.8 similar but 8-31s; Haiku via plain `claude -p` 18-45s from startup.
 - `Now` **Card pages survive a restart** — each card's last page is saved to `~/.weft/pages/` (temp pages copied) and comes back when you open the card (`electron/pane-pages.cjs`).
@@ -376,7 +377,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `Done` **Move without dragging** — the card's right-click menu and the command palette move cards between columns.
 - `P2` **Screen reader announcements** — a live region that reads out card moves and new permission requests.
 - `P2` **Focus return** — focus goes back to the card after closing its thread panel or a dialog.
-- `P2` **Resizable thread panel** — drag the divider between the thread and its browser in the full-screen overlay, and remember the split.
+- `Done` **Resizable thread panel** — the open card is four columns (thread, editor, pane, glance), each closable and resizable, remembered (`lib/workspace-layout.ts`, `components/CardWorkspace.tsx`). Next: drag a column to reorder.
 - `P2` **Clear error messages** — plain explanations with a fix for common failures: CLI not on PATH, folder missing, logged out, port in use.
 - `P2` **Contrast and motion** — check the column colors against contrast guidelines and respect reduced-motion settings.
 - `P3` **Text size** — a setting for card and thread text size.

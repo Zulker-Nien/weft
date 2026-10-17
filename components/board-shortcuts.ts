@@ -3,6 +3,7 @@ import type { ShortcutDef } from "@/lib/hotkeys";
 import type { RailPanel } from "@/lib/rail-view";
 import { addSecret } from "@/lib/use-vault";
 import type { Card, LoginView } from "@/lib/types";
+import type { ColumnId } from "@/lib/workspace-layout";
 
 // The board's keyboard shortcuts (Board.tsx), from the state and actions they read.
 export interface BoardShortcutContext {
@@ -14,6 +15,8 @@ export interface BoardShortcutContext {
   query: string;
   // Shortcuts that act on the board stand down while a dialog or the project menu is up.
   boardKeys: boolean;
+  // True when a card is open: required for the column toggles, which only act on the workspace.
+  cardOpen: boolean;
   doneToArchive: Card[];
   lastArchived: string[];
   setShowPalette: (open: boolean) => void;
@@ -27,6 +30,8 @@ export interface BoardShortcutContext {
   toggleCopilot: () => void;
   toggleBrowser: () => void;
   toggleTerminal: () => void;
+  // Toggle a column in the open-card workspace (lib/workspace-layout.ts). No-op without a card.
+  toggleColumn: (id: ColumnId) => void;
   moveFocus: (move: { dx?: number; dy?: number; edge?: "first" | "last" }) => void;
   openFocused: (e: KeyboardEvent) => false | undefined;
   jumpToNeedsYou: () => false | undefined;
@@ -79,6 +84,13 @@ export function boardShortcuts(c: BoardShortcutContext): ShortcutDef[] {
     { id: "copilot", keys: ["c"], description: "Open or close the copilot", group: "General", enabled: c.boardKeys, handler: c.toggleCopilot },
     { id: "browser", keys: ["b"], description: "Toggle the browser", group: "General", enabled: c.boardKeys, handler: c.toggleBrowser },
     { id: "terminal", keys: ["t"], description: "Toggle the terminal", group: "General", enabled: c.boardKeys, handler: c.toggleTerminal },
+    // The four-column workspace for an open card (lib/workspace-layout.ts). ⌥⌘1..4 sit on free
+    // keys (the App group owns ⌘1/⌘2, ⌥⌘ are not used elsewhere in lib/shortcut-catalog.ts) and
+    // stand down without a card.
+    { id: "column-thread", keys: ["alt+mod+1"], description: "Toggle the thread column", group: "General", enabled: c.boardKeys && c.cardOpen, handler: () => c.toggleColumn("thread") },
+    { id: "column-editor", keys: ["alt+mod+2"], description: "Toggle the editor column", group: "General", enabled: c.boardKeys && c.cardOpen, handler: () => c.toggleColumn("editor") },
+    { id: "column-pane", keys: ["alt+mod+3"], description: "Toggle the browser column", group: "General", enabled: c.boardKeys && c.cardOpen, handler: () => c.toggleColumn("pane") },
+    { id: "column-glance", keys: ["alt+mod+4"], description: "Toggle the glance column", group: "General", enabled: c.boardKeys && c.cardOpen, handler: () => c.toggleColumn("glance") },
     {
       id: "card-down",
       keys: ["j", "ArrowDown"],

@@ -9,6 +9,7 @@ import CardActions from "./CardActions";
 import CrashGuard from "./CrashGuard";
 import { guarded } from "./guarded";
 import Icon from "./Icon";
+import EditorToggle from "./EditorToggle";
 import ModePicker from "./ModePicker";
 import TagPill from "./TagPill";
 import { cardTags } from "@/lib/rail-view";
@@ -35,8 +36,11 @@ export default function ThreadPanel({
   onRename,
   onMode,
   onNewChat,
+  editorOpen,
+  onEditor,
   editTitle = false,
   resets,
+  className = "",
 }: {
   card: Card;
   items: ThreadItem[];
@@ -61,17 +65,22 @@ export default function ThreadPanel({
   onMode: (mode: PermissionMode) => void;
   // The copilot's New chat, in place of the board card's skills, star, archive and delete.
   onNewChat?: () => void;
+  // The ✏︎ beside the X: opens or closes the editor column (CardWorkspace draws no strip for it).
+  editorOpen?: boolean;
+  onEditor?: () => void;
   // Opens with the title already being edited (Rename… in the card's right-click menu).
   editTitle?: boolean;
   // The plan's next 5-hour and weekly resets, the reply box's default Send later times.
   resets: PlanResets;
+  // Replaces the default sizing classes when the panel is rendered as a column inside CardWorkspace.
+  className?: string;
 }) {
   const live = isLive(card);
   // The copilot opens here like any card, but it has no project and isn't filed, starred or renamed.
   const pilot = card.role === "copilot";
 
   return (
-    <aside data-drop-target={card.id} className="flex w-[44%] min-w-[380px] shrink-0 flex-col bg-panel last:flex-1">
+    <aside data-drop-target={card.id} className={className || "flex w-[44%] min-w-[380px] shrink-0 flex-col bg-panel last:flex-1"}>
       <header className="flex items-start gap-3 border-b border-line px-4 py-3">
         <div className="min-w-0 flex-1">
           <PanelTitle card={card} editable={!pilot} editTitle={editTitle} onRename={onRename} />
@@ -88,6 +97,7 @@ export default function ThreadPanel({
         ) : (
           <CardActions card={card} live={live} onSend={onSend} onShare={onShare} onStar={onStar} onArchive={onArchive} onDelete={onDelete} marksInPane={marksInPane} />
         )}
+        <EditorToggle open={editorOpen} onClick={onEditor} />
         {onClose && (
           <button
             onClick={onClose}

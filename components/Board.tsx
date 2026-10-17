@@ -10,6 +10,8 @@ import { planResets } from "@/lib/schedule";
 import { COLUMNS, type BoardEvent, type Card, type Column, type LoginView, type Project, type ThreadItem } from "@/lib/types";
 import { useShortcutHint, useShortcutListener, useShortcuts } from "@/lib/hotkeys";
 import { playChime, preloadChimes } from "@/lib/chimes";
+import { useWorkspaceLayout } from "@/lib/use-workspace-layout";
+import { onOpenFile } from "@/lib/open-file";
 import {
   cardChangeEffects,
   groupByColumn,
@@ -82,6 +84,10 @@ const ShortcutsDialog = guarded(() => import("./ShortcutsDialog"), { what: "shor
 const TerminalDrawer = guarded(() => import("./TerminalDrawer"), { what: "terminal", className: "m-3" });
 const GlanceRail = guarded(() => import("./GlanceRail"), { what: "glance rail", className: "w-[72px] shrink-0" });
 const ThreadPanel = guarded(() => import("./ThreadPanel"), { what: "thread", className: "m-3 w-[360px] self-start" });
+// The four-column workspace that holds the thread + editor + pane + glance when a card is open.
+const CardWorkspace = guarded(() => import("./CardWorkspace"), { what: "card workspace", className: "flex-1 min-w-0" });
+// The code/markdown editor column, in its own CrashGuard so a broken editor leaves the thread and the pane.
+const EditorColumn = guarded(() => import("./EditorColumn"), { what: "editor column" });
 const CommandPalette = guarded(() => import("./CommandPalette"), { what: "command palette", className: "fixed left-4 top-16 z-50" });
 
 // The browser pane's page beside the New thread dialog (not a card's).
@@ -139,6 +145,9 @@ export default function Board() {
   const [showPalette, setShowPalette] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState("");
   const [login, setLogin] = useState<LoginView | null>(null);
+  // The four-column workspace for an open card: open/close state, widths, and the divider drag.
+  // Declared before the shortcuts below read workspace.toggle (lib/workspace-layout.ts has the rest).
+  const workspace = useWorkspaceLayout();
   // Columns showing all their cards, for the project and filter they were expanded under.
   const [expanded, setExpanded] = useState<{ view: string; columns: Column[] }>({ view: "", columns: [] });
   // Each card's last known column, to notice when one moves.
@@ -528,6 +537,7 @@ export default function Board() {
       login,
       query,
       boardKeys,
+      cardOpen: Boolean(selectedId),
       doneToArchive,
       lastArchived,
       setShowPalette,
@@ -541,6 +551,7 @@ export default function Board() {
       toggleCopilot,
       toggleBrowser,
       toggleTerminal,
+      toggleColumn: workspace.toggle,
       moveFocus,
       openFocused,
       jumpToNeedsYou,
@@ -564,6 +575,15 @@ export default function Board() {
   useEscape(Boolean(libraryOpen) && !selectedId && !showNew && !railPinned(), () => setLibraryOpen(null), { panel: true });
 
   const tagCatalog = useTagCatalog(cards, notify);
+  // Open the editor column automatically when something asks for a file in this card's folder.
+  // The editor itself drains the waiting requests in onOpenFile (lib/open-file.ts); here we just
+  // flip the column open so the user sees the tab. `setOpenEditor` is captured to keep the
+  // effect from depending on the whole `workspace` object (which re-creates each render).
+  const setOpenEditor = workspace.setOpen;
+  useEffect(() => {
+    if (!selectedId) return;
+    return onOpenFile(selectedId, () => setOpenEditor("editor", true));
+  }, [selectedId, setOpenEditor]);
   const { onCardMenu, onColumnMenu, toggleStar, tagging, editTags, saveTags, closeTags, sharing, closeShare, shareCard } = useBoardMenus({
     doneShown: byColumn.get("done") ?? [],
     archivedCount,
@@ -752,56 +772,99 @@ export default function Board() {
         <div style={framed ? { ...NO_DRAG, bottom: terminalOpen ? terminalHeight + 16 : undefined } : undefined} className={framed ? "fixed inset-4 z-40 flex overflow-hidden rounded-xl border border-line-strong bg-panel shadow-2xl" : "contents"}>
         {showNew ? (
           <NewCardDialog cards={cards} home={home} defaultCwd={newCwd ?? project ?? undefined} recentCwd={[...cards].sort((a, b) => b.updatedAt - a.updatedAt).find((c) => c.cwd !== home)?.cwd} onClose={() => setShowNew(false)} onCreate={create} />
-        ) : selected && (
-          <ThreadPanel
-            key={selected.id}
-            guardName={selected.title}
-            card={selected}
-            onStar={() => toggleStar(selected)}
-            onTags={() => editTags(selected)}
-            onShare={() => shareCard(selected)}
-            marksInPane={browserOpen}
-            resets={planResets(cards)}
-            items={thread}
-            streaming={streaming}
-            onSend={async (text) => {
-              // /done wraps the thread up on its own, so the thread closes as it's sent.
-              // A failed send shows on the board, since the thread isn't there to show it.
-              if (/^\/(weft:)?done(-quick)?(\s|$)/.test(text.trim())) {
-                select(null);
-                api.send(selected.id, text).catch(notify);
-                return;
-              }
-              await api.send(selected.id, text);
+        ) : selected ? (
+          // The four-column workspace for an open card: thread | editor | pane | glance, in order.
+          // The columns remember which are open and how wide each is (lib/use-workspace-layout.ts);
+          // closing the last open column is a no-op so the card always has at least its thread.
+          <CardWorkspace
+            layout={workspace.layout}
+            fill={workspace.fill}
+            dragging={workspace.dragging}
+            setDragging={workspace.setDragging}
+            toggle={workspace.toggle}
+            dragDivider={workspace.dragDivider}
+            fitToContainer={workspace.fitToContainer}
+            columns={{
+              thread: (
+                <ThreadPanel
+                  key={selected.id}
+                  guardName={selected.title}
+                  card={selected}
+                  onStar={() => toggleStar(selected)}
+                  onTags={() => editTags(selected)}
+                  onShare={() => shareCard(selected)}
+                  marksInPane={workspace.layout.open.pane}
+                  resets={planResets(cards)}
+                  items={thread}
+                  streaming={streaming}
+                  onSend={async (text) => {
+                    // /done wraps the thread up on its own, so the thread closes as it's sent.
+                    // A failed send shows on the board, since the thread isn't there to show it.
+                    if (/^\/(weft:)?done(-quick)?(\s|$)/.test(text.trim())) {
+                      select(null);
+                      api.send(selected.id, text).catch(notify);
+                      return;
+                    }
+                    await api.send(selected.id, text);
+                  }}
+                  onAnswer={(allow, answers) => void api.answer(selected.id, allow, answers, selected.pending?.id).catch(notify)}
+                  onRelease={() => void api.release(selected.id).catch(notify)}
+                  onArchive={() => toggleArchive(selected)}
+                  onDelete={() => {
+                    select(null);
+                    api.remove(selected.id).catch(notify);
+                  }}
+                  // The thread is now always closeable from its own X — the pane column's X
+                  // closes the pane, not the card.
+                  onClose={() => select(null)}
+                  onRename={(title) => void api.rename(selected.id, title).catch(notify)}
+                  onMode={(mode) => void api.setMode(selected.id, mode).catch(notify)}
+                  onNewChat={() => void api.resetCopilot().then(() => select(selected.id)).catch(notify)}
+                  editorOpen={workspace.layout.open.editor}
+                  onEditor={() => workspace.toggle("editor")}
+                  editTitle={renameId === selected.id}
+                  className="flex h-full min-h-0 w-full flex-col bg-panel"
+                />
+              ),
+              editor: (
+                <EditorColumn cardId={selected.id} cwd={selected.cwd} onClose={() => workspace.setOpen("editor", false)} />
+              ),
+              pane: (
+                <BrowserPane
+                  desktop={desktop}
+                  state={browser}
+                  obscured={showSettings || showPalette || showHelp || Boolean(login) || menuOpen || workspace.dragging}
+                  width={browserWidth}
+                  onWidth={setBrowserWidth}
+                  // The pane's X closes the pane column, not the card; the card is closed from
+                  // the thread column's X or the framed window's backdrop / Escape.
+                  onClose={() => workspace.setOpen("pane", false)}
+                  expanded
+                  actions={<PaneCardMarks card={selected} onShare={() => shareCard(selected)} onStar={() => toggleStar(selected)} onArchive={() => toggleArchive(selected)} />}
+                />
+              ),
+              glance: <GlanceRail card={selected} hidden={false} items={thread} pageUrl={browser.url} />,
             }}
-            onAnswer={(allow, answers) => void api.answer(selected.id, allow, answers, selected.pending?.id).catch(notify)}
-            onRelease={() => void api.release(selected.id).catch(notify)}
-            onArchive={() => toggleArchive(selected)}
-            onDelete={() => {
-              select(null);
-              api.remove(selected.id).catch(notify);
-            }}
-            onClose={browserOpen ? undefined : () => select(null)}
-            onRename={(title) => void api.rename(selected.id, title).catch(notify)}
-            onMode={(mode) => void api.setMode(selected.id, mode).catch(notify)}
-            onNewChat={() => void api.resetCopilot().then(() => select(selected.id)).catch(notify)}
-            editTitle={renameId === selected.id}
           />
-        )}
+        ) : null}
 
-        {browserOpen && (
-          <BrowserPane
-            desktop={desktop}
-            state={browser}
-            obscured={showSettings || showPalette || showHelp || Boolean(login) || menuOpen}
-            width={browserWidth}
-            onWidth={setBrowserWidth}
-            onClose={showNew ? () => setShowNew(false) : selected ? () => select(null) : toggleBrowser}
-            expanded={framed}
-            rail={<GlanceRail card={selected} hidden={showNew} items={thread} pageUrl={browser.url} />}
-            actions={selected && !showNew && <PaneCardMarks card={selected} onShare={() => shareCard(selected)} onStar={() => toggleStar(selected)} onArchive={() => toggleArchive(selected)} />}
-          />
-        )}
+        {browserOpen && !framed && (() => {
+          // The pane sits below the board here, not in the workspace (the framed pane lives in
+          // the workspace's `pane` column above). `framed = Boolean(selected) || showNew`, so
+          // `!framed` already implies both `!showNew` and `!selected`; the JSX reflects that.
+          return (
+            <BrowserPane
+              desktop={desktop}
+              state={browser}
+              obscured={showSettings || showPalette || showHelp || Boolean(login) || menuOpen}
+              width={browserWidth}
+              onWidth={setBrowserWidth}
+              onClose={selected ? () => select(null) : toggleBrowser}
+              expanded={false}
+              rail={<GlanceRail card={selected} hidden={false} items={thread} pageUrl={browser.url} />}
+            />
+          );
+        })()}
         </div>
       </div>
 

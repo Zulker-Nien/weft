@@ -39,6 +39,13 @@ same time; Next.js allows one dev server per project folder.
 - **Board view for threads**: a thread can screenshot, click, hover, type into and read Weft's own board window
   (`mcp__board_view__*`), so a thread changing a drawer or dialog tests it in the real app instead of asking you to click
   through. Revealed secrets read as ‹secret› and are blanked in its screenshots (docs/architecture/board-view.md).
+- **Editor column**: an open card is four columns, thread · editor · pane · glance; each closes to a thin strip
+  (click it, or ⌥⌘1–4, to reopen; the editor opens from the ✏︎ beside the thread's ✕) and the line between any two
+  drags to resize. Click any file path in the thread, or ⌘P, to open the
+  file: CodeMirror for code, a what-you-see markdown editor that leaves the lines you didn't touch alone, and a Changes
+  view against git HEAD with a revert per chunk. ⌘S saves; a file the thread changed meanwhile asks before it's
+  overwritten, and an open file reloads as the thread edits it. Edit and Write rows in the thread show their diff
+  (docs/architecture/editor.md).
 - **Mini apps**: a page you keep coming back to (a thread's dashboard in `~/.weft/show`, a dev server, any site) is
   one click from the board. The grid button in the browser pane's toolbar saves the page as an app; it joins the
   left rail as a tile below 🖥 Services (its first letter, or the emoji its name starts with). Click a tile
