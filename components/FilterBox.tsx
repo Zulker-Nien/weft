@@ -4,10 +4,12 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { folderName } from "@/lib/format";
 import { currentArea, fitWidth } from "@/lib/float-place";
 import { useShortcutList } from "@/lib/hotkeys";
+import type { FilterMatch } from "@/lib/board-view";
 import type { Card } from "@/lib/types";
 import { COLUMN_LABEL, COLUMN_PILL } from "./CommandPalette";
 import Icon from "./Icon";
 import KeyCaps from "./KeyCaps";
+import TagPill from "./TagPill";
 
 const LIST_WIDTH = 320;
 const MARGIN = 8;
@@ -23,7 +25,7 @@ export default function FilterBox({
 }: {
   query: string;
   onQuery: (query: string) => void;
-  matches: Card[]; // the cards the filter matches, already cut to the few worth listing
+  matches: FilterMatch[]; // the cards the filter matches, already cut to the few worth listing
   onOpen: (card: Card) => void;
   onSearchAll: () => void; // opens the command palette with this query
 }) {
@@ -58,10 +60,10 @@ export default function FilterBox({
   }, [open]);
 
   function choose(index: number) {
-    const card = matches[index];
-    if (card) {
+    const match = matches[index];
+    if (match) {
       input.current?.blur();
-      onOpen(card);
+      onOpen(match.card);
     } else {
       onSearchAll();
     }
@@ -128,23 +130,27 @@ export default function FilterBox({
           style={spot}
         >
           {matches.length === 0 && <li className="px-2.5 py-1.5 text-[12px] text-faint">No cards match</li>}
-          {matches.map((card, i) => (
-            <li
-              key={card.id}
-              id={`filter-row-${i}`}
-              role="option"
-              aria-selected={i === current}
-              onMouseMove={() => setActive(i)}
-              onClick={() => choose(i)}
-              className={`flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 ${i === current ? "bg-accent-soft" : ""}`}
-            >
-              <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">{card.title}</span>
-              <span className="max-w-[80px] shrink-0 truncate text-[11px] text-faint">{folderName(card.cwd)}</span>
-              <span className={`shrink-0 rounded px-1.5 py-px text-[10px] font-semibold ${COLUMN_PILL[card.column]}`}>
-                {COLUMN_LABEL[card.column]}
-              </span>
-            </li>
-          ))}
+          {matches.map((match, i) => {
+            const { card, matchedTag } = match;
+            return (
+              <li
+                key={card.id}
+                id={`filter-row-${i}`}
+                role="option"
+                aria-selected={i === current}
+                onMouseMove={() => setActive(i)}
+                onClick={() => choose(i)}
+                className={`flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 ${i === current ? "bg-accent-soft" : ""}`}
+              >
+                <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">{card.title}</span>
+                {matchedTag && <TagPill tag={matchedTag} className="max-w-[80px] shrink-0" />}
+                <span className="max-w-[80px] shrink-0 truncate text-[11px] text-faint">{folderName(card.cwd)}</span>
+                <span className={`shrink-0 rounded px-1.5 py-px text-[10px] font-semibold ${COLUMN_PILL[card.column]}`}>
+                  {COLUMN_LABEL[card.column]}
+                </span>
+              </li>
+            );
+          })}
           <li
             id={`filter-row-${matches.length}`}
             role="option"

@@ -32,16 +32,41 @@ export const SORTERS: Record<SortKey, (a: Card, b: Card) => number> = {
 
 // The board's columns: the cards in the chosen project that match the filter, each column sorted.
 // rootOf folds a worktree into its main repo, so its cards show under that project.
+// What a free-text query is asking for. `tag:foo` narrows to a single tag (case-insensitive,
+// whitespace tolerated); an empty query matches everything. `haystack` is the lowercased needle
+// to look for in a card's title/prompt/lastLine/stage/remaining/tags, or null when the query is
+// a tag-only filter or empty.
+function queryShape(raw: string): { tagNeedle: string | null; haystack: string | null } {
+  const trimmed = raw.trim();
+  const tagOnly = /^tag:\s*(.+)$/i.exec(trimmed);
+  if (tagOnly?.[1]) return { tagNeedle: tagOnly[1].trim().toLowerCase(), haystack: null };
+  if (!trimmed) return { tagNeedle: null, haystack: null };
+  return { tagNeedle: null, haystack: trimmed.toLowerCase() };
+}
+
+// A card the filter dropped into the dropdown, plus the tag that matched (if any), so the row
+// can show *why* it's in the result.
+export interface FilterMatch {
+  card: Card;
+  matchedTag?: string;
+}
+
 export function groupByColumn(cards: Card[], view: BoardView, rootOf: (cwd: string) => string) {
-  const needle = view.query.trim().toLowerCase();
+  const { tagNeedle, haystack } = queryShape(view.query);
+  const cardMatches = (card: Card) => {
+    const tags = card.tags ?? [];
+    if (tagNeedle) return tags.some((t) => t.toLowerCase() === tagNeedle);
+    if (!haystack) return true;
+    return [card.title, card.prompt, card.lastLine, card.stage, card.remaining, ...tags]
+      .join(" ")
+      .toLowerCase()
+      .includes(haystack);
+  };
   const groups = new Map<Column, Card[]>(COLUMNS.map((c) => [c.id, []]));
   for (const card of cards) {
     if (view.project && rootOf(card.cwd) !== view.project) continue;
     if (card.archived && !view.showArchived) continue;
-    if (needle) {
-      const haystack = [card.title, card.prompt, card.lastLine, card.stage, card.remaining].join(" ").toLowerCase();
-      if (!haystack.includes(needle)) continue;
-    }
+    if (!cardMatches(card)) continue;
     groups.get(shownColumn(card))?.push(card);
   }
   for (const list of groups.values()) list.sort(SORTERS[view.sort]);
@@ -54,8 +79,25 @@ export function shownColumn(card: Card): Column {
 }
 
 // The cards a filter matches, most recently active first, for the filter box's quick-open list.
-export function topMatches(groups: Map<Column, Card[]>, limit: number): Card[] {
-  return [...groups.values()].flat().toSorted(SORTERS.active).slice(0, limit);
+// When the query is a `tag:foo` or a free-text hit that landed in the card's tags, `matchedTag`
+// names the tag that caused the match (the first one, case-insensitive); otherwise it's unset.
+// `query` is optional so callers that don't have it handy still get the list (without the chip).
+export function topMatches(groups: Map<Column, Card[]>, limit: number, query = ""): FilterMatch[] {
+  const { tagNeedle, haystack } = queryShape(query);
+  const list = [...groups.values()].flat();
+  const enriched: FilterMatch[] = list.map((card) => {
+    const tags = card.tags ?? [];
+    if (tagNeedle) {
+      const hit = tags.find((t) => t.toLowerCase() === tagNeedle);
+      return hit ? { card, matchedTag: hit } : { card };
+    }
+    if (haystack) {
+      const hit = tags.find((t) => t.toLowerCase().includes(haystack));
+      if (hit) return { card, matchedTag: hit };
+    }
+    return { card };
+  });
+  return enriched.toSorted((a, b) => SORTERS.active(a.card, b.card)).slice(0, limit);
 }
 
 // Recent projects: saved ones plus every folder a card runs in, most recently active first. Worktrees

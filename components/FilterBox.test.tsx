@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
-import type { Card } from "@/lib/types";
+import type { FilterMatch } from "@/lib/board-view";
 import { makeCard } from "./test-utils";
 import FilterBox from "./FilterBox";
 
@@ -17,8 +17,9 @@ vi.mock("@/lib/hotkeys", async (real) => ({
 
 const login = makeCard({ id: "a", title: "Fix the login page" });
 const logout = makeCard({ id: "b", title: "Log out button", column: "running" });
+const bugged = makeCard({ id: "c", title: "Refactor parser", tags: ["bug"] });
 
-function setup(matches: Card[] = [login, logout]) {
+function setup(matches: FilterMatch[] = [{ card: login }, { card: logout }]) {
   const onOpen = vi.fn();
   const onSearchAll = vi.fn();
   function Harness() {
@@ -73,4 +74,13 @@ describe("FilterBox", () => {
     await userEvent.keyboard("{Escape}");
     expect(input).toHaveValue("");
   });
+
+  it("shows a tag chip on rows that arrived via a tag match", async () => {
+    const { input } = setup([{ card: bugged, matchedTag: "bug" }]);
+    await userEvent.type(input, "bug");
+    // The matched tag rides the row next to the title so the cause of the match is visible.
+    const row = screen.getByRole("option", { name: /Refactor parser/ });
+    expect(within(row).getByText("bug")).toBeInTheDocument();
+  });
 });
+

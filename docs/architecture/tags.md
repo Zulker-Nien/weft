@@ -75,3 +75,21 @@ a recipe still runs as a Claude Code skill.
   (docs/architecture/github-issues.md).
 - No filter by more than one tag at a time.
 - The recipe, to-do and note pages the library kept aren't reachable from the board anymore.
+
+## Filtering by tag
+
+Two paths narrow the board to a tag, and they coexist:
+
+- The rail's ★/tag chip (the `RailFilterChip` next to the filter box) is a sticky filter: ★ and a
+  tag together are an `AND`. It uses `lib/rail-view.ts` `filterCards`, the same picker the 🏷
+  drawer toggles.
+- The `/`-focused filter input (`components/FilterBox.tsx`) is the ad-hoc one. Its query is parsed
+  by `queryShape` in `lib/board-view.ts`:
+  - `tag:foo` (case-insensitive, optional space after the colon) narrows to that tag alone. The
+    card must carry it.
+  - Otherwise the query is a free-text needle, matched against `title | prompt | lastLine |
+    stage | remaining | tags` (case-insensitive). Typing `bug` lands on cards tagged `bug` *and*
+    on cards whose title or prompt contains "bug".
+  `groupByColumn` runs the same rules. `topMatches(groups, limit, query)` returns
+  `FilterMatch = { card, matchedTag? }`; the dropdown renders a `TagPill` next to the title when
+  `matchedTag` is set, so the cause of the match is visible.

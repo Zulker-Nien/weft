@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { railPinned, setRailPinned, starredCount, toggleTag, type RailFilter, type RailPanel } from "@/lib/rail-view";
 import type { Card } from "@/lib/types";
-import { useSlideOut } from "@/lib/use-slide-out";
 import { useSuperAdminGate } from "@/lib/use-admin-gate";
 import { useVault } from "@/lib/use-vault";
 import { filterVaults, railBadge } from "@/lib/vault-view";
@@ -38,19 +37,16 @@ import SupabaseLogo from "./SupabaseLogo";
 import TagsDrawer from "./TagsDrawer";
 import AppsRail from "./AppsRail";
 import type { TagCatalog } from "./use-tag-catalog";
-import "./rail-drawer.css";
 
 // The board's left edge: a 38px rail. ★ filters the board to starred cards (drop a card on it to star it),
 // 🏷 opens the drawer of every tag (components/TagsDrawer.tsx; a tag there filters the board). The drawer
-// slides out from under the board, which sits on it as a sheet (.board-sheet in ./rail-drawer.css), and slides
-// back beneath it on close; pinned, Esc leaves it out. Below a divider, 🔐 opens the same drawer on the secrets
+// slides over the board, or, pinned, pushes it over. Below a divider, 🔐 opens the same drawer on the secrets
 // vault of the board's project(s), 🪝 on the webhooks their code receives (its count is the ones still to register), and ▲ on their Vercel links, Supabase's bolt on their Supabase projects,
 // Cloudflare's cloud on their Workers and Pages projects, BlastCP's rocket on the BlastCP property each one posts as,
 // and GitHub's mark on the gh sign-in and each one's issue sync. Below 🖥 Services, the mini apps saved from the browser pane (components/AppsRail.tsx).
 // The drawers under the divider, each with its icon, title and label.
 const TOOLS = { vault: ["🔐", "Secrets", "Secrets vault"], webhooks: ["🪝", "Webhooks", "Webhooks"], vercel: ["▲", "Vercel", "Vercel"], supabase: [<SupabaseLogo key="supabase" />, "Supabase", "Supabase"], cloudflare: [<CloudflareLogo key="cloudflare" />, "Cloudflare", "Cloudflare"], blastcp: [<BlastcpLogo key="blastcp" />, "BlastCP", "BlastCP"], github: [<GithubLogo key="github" />, "GitHub", "GitHub"] } as const;
 type Tool = keyof typeof TOOLS;
-const DRAWER_SLIDE_MS = 200;
 const isTool = (panel: RailPanel | null): panel is Tool => panel !== null && panel in TOOLS;
 
 export default function SideRail({
@@ -99,8 +95,6 @@ export default function SideRail({
   const [pinned, setPinned] = useState(() => typeof window !== "undefined" && railPinned());
   // A card is being dragged somewhere on the board: ★ and 🏷 light up to show they take drops.
   const [cardDrag, setCardDrag] = useState(false);
-  // The drawer to draw: the open one, or the one sliding back under the board (DRAWER_SLIDE_MS, as in rail-drawer.css).
-  const { shown, closing } = useSlideOut(open, DRAWER_SLIDE_MS);
   const router = useRouter();
   const isSuperAdmin = useSuperAdminGate();
   const vault = useVault(folders);
@@ -137,30 +131,31 @@ export default function SideRail({
   };
 
   const drawerShell = ([icon, title, label]: readonly [React.ReactNode, string, string], body: React.ReactNode) => (
-    <aside className="rail-drawer flex shrink-0 overflow-hidden bg-panel" data-drawer data-closing={closing || undefined} aria-label={label}>
-      <div className="rail-drawer-body flex w-[260px] shrink-0 flex-col">
-        <div className="flex items-center gap-1.5 border-b border-line px-3 py-2">
-          <span className="text-[14px]" aria-hidden>
-            {icon}
-          </span>
-          <h2 className="flex-1 text-[13px] font-semibold text-ink">{title}</h2>
-          <button
-            onClick={() => pin(!pinned)}
-            title={pinned ? "Unpin: Esc slides it back under the board" : "Pin: keep it out, even on Esc"}
-            aria-pressed={pinned}
-            className={`rounded px-1.5 py-0.5 text-[11px] ${pinned ? "bg-accent-soft text-accent" : "text-muted hover:bg-sunken hover:text-ink"}`}
-          >
-            {pinned ? "Pinned" : "Pin"}
-          </button>
-          <button onClick={() => onOpen(null)} aria-label="Close" className="rounded p-1 text-muted hover:bg-sunken hover:text-ink">
-            <Icon name="x" size={13} />
-          </button>
-        </div>
-        {/* A drawer that fails to draw keeps its header (Pin, ✕) and leaves the rail's icons working. */}
-        <CrashGuard key={title} what="drawer" name={title} className="m-2">
-          {body}
-        </CrashGuard>
+    <aside
+      className={`flex w-[260px] shrink-0 flex-col border-r border-line bg-panel ${pinned ? "" : "absolute bottom-0 left-full top-0 z-20 shadow-[6px_0_18px_rgb(0_0_0/0.12)]"}`}
+      aria-label={label}
+    >
+      <div className="flex items-center gap-1.5 border-b border-line px-3 py-2">
+        <span className="text-[14px]" aria-hidden>
+          {icon}
+        </span>
+        <h2 className="flex-1 text-[13px] font-semibold text-ink">{title}</h2>
+        <button
+          onClick={() => pin(!pinned)}
+          title={pinned ? "Unpin: slide over the board" : "Pin: keep it open beside the board"}
+          aria-pressed={pinned}
+          className={`rounded px-1.5 py-0.5 text-[11px] ${pinned ? "bg-accent-soft text-accent" : "text-muted hover:bg-sunken hover:text-ink"}`}
+        >
+          {pinned ? "Pinned" : "Pin"}
+        </button>
+        <button onClick={() => onOpen(null)} aria-label="Close" className="rounded p-1 text-muted hover:bg-sunken hover:text-ink">
+          <Icon name="x" size={13} />
+        </button>
       </div>
+      {/* A drawer that fails to draw keeps its header (Pin, ✕) and leaves the rail's icons working. */}
+      <CrashGuard key={title} what="drawer" name={title} className="m-2">
+        {body}
+      </CrashGuard>
     </aside>
   );
 
@@ -173,9 +168,9 @@ export default function SideRail({
     blastcp: <BlastcpDrawer {...blastcp} project={project} onOpenUrl={onOpenUrl} notify={notify} />,
     github: <GithubDrawer {...github} project={project} onOpenUrl={onOpenUrl} notify={notify} />,
   };
-  const drawer = isTool(shown)
-    ? drawerShell(TOOLS[shown], toolBodies[shown])
-    : shown === "tags" &&
+  const drawer = isTool(open)
+    ? drawerShell(TOOLS[open], toolBodies[open])
+    : open === "tags" &&
       drawerShell(
         ["🏷", "Tags", "Tags"],
         <TagsDrawer catalog={catalog} active={filter.tag} onFilter={(tag) => onFilter(toggleTag(filter, tag))} onDropCard={onTagCard} />,
@@ -183,7 +178,7 @@ export default function SideRail({
   const toggle = (panel: Tool) => () => onOpen(open === panel ? null : panel);
 
   return (
-    <div className="relative flex shrink-0" data-rail>
+    <div className="relative flex shrink-0">
       <nav className="flex w-[38px] flex-col items-center gap-1 border-r border-line bg-panel pt-2" aria-label="Rail">
         <StarRailButton on={Boolean(filter.starred)} count={starred} cardDrag={cardDrag} onClick={() => onFilter({ ...filter, starred: !filter.starred })} onDropCard={onDropStar} />
         <TagsRailButton open={open === "tags"} tag={filter.tag} cardDrag={cardDrag} onOpen={(next) => onOpen(next ? "tags" : null)} />

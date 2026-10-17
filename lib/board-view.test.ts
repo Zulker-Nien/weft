@@ -90,6 +90,8 @@ describe("groupByColumn", () => {
       expect(groups.get("backlog")).toEqual([c]);
     }
   });
+  // Tag matching (`tag:foo`, and a card's tags as part of the free-text query) lives in
+  // lib/board-view-tags.test.ts so this suite stays under its ratchet cap.
 
   it("a whitespace-only query matches everything", () => {
     const a = card({ id: "a" });
@@ -139,7 +141,7 @@ describe("topMatches", () => {
     const mid = card({ column: "running", updatedAt: 2 });
     const fresh = card({ column: "review", updatedAt: 1, lastActivity: 3 });
     const groups = groupByColumn([old, mid, fresh], view(), identity);
-    expect(topMatches(groups, 2)).toEqual([fresh, mid]);
+    expect(topMatches(groups, 2, "").map((m) => m.card)).toEqual([fresh, mid]);
   });
 });
 
