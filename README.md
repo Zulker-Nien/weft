@@ -119,6 +119,10 @@ The new-thread dialog (⌘N) and every card's reply box use the same editor:
   `~/.weft/attachments` and written into the prompt as `![name](path)`. Uploaded PNG, JPEG and GIF
   images are converted to WebP; images also reach the agent as image blocks at that spot (shrunk if
   over the API's 5 MB limit). Videos and other files go as paths the agent can open.
+- **Drag files from Finder anywhere in Weft.** Onto a card: it opens with the files in its reply box.
+  Onto an open thread (or the copilot): its reply box. Onto empty board, or the New thread dialog:
+  New thread opens with them attached. A pill says where they'll go and the card under the cursor
+  lights up; dropped right on a composer, they land where you let go.
 - **The mic dictates** on this Mac with whisper.cpp: click it, talk, click again, and the text lands
   at the cursor (Esc throws the recording away). It needs `brew install whisper-cpp ffmpeg` and a
   model; it uses superwhisper's or Homebrew's models, or the one in `WEFT_WHISPER_MODEL`. In a

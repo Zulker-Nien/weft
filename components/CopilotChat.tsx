@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useRef, useState, useSyncExternalStore } from "react";
+import { handFiles } from "@/lib/file-drop";
+import { useFileDrop } from "@/lib/use-file-drop";
 import { api, mergeThread } from "@/lib/client";
 import { isLive } from "@/lib/format";
 import { useBoardEvents } from "@/lib/use-events";
@@ -35,6 +37,8 @@ export default function CopilotChat() {
   // On macOS the header doubles as the title bar, under the window's traffic lights.
   const mac = useSyncExternalStore(noopSubscribe, () => window.threadboard?.platform ?? "", () => "") === "darwin";
   useTitleBarZoom();
+  // The copilot's own window: files dropped anywhere in it go to its reply box.
+  useFileDrop((_spot, files) => handFiles(COPILOT_ID, files));
 
   // The first load keeps live items that arrived during the fetch; after a reconnect, what's shown
   // may be stale, so the snapshot replaces it.
@@ -91,7 +95,7 @@ export default function CopilotChat() {
   const live = card ? isLive(card) : false;
 
   return (
-    <div className="flex h-screen flex-col bg-panel">
+    <div data-drop-target={COPILOT_ID} className="flex h-screen flex-col bg-panel">
       <header
         className={`flex shrink-0 items-center gap-2 border-b border-line ${mac ? "app-drag mac-title-bar pr-3" : "px-3 py-2.5"}`}
       >

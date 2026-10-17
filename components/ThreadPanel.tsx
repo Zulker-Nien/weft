@@ -67,7 +67,7 @@ export default function ThreadPanel({
   const pilot = card.role === "copilot";
 
   return (
-    <aside className="flex w-[44%] min-w-[380px] shrink-0 flex-col bg-panel last:flex-1">
+    <aside data-drop-target={card.id} className="flex w-[44%] min-w-[380px] shrink-0 flex-col bg-panel last:flex-1">
       <header className="flex items-start gap-3 border-b border-line px-4 py-3">
         <div className="min-w-0 flex-1">
           <PanelTitle card={card} editable={!pilot} editTitle={editTitle} onRename={onRename} />

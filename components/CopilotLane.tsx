@@ -127,6 +127,7 @@ export default function CopilotLane(props: {
   return (
     <aside
       data-copilot-lane="open"
+      data-drop-target={COPILOT_ID}
       style={{ width: LANE_WIDTH.open }}
       className="relative flex shrink-0 flex-col overflow-hidden border-l border-line-strong bg-canvas"
     >

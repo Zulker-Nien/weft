@@ -73,6 +73,7 @@ const HeaderBadges = guarded(() => import("./HeaderBadges"), { inline: true, wha
 const BoardFooter = guarded(() => import("./BoardFooter"), { what: "footer" });
 const ModifierHint = guarded(() => import("./ModifierHint"), { inline: true, what: "modifier hint", className: "fixed bottom-2 right-2 z-50" });
 const LoginDialog = guarded(() => import("./LoginDialog"), { what: "login dialog", className: "fixed left-4 top-16 z-50" });
+const FileDrop = guarded(() => import("./FileDrop"), { inline: true, what: "file drop", className: "fixed bottom-6 left-1/2 z-50" });
 const NewCardDialog = guarded(() => import("./NewCardDialog"), { what: "New thread dialog", className: "m-3 w-[360px] self-start" });
 const SettingsDialog = guarded(() => import("./SettingsDialog"), { what: "settings", className: "fixed left-4 top-16 z-50" });
 const ShortcutsDialog = guarded(() => import("./ShortcutsDialog"), { what: "shortcuts sheet", className: "fixed left-4 top-16 z-50" });
@@ -819,6 +820,8 @@ export default function Board() {
       )}
       {login && <LoginDialog login={login} onClose={() => setLogin(null)} />}
       {switchAllDialog}
+
+      <FileDrop cards={cards} newOpen={showNew} onOpenCard={openCard} onOpenNew={() => openNew()} />
 
       {toast && (
         <BoardToast text={toast.text} action={toast.action} onDismiss={() => setToast(null)} />

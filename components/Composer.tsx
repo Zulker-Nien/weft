@@ -12,6 +12,7 @@ import { useComposerHandle, type ComposerHandle } from "@/lib/composer-handle";
 import { useSkillTypeahead } from "@/lib/use-skill-typeahead";
 import { useComposerKeys } from "@/lib/use-composer-keys";
 import { useDictation } from "@/lib/use-dictation";
+import { useHandedFiles } from "@/lib/use-file-drop";
 import { removeFromEditor, SecretBars, useComposerSecrets } from "./SecretPaste";
 import { Media, insertFiles } from "./MediaNode";
 import SkillTypeahead from "./SkillTypeahead";
@@ -46,9 +47,11 @@ const Composer = forwardRef<
     className?: string;
     // The folder the thread works in; typing "/" suggests the skills available there.
     cwd?: string;
+    // Files dropped elsewhere for this composer (a card id, or "new"; lib/file-drop.ts) land here.
+    dropTarget?: string;
   }
 >(function Composer(
-  { initial = "", placeholder, autoFocus, variant, onSubmit, onSubmitAlt, onChange, actions, sizeClass, className = "", cwd },
+  { initial = "", placeholder, autoFocus, variant, onSubmit, onSubmitAlt, onChange, actions, sizeClass, className = "", cwd, dropTarget },
   ref,
 ) {
   const [source, setSource] = useState<string | null>(null);
@@ -206,13 +209,27 @@ const Composer = forwardRef<
 
   useComposerHandle({ ref, source, setSource, editor, sourceBox });
 
+  // Files dropped on this composer's card, thread or the empty board go in at the cursor.
+  useHandedFiles(editor && !editor.isDestroyed ? dropTarget : undefined, (files) =>
+    source !== null ? void uploadIntoSource(files) : editor && insertFiles(editor, files),
+  );
+
   return (
     <div
       onKeyDownCapture={onKeyDownCapture}
       onKeyDown={onKeyDown}
       onDragEnter={(e) => e.dataTransfer.types.includes("Files") && setDragging(true)}
       onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setDragging(false)}
-      onDrop={() => setDragging(false)}
+      onDrop={(e) => {
+        setDragging(false);
+        // The editor places a drop on its text itself. One on the bars around it goes in at the cursor;
+        // the Markdown view is a plain textarea, so its files upload and their Markdown goes in.
+        const files = [...e.dataTransfer.files];
+        if (e.defaultPrevented || !files.length) return;
+        e.preventDefault();
+        if (source !== null) void uploadIntoSource(files);
+        else if (editor) insertFiles(editor, files);
+      }}
       className={`composer relative flex min-h-0 flex-col rounded-lg border bg-canvas transition-colors focus-within:border-accent ${
         dragging ? "border-accent bg-accent-soft" : "border-line-strong"
       } ${className}`}

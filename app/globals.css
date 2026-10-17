@@ -455,3 +455,8 @@ html[data-build-error] nextjs-portal {
   --admin-accent: var(--accent);
   --admin-error: var(--danger);
 }
+
+/* A card or open thread with files from Finder hovering it (lib/use-file-drop.ts). */
+[data-file-over] {
+  box-shadow: inset 0 0 0 2px var(--accent), inset 0 0 0 9999px var(--accent-soft);
+}

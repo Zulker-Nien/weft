@@ -263,6 +263,7 @@ export default function ReplyBox({
         ref={composer}
         variant="reply"
         cwd={cwd}
+        dropTarget={cardId}
         initial={initial}
         autoFocus={autoFocus}
         placeholder={replyPlaceholder(live, suggestion, placeholder, Boolean(question))}

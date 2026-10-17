@@ -8,6 +8,7 @@ import { startButton } from "@/lib/new-thread";
 import { useEscape } from "@/lib/use-escape";
 import { useHeldModifiers } from "@/lib/use-mod-held";
 import { useNewCardDialog } from "@/lib/use-new-card-dialog";
+import { NEW_THREAD } from "@/lib/file-drop";
 import Composer, { type ComposerHandle } from "./Composer";
 import Icon from "./Icon";
 import { NewCardDialogControls } from "./NewCardDialogControls";
@@ -67,6 +68,7 @@ export default function NewCardDialog({
           ref={composer}
           variant="dialog"
           cwd={dialog.cwd}
+          dropTarget={NEW_THREAD}
           autoFocus
           initial={dialog.draftInitial}
           onChange={dialog.saveDraft}

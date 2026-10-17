@@ -123,6 +123,9 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   which drops CSS-module exports. `GoogleAnalytics` (gated on the home being mounted, so the board route never calls home) and
   `HomeErrorFallback` (the dark plain page both routes render when `loadHome()` returns an error) are both server components;
   `docs/architecture/analytics.md` covers GA.
+- `lib/file-drop.ts` + `lib/use-file-drop.ts` + `components/FileDrop.tsx`: files dragged from Finder anywhere in the window; a composer takes
+  its own drop, a card opens with them in its reply box, an open thread (`data-drop-target`) gets them, empty board opens New thread; files wait
+  in the store until the target composer (`dropTarget`) mounts.
 - `lib/review.ts`, `lib/devserver.ts`: `weft-review` tour blocks and the card's dev server.
 - `plugin/skills/*`: my own skills (`/weft:done`, `/weft:commit`, `/weft:preview`, `/weft:setup-done`,
   which installs tests, docs and strict lint on a project before `/done`; `/weft:done` also keeps this file current);
