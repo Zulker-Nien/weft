@@ -148,3 +148,26 @@ describe("ShareCardDialog", () => {
     await waitFor(() => expect(api.getShare).toHaveBeenCalledTimes(1));
   });
 });
+
+describe("ShareCardDialog over the window", () => {
+  it("draws on document.body and moves the browser pane aside while it's open", async () => {
+    const { useAnyOverlay } = await import("@/lib/overlay");
+    function Pane() {
+      return <span data-testid="pane">{useAnyOverlay() ? "hidden" : "shown"}</span>;
+    }
+    api.getShare.mockResolvedValueOnce(OK);
+    const { container, unmount } = render(
+      <div>
+        <Pane />
+        <ShareCardDialog card={makeCard({ title: "Fix login" })} onClose={vi.fn()} />
+      </div>,
+    );
+    const dialog = await screen.findByRole("dialog");
+    expect(container.contains(dialog)).toBe(false);
+    expect(document.body.contains(dialog)).toBe(true);
+    expect(screen.getByTestId("pane").textContent).toBe("hidden");
+    unmount();
+    render(<Pane />);
+    expect(screen.getByTestId("pane").textContent).toBe("shown");
+  });
+});
