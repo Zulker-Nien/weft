@@ -59,6 +59,8 @@ async function main([name, command, ...args]) {
     console.error('usage: one-at-a-time.mjs <name> "<command>" [args...]');
     return 2;
   }
+  const once = process.env.TSC_ONCE_ACTIVE ? null : onPath("tsc-once");
+  if (once) return delegate(once, name, [command, ...args].join(" "));
   const file = lockPath(name);
   await waitForLock(file, {
     onWait: (pid) => console.error(`${name}: another ${name} is running (pid ${pid}); waiting for it to finish…`),
@@ -72,6 +74,29 @@ async function main([name, command, ...args]) {
     });
   }
   const child = spawn([command, ...args].join(" "), { stdio: "inherit", shell: true });
+  return new Promise((resolve) => child.on("exit", (code, signal) => resolve(code ?? (signal ? 1 : 0))));
+}
+
+// The machine-wide tsc-once (github.com/fotoflo/zprofile bin/tsc-once), when installed, does this lock's job
+// for every project on the Mac: one check per project, at most two at once overall, and a caller whose tree
+// hasn't changed since the last check started gets that check's result instead of running it again.
+export function onPath(bin, dirs = (process.env.PATH ?? "").split(path.delimiter)) {
+  for (const dir of dirs) {
+    const file = path.join(dir, bin);
+    try {
+      fs.accessSync(file, fs.constants.X_OK);
+      return file;
+    } catch {
+      // Not here.
+    }
+  }
+  return null;
+}
+
+function delegate(once, name, command) {
+  // Keyed by this repo, so the pre-commit hook's check (run from a temp copy) takes turns with `pnpm typecheck`.
+  const key = `${fs.realpathSync(path.resolve(import.meta.dirname, ".."))}::${name}`;
+  const child = spawn(once, ["--name", name, "--key", key, "--", command], { stdio: "inherit" });
   return new Promise((resolve) => child.on("exit", (code, signal) => resolve(code ?? (signal ? 1 : 0))));
 }
 

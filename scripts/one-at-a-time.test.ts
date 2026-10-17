@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { lockPath, tryLock, unlock, waitForLock } from "./one-at-a-time.mjs";
+import { lockPath, onPath, tryLock, unlock, waitForLock } from "./one-at-a-time.mjs";
 
 let dir: string;
 let file: string;
@@ -77,5 +77,16 @@ describe("the command line", () => {
 
   it("explains its usage without a command", () => {
     expect(() => execFileSync(process.execPath, [script, "lint"], { stdio: "pipe" })).toThrow();
+  });
+});
+
+describe("onPath", () => {
+  it("finds an executable on the given PATH dirs, and null when none has it", () => {
+    const bin = path.join(dir, "tsc-once");
+    fs.writeFileSync(bin, "#!/bin/sh\n", { mode: 0o755 });
+    fs.writeFileSync(path.join(dir, "plain"), "", { mode: 0o644 });
+    expect(onPath("tsc-once", ["/nope", dir])).toBe(bin);
+    expect(onPath("plain", [dir])).toBeNull();
+    expect(onPath("tsc-once", ["/nope"])).toBeNull();
   });
 });

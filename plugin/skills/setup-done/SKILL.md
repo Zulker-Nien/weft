@@ -81,7 +81,8 @@ and a `lint` script, same rules.)
    `"typecheck": "tsc --noEmit"` script if missing.
 3. **Scripts:** `"lint": "eslint ."` if missing. If `lint` exists and runs something else, keep it
    and report.
-4. **Violations:** run `node_modules/.bin/eslint .` and `node_modules/.bin/tsc --noEmit`.
+4. **Violations:** run `node_modules/.bin/eslint .` and `node_modules/.bin/tsc --noEmit` (or `tsc-once`, when it's
+   on PATH, so it takes turns with other threads' checks).
    - Fix mechanical ones (unused imports and variables, `any` with an obvious type, hook
      dependencies, `let` to `const`). Re-run after.
    - List the rest grouped by rule with counts and the worst files. Do not disable rules and do
