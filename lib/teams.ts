@@ -9,6 +9,7 @@
 // `teamAccess` is just `teamAccessFor(await webUser(), slug)`.
 import "server-only";
 import type { Org, OrgRole } from "@aimhuge/teams";
+import { inviteHtmlFor } from "./invite-email";
 import { ORG_ROLES, assignableRoles, createInvite, isPlausibleEmail, listUserOrgs, normalizeEmail, revokeInvite, roleDescription, roleLabel, setCurrentOrg } from "@aimhuge/teams";
 import type { InviteEmailTransport } from "@aimhuge/teams";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -156,7 +157,8 @@ export function roleOptions(actor: OrgRole): RoleOption[] {
 }
 
 // The mailer an invite action hands to the package. Resend REST, RESEND_API_KEY. The from address is
-// fixed; the message body and subject come from the package. `fetchFn` is for tests.
+// fixed; the message body and subject come from the package, and an invite also gets the Salt Flats HTML
+// (lib/invite-email.ts). `fetchFn` is for tests.
 export function inviteMailer(env: Record<string, string | undefined> = process.env, fetchFn: typeof fetch = fetch): InviteEmailTransport | null {
   const key = env.RESEND_API_KEY;
   if (!key) return null;
@@ -165,7 +167,7 @@ export function inviteMailer(env: Record<string, string | undefined> = process.e
       const res = await fetchFn("https://api.resend.com/emails", {
         method: "POST",
         headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-        body: JSON.stringify({ from: "Weft <team@weft.zip>", to: [to], subject, text }),
+        body: JSON.stringify({ from: "Weft <team@weft.zip>", to: [to], subject, text, html: inviteHtmlFor(text) }),
       });
       if (!res.ok) throw new Error(`Resend ${res.status}: ${(await res.text()).slice(0, 200)}`);
     },

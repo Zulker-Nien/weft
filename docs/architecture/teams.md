@@ -54,7 +54,7 @@ cannot dot into a temporary client reference"; reproduced 2026-10-13 on Next 16.
 - `lib/teams.ts`: the gate. `teamAccess(slug)` answers ok / signed-out / denied / unconfigured (a missing workspace and
   a non-member get the same "denied", so membership can't be probed); `requireTeam(slug)` redirects to `/login` or
   404s. `currentWorkspaceSlug()` reads `profiles.current_org_id` and heals a stale pointer. `inviteMailer()` sends
-  invites through Resend (`RESEND_API_KEY`, from `Weft <team@weft.zip>`). No `"use cache"`: plain queries per request.
+  invites through Resend (`RESEND_API_KEY`, from `Weft <team@weft.zip>`), the package's plain text plus an HTML version in the Salt Flats scene (`lib/invite-email.ts` reads the facts back out of that text; its car banner and mark are `public/brand/email/`, loaded from the claim link's origin, so they show only once deployed). No `"use cache"`: plain queries per request.
 - `lib/team-actions.ts`: the server actions: invite (or add straight in when the address already has an account),
   change role, remove or leave, revoke an invite. Each re-checks the role on the server, and none leaves a workspace
   without an owner.

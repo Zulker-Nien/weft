@@ -247,6 +247,21 @@ describe("inviteMailer", () => {
     });
   });
 
+  it("adds the Salt Flats HTML when the text is an invite", async () => {
+    let body = "";
+    const fetchFn = vi.fn((_url: string, init: { body: string }) => {
+      body = init.body;
+      return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve("") });
+    });
+    const mailer = inviteMailer({ RESEND_API_KEY: "re_test" }, fetchFn as unknown as typeof fetch);
+    if (!mailer) throw new Error("expected mailer");
+    const text = 'a@b.c invited you to join "Acme" on Weft as a member.\n\nhttps://weft.zip/invite/t1';
+    await mailer.send({ to: "jane@example.com", subject: "Hi", text });
+    const sent = JSON.parse(body) as { text: string; html: string };
+    expect(sent.text).toBe(text);
+    expect(sent.html).toContain('href="https://weft.zip/invite/t1"');
+  });
+
   it("throws with the status and a body excerpt on a non-2xx response", async () => {
     const body = "bad address: too long; not a real value";
     const fetchFn = vi.fn(() => Promise.resolve({ ok: false, status: 422, text: () => Promise.resolve(body) }));
