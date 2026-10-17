@@ -498,6 +498,12 @@ thread from the web isn't built yet, and thread text isn't encrypted yet, so
 turn it on only for projects you're fine storing on Weft's servers. Separately, a long thread opens on its newest 50 items
 and loads older ones as you scroll up. More in [docs/architecture/cloud-sync.md](docs/architecture/cloud-sync.md).
 
+**Share…** on a card's right-click menu (or the share icon in the browser pane's toolbar, beside ☆ and Archive) makes a link, `weft.zip/s/<id>`, that shows the card's thread and the page in its browser
+pane side by side, updating as it works: private to your workspace, public, behind an email or behind a password. A
+`~/.weft/show` page runs in a sandbox; a localhost page shows as its latest capture. Key-shaped text is masked and long tool
+outputs stay on your Mac. It reads what sync uploads, so the dialog turns sync on for the folder first. More in
+[docs/architecture/sharing.md](docs/architecture/sharing.md).
+
 ## Secrets vault
 
 🔐 sits on the rail under ★ and 🏷 and opens the same drawer, with a vault for every project on the board. Its

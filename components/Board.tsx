@@ -69,6 +69,8 @@ const BrowserPane = guarded(() => import("./BrowserPane"), { what: "browser pane
 const CardView = guarded(() => import("./CardView"), { what: "card" });
 const SideRail = guarded(() => import("./LibraryRail"), { what: "rail", className: "m-3 w-[220px] self-start" });
 const TagsDialog = guarded(() => import("./TagsDialog"), { what: "tags dialog", className: "fixed left-4 top-16 z-50" });
+const PaneCardMarks = guarded(() => import("./PaneCardMarks"), { inline: true, what: "card marks" });
+const ShareCardDialog = guarded(() => import("./ShareCardDialog"), { what: "share dialog", className: "fixed left-4 top-16 z-50" });
 const HeaderBadges = guarded(() => import("./HeaderBadges"), { inline: true, what: "header badges" });
 const BoardFooter = guarded(() => import("./BoardFooter"), { what: "footer" });
 const ModifierHint = guarded(() => import("./ModifierHint"), { inline: true, what: "modifier hint", className: "fixed bottom-2 right-2 z-50" });
@@ -562,7 +564,7 @@ export default function Board() {
   useEscape(Boolean(libraryOpen) && !selectedId && !showNew && !railPinned(), () => setLibraryOpen(null), { panel: true });
 
   const tagCatalog = useTagCatalog(cards, notify);
-  const { onCardMenu, onColumnMenu, toggleStar, tagging, editTags, saveTags, closeTags } = useBoardMenus({
+  const { onCardMenu, onColumnMenu, toggleStar, tagging, editTags, saveTags, closeTags, sharing, closeShare, shareCard } = useBoardMenus({
     doneShown: byColumn.get("done") ?? [],
     archivedCount,
     showArchived,
@@ -756,6 +758,8 @@ export default function Board() {
             card={selected}
             onStar={() => toggleStar(selected)}
             onTags={() => editTags(selected)}
+            onShare={() => shareCard(selected)}
+            marksInPane={browserOpen}
             resets={planResets(cards)}
             items={thread}
             streaming={streaming}
@@ -794,6 +798,7 @@ export default function Board() {
             onClose={showNew ? () => setShowNew(false) : selected ? () => select(null) : toggleBrowser}
             expanded={framed}
             rail={<GlanceRail card={selected} hidden={showNew} items={thread} pageUrl={browser.url} />}
+            actions={selected && !showNew && <PaneCardMarks card={selected} onShare={() => shareCard(selected)} onStar={() => toggleStar(selected)} onArchive={() => toggleArchive(selected)} />}
           />
         )}
         </div>
@@ -810,6 +815,7 @@ export default function Board() {
       {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
       {showHelp && <ShortcutsDialog onClose={() => setShowHelp(false)} />}
       {tagging && <TagsDialog card={tagging} all={tagCatalog.tags.map((t) => ({ tag: t.name, count: t.count }))} onChange={saveTags} onClose={closeTags} />}
+      {sharing && <ShareCardDialog card={sharing} onClose={closeShare} />}
       <ModifierHint />
       {showPalette && (
         // The palette items accessor passes useCallback returns (which the type analyzer flags as

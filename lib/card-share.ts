@@ -1,0 +1,105 @@
+// The Mac's side of a card's share link (lib/share-types.ts, docs/architecture/sharing.md): the Share dialog
+// (components/ShareCardDialog.tsx) reads and sets the card's cloud_shares row through app/api/cards/[id]/share.
+// It writes as the signed-in account, into the workspace cloud sync uploads to, so RLS decides who may share:
+// only the card's owner. A share points at the card's cloud_cards row, so a card is shared only once cloud
+// sync has uploaded it; until then the dialog is told why (signed out, no workspace, not synced, pending).
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { hashSharePassword } from "@aimhuge/share/server";
+import { accountClient } from "./account";
+import { syncNow, syncOrgId } from "./cloud-sync";
+import { syncFolders } from "./settings";
+import { getCard } from "./store";
+import { isCardShareMode, newShareId, shareUrl, type CardShareMode, type CardShareState, type CardShareUpdate } from "./share-types";
+
+// A refusal the route turns into its status (a missing card is a 404, a bad request a 400).
+export class CardShareError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
+// The columns a client may read: password_hash is left out of the column grant on purpose.
+type ShareRead = { id: string; mode: string; has_password: boolean | null };
+
+// Where the card's share would live, or why it can't be shared yet.
+type Target = { kind: "ready"; client: SupabaseClient; orgId: string } | { kind: "blocked"; state: CardShareState };
+
+function safeClient(): SupabaseClient | null {
+  try {
+    return accountClient();
+  } catch {
+    return null; // accounts aren't set up in this build
+  }
+}
+
+function check(error: { message: string } | null) {
+  if (error) throw new Error(error.message);
+}
+
+async function target(cardId: string): Promise<Target> {
+  const card = getCard(cardId);
+  if (!card) throw new CardShareError("No such card.", 404);
+  const client = safeClient();
+  const { data } = client ? await client.auth.getSession() : { data: { session: null } };
+  const userId = data.session?.user.id;
+  if (!client || !userId) return { kind: "blocked", state: { kind: "signed-out" } };
+  const orgId = await syncOrgId(client, userId);
+  if (!orgId) return { kind: "blocked", state: { kind: "no-workspace" } };
+  if (!syncFolders().includes(card.cwd)) return { kind: "blocked", state: { kind: "not-synced", folder: card.cwd } };
+  // The share's foreign key needs the card's row; nudge the outbox and let the dialog ask again.
+  const row = await client.from("cloud_cards").select("card_id").eq("org_id", orgId).eq("card_id", cardId).maybeSingle();
+  check(row.error);
+  if (!row.data) {
+    syncNow();
+    return { kind: "blocked", state: { kind: "pending" } };
+  }
+  return { kind: "ready", client, orgId };
+}
+
+async function readShare(client: SupabaseClient, orgId: string, cardId: string): Promise<ShareRead | null> {
+  const { data, error } = await client
+    .from("cloud_shares")
+    .select("id, mode, has_password")
+    .eq("org_id", orgId)
+    .eq("card_id", cardId)
+    .maybeSingle<ShareRead>();
+  check(error);
+  return data;
+}
+
+// A row with a mode this build doesn't know reads as private: fail closed.
+function stateOf(row: ShareRead | null): CardShareState {
+  if (!row) return { kind: "ok", id: null, url: null, mode: "private", hasPassword: false };
+  const mode: CardShareMode = isCardShareMode(row.mode) ? row.mode : "private";
+  return { kind: "ok", id: row.id, url: shareUrl(row.id), mode, hasPassword: Boolean(row.has_password) };
+}
+
+export async function getCardShare(cardId: string): Promise<CardShareState> {
+  const t = await target(cardId);
+  if (t.kind === "blocked") return t.state;
+  return stateOf(await readShare(t.client, t.orgId, cardId));
+}
+
+export async function setCardShare(cardId: string, update: CardShareUpdate): Promise<CardShareState> {
+  // Never public_edit: a stranger editing the thread would run turns on this Mac.
+  if (!isCardShareMode(update.mode)) throw new CardShareError("Unknown share mode.", 400);
+  const password = typeof update.password === "string" && update.password !== "" ? update.password : undefined;
+  const t = await target(cardId);
+  if (t.kind === "blocked") return t.state;
+  const existing = await readShare(t.client, t.orgId, cardId);
+  if (update.mode === "password" && !password && !existing?.has_password) throw new CardShareError("Set a password first.", 400);
+  const row: Record<string, unknown> = { id: existing?.id ?? newShareId(), org_id: t.orgId, card_id: cardId, mode: update.mode };
+  // Only the hash goes up. Leaving the password gate drops the old one, so it can't come back unseen.
+  if (update.mode !== "password") row.password_hash = null;
+  else if (password) row.password_hash = hashSharePassword(password);
+  const { data, error } = await t.client
+    .from("cloud_shares")
+    .upsert(row, { onConflict: "org_id,card_id" })
+    .select("id, mode, has_password")
+    .single<ShareRead>();
+  check(error);
+  return stateOf(data);
+}

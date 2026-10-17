@@ -252,7 +252,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
   workspace, and `weft.zip/<workspace>/board` shows them live, read-only, through the desktop's own `CardView`, project bar, filter and thread components, and **New thread** on the web board starts a card on your Mac (`cloud_commands`, `lib/cloud-inbox.ts`). Next: seal item bodies with the workspace key, replies from the web
   board queued to the Mac that runs the card (the same commands table, a `reply` kind), and maybe session logs so another Mac can carry a thread on.
 - `P3` **Card comments** — notes from teammates on a card that the agent doesn't see.
-- `P3` **Read-only thread link** — share a snapshot of a thread as a page for someone to review.
+- `Now` **Share a card** — **Share…** on a card makes `weft.zip/s/<id>`: the thread and its browser pane side by side, live (polled every 4 s), private / public / email / password from `@aimhuge/share` v0.8.0, pages sandboxed, keys masked, long tool outputs left out (docs/architecture/sharing.md). Next: a visits list for the owner, expiry, sealed item bodies, a show page's own images.
 
 ## Cost and analytics
 

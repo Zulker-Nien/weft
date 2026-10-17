@@ -30,6 +30,7 @@ export type CardAction =
   | "copy-resume"
   | "star"
   | "tags"
+  | "share"
   | "archive"
   | "delete";
 
@@ -72,6 +73,7 @@ const MENU_KEYS: Record<string, string> = {
   "copy-resume": "Shift+C",
   star: "K",
   tags: "G",
+  share: "Shift+S",
   archive: "Shift+A",
   delete: "CmdOrCtrl+Backspace",
   // Column menus.
@@ -131,8 +133,9 @@ function switchItems(card: Card, live: boolean): MenuItem[] {
 }
 
 // A starred card is never auto-archived. Tags are the card's own, or ones Weft picked (lib/tags.ts).
+// Share… opens the card's link to weft.zip (components/ShareCardDialog.tsx).
 function markItems(card: Card): MenuItem[] {
-  return [{ id: "star", label: card.starred ? "Unstar" : "Star" }, { id: "tags", label: "Tags…" }];
+  return [{ id: "star", label: card.starred ? "Unstar" : "Star" }, { id: "tags", label: "Tags…" }, { id: "share", label: "Share…" }];
 }
 
 // What to paste in a terminal to pick the thread up in Claude Code.

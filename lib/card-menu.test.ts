@@ -10,10 +10,12 @@ const ids = (items: MenuItem[]) => items.flatMap((i) => ("id" in i ? [i.id] : []
 const item = (items: MenuItem[], id: string) => items.find((i) => "id" in i && i.id === id) as { enabled?: boolean; checked?: boolean; label: string; accelerator?: string } | undefined;
 
 describe("cardMenu", () => {
-  it("toggles the star, and edits tags, with their keys", () => {
+  it("toggles the star, edits tags and shares, with their keys", () => {
     const plain = cardMenu(card());
     expect(item(plain, "star")).toMatchObject({ label: "Star", accelerator: "K" });
     expect(item(plain, "tags")).toMatchObject({ label: "Tags…", accelerator: "G" });
+    expect(item(plain, "share")).toMatchObject({ label: "Share…", accelerator: "Shift+S" });
+    expect(ids(plain).indexOf("share")).toBe(ids(plain).indexOf("tags") + 1);
     expect(item(cardMenu(card({ starred: true })), "star")?.label).toBe("Unstar");
   });
 

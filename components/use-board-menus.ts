@@ -33,6 +33,8 @@ export function useBoardMenus(deps: BoardMenuDeps) {
   const shortcuts = useShortcutList();
   // The card whose tags are being edited (Tags…); the board shows components/TagsDialog.tsx for it.
   const [tagging, setTagging] = useState<Card | null>(null);
+  // The card whose share link is open (Share…); the board shows components/ShareCardDialog.tsx for it.
+  const [sharing, setSharing] = useState<Card | null>(null);
   const keys = (map: Record<string, string>) =>
     Object.fromEntries(
       Object.entries(map).map(([item, id]) => {
@@ -60,10 +62,11 @@ export function useBoardMenus(deps: BoardMenuDeps) {
     if (tagging) api.mark(tagging.id, { tags }).catch(deps.notify);
   }
 
-  // Star and Tags…: true when the action was one of these.
+  // Star, Tags… and Share…: true when the action was one of these.
   function runMarkAction(card: Card, action: CardAction) {
     if (action === "star") toggleStar(card);
     else if (action === "tags") setTagging(card);
+    else if (action === "share") setSharing(card);
     else return false;
     return true;
   }
@@ -169,7 +172,18 @@ export function useBoardMenus(deps: BoardMenuDeps) {
   }
 
   // editTags opens the Tags… dialog from elsewhere (the tags in a thread's header).
-  return { onCardMenu, onColumnMenu, toggleStar, tagging, editTags: setTagging, saveTags, closeTags: () => setTagging(null) };
+  return {
+    onCardMenu,
+    onColumnMenu,
+    toggleStar,
+    tagging,
+    editTags: setTagging,
+    saveTags,
+    closeTags: () => setTagging(null),
+    sharing,
+    closeShare: () => setSharing(null),
+    shareCard: setSharing,
+  };
 }
 
 // Keys a native menu uses to move and pick, so they can't be an item's key.

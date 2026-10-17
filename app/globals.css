@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@aimhuge/share/share.css";
 
 /* Light by default; <html data-theme="dark"> switches, and <html data-scene> lays a scene over either.
    A script in app/layout.tsx sets both from the user's choice, or from the OS when they pick System
@@ -172,6 +173,30 @@
 :root[data-scene] [data-column].bg-sunken {
   background: transparent;
   border-color: var(--line-strong);
+}
+
+/* The Share dialog from @aimhuge/share (components/ShareCardDialog.tsx) on Weft's palette instead of its dark
+   default. Set wherever the palette is, so it follows every theme and scene like the board does. */
+:root,
+[data-theme] {
+  --share-ink: var(--ink);
+  --share-soft: var(--ink);
+  --share-dim: var(--muted);
+  --share-muted: var(--muted);
+  --share-faint: var(--faint);
+  --share-line: var(--line);
+  --share-line-strong: var(--line-strong);
+  --share-surface: var(--panel);
+  --share-stage: var(--canvas);
+  --share-card: var(--card);
+  --share-field: var(--sunken);
+  --share-hover: var(--sunken);
+  /* Modal.tsx's backdrop (bg-black/40). */
+  --share-scrim: rgb(0 0 0 / 0.4);
+  --share-on-accent: var(--on-accent);
+  --share-ok: var(--ok);
+  --share-warn: var(--warn);
+  --share-danger: var(--danger);
 }
 
 @theme inline {

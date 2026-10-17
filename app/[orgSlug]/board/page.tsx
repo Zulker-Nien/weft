@@ -24,6 +24,7 @@ import {
   collectBlobRefs,
   windowFromItems,
 } from "@/lib/web-board";
+import { cardThumbRefs } from "@/lib/web-board-thumbs";
 import { webClient } from "@/lib/web-session";
 import { WebBoard } from "@/components/web-board";
 import "@/components/web-board/web-board.css";
@@ -111,6 +112,7 @@ async function BoardPageBody({ orgSlug, searchParams }: { orgSlug: string; searc
   // items it receives later through Realtime.
   const initialRefs = new Set<string>();
   if (cardId) collectBlobRefs(windowFromItems(cardId, threadRows).items, initialRefs);
+  for (const ref of cardThumbRefs(cardRows)) initialRefs.add(ref);
   const initialBlobUrls = await resolveBlobUrls(supabase, ctx.org.id, [...initialRefs]);
 
   return (

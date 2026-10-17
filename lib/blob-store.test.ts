@@ -63,26 +63,10 @@ afterEach(() => {
   process.env.THREADBOARD_DATA = envData;
 });
 
-describe("isLocalUploadPath", () => {
-  it("refuses empty, relative, and outside-home paths", () => {
-    expect(isLocalUploadPath("", HOME)).toBe(false);
-    expect(isLocalUploadPath("relative/x.png", HOME)).toBe(false);
-    expect(isLocalUploadPath("/etc/passwd", HOME)).toBe(false);
-  });
-  it("accepts a file under the home directory", () => {
+// The path rules themselves (isLocalUploadPath, resolvePage) are tested in lib/blob-paths.test.ts.
+describe("isLocalUploadPath re-export", () => {
+  it("is the blob-paths check", () => {
     expect(isLocalUploadPath(path.join(HOME, "a.png"), HOME)).toBe(true);
-  });
-  it("decodes file:// URLs before the check", () => {
-    const p = path.join(HOME, "x.png");
-    expect(isLocalUploadPath(`file://${p}`, HOME)).toBe(true);
-    expect(isLocalUploadPath("file:///etc/passwd", HOME)).toBe(false);
-  });
-  it("refuses .env files, the device key, account files, token files, and the vault", () => {
-    for (const n of [".env", ".env.local", "device-key.json", "account.json", "account.sealed", "puku-trial-token", "shell-token", "github-token.json"]) {
-      expect(isLocalUploadPath(path.join(HOME, n), HOME)).toBe(false);
-    }
-    expect(isLocalUploadPath(path.join(HOME, ".weft", "vault", "x.json"), HOME)).toBe(false);
-    expect(isLocalUploadPath(path.join(HOME, ".weft", "vault"), HOME)).toBe(false);
   });
 });
 
@@ -212,6 +196,31 @@ describe("createBlobStore", () => {
       const s = store(m);
       expect(await s.rewriteItem({ kind: "user", text: "", at: 1, page: "https://example.com" } as const, "orgA")).toEqual({ kind: "user", text: "", at: 1, page: "https://example.com" });
       expect(await s.rewriteItem({ kind: "user", text: "", at: 1, page: path.join(HOME, "nope.html") } as const, "orgA")).toEqual({ kind: "user", text: "", at: 1, page: path.join(HOME, "nope.html") });
+    });
+
+    it("keeps a user.page's #hash after the ref", async () => {
+      const p = file(".weft/show/plan/index.html", "<p>plan</p>");
+      const m = makeClient();
+      const out = await store(m).rewriteItem({ kind: "user", text: "", at: 1, page: `file://${p}#step-2` } as const, "orgA");
+      expect(out).toEqual({ kind: "user", text: "", at: 1, page: `blob:sha256:${sha("<p>plan</p>")}#step-2` });
+      expect(m.uploadCalls[0]?.opts.contentType).toBe("text/html; charset=utf-8");
+    });
+
+    it("uploads the local page an open_url call opened and keeps its #hash; sites and localhost stay", async () => {
+      const p = file(".weft/show/x/index.html", "<p>x</p>");
+      const m = makeClient();
+      const s = store(m);
+      const open = (summary: string): ThreadItem => ({ kind: "tool", id: "t", name: "mcp__browser__open_url", summary, at: 1 });
+      const out = await s.rewriteItem(open(` file://${p}#step-2 `), "orgA");
+      expect(out).toEqual({ ...open(""), summary: `blob:sha256:${sha("<p>x</p>")}#step-2` });
+      expect(m.uploadCalls.map((c) => c.path)).toEqual([`orgA/${sha("<p>x</p>")}`]);
+      for (const url of ["https://example.com/#a", "http://localhost:3000/", path.join(HOME, "missing.html")]) {
+        const item = open(url);
+        expect(await s.rewriteItem(item, "orgA")).toBe(item);
+      }
+      // Another tool's summary is never treated as a page.
+      const bash: ThreadItem = { kind: "tool", id: "b", name: "Bash", summary: p, at: 1 };
+      expect(await s.rewriteItem(bash, "orgA")).toBe(bash);
     });
 
     it("rewrites markdown image targets (bare and angle-bracketed) and leaves http/localhost alone", async () => {

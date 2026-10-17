@@ -4,7 +4,7 @@
 // kept live through Supabase Realtime. The browser client is the visitor's own cookie session
 // (@supabase/ssr's createBrowserClient with the publishable key), so RLS gates both the reads and the
 // Realtime stream: the same SELECT policy that gates a read gates what postgres_changes sends.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
 import { newCardCommand, type CloudCommandRow, type NewCardForm } from "@/lib/cloud-commands";
@@ -20,6 +20,7 @@ import {
   windowFromItems,
   type WebBoardThread,
 } from "@/lib/web-board";
+import { cardThumbRefs, withThumbUrls } from "@/lib/web-board-thumbs";
 import { applyCommandChange, type CloudCommandChange, type WebTarget } from "@/lib/web-commands";
 
 // The status of the Realtime channel; the dot beside the title reflects it.
@@ -117,10 +118,11 @@ export function useWebBoard({ orgId, userId, initialCommands, initialCards, open
     };
   }, [client, orgId, userId]);
 
-  // Whatever refs the window names that have no URL yet.
+  // Whatever refs the window and the cards' thumbnails name that have no URL yet.
+  const thumbRefs = useMemo(() => cardThumbRefs(cards), [cards]);
   const refs = thread?.blobRefs;
   useEffect(() => {
-    const missing = (refs ?? []).filter((r) => !asked.current.has(r));
+    const missing = [...(refs ?? []), ...thumbRefs].filter((r) => !asked.current.has(r));
     if (!missing.length) return;
     for (const r of missing) asked.current.add(r);
     let cancelled = false;
@@ -130,7 +132,7 @@ export function useWebBoard({ orgId, userId, initialCommands, initialCards, open
     return () => {
       cancelled = true;
     };
-  }, [client, orgId, refs]);
+  }, [client, orgId, refs, thumbRefs]);
 
   const setCardParam = useCallback((cardId: string | null) => {
     const url = new URL(window.location.href);
@@ -239,5 +241,8 @@ export function useWebBoard({ orgId, userId, initialCommands, initialCards, open
     [client, orgId],
   );
 
-  return { cards, commands, activeCardId, thread, blobUrls, live, openCard, closeCard, loadOlder, toolOutput, startCard, dropCommand };
+  // The cards as CardView draws them: a thumb ref becomes its signed URL once it has one.
+  const shown = useMemo(() => withThumbUrls(cards, blobUrls), [cards, blobUrls]);
+
+  return { cards: shown, commands, activeCardId, thread, blobUrls, live, openCard, closeCard, loadOlder, toolOutput, startCard, dropCommand };
 }

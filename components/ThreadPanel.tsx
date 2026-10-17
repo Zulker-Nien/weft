@@ -2,16 +2,14 @@
 
 import { useState } from "react";
 import { folderName, isLive } from "@/lib/format";
-import { useShortcutHint } from "@/lib/hotkeys";
 import type { PlanResets } from "@/lib/schedule";
 import type { Card, PermissionMode, QuestionReply, ThreadItem } from "@/lib/types";
 import { BackendPicker } from "./CardView";
+import CardActions from "./CardActions";
 import CrashGuard from "./CrashGuard";
 import { guarded } from "./guarded";
 import Icon from "./Icon";
 import ModePicker from "./ModePicker";
-import SkillMenu from "./SkillMenu";
-import StarButton from "./StarButton";
 import TagPill from "./TagPill";
 import { cardTags } from "@/lib/rail-view";
 import ThreadView from "./ThreadView";
@@ -30,6 +28,8 @@ export default function ThreadPanel({
   onArchive,
   onStar,
   onTags,
+  onShare,
+  marksInPane,
   onDelete,
   onClose,
   onRename,
@@ -49,6 +49,10 @@ export default function ThreadPanel({
   onStar?: () => void;
   // A click on the card's tags (or "+ tag"): opens the Tags… dialog.
   onTags?: () => void;
+  // Share… beside the ☆ (the card menu has it too).
+  onShare?: () => void;
+  // The browser pane beside the thread shows share, star and archive in its toolbar instead.
+  marksInPane?: boolean;
   onDelete: () => void;
   // Left out while the browser shows beside the thread: the window's X sits in the browser's corner.
   onClose?: () => void;
@@ -82,7 +86,7 @@ export default function ThreadPanel({
         {pilot ? (
           <NewChatButton onClick={onNewChat} />
         ) : (
-          <CardActions card={card} live={live} onSend={onSend} onStar={onStar} onArchive={onArchive} onDelete={onDelete} />
+          <CardActions card={card} live={live} onSend={onSend} onShare={onShare} onStar={onStar} onArchive={onArchive} onDelete={onDelete} marksInPane={marksInPane} />
         )}
         {onClose && (
           <button
@@ -206,43 +210,6 @@ function threadExtras(card: Card, pilot: boolean, items: ThreadItem[], onSend: (
     replaceReply: card.column === "review" && Boolean(card.review),
     scheduling: { resets },
   };
-}
-
-// A board card's header buttons: its skills, star, archive and delete.
-function CardActions({ card, live, onSend, onStar, onArchive, onDelete }: {
-  card: Card;
-  live: boolean;
-  onSend: (text: string) => Promise<void>;
-  onStar?: () => void;
-  onArchive: () => void;
-  onDelete: () => void;
-}) {
-  const hint = useShortcutHint();
-  return (
-    <>
-      <CrashGuard inline what="skill menu"><SkillMenu cwd={card.cwd} disabled={live} onRun={(skill) => onSend(`/${skill}`)} /></CrashGuard>
-      <CrashGuard inline what="star"><StarButton variant="header" starred={Boolean(card.starred)} onClick={onStar} /></CrashGuard>
-      <button
-        onClick={onArchive}
-        disabled={live}
-        title={hint("archive", card.archived ? "Unarchive card" : "Archive card")}
-        aria-label={card.archived ? "Unarchive card" : "Archive card"}
-        className="rounded-md p-1.5 text-muted hover:bg-sunken hover:text-ink disabled:opacity-40"
-      >
-        <Icon name="archive" size={15} />
-      </button>
-      <button
-        onClick={() => {
-          if (window.confirm(`Delete “${card.title}”? Its CLI transcript stays on disk.`)) onDelete();
-        }}
-        title="Delete card"
-        aria-label="Delete card"
-        className="rounded-md p-1.5 text-muted hover:bg-sunken hover:text-danger"
-      >
-        <Icon name="trash" size={15} />
-      </button>
-    </>
-  );
 }
 
 // Starts the copilot over with an empty conversation.

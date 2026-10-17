@@ -11,12 +11,11 @@ import { appendOutbox, compactOutbox, readOutbox, replaceOutboxHead } from "./cl
 import {
   TOOL_RESULT_INLINE_MAX,
   type BlobStore,
-  type CloudCardRow,
   type CloudThreadItemRow,
   type CloudToolOutputRow,
   type OutboxEntry,
 } from "./cloud-sync-types";
-import { deviceId } from "./device-id";
+import { cardRows } from "./cloud-sync-cards";
 import { globalSingleton } from "./global-singleton";
 import { syncFolders } from "./settings";
 import { getCard, getThread, listCards } from "./store";
@@ -261,7 +260,7 @@ async function resolveOrgId(s: SyncState, client: SupabaseClient, userId: string
 // Cards first (items reference them), then deletes and truncates, then items and tool outputs in one upsert each.
 // Returns the number of items shipped — every entry that was actually uploaded, not the outbox count.
 async function uploadPending(ctx: Ctx, client: SupabaseClient, orgId: string, pending: OutboxEntry[]): Promise<number> {
-  const cards = cardRows(ctx, orgId, pending);
+  const cards = await cardRows(ctx.blobs, orgId, pending, ctx.now());
   if (cards.length) check(await client.from("cloud_cards").upsert(cards));
   for (const entry of pending) {
     // The row keeps the card json it last uploaded; a card that never synced matches no row.
@@ -286,27 +285,6 @@ async function uploadPending(ctx: Ctx, client: SupabaseClient, orgId: string, pe
   if (outputs.length) check(await client.from("cloud_tool_outputs").upsert(outputs));
   if (items.length) check(await client.from("cloud_thread_items").upsert(items));
   return items.length;
-}
-
-// Every live card the batch touches, not just those with a card entry: a card that changed before its folder
-// was opted in still needs its row before its items can reference it.
-function cardRows(ctx: Ctx, orgId: string, pending: OutboxEntry[]): CloudCardRow[] {
-  const ids = new Set(pending.filter((e) => e.op !== "card_deleted").map((e) => e.cardId));
-  const rows: CloudCardRow[] = [];
-  for (const id of ids) {
-    const card = getCard(id);
-    if (!card) continue;
-    rows.push({
-      org_id: orgId,
-      card_id: id,
-      owner_device: deviceId(),
-      folder: card.cwd,
-      card,
-      deleted: false,
-      updated_at: new Date(ctx.now()).toISOString(),
-    });
-  }
-  return rows;
 }
 
 // Supabase hands errors back as plain objects; throw them as Errors so the backoff's warning can read them.

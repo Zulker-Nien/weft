@@ -1,0 +1,57 @@
+// @vitest-environment jsdom
+import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import CardActions from "./CardActions";
+import { makeCard } from "./test-utils";
+
+const api = vi.hoisted(() => ({ skills: vi.fn(() => Promise.resolve({ skills: [] })) }));
+vi.mock("@/lib/client", () => ({ api }));
+
+function renderActions(over: Partial<Parameters<typeof CardActions>[0]> = {}) {
+  const props = { card: makeCard(), live: false, onSend: vi.fn(() => Promise.resolve()), onStar: vi.fn(), onArchive: vi.fn(), onDelete: vi.fn(), ...over };
+  render(<CardActions {...props} />);
+  return props;
+}
+
+afterEach(cleanup);
+
+describe("CardActions", () => {
+  it("opens Share… from its button", async () => {
+    const onShare = vi.fn();
+    renderActions({ onShare });
+    await userEvent.click(screen.getByRole("button", { name: "Share" }));
+    expect(onShare).toHaveBeenCalledOnce();
+  });
+
+  it("leaves the share button out without a handler", () => {
+    renderActions();
+    expect(screen.queryByRole("button", { name: "Share" })).toBeNull();
+  });
+
+  it("archives, and deletes only after a confirm", async () => {
+    const props = renderActions();
+    await userEvent.click(screen.getByRole("button", { name: "Archive card" }));
+    expect(props.onArchive).toHaveBeenCalledOnce();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    await userEvent.click(screen.getByRole("button", { name: "Delete card" }));
+    expect(props.onDelete).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Delete card" }));
+    expect(props.onDelete).toHaveBeenCalledOnce();
+    confirm.mockRestore();
+  });
+
+  it("can't archive a live card", () => {
+    renderActions({ live: true });
+    expect(screen.getByRole("button", { name: "Archive card" })).toHaveProperty("disabled", true);
+  });
+});
+
+describe("CardActions beside the browser pane", () => {
+  it("leaves share, star and archive to the pane's toolbar", () => {
+    renderActions({ onShare: vi.fn(), marksInPane: true });
+    expect(screen.queryByRole("button", { name: "Share" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Archive card" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Delete card" })).toBeTruthy();
+  });
+});

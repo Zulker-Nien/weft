@@ -14,6 +14,9 @@ importers:
       '@aimhuge/billing':
         specifier: github:aimhuge/components#v0.5.0&path:/packages/billing
         version: https://codeload.github.com/aimhuge/components/tar.gz/051acbc55b2b7d01dfed6d5f454ce6d4d6392c0c#path:/packages/billing(@supabase/supabase-js@2.117.3)(@types/node@20.19.43)
+      '@aimhuge/share':
+        specifier: github:aimhuge/components#v0.8.0&path:/packages/share
+        version: https://codeload.github.com/aimhuge/components/tar.gz/62d3085d0c1152174953b7f6fb0a953e5619a29c#path:/packages/share(lucide-react@1.56.0(@types/react@19.3.0)(react@19.3.0))(next@16.4.0(@babel/core@7.29.7)(@types/node@20.19.43)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
       '@aimhuge/teams':
         specifier: file:vendor/aimhuge-teams-0.1.0.tgz
         version: file:vendor/aimhuge-teams-0.1.0.tgz(@supabase/ssr@0.12.7(@supabase/supabase-js@2.117.3))(@supabase/supabase-js@2.117.3)(lucide-react@1.56.0(@types/react@19.3.0)(react@19.3.0))(next@16.4.0(@babel/core@7.29.7)(@types/node@20.19.43)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -163,6 +166,14 @@ packages:
     version: 0.5.0
     peerDependencies:
       '@supabase/supabase-js': ^2.0.0
+
+  '@aimhuge/share@https://codeload.github.com/aimhuge/components/tar.gz/62d3085d0c1152174953b7f6fb0a953e5619a29c#path:/packages/share':
+    resolution: {path: /packages/share, tarball: https://codeload.github.com/aimhuge/components/tar.gz/62d3085d0c1152174953b7f6fb0a953e5619a29c}
+    version: 0.1.0
+    peerDependencies:
+      lucide-react: '>=1.0.0'
+      next: '>=16.0.0'
+      react: '>=19.0.0'
 
   '@aimhuge/teams@file:vendor/aimhuge-teams-0.1.0.tgz':
     resolution: {integrity: sha512-u/ybH3naXAf3vypsIUoJ2SLvsTJ8tcLsaSnMO+FdciRHQmsZrXu4C4A8W0BNF3qiF0HrQSzn8tUqUwRk/dbVlA==, tarball: file:vendor/aimhuge-teams-0.1.0.tgz}
@@ -4756,6 +4767,12 @@ snapshots:
       stripe: 22.5.0(@types/node@20.19.43)
     transitivePeerDependencies:
       - '@types/node'
+
+  '@aimhuge/share@https://codeload.github.com/aimhuge/components/tar.gz/62d3085d0c1152174953b7f6fb0a953e5619a29c#path:/packages/share(lucide-react@1.56.0(@types/react@19.3.0)(react@19.3.0))(next@16.4.0(@babel/core@7.29.7)(@types/node@20.19.43)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)':
+    dependencies:
+      lucide-react: 1.56.0(@types/react@19.3.0)(react@19.3.0)
+      next: 16.4.0(@babel/core@7.29.7)(@types/node@20.19.43)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      react: 19.3.0
 
   '@aimhuge/teams@file:vendor/aimhuge-teams-0.1.0.tgz(@supabase/ssr@0.12.7(@supabase/supabase-js@2.117.3))(@supabase/supabase-js@2.117.3)(lucide-react@1.56.0(@types/react@19.3.0)(react@19.3.0))(next@16.4.0(@babel/core@7.29.7)(@types/node@20.19.43)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)':
     dependencies:

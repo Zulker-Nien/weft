@@ -5,6 +5,7 @@ import type { TagInfo, TagRow } from "./tags";
 import type { Webhook, WebhookInput, WebhookPatch } from "./webhooks";
 import type { SubagentModel } from "./subagents";
 import type { CloudSyncStatus } from "./cloud-sync-view";
+import type { CardShareState, CardShareUpdate } from "./share-types";
 import type { GithubStatus } from "./github-view";
 import type { MediaKind } from "./media";
 import type { BillingClientView } from "./client-bridge";
@@ -146,6 +147,9 @@ export const api = {
   archive: (id: string, archived: boolean) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { archived }),
   // ★ and tags. Tags are normalized on the server, become yours (tagsBy "user"), and new ones join the catalog.
   mark: (id: string, patch: { starred?: boolean; tags?: string[] }) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, patch),
+  // The Share… dialog: the card's share link, or why it can't have one yet (lib/card-share.ts).
+  getShare: (id: string) => call<CardShareState>("GET", `/api/cards/${id}/share`),
+  setShare: (id: string, update: CardShareUpdate) => call<CardShareState>("PUT", `/api/cards/${id}/share`, update),
   // The tag catalog (lib/tag-store.ts): every tag with its colour, description and card count, by name.
   tags: () => call<{ tags: TagRow[] }>("GET", "/api/tags"),
   createTag: (name: string, color?: string, description?: string) => call<{ tag: TagInfo }>("POST", "/api/tags", { name, color, description }),

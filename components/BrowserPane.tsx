@@ -19,6 +19,7 @@ export default function BrowserPane({
   onWidth,
   onClose,
   rail,
+  actions,
 }: {
   desktop: boolean;
   state: BrowserState;
@@ -30,6 +31,8 @@ export default function BrowserPane({
   onClose: () => void;
   // The glance rail (components/GlanceRail.tsx), right of the page; the native view keeps clear of it.
   rail?: ReactNode;
+  // The open card's share, star and archive (components/PaneCardMarks.tsx), right of the zoom.
+  actions?: ReactNode;
 }) {
   const holder = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState<string | null>(null);
@@ -128,6 +131,7 @@ export default function BrowserPane({
         />
         {/* Only the page's zoom; ⌘+/−/0, ⌘+scroll and pinch work too. Accent when not 100%. */}
         <ZoomMenu zoom={zoom} disabled={!state.url} />
+        {actions}
         <button className={nav} onClick={onClose} aria-label={expanded ? "Close thread" : "Close browser"}>
           <Icon name="x" size={15} />
         </button>
