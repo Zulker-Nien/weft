@@ -52,7 +52,16 @@ export default function ReplyBoxActions({
         answering={question}
         sending={sending}
         shell={shell}
-        onStop={() => void onStop().catch(onStopError)}
+        onStop={() => {
+          // try/catch, not .catch(): a caller whose onStop throws or returns no promise still lands in onStopError.
+          void (async () => {
+            try {
+              await onStop();
+            } catch (err) {
+              onStopError(err);
+            }
+          })();
+        }}
         onSend={onSend}
       />
     </>

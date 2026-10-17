@@ -82,13 +82,20 @@ export default function ThreadView({
   const question = questionFor(card, onAnswer);
 
   // Fetch one page of the thread, newest (`before` omitted) or older (with `before=start`).
+  // A non-JSON body would throw at res.json() and reject the promise, so guard it: the caller
+  // (loadOlder, effects) catches or swallows, and an unreadable page leaves the user on the seed.
   const loadPage = useCallback(async (before?: number) => {
     const params = new URLSearchParams();
     if (before !== undefined) params.set("before", String(before));
     params.set("limit", String(THREAD_PAGE_SIZE));
-    const res = await fetch(`/api/cards/${card.id}/thread?${params.toString()}`);
-    if (!res.ok) return;
-    const data = (await res.json()) as ThreadPage;
+    let data: ThreadPage;
+    try {
+      const res = await fetch(`/api/cards/${card.id}/thread?${params.toString()}`);
+      if (!res.ok) return;
+      data = (await res.json()) as ThreadPage;
+    } catch {
+      return;
+    }
     setPage((prev) => (before === undefined ? data : mergeOlderPage(prev, data)));
   }, [card.id]);
 

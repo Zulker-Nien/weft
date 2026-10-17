@@ -130,6 +130,22 @@ describe("ReplyBox", () => {
       expect(onSend).not.toHaveBeenCalled();
     });
 
+    it("Stop shows a failed stop instead of crashing", async () => {
+      const { onStop } = setup({ live: true });
+      onStop.mockImplementation(() => Promise.reject(new Error("stop failed")));
+      await userEvent.click(screen.getByRole("button", { name: "Stop the current turn" }));
+      expect(await screen.findByText(/stop failed/)).toBeInTheDocument();
+    });
+
+    it("Stop survives an onStop that throws instead of rejecting", async () => {
+      const { onStop } = setup({ live: true });
+      onStop.mockImplementation(() => {
+        throw new Error("no promise");
+      });
+      await userEvent.click(screen.getByRole("button", { name: "Stop the current turn" }));
+      expect(await screen.findByText(/no promise/)).toBeInTheDocument();
+    });
+
     it("the placeholder says the next message waits", () => {
       const { box } = setup({ live: true });
       expect(box).toHaveAttribute("placeholder", expect.stringMatching(/send when this turn is done/));
