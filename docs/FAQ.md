@@ -191,8 +191,8 @@ the newest one, when it last checked, the release notes and the button for the n
 download instead. Dev mode (`pnpm desktop`) never checks on its own; `git pull` updates it. What changed is in
 [CHANGELOG.md](../CHANGELOG.md).
 
-No release is published on GitHub yet, so for now every check ends in "No Weft release is published on GitHub yet".
-The first signed release (docs/architecture/updates.md) turns this on.
+The first release, 0.4.0, is on GitHub Releases. It's signed but not notarized yet, so the first download from the
+web gets macOS's "can't be checked" warning: right-click Weft → Open. Updates after that install without it.
 
 ### What happens when I close the window?
 

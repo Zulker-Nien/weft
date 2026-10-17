@@ -89,8 +89,10 @@ from Alex Miller's individual membership, not Flexbike Inc's.
 
 ## Gaps
 
-- Not yet run end to end: aimhuge/weft has no release and no signing secrets yet (2026-10-17), so the feed 404s. The
-  first signed release proves the signing, notarization and Squirrel path.
+- v0.4.0 (2026-10-17) was published by hand: built from a clean `git archive` of the tag, signed with the Developer ID
+  in the Keychain, not notarized (no Apple API key yet; `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`, `APPLE_API_KEY_P8` are
+  blanks in the vault), and `gh release create` with the dmg, zip and update.json. The tag's workflow run was cancelled:
+  the repo has no signing secrets. Squirrel's install of a signed update is still unproven until 0.4.1.
 - arm64 only. Intel Macs would need an `x64` (or `universal`) target and their own zip in the feed.
 - No delta updates: each update downloads the full zip.
 - `countRunning` in `updater.cjs` repeats the one in `keep-working.cjs`.
