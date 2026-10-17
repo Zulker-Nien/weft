@@ -1,13 +1,14 @@
 import { randomUUID } from "node:crypto";
 import type { PermissionResult } from "@anthropic-ai/claude-agent-sdk";
 import { describeBoardTool } from "./board-tools";
+import { editPreview } from "./edit-preview";
 import { shortToolName, summarizeInput } from "./format";
 import { writeQuestionPreview } from "./question-preview";
 import { suggestReadScope } from "./read-scope";
 import { safeUpdate, sessions, type Pending, type Session } from "./runner-state";
 import { appendThread, replaceThreadItem } from "./store";
 import { readQuestions } from "./turn";
-import type { QuestionReply } from "./types";
+import { MODE_OPTIONS, type PermissionMode, type PromptReason, type QuestionReply } from "./types";
 
 // A thread's permission requests and questions: asked on the card, answered from the board.
 
@@ -27,7 +28,15 @@ export function answerPermission(
   settle(cardId, allow, answers, target.id, reply);
 }
 
-export function settle(cardId: string, allow: boolean, answers?: Record<string, string>, pendingId?: string, reply?: QuestionReply) {
+// denyMessage: what a denial tells the thread instead of "The user denied this" (a Wait that ended, lib/permission-wait.ts).
+export function settle(
+  cardId: string,
+  allow: boolean,
+  answers?: Record<string, string>,
+  pendingId?: string,
+  reply?: QuestionReply,
+  denyMessage?: string,
+) {
   const session = sessions.get(cardId);
   if (!session) return false;
   const at = pendingId ? session.pending.findIndex((p) => p.id === pendingId) : 0;
@@ -49,7 +58,7 @@ export function settle(cardId: string, allow: boolean, answers?: Record<string, 
     pending: next ? pendingView(next) : null,
     lastLine: next ? next.title : answers ? `Answered: ${Object.values(answers).join("; ")}` : `${allow ? "Allowed" : "Denied"}: ${p.title}`,
   });
-  p.resolve(permissionResult(p, allow, answers, reply));
+  p.resolve(denyMessage && !allow ? { behavior: "deny", message: denyMessage } : permissionResult(p, allow, answers, reply));
   return true;
 }
 
@@ -73,7 +82,7 @@ function permissionResult(p: Pending, allow: boolean, answers?: Record<string, s
 }
 
 export function pendingView(p: Pending) {
-  return { id: p.id, toolName: p.toolName, title: p.title, input: p.input, questions: p.questions, readScope: p.readScope, previewUrl: p.previewUrl };
+  return { id: p.id, toolName: p.toolName, title: p.title, input: p.input, questions: p.questions, readScope: p.readScope, previewUrl: p.previewUrl, edit: p.edit, why: p.why, waiting: p.waiting };
 }
 
 export function askUser(
@@ -83,6 +92,8 @@ export function askUser(
   input: Record<string, unknown>,
   signal: AbortSignal,
   title?: string,
+  // From the claim guard: the symbols the edit touches, for its preview, and why it asked.
+  claim: { symbols?: string[]; why?: PromptReason } = {},
 ): Promise<PermissionResult> {
   return new Promise((resolve) => {
     const questions = toolName === "AskUserQuestion" ? readQuestions(input) : undefined;
@@ -97,7 +108,9 @@ export function askUser(
     // The first question that names a folder outside the project wins; more buttons would be noise.
     const readScope = questions?.map((q) => suggestReadScope(q.question, session.spec.cwd)).find((s) => s !== undefined);
     const previewUrl = questions ? questionPreview(cardId, questions) : undefined;
-    const p: Pending = { id, index, toolName, title: label, input, questions, readScope, previewUrl, resolve };
+    const edit = questions ? undefined : editPreview(toolName, input, session.spec.cwd, claim.symbols);
+    const why = questions ? undefined : (claim.why ?? modeWhy(session.spec.permissionMode, toolName));
+    const p: Pending = { id, index, toolName, title: label, input, questions, readScope, previewUrl, edit, why, resolve };
     session.pending.push(p);
     if (session.pending.length === 1) {
       safeUpdate(cardId, { column: "needs_you", pending: pendingView(p), lastLine: label });
@@ -131,4 +144,10 @@ function questionPreview(cardId: string, questions: NonNullable<Pending["questio
   } catch {
     return undefined;
   }
+}
+
+// Why a prompt with no claim behind it came up: the card's permission mode asks before this tool.
+export function modeWhy(mode: PermissionMode, toolName: string): PromptReason {
+  const option = MODE_OPTIONS.find((m) => m.id === mode);
+  return { category: "mode", detail: `${option ? option.label : "This card"} asks before ${shortToolName(toolName)}` };
 }

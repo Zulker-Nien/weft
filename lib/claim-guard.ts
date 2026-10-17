@@ -1,9 +1,10 @@
 import type { HookCallback, HookCallbackMatcher } from "@anthropic-ai/claude-agent-sdk";
 import fs from "node:fs";
 import path from "node:path";
-import { addClaims, claimKey, clashQuestion, dropClaims, findClash } from "./claims";
+import { addClaims, claimKey, clashQuestion, clashWhy, dropClaims, findClash, splitClaim, WHOLE_FILE } from "./claims";
 import { editedPath } from "./overlap";
 import { getCard, listCards, updateCard } from "./store";
+import type { PromptReason } from "./types";
 
 // Symbol claims in every board thread (lib/claims.ts). Before an Edit, MultiEdit, Write or NotebookEdit, the
 // PreToolUse hook works out what it claims from the file as it is, and when another busy card in the same
@@ -71,16 +72,29 @@ export async function claimsFor(toolName: string, input: Record<string, unknown>
 // PreToolUse to PostToolUse (or to canUseTool for the question). Denied edits never reach PostToolUse,
 // so the oldest go past PENDING_CAP.
 const PENDING_CAP = 200;
-const pending = new Map<string, { keys: string[]; question?: string }>();
+const pending = new Map<string, { keys: string[]; question?: string; why?: PromptReason }>();
 
-function remember(id: string, keys: string[], question?: string) {
-  pending.set(id, { keys, question });
+function remember(id: string, keys: string[], question?: string, why?: PromptReason) {
+  pending.set(id, { keys, question, why });
   if (pending.size > PENDING_CAP) pending.delete(pending.keys().next().value as string);
 }
 
 // The clash question for a tool call the hook asked about, for the permission prompt's title.
 export function claimQuestion(toolUseId: string | undefined) {
   return toolUseId ? pending.get(toolUseId)?.question : undefined;
+}
+
+// Why the hook asked: who holds the clashing claim and what going ahead risks, for under the prompt's title.
+export function claimWhy(toolUseId: string | undefined) {
+  return toolUseId ? pending.get(toolUseId)?.why : undefined;
+}
+
+// The symbols a pending tool call edits, for the permission prompt's preview (lib/edit-preview.ts);
+// undefined when the hook didn't see it or it claims the whole file.
+export function claimSymbols(toolUseId: string | undefined) {
+  const keys = toolUseId ? pending.get(toolUseId)?.keys : undefined;
+  const symbols = keys?.map((k) => splitClaim(k).symbol);
+  return symbols?.length && !symbols.includes(WHOLE_FILE) ? symbols : undefined;
 }
 
 const ask = (reason: string) => ({ hookSpecificOutput: { hookEventName: "PreToolUse" as const, permissionDecision: "ask" as const, permissionDecisionReason: reason } });
@@ -94,7 +108,7 @@ export function claimGuard(cardId: () => string | undefined): HookCallback {
     if (!keys.length) return {};
     const clash = findClash(listCards(), card, keys);
     const question = clash ? clashQuestion(clash) : undefined;
-    remember(toolUseId, keys, question);
+    remember(toolUseId, keys, question, clash && clashWhy(clash));
     return question ? ask(question) : {};
   };
 }

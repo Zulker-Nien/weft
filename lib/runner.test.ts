@@ -298,6 +298,11 @@ describe("permissions", () => {
     expect(thread("c1")[index]).toMatchObject({ kind: "permission", decision: "allow" });
   });
 
+  it("a held Edit carries a readable preview of the change (lib/edit-preview.ts)", async () => {
+    addCard({ id: "c1" });
+    ask(await send("c1"), "Edit", { file_path: "lib/a.ts", old_string: "one\ntwo", new_string: "one\n2" });
+    expect(card("c1").pending?.edit).toMatchObject({ file: path.join("lib", "a.ts"), added: 1, removed: 1, lines: [{ kind: " ", text: "one" }, { kind: "-", text: "two" }, { kind: "+", text: "2" }] });
+  });
   it("deny resolves with a deny message and returns to running", async () => {
     addCard({ id: "c1" });
     const q = await send("c1");

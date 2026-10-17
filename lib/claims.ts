@@ -1,6 +1,6 @@
 import path from "node:path";
 import { busyInFolder, TOUCHED_CAP } from "./overlap";
-import type { Card } from "./types";
+import type { Card, PromptReason } from "./types";
 
 // Symbol claims: cards share one working tree (no worktree per card, SOUL.md), so a card claims the
 // symbols its thread edits, `/abs/Board.tsx#CommandPalette` (or inside a long one, `/abs/Board.tsx#Board/useEffect#3`,
@@ -74,4 +74,22 @@ export function clashQuestion({ card, theirs }: Clash) {
   const { file, symbol } = splitClaim(theirs);
   const what = symbol === WHOLE_FILE ? path.basename(file) : `${symbol} in ${path.basename(file)}`;
   return `Card ‘${card.title}’ is editing ${what}. Wait, or go ahead?`;
+}
+
+const symbolText = (symbol: string) => symbol.split("/").map((part) => part.replace(/#(\d+)$/, " #$1")).join(" › ");
+
+// Why the prompt came up, by category: the same symbol, one symbol inside the other, or a whole-file
+// claim on either side; the detail names the holding card and what it has uncommitted. The shared-tree
+// explanation is the same every time, so the prompt keeps it in the chip's tooltip.
+export function clashWhy({ card, theirs, mine }: Clash): PromptReason {
+  const t = splitClaim(theirs);
+  const m = splitClaim(mine);
+  const state = card.column === "needs_you" ? "waiting on you" : "running";
+  const held = t.symbol === WHOLE_FILE ? path.basename(t.file) : symbolText(t.symbol);
+  const category = t.symbol === WHOLE_FILE || m.symbol === WHOLE_FILE ? "whole-file" : m.symbol === t.symbol ? "same-code" : "overlap";
+  return {
+    category,
+    detail: `‘${card.title}’ (${state}) has uncommitted edits to ${held}`,
+    holder: { id: card.id, title: card.title, claim: theirs },
+  };
 }

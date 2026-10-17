@@ -3,6 +3,7 @@
 import type { Effort, LoginView } from "./types-settings";
 import type { Question, ThreadItem } from "./types-thread";
 import type { Card } from "./types-card-detail";
+import type { EditPreview } from "./edit-preview";
 
 export const COLUMNS = [
   { id: "backlog", label: "Backlog" },
@@ -167,6 +168,21 @@ export interface PendingPermission {
   readScope?: { directory: string; token: string };
   // The page with the options' previews (lib/question-preview.ts); open it at #<question>-<option>.
   previewUrl?: string;
+  // What a held Edit/Write would change, readable (lib/edit-preview.ts).
+  edit?: EditPreview;
+  // Why the prompt came up: a symbol-claim clash (lib/claims.ts clashWhy) or the card's permission mode.
+  why?: PromptReason;
+  // The user chose Wait: Weft answers it once the holder lets go of the code.
+  waiting?: boolean;
+}
+
+// A permission prompt's reason, as a category chip and a short detail (components/PermissionInput.tsx).
+// same-code / overlap / whole-file: another busy card's claim (lib/claims.ts); mode: the card's permission mode.
+export interface PromptReason {
+  category: "same-code" | "overlap" | "whole-file" | "mode";
+  detail: string;
+  // For a clash: the card holding the claim and its claim key, so Wait can watch for its release (lib/permission-wait.ts).
+  holder?: { id: string; title: string; claim: string };
 }
 
 // Card and CardIssue live in lib/types-card-detail.ts to keep this file under the line limit.
@@ -179,6 +195,8 @@ export type BoardEvent =
   | { type: "card_deleted"; id: string }
   // Appends when index === thread length, otherwise replaces the item at index; truncate drops what follows it.
   | { type: "thread"; cardId: string; item: ThreadItem; index: number; truncate?: boolean }
+  // The whole thread was emptied (the copilot's New chat, lib/copilot.ts resetCopilot).
+  | { type: "thread_cleared"; cardId: string }
   // Streaming text of the assistant message in progress; cleared by the next assistant item.
   | { type: "delta"; cardId: string; text: string }
   | { type: "login"; login: LoginView }

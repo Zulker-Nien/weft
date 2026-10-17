@@ -89,26 +89,51 @@ function upload(file: Blob, name: string, onProgress?: (fraction: number) => voi
   });
 }
 
+// What a fetch that never reached the server says. The browser's own message is a bare "Failed to fetch"
+// (Safari: "Load failed"), which tells the user nothing; the usual cause is Weft's server restarting.
+export const UNREACHABLE = "Couldn't reach Weft's server. It may be restarting; try again in a moment.";
+
+// fetch, with a dropped connection turned into UNREACHABLE. An abort is the caller's own doing and passes through.
+async function send(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
+    throw new Error(UNREACHABLE, { cause: err });
+  }
+}
+
+// The reply's JSON body. A restarting dev server answers with an HTML error page; that is a failed call
+// (the status says so), not a SyntaxError from the parser.
+async function readJson<T>(res: Response): Promise<T & { error?: string }> {
+  try {
+    return (await res.json()) as T & { error?: string };
+  } catch {
+    if (res.ok) throw new Error("Weft's server sent a reply that isn't JSON.");
+    return {} as T & { error?: string };
+  }
+}
+
 async function transcribe(audio: Blob) {
-  const res = await fetch("/api/transcribe", {
+  const res = await send("/api/transcribe", {
     method: "POST",
     headers: { "x-threadboard": "1", "content-type": audio.type || "audio/webm" },
     body: audio,
   });
-  const data = (await res.json()) as { text?: string; error?: string };
-  if (!res.ok) throw new Error(data.error ?? res.statusText);
+  const data = await readJson<{ text?: string }>(res);
+  if (!res.ok) throw new Error(data.error ?? (res.statusText || `Request failed (${res.status}).`));
   return data.text ?? "";
 }
 
 async function call<T>(method: string, url: string, body?: unknown, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(url, {
+  const res = await send(url, {
     method,
     headers: { "content-type": "application/json", "x-threadboard": "1" },
     body: body === undefined ? undefined : JSON.stringify(body),
     ...(signal ? { signal } : {}),
   });
-  const data = (await res.json()) as T & { error?: string };
-  if (!res.ok) throw new Error(data.error ?? res.statusText);
+  const data = await readJson<T>(res);
+  if (!res.ok) throw new Error(data.error ?? (res.statusText || `Request failed (${res.status}).`));
   return data;
 }
 
@@ -146,6 +171,8 @@ export const api = {
   // reply: a question's notes, or "Chat about this" instead of answers.
   answer: (id: string, allow: boolean, answers?: Record<string, string>, pendingId?: string, reply?: QuestionReply) =>
     call("POST", `/api/cards/${id}/permission`, { allow, answers, pendingId, ...reply }),
+  // Wait on a symbol-claim prompt: Weft answers it once the card holding that code lets go.
+  waitPermission: (id: string, pendingId: string) => call("POST", `/api/cards/${id}/permission`, { wait: true, pendingId }),
   stop: (id: string) => call("POST", `/api/cards/${id}/stop`),
   // "!" in the reply box: runs a shell command in the card's folder (lib/shell.ts).
   shell: (id: string, command: string) => call<{ ok: true }>("POST", `/api/cards/${id}/shell`, { command }),
@@ -167,6 +194,8 @@ export const api = {
     call<{ status: DevServerStatus }>("POST", `/api/cards/${id}/dev`, { action }),
   copilot: () => call<{ card: Card }>("GET", "/api/copilot"),
   resetCopilot: () => call<{ card: Card }>("POST", "/api/copilot/reset"),
+  copilotSuggestions: () => call<{ chips: { text: string; cardId?: string }[]; covers: string[] }>("GET", "/api/copilot/suggestions"),
+  copilotChipClicked: (text: string) => call<{ ok: true }>("POST", "/api/copilot/suggestions", { text }),
   // Restart when idle (lib/restart-when-idle.ts): nothing new starts, and Weft restarts once the running turns end.
   restartStatus: () => call<RestartStatus>("GET", "/api/restart"),
   restartWhenIdle: () => call<RestartStatus>("POST", "/api/restart", {}),

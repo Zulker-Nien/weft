@@ -6,7 +6,7 @@ import { isTrustedTool } from "./board-tools";
 import { runsOn } from "./cli-defaults";
 import { executableFor } from "./cli-path";
 import { spawnCli, withStderr } from "./cli-process";
-import { claimQuestion } from "./claim-guard";
+import { claimQuestion, claimSymbols, claimWhy } from "./claim-guard";
 import { guardedCli } from "./env";
 import { isNotLoggedInError, isRateLimitError } from "./login";
 import { hitRateLimit } from "./rate-limit";
@@ -206,7 +206,10 @@ function queryOptions(session: Session, executable: string | undefined): Options
       }
       if (!session.cardId) return Promise.resolve({ behavior: "deny", message: "No card is attached yet." });
       // A symbol-claim clash (lib/claim-guard.ts) asks in its own words.
-      return askUser(session.cardId, session, toolName, input, opts.signal, claimQuestion(opts.toolUseID) ?? opts.title);
+      return askUser(session.cardId, session, toolName, input, opts.signal, claimQuestion(opts.toolUseID) ?? opts.title, {
+        symbols: claimSymbols(opts.toolUseID),
+        why: claimWhy(opts.toolUseID),
+      });
     },
     // Its own spawn, so ending the session ends puku-cli's `Puku` child too (lib/cli-process.ts).
     spawnClaudeCodeProcess: (opts) => (session.process = spawnCli(opts, logStderr)),

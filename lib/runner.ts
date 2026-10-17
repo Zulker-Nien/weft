@@ -24,6 +24,7 @@ import type { Card, PermissionMode } from "./types";
 // (permission requests), lib/runner-login.ts (auth wall).
 export { switchBackend } from "./backend-switch";
 export { answerPermission } from "./runner-ask";
+export { waitPermission } from "./permission-wait";
 export { ensureSpare, warmUp } from "./runner-session";
 export { isBusy } from "./runner-state";
 // Re-exports for the login module (used by app/api/login and lib/copilot.ts).

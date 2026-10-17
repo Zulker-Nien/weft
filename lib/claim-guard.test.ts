@@ -17,7 +17,7 @@ vi.mock("./store", () => ({
 }));
 
 const store = await import("./store");
-const { claimHooks, claimQuestion, claimsFor, MAX_SYMBOLS, releaseClaims } = await import("./claim-guard");
+const { claimHooks, claimQuestion, claimsFor, claimSymbols, claimWhy, MAX_SYMBOLS, releaseClaims } = await import("./claim-guard");
 
 const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "weft-claims-")));
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
@@ -92,6 +92,8 @@ describe("the PreToolUse hook", () => {
     const question = "Card ‘Fix login’ is editing one in a.ts. Wait, or go ahead?";
     expect(out).toEqual({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "ask", permissionDecisionReason: question } });
     expect(claimQuestion("ask1")).toBe(question);
+    expect(claimWhy("ask1")).toMatchObject({ category: "same-code", detail: "‘Fix login’ (running) has uncommitted edits to one" });
+    expect(claimWhy(undefined)).toBeUndefined();
     expect(claimQuestion(undefined)).toBeUndefined();
   });
 
@@ -100,6 +102,19 @@ describe("the PreToolUse hook", () => {
     cards.set("other", card("other", { claims: [`${file}#two`] }));
     expect(await pre("me", "Edit", { file_path: file, old_string: "return 1;" }, "free")).toEqual({});
     expect(claimQuestion("free")).toBeUndefined();
+    expect(claimWhy("free")).toBeUndefined();
+  });
+
+  it("keeps the symbols an edit touches for the permission prompt, not a whole-file claim", async () => {
+    cards.set("me", card("me"));
+    await pre("me", "Edit", { file_path: file, old_string: "return 1;" }, "sym1");
+    expect(claimSymbols("sym1")).toEqual(["one"]);
+    await pre("me", "Write", { file_path: file, content: "" }, "sym2");
+    expect(claimSymbols("sym2")).toBeUndefined();
+    await pre("me", "Edit", { file_path: file, old_string: 'import x from "./x";' }, "sym3");
+    expect(claimSymbols("sym3")).toBeUndefined();
+    expect(claimSymbols("never")).toBeUndefined();
+    expect(claimSymbols(undefined)).toBeUndefined();
   });
 
   it("does nothing without a card, a tool use id, a claim, or outside PreToolUse", async () => {

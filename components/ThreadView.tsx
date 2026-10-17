@@ -13,6 +13,7 @@ import { useEditLast } from "@/lib/use-edit-last";
 import CrashGuard from "./CrashGuard";
 import { guarded } from "./guarded";
 import Icon, { Spinner } from "./Icon";
+import PermissionInput, { PermissionActions } from "./PermissionInput";
 import StatusStrip from "./StatusStrip";
 import { ThreadEntries, groupThread } from "./ThreadItems";
 
@@ -101,6 +102,7 @@ export default function ThreadView({
   // Live events: translate the absolute index to a local one in the loaded window.
   useBoardEvents(
     (event: BoardEvent) => {
+      if (event.type === "thread_cleared" && event.cardId === card.id) setPage({ items: [], start: 0, total: 0 });
       if (event.type !== "thread" || event.cardId !== card.id) return;
       setPage((prev) => applyThreadEvent(prev, event));
     },
@@ -232,25 +234,13 @@ export default function ThreadView({
             <Icon name="lock" size={14} className="mt-0.5 text-warn" />
             <span>{card.pending.title}</span>
           </div>
-          <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap rounded bg-panel/70 px-2 py-1.5 font-mono text-[11px] text-muted">
-            {JSON.stringify(card.pending.input, null, 2)}
-          </pre>
-          <div className="mt-2 flex gap-2">
-            <button
-              onClick={() => answer(true)}
-              disabled={answered}
-              className="rounded-md bg-accent px-3 py-1.5 text-[12.5px] font-medium text-on-accent hover:opacity-90 disabled:opacity-50"
-            >
-              Allow
-            </button>
-            <button
-              onClick={() => answer(false)}
-              disabled={answered}
-              className="rounded-md border border-line-strong bg-panel px-3 py-1.5 text-[12.5px] text-ink hover:bg-sunken disabled:opacity-50"
-            >
-              Deny
-            </button>
-          </div>
+          <PermissionInput input={card.pending.input} edit={card.pending.edit} askedBy={card.title} why={card.pending.why} />
+          <PermissionActions
+            pending={card.pending}
+            answered={answered}
+            onAnswer={answer}
+            onWait={() => card.pending && void api.waitPermission(card.id, card.pending.id).catch(() => {})}
+          />
         </div>
         </CrashGuard>
       )}

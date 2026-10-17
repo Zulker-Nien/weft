@@ -2,10 +2,11 @@ import type { PermissionResult, Query, SDKUserMessage } from "@anthropic-ai/clau
 import { messageContent } from "./attachments";
 import type { BoardActions } from "./board-tools";
 import type { CliProcess } from "./cli-process";
+import type { EditPreview } from "./edit-preview";
 import { keepAliveMinutes } from "./settings";
 import type { BoardStatus } from "./status";
 import { getCard, updateCard } from "./store";
-import type { Backend, CacheState, Card, Effort, PermissionMode, Question } from "./types";
+import type { Backend, CacheState, Card, Effort, PermissionMode, PromptReason, Question } from "./types";
 import { globalSingleton } from "./global-singleton";
 import { effortFor, modelOn } from "./new-thread";
 import { idleToClose, keepAliveFor } from "./puku-idle";
@@ -25,6 +26,9 @@ export interface Pending {
   questions?: Question[];
   readScope?: { directory: string; token: string };
   previewUrl?: string;
+  edit?: EditPreview;
+  why?: PromptReason;
+  waiting?: boolean;
   resolve: (result: PermissionResult) => void;
 }
 

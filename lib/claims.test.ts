@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addClaims, claimKey, CLAIMS_CAP, clashes, clashQuestion, dropClaims, findClash, splitClaim } from "./claims";
+import { addClaims, claimKey, CLAIMS_CAP, clashes, clashQuestion, clashWhy, dropClaims, findClash, splitClaim } from "./claims";
 import type { Card } from "./types";
 
 let seq = 0;
@@ -82,6 +82,27 @@ describe("findClash", () => {
     const elsewhere = card({ claims: ["/repo/a.ts#g"] });
     const none = card();
     expect(findClash([me, idle, away, elsewhere, none], me, ["/repo/a.ts#f"])).toBeUndefined();
+  });
+});
+
+describe("clashWhy", () => {
+  it("files a clash under same code, overlapping code or whole file, and names the holder", () => {
+    const running = card({ title: "Fix login", column: "running" });
+    expect(clashWhy({ card: running, theirs: "/repo/Login.tsx#LoginForm", mine: "/repo/Login.tsx#LoginForm" })).toEqual({
+      category: "same-code",
+      detail: "‘Fix login’ (running) has uncommitted edits to LoginForm",
+      holder: { id: running.id, title: "Fix login", claim: "/repo/Login.tsx#LoginForm" },
+    });
+    expect(clashWhy({ card: running, theirs: "/repo/B.tsx#Board/useEffect#3", mine: "/repo/B.tsx#Board" })).toMatchObject({
+      category: "overlap",
+      detail: "‘Fix login’ (running) has uncommitted edits to Board › useEffect #3",
+    });
+    const waiting = card({ title: "Restyle", column: "needs_you" });
+    expect(clashWhy({ card: waiting, theirs: "/repo/app.css#*", mine: "/repo/app.css#x" })).toMatchObject({
+      category: "whole-file",
+      detail: "‘Restyle’ (waiting on you) has uncommitted edits to app.css",
+    });
+    expect(clashWhy({ card: waiting, theirs: "/repo/a.ts#one", mine: "/repo/a.ts#*" }).category).toBe("whole-file");
   });
 });
 

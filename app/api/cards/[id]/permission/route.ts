@@ -1,5 +1,5 @@
 import { fail, guard } from "@/lib/guard";
-import { answerPermission } from "@/lib/runner";
+import { answerPermission, waitPermission } from "@/lib/runner";
 import type { QuestionReply } from "@/lib/types";
 
 // A question's notes (string notes and preview per question) and its "Chat about this" message, from an untrusted body.
@@ -29,12 +29,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     const body = (await req.json()) as {
       allow?: boolean;
+      // Wait: hold the edit until the card holding that code lets go (lib/permission-wait.ts).
+      wait?: boolean;
       answers?: Record<string, string>;
       pendingId?: string;
       annotations?: unknown;
       chat?: unknown;
     };
     const { allow, answers, pendingId } = body;
+    if (body.wait === true) {
+      if (typeof pendingId !== "string") throw new Error("Wait needs the request's pendingId.");
+      waitPermission(id, pendingId);
+      return Response.json({ ok: true });
+    }
     answerPermission(
       id,
       allow === true,

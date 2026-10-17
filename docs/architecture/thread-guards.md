@@ -45,6 +45,26 @@ into each other. Claims catch that at the moment it happens, instead of a standi
   holds the same symbol, or either side covers the whole file. The PreToolUse hook answers `ask` and the card's
   permission prompt reads "Card ‘<title>’ is editing <Symbol> in <file>. Wait, or go ahead?" (`claimQuestion`,
   used as the prompt title in `lib/runner-session.ts`). It reads board data and the one file; no git.
+- **What the prompt shows** (`lib/edit-preview.ts`, `components/PermissionInput.tsx`): any held Edit, MultiEdit,
+  Write or NotebookEdit, from a claim clash or any other permission prompt, reads as a change instead of the tool's
+  JSON: the asking card's title, the file (relative to the card's folder; "creates" for a Write to a new file), the
+  symbols it touches (`claimSymbols`, the keys the PreToolUse hook already worked out, so no second parse; left out
+  for a whole-file claim), +added −removed and a line diff (common lines as context, LCS in the middle, plain −/+
+  past 250,000 cells, first 40 lines). `askUser` (`lib/runner-ask.ts`) builds it as `pending.edit`; a Write diffs
+  against the file on disk. **Raw** shows the JSON. Other tools still show their input as JSON.
+  Above it, **why the prompt came up** (`pending.why`, a `PromptReason`): a category chip and a one-line detail.
+  For a claim clash `clashWhy` (`lib/claims.ts`, kept by the PreToolUse hook, read with `claimWhy`) picks **Same code**,
+  **Overlapping code** (one symbol inside the other) or **Whole file** (either side claims it), with "‘<card>’
+  (running | waiting on you) has uncommitted edits to <symbol>". Any other prompt is **Permission mode**, "<mode> asks
+  before <tool>" (`modeWhy` in `lib/runner-ask.ts`, labels from `MODE_OPTIONS`). The explanation every clash shares
+  (one working tree, going ahead can undo their uncommitted change) is the chip's tooltip, `REASONS` in the component.
+- **Wait** (`lib/permission-wait.ts`, `PermissionActions` in `components/PermissionInput.tsx`): a clash prompt's
+  buttons are **Wait** (first), **Go ahead** and **Deny**. Wait (`POST /api/cards/:id/permission { wait, pendingId }`)
+  keeps the edit held, marks it `waiting`, moves the card back to Running ("Waiting for ‘<holder>’") and polls every 3 s
+  (`checkWaits`). Once the holder lets go (no longer busy, archived or deleted, or its claim dropped because its change
+  was committed), the held edit is denied with a message telling the thread to re-read the file and redo the edit on top
+  of that change: the old_string it planned to replace may be gone, and a Write would clobber it. Go ahead now and Deny
+  still answer it while it waits. Waits live in memory; a restart ends the turn and them with it.
 - **Recording**: the PreToolUse hook keeps what the edit will claim by tool use id, and the PostToolUse hook puts
   it on `card.claims` (most recent first, last 50) once the edit has run, so a denied edit claims nothing.
 - **Dropping**: `updateCard` (`lib/store.ts`) clears a card's claims when it reaches Done or is archived;
