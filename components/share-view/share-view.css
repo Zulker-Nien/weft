@@ -8,6 +8,8 @@
   display: flex;
   flex: 1;
   flex-direction: column;
+  /* The page's root: unlike the web board, nothing above it is a full-height flex column. */
+  height: 100dvh;
   min-width: 0;
   min-height: 0;
   background: var(--canvas);
