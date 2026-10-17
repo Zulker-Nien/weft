@@ -91,15 +91,16 @@ export async function setCardShare(cardId: string, update: CardShareUpdate): Pro
   if (t.kind === "blocked") return t.state;
   const existing = await readShare(t.client, t.orgId, cardId);
   if (update.mode === "password" && !password && !existing?.has_password) throw new CardShareError("Set a password first.", 400);
-  const row: Record<string, unknown> = { id: existing?.id ?? newShareId(), org_id: t.orgId, card_id: cardId, mode: update.mode };
+  const change: Record<string, unknown> = { mode: update.mode };
   // Only the hash goes up. Leaving the password gate drops the old one, so it can't come back unseen.
-  if (update.mode !== "password") row.password_hash = null;
-  else if (password) row.password_hash = hashSharePassword(password);
-  const { data, error } = await t.client
-    .from("cloud_shares")
-    .upsert(row, { onConflict: "org_id,card_id" })
-    .select("id, mode, has_password")
-    .single<ShareRead>();
+  if (update.mode !== "password") change.password_hash = null;
+  else if (password) change.password_hash = hashSharePassword(password);
+  // An update or an insert that asks nothing back, never an upsert: ON CONFLICT DO UPDATE reads excluded.password_hash,
+  // which clients can't select (the migration's column grants), and the database refuses the whole statement.
+  const shares = t.client.from("cloud_shares");
+  const { error } = existing
+    ? await shares.update(change).eq("org_id", t.orgId).eq("card_id", cardId)
+    : await shares.insert({ ...change, id: newShareId(), org_id: t.orgId, card_id: cardId });
   check(error);
-  return stateOf(data);
+  return stateOf(await readShare(t.client, t.orgId, cardId));
 }

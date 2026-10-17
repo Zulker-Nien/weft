@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// lib/card-share.ts against a fake account client: each table answers from `db`, and every query and upsert is
-// recorded so the tests can pin what goes up (only a hash, never the password; never public_edit).
+// lib/card-share.ts against a fake account client: each table answers from `db`, and every query and write is
+// recorded so the tests can pin what goes up (only a hash, never the password; never public_edit; never an upsert,
+// which the database refuses because it reads password_hash).
 
 interface Db {
   user: string | null;
@@ -12,7 +13,7 @@ interface Db {
   error: { message: string } | null;
   configured: boolean;
   queries: { table: string; filters: Record<string, unknown> }[];
-  upserts: { row: Record<string, unknown>; options: unknown }[];
+  writes: { op: "insert" | "update"; row: Record<string, unknown>; filters: Record<string, unknown> }[];
 }
 
 const db = vi.hoisted((): Db => ({
@@ -24,7 +25,7 @@ const db = vi.hoisted((): Db => ({
   error: null,
   configured: true,
   queries: [],
-  upserts: [],
+  writes: [],
 }));
 
 function query(table: string) {
@@ -42,13 +43,29 @@ function query(table: string) {
       return q;
     },
     maybeSingle: () => Promise.resolve(answer()),
-    upsert: (row: Record<string, unknown>, options: unknown) => {
-      db.upserts.push({ row, options });
-      const saved = { id: row.id as string, mode: row.mode as string, has_password: "password_hash" in row ? row.password_hash !== null : Boolean(db.share?.has_password) };
-      return { select: () => ({ single: () => Promise.resolve(db.error ? { data: null, error: db.error } : { data: saved, error: null }) }) };
+    insert: (row: Record<string, unknown>) => write("insert", row, {}),
+    update: (row: Record<string, unknown>) => {
+      const where: Record<string, unknown> = {};
+      const chain = {
+        eq: (col: string, value: unknown) => {
+          where[col] = value;
+          return chain;
+        },
+        then: (done: (r: { error: { message: string } | null }) => unknown) => write("update", row, where).then(done),
+      };
+      return chain;
     },
   };
   return q;
+}
+
+// A write that asks nothing back; the next read sees it, as the database would.
+function write(op: "insert" | "update", row: Record<string, unknown>, filters: Record<string, unknown>) {
+  db.writes.push({ op, row, filters });
+  if (db.error) return Promise.resolve({ error: db.error });
+  const has = "password_hash" in row ? row.password_hash !== null : Boolean(db.share?.has_password);
+  db.share = { id: (row.id as string | undefined) ?? db.share!.id, mode: row.mode as string, has_password: has };
+  return Promise.resolve({ error: null });
 }
 
 const client = {
@@ -76,7 +93,7 @@ vi.mock("@aimhuge/share/server", () => ({ hashSharePassword: (p: string) => `has
 const { CardShareError, getCardShare, setCardShare } = await import("./card-share");
 
 beforeEach(() => {
-  Object.assign(db, { user: "u1", org: "o1", folders: ["/w"], cards: new Set(["c1"]), share: null, error: null, configured: true, queries: [], upserts: [] });
+  Object.assign(db, { user: "u1", org: "o1", folders: ["/w"], cards: new Set(["c1"]), share: null, error: null, configured: true, queries: [], writes: [] });
   syncNow.mockClear();
 });
 
@@ -128,34 +145,35 @@ describe("setCardShare", () => {
   it("refuses public_edit and unknown modes before anything else", async () => {
     await expect(setCardShare("c1", { mode: "public_edit" as never })).rejects.toMatchObject({ status: 400 });
     await expect(setCardShare("c1", { mode: "everyone" as never })).rejects.toMatchObject({ status: 400 });
-    expect(db.upserts).toEqual([]);
+    expect(db.writes).toEqual([]);
   });
 
   it("answers the blocked state instead of writing", async () => {
     db.folders = [];
     expect(await setCardShare("c1", { mode: "public" })).toEqual({ kind: "not-synced", folder: "/w" });
-    expect(db.upserts).toEqual([]);
+    expect(db.writes).toEqual([]);
   });
 
-  it("creates a share with a fresh id, upserting on the card", async () => {
+  it("inserts a new share with a fresh id, then reads it back", async () => {
     const state = await setCardShare("c1", { mode: "email" });
-    const { row, options } = db.upserts[0]!;
+    const { op, row } = db.writes[0]!;
+    expect(op).toBe("insert");
     expect(row).toMatchObject({ org_id: "o1", card_id: "c1", mode: "email", password_hash: null });
     expect(row.id).toMatch(/^[A-Za-z0-9_-]{22}$/);
-    expect(options).toEqual({ onConflict: "org_id,card_id" });
     expect(state).toEqual({ kind: "ok", id: row.id, url: `https://weft.zip/s/${row.id as string}`, mode: "email", hasPassword: false });
   });
 
-  it("keeps the existing id", async () => {
+  it("updates an existing share in place, keeping its id", async () => {
     db.share = { id: "abcdefghijklmnopqrstuv", mode: "private", has_password: false };
-    await setCardShare("c1", { mode: "public" });
-    expect(db.upserts[0]!.row.id).toBe("abcdefghijklmnopqrstuv");
+    const state = await setCardShare("c1", { mode: "public" });
+    expect(db.writes).toEqual([{ op: "update", row: { mode: "public", password_hash: null }, filters: { org_id: "o1", card_id: "c1" } }]);
+    expect(state).toMatchObject({ id: "abcdefghijklmnopqrstuv", mode: "public" });
   });
 
   it("sends only a password's hash", async () => {
     const state = await setCardShare("c1", { mode: "password", password: "hunter2" });
-    expect(db.upserts[0]!.row).toMatchObject({ mode: "password", password_hash: "hash(hunter2)" });
-    expect(JSON.stringify(db.upserts)).not.toContain('"hunter2"');
+    expect(db.writes[0]!.row).toMatchObject({ mode: "password", password_hash: "hash(hunter2)" });
+    expect(JSON.stringify(db.writes)).not.toContain('"hunter2"');
     expect(state).toMatchObject({ mode: "password", hasPassword: true });
   });
 
@@ -164,14 +182,14 @@ describe("setCardShare", () => {
     await expect(setCardShare("c1", { mode: "password", password: "" })).rejects.toMatchObject({ status: 400 });
     db.share = { id: "abcdefghijklmnopqrstuv", mode: "password", has_password: true };
     const state = await setCardShare("c1", { mode: "password" });
-    expect(db.upserts[0]!.row).not.toHaveProperty("password_hash");
+    expect(db.writes[0]!.row).not.toHaveProperty("password_hash");
     expect(state).toMatchObject({ mode: "password", hasPassword: true });
   });
 
   it("drops the hash when leaving the password gate, and ignores a password sent with another mode", async () => {
     db.share = { id: "abcdefghijklmnopqrstuv", mode: "password", has_password: true };
     await setCardShare("c1", { mode: "public", password: "x" });
-    expect(db.upserts[0]!.row.password_hash).toBeNull();
+    expect(db.writes[0]!.row.password_hash).toBeNull();
   });
 
   it("throws what Supabase refused on write", async () => {
@@ -179,11 +197,11 @@ describe("setCardShare", () => {
     db.share = { id: "abcdefghijklmnopqrstuv", mode: "private", has_password: false };
     client.from = (table: string) => {
       const q = real(table);
-      const upsert = (row: Record<string, unknown>, options: unknown) => {
+      const update = (row: Record<string, unknown>) => {
         db.error = { message: "rls" };
-        return q.upsert(row, options);
+        return q.update(row);
       };
-      return { ...q, upsert };
+      return { ...q, update };
     };
     await expect(setCardShare("c1", { mode: "public" })).rejects.toThrow("rls");
     client.from = real;
