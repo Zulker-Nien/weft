@@ -235,6 +235,13 @@ fixed-size window on its own `about` session, and navigation and `window.open` a
 `server.cjs` exposes `port` and a `pid` getter (the current supervised process; it changes on
 restart). In dev that PID is `next dev`'s launcher, not necessarily the process holding the port.
 
+## Dev wrapper (`scripts/dev-protocol.cjs`)
+
+`pnpm desktop` first makes `~/Applications/Weft Dev.app`, a wrapper that declares `weft://` and re-launches
+the dev Electron on this folder. It warns when the checkout is in Desktop, Documents or Downloads, and the
+wrapper reads `package.json` before launching so a macOS folder-permission refusal shows a dialog that says
+to move the folder, not Electron's bare EPERM (docs/bug-fixes/019-desktop-checkout-eperm-on-macos-protected-folder.md).
+
 ## Packaging
 
 `package.json`'s `build` block drives `electron-builder`:

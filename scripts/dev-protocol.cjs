@@ -24,18 +24,51 @@ function ensureElectron() {
   }
 }
 
-function launcherScript() {
+// macOS privacy (TCC) guards these folders per app. From Terminal, Electron borrows Terminal's
+// permission; started by macOS (a weft:// link through the wrapper, app.relaunch()) it's judged on
+// its own, can't read package.json and shows Electron's bare "Error launching app … EPERM".
+const PROTECTED = ["Desktop", "Documents", "Downloads"];
+
+function protectedFolder(root, home = os.homedir()) {
+  return PROTECTED.find((name) => root === path.join(home, name) || root.startsWith(path.join(home, name) + path.sep)) ?? null;
+}
+
+const BLOCKED_TITLE = "Weft can't open its folder";
+const BLOCKED_MESSAGE = (root) =>
+  `macOS is blocking access to ${root}. Move the folder out of Desktop, Documents or Downloads ` +
+  "(for example to ~/dev/weft) and run pnpm desktop again, or allow Weft Dev and Electron in " +
+  "System Settings → Privacy & Security → Files and Folders.";
+
+function launcherScript(root = projectRoot) {
   // Re-launches the real Electron with this project as its app folder, then forwards any
   // weft:// URL that the wrapper received as an extra argv. macOS dispatches the URL to the
   // wrapper as argv[1] when the wrapper is opened from a `weft://` link; --weft-link is the
   // explicit form the wrapper uses when it itself starts the app (so single-instance still
   // forwards the URL to the running instance via the second-instance handler).
+  // It first tries to read package.json (a real open, which TCC checks; `test -r` it doesn't) and,
+  // when macOS refuses, says why in a dialog instead of Electron's EPERM.
   return `#!/bin/bash
 set -e
 ELECTRON="${electronApp}"
-PROJECT="${projectRoot}"
+PROJECT="${root}"
+if ! head -c1 "$PROJECT/package.json" >/dev/null 2>&1; then
+  /usr/bin/osascript -e 'on run argv' -e 'display alert (item 1 of argv) message (item 2 of argv) as critical' -e 'end run' \\
+    ${JSON.stringify(BLOCKED_TITLE)} ${JSON.stringify(BLOCKED_MESSAGE(root))} >/dev/null 2>&1 || true
+  exit 1
+fi
 exec "$ELECTRON/Contents/MacOS/Electron" "$PROJECT" --weft-link="$1"
 `;
+}
+
+function warnIfProtected(root = projectRoot, log = console.warn) {
+  const folder = protectedFolder(root);
+  if (!folder) return false;
+  log(
+    `dev-protocol: this checkout is in ~/${folder}, which macOS guards per app.\n` +
+      "  pnpm desktop works from Terminal, but Weft started by macOS (a weft:// link, Restart) can't read it\n" +
+      `  and shows "Error launching app … EPERM". Move it, e.g. \`mv ${root} ~/dev/weft\`, then pnpm install.`,
+  );
+  return true;
 }
 
 function writeInfoPlist() {
@@ -105,9 +138,12 @@ function register() {
 
 function main() {
   ensureElectron();
+  warnIfProtected();
   ensureWrapper();
   register();
   console.log(`dev-protocol: ready (${wrapperRoot} handles weft://)`);
 }
 
-main();
+if (require.main === module) main();
+
+module.exports = { protectedFolder, launcherScript, warnIfProtected };
