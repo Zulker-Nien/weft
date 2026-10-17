@@ -145,6 +145,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 
 ## Browser pane
 
+- `Now` **Mini apps** — the pane's grid button saves its page as an app, a tile on the left rail below 🖥 Services; click to open it in the pane, right-click to rename, move, copy or remove; `~/.weft/apps.json` (`lib/mini-apps.ts`, `components/AppsRail.tsx`). Next: `mcp__browser__save_app` so a thread can offer its page as an app, drag to reorder, favicons, apps per project.
 - `Now` **Glance rail** — a 72 px column right of the page: one mini per turn of the open thread (dot, first words, relative time) and per page the pane showed (the agent's `open_url` calls, and pages you opened this session), click to scroll the chat there and put the pane back on that turn's page, chat scrolling lights the turn on top; hidden under 980 px (`lib/glance-rail.ts`, `components/GlanceRail.tsx`). Next: keep hand-opened pages across a restart.
 - `Now` **Always show something** — a working page in a card's blank pane when a turn starts (the card's own hovercar scene, dimmed, with the title, ask and a running clock), and a Haiku-written update page (how it's going, what we did, what's next) after any turn that showed nothing (`lib/glance.ts`). Measured 2026-10-10: Haiku with a bare CLI ~8-15s and steady; puku-ai-2.8 similar but 8-31s; Haiku via plain `claude -p` 18-45s from startup.
 - `Now` **Card pages survive a restart** — each card's last page is saved to `~/.weft/pages/` (temp pages copied) and comes back when you open the card (`electron/pane-pages.cjs`).

@@ -5,6 +5,7 @@ import type { BrowserState } from "@/lib/client";
 import { setPaneBox } from "@/lib/float-place";
 import { useAnyOverlay } from "@/lib/overlay";
 import Icon, { Spinner } from "./Icon";
+import SaveAppButton from "./SaveAppButton";
 import ZoomMenu from "./ZoomMenu";
 
 const HIDDEN = { x: 0, y: 0, width: 0, height: 0 };
@@ -129,6 +130,8 @@ export default function BrowserPane({
           placeholder="Type a URL, or ask an agent to open one"
           className="mx-1 min-w-0 flex-1 rounded-md border border-line bg-canvas px-2.5 py-1 font-mono text-[12px] text-ink outline-none placeholder:font-sans placeholder:text-faint focus:border-accent"
         />
+        {/* Save as app: the page joins the left rail below Services (components/AppsRail.tsx). */}
+        {desktop && <SaveAppButton url={state.url} title={state.title} />}
         {/* Only the page's zoom; ⌘+/−/0, ⌘+scroll and pinch work too. Accent when not 100%. */}
         <ZoomMenu zoom={zoom} disabled={!state.url} />
         {actions}

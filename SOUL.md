@@ -204,6 +204,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   the peek auto-closes 6s after the mouse leaves so the board reclaims the width. They
   are `@container`s that drop thumbnails and header extras.
 - `lib/browser-tools.ts`: `mcp__browser__*` tools every thread gets.
+- `lib/mini-apps.ts` + `lib/mini-app-store.ts` + `app/api/apps` + `lib/use-mini-apps.ts` + `components/AppsRail.tsx` + `components/SaveAppButton.tsx`: mini apps, pages
+  saved from the browser pane (its toolbar's grid button) as tiles on the left rail below 🖥 Services (rendered inside `components/LibraryRail.tsx`), in `~/.weft/apps.json`; a tile opens its page in the board's pane. No apps, nothing on the rail (docs/architecture/mini-apps.md).
 - Browser pane: `components/BrowserPane.tsx` draws the toolbar and the placeholder the native view (`electron/browser-pane.cjs`)
   lies over; `components/GlanceRail.tsx` + `lib/glance-rail.ts` + `lib/glance-events.ts` + `lib/pane-page.ts` (stamps each sent message with the pane's page) are the 72 px glance rail right of the page,
   one mini per turn and per page the pane showed (the thread's `open_url` calls plus pages opened by hand, in memory), synced with the chat by two window events (`glance:scroll-to`, `glance:pulse`) on rows tagged `data-turn` (docs/architecture/glance-rail.md).
@@ -267,6 +269,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - `puku-trial.md` — the puku trial: a puku thread with no Puku login runs through the deployed Weft's proxy on Weft's own key, day-long token, per-account daily cap.
   - `email-forwarding.md` — `weft.zip` mail → Resend → Svix-signed `email.received` → one inbox.
   - `github-issues.md` — a project's open GitHub issues become Backlog cards, one direction, polled every 5 min, instant sync via the deployed relay.
+  - `mini-apps.md` — pages saved from the browser pane as tiles on the left rail below Services: `~/.weft/apps.json`, `/api/apps`, the pane's Save as app button, right-click menu.
   - `tags.md` — ★ star and tags (the GitHub-label-style rules, the catalog in `~/.weft/tags.json`, the 🏷 drawer, pills on the card); replaced the library.
   - `glance-rail.md` — the browser pane's 72 px rail of one mini per turn and per page, its dots, fallbacks and browser history, and the two events that sync it with the chat.
   - `board-view.md` — `mcp__board_view__*`: a thread's eyes and hands on the board window itself, fixed scripts, the token-guarded control server.

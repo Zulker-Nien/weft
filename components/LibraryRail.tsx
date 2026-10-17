@@ -35,6 +35,7 @@ import WebhooksDrawer from "./WebhooksDrawer";
 import SupabaseDrawer from "./SupabaseDrawer";
 import SupabaseLogo from "./SupabaseLogo";
 import TagsDrawer from "./TagsDrawer";
+import AppsRail from "./AppsRail";
 import type { TagCatalog } from "./use-tag-catalog";
 
 // The board's left edge: a 38px rail. ★ filters the board to starred cards (drop a card on it to star it),
@@ -42,7 +43,7 @@ import type { TagCatalog } from "./use-tag-catalog";
 // slides over the board, or, pinned, pushes it over. Below a divider, 🔐 opens the same drawer on the secrets
 // vault of the board's project(s), 🪝 on the webhooks their code receives (its count is the ones still to register), and ▲ on their Vercel links, Supabase's bolt on their Supabase projects,
 // Cloudflare's cloud on their Workers and Pages projects, BlastCP's rocket on the BlastCP property each one posts as,
-// and GitHub's mark on the gh sign-in and each one's issue sync.
+// and GitHub's mark on the gh sign-in and each one's issue sync. Below 🖥 Services, the mini apps saved from the browser pane (components/AppsRail.tsx).
 // The drawers under the divider, each with its icon, title and label.
 const TOOLS = { vault: ["🔐", "Secrets", "Secrets vault"], webhooks: ["🪝", "Webhooks", "Webhooks"], vercel: ["▲", "Vercel", "Vercel"], supabase: [<SupabaseLogo key="supabase" />, "Supabase", "Supabase"], cloudflare: [<CloudflareLogo key="cloudflare" />, "Cloudflare", "Cloudflare"], blastcp: [<BlastcpLogo key="blastcp" />, "BlastCP", "BlastCP"], github: [<GithubLogo key="github" />, "GitHub", "GitHub"] } as const;
 type Tool = keyof typeof TOOLS;
@@ -60,6 +61,7 @@ export default function SideRail({
   onTagCard,
   catalog,
   onOpenUrl,
+  paneUrl,
   onOpenCard,
   onStartCard,
   notify,
@@ -82,6 +84,8 @@ export default function SideRail({
   catalog: TagCatalog;
   // Shows a page (a deploy) in the board's browser pane.
   onOpenUrl: (url: string) => void;
+  // The page the board's pane shows, which lights its mini app below Services (components/AppsRail.tsx); unset outside the desktop app.
+  paneUrl?: string;
   // Opens a card's thread (the Supabase drawer's link from a migration to the card that wrote it).
   onOpenCard: (card: Card) => void;
   // Starts a card in a folder (a drawer's helper card, like Supabase's Migrate); rejects when that fails.
@@ -193,6 +197,7 @@ export default function SideRail({
         <RailIconButton icon={<CloudflareLogo />} label="Cloudflare" open={open === "cloudflare"} title={cloudflareTitle(cloudflare.status, project)} onClick={toggle("cloudflare")} />
         <RailIconButton icon={<BlastcpLogo />} label="BlastCP" open={open === "blastcp"} title={blastcpTitle(blastcp.status, project)} onClick={toggle("blastcp")} />
         <RailIconButton icon={<GithubLogo />} label="GitHub" open={open === "github"} title={githubTitle(github.status, project)} onClick={toggle("github")} />
+        {paneUrl !== undefined && <AppsRail current={paneUrl} onOpen={onOpenUrl} notify={notify} />}
         {isSuperAdmin ? (
           <>
             <span className="my-1 h-px w-5 bg-line" aria-hidden />

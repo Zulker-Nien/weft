@@ -39,6 +39,11 @@ same time; Next.js allows one dev server per project folder.
 - **Board view for threads**: a thread can screenshot, click, hover, type into and read Weft's own board window
   (`mcp__board_view__*`), so a thread changing a drawer or dialog tests it in the real app instead of asking you to click
   through. Revealed secrets read as ‹secret› and are blanked in its screenshots (docs/architecture/board-view.md).
+- **Mini apps**: a page you keep coming back to (a thread's dashboard in `~/.weft/show`, a dev server, any site) is
+  one click from the board. The grid button in the browser pane's toolbar saves the page as an app; it joins the
+  left rail as a tile below 🖥 Services (its first letter, or the emoji its name starts with). Click a tile
+  to open it in the pane; right-click to rename, move, copy the address or remove it. The button is lit on a page
+  that's already an app, and clicking it then takes it out. No apps, nothing on the rail.
 - **Glance rail**: a 72 px column right of the page in the browser pane, one mini per turn of the open thread
   (status dot, its first words, how long ago) and per page the pane showed, newest at the bottom like the chat. Every message keeps the page on
   screen as you sent it. Click any mini and the chat

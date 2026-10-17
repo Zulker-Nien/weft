@@ -126,7 +126,7 @@ async function transcribe(audio: Blob) {
   return data.text ?? "";
 }
 
-async function call<T>(method: string, url: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+export async function call<T>(method: string, url: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const res = await send(url, {
     method,
     headers: { "content-type": "application/json", "x-threadboard": "1" },

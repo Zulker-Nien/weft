@@ -665,6 +665,7 @@ export default function Board() {
           onTagCard={tagCard}
           catalog={tagCatalog}
           onOpenUrl={showPage}
+          paneUrl={desktop ? browser.url : undefined}
           onOpenCard={openCard}
           onStartCard={improveQuality}
           notify={notify}
