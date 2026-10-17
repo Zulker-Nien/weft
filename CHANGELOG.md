@@ -8,6 +8,8 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-17
+
 ### Added
 
 - **Software Update window.** Weft → Check for Updates… opens a window instead of a message box: this Mac's version, the newest, when it last checked, the release notes, and one button for the next step (Check Now, Download…, Restart to Update). A missing feed reads as "No Weft release is published on GitHub yet" (`electron/update-window.cjs`, `electron/update-view.cjs`).
@@ -483,5 +485,6 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 - Status strip with plan quota, project and branch; choose the Claude model per thread.
 - About window with version, server port and PIDs; the start screen.
 
-[Unreleased]: https://github.com/aimhuge/weft/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/aimhuge/weft/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/aimhuge/weft/releases/tag/v0.4.0
 [0.3.0]: https://github.com/aimhuge/weft/releases/tag/v0.3.0
