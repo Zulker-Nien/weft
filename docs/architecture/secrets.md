@@ -82,8 +82,8 @@ secret get a conflict instead of one silently overwriting the other.
 
 The vault is a 🔐 icon on the left rail (`SideRail` in `components/LibraryRail.tsx`), under ★ and 🏷 and separated by a
 divider. It adds no new row: its count badge carries the nudges ("3 missing", or a dot when `.env.local`
-holds values not yet imported). It opens the same drawer the library uses (over the board, or pushing it
-when pinned), with every board project's vault. A project filter at its top follows the top bar's project;
+holds values not yet imported). It opens the same drawer the library uses (sliding out from under the board, which
+lies on it as a sheet), with every board project's vault. A project filter at its top follows the top bar's project;
 picking another there holds until the top bar's project changes (`vaultFilter` in `lib/vault-view.ts`). The
 rail's badge counts the top bar's project only.
 

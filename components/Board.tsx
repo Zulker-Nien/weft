@@ -671,7 +671,7 @@ export default function Board() {
           notify={notify}
         />
         <main
-          className="flex min-w-0 flex-1 gap-3 overflow-x-auto p-3"
+          className="board-sheet flex min-w-0 flex-1 gap-3 overflow-x-auto p-3"
           onDoubleClick={(e) => {
             // Empty board space (between or inside columns, not on a card or control) opens New thread.
             if (!(e.target as HTMLElement).closest("[data-card-id], button, a, input, textarea, [contenteditable]")) openNew();

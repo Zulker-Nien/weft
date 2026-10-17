@@ -75,6 +75,8 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Changed
 
+- **Rail drawers slide out from under the board.** Clicking 🏷, 🔐, 🪝, ▲, Supabase, Cloudflare, BlastCP, GitHub or 🖥 Services now pulls its drawer out from beneath the board, which moves over and lies on it as a sheet with a rounded, shadowed left edge; closing slides the drawer back under. Pin now means Esc leaves it out (`lib/use-slide-out.ts`, `.board-sheet` in `app/globals.css`).
+
 - The Share dialog opens at once with the card's link (remembered on the card) instead of "Loading…" while Supabase answers.
 - **Smaller files.** 21 of the 26 files over 300 lines were split into focused modules, behavior unchanged (`Board.tsx` 1,078 → 849, `Composer.tsx` 614 → 281, `lib/import.ts`, `lib/types.ts`, `lib/secret-guard.ts`, `lib/client.ts` now re-export from `lib/import-*`, `lib/types-*`, `lib/secret-guard-*`, `lib/client-*`); Settings pages are one file each (`components/Settings*Page.tsx`). The quality checker no longer counts paths in a `Status: design` doc as stale.
 
