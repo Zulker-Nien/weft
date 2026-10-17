@@ -38,10 +38,11 @@ import SupabaseLogo from "./SupabaseLogo";
 import TagsDrawer from "./TagsDrawer";
 import AppsRail from "./AppsRail";
 import type { TagCatalog } from "./use-tag-catalog";
+import "./rail-drawer.css";
 
 // The board's left edge: a 38px rail. ★ filters the board to starred cards (drop a card on it to star it),
 // 🏷 opens the drawer of every tag (components/TagsDrawer.tsx; a tag there filters the board). The drawer
-// slides out from under the board, which sits on it as a sheet (.board-sheet in app/globals.css), and slides
+// slides out from under the board, which sits on it as a sheet (.board-sheet in ./rail-drawer.css), and slides
 // back beneath it on close; pinned, Esc leaves it out. Below a divider, 🔐 opens the same drawer on the secrets
 // vault of the board's project(s), 🪝 on the webhooks their code receives (its count is the ones still to register), and ▲ on their Vercel links, Supabase's bolt on their Supabase projects,
 // Cloudflare's cloud on their Workers and Pages projects, BlastCP's rocket on the BlastCP property each one posts as,
@@ -98,7 +99,7 @@ export default function SideRail({
   const [pinned, setPinned] = useState(() => typeof window !== "undefined" && railPinned());
   // A card is being dragged somewhere on the board: ★ and 🏷 light up to show they take drops.
   const [cardDrag, setCardDrag] = useState(false);
-  // The drawer to draw: the open one, or the one sliding back under the board (DRAWER_SLIDE_MS, as in globals.css).
+  // The drawer to draw: the open one, or the one sliding back under the board (DRAWER_SLIDE_MS, as in rail-drawer.css).
   const { shown, closing } = useSlideOut(open, DRAWER_SLIDE_MS);
   const router = useRouter();
   const isSuperAdmin = useSuperAdminGate();

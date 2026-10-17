@@ -168,54 +168,6 @@
   background: var(--scrim), var(--scene) center 62% / cover no-repeat, var(--canvas);
 }
 
-/* The side rail's drawers slide out from under the board (components/LibraryRail.tsx). While one is out, the
-   board is a sheet lying on it: a rounded left edge 12px over the drawer, casting a shadow onto it, painted
-   with the window's own background (the scene fixed to the viewport, so it lines up with the body's). The
-   drawer grows from 12px (just the part under the sheet) to 272px and back, so the board never jumps when it
-   mounts or unmounts; 200ms matches DRAWER_SLIDE_MS. */
-.rail-drawer {
-  width: 272px;
-  animation: rail-drawer-out 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.rail-drawer[data-closing] {
-  width: 12px;
-  animation: rail-drawer-in 200ms cubic-bezier(0.4, 0, 0.6, 1);
-}
-.rail-drawer-body {
-  animation: rail-drawer-body-out 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.rail-drawer[data-closing] .rail-drawer-body {
-  transform: translateX(-24px);
-  opacity: 0.4;
-  transition: transform 200ms, opacity 200ms;
-}
-@keyframes rail-drawer-out {
-  from { width: 12px; }
-}
-@keyframes rail-drawer-in {
-  from { width: 272px; }
-}
-@keyframes rail-drawer-body-out {
-  from { transform: translateX(-24px); opacity: 0.4; }
-}
-[data-rail]:has(> [data-drawer]) + .board-sheet {
-  position: relative;
-  margin-left: -12px;
-  border-left: 1px solid var(--line-strong);
-  border-radius: 14px 0 0 14px;
-  box-shadow: -14px 0 28px -10px rgb(0 0 0 / 0.45);
-  background: var(--canvas);
-}
-:root[data-scene] [data-rail]:has(> [data-drawer]) + .board-sheet {
-  background: var(--scrim), var(--scene) center 62% / cover no-repeat fixed, var(--canvas);
-}
-@media (prefers-reduced-motion: reduce) {
-  .rail-drawer,
-  .rail-drawer-body {
-    animation: none;
-  }
-}
-
 /* Columns stay clear over a scene so the picture shows between the cards; a faint edge keeps their
    shape. A drag over one still lights it up (bg-accent-soft). */
 :root[data-scene] [data-column].bg-sunken {
