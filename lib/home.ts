@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
+import { SITE } from "./site";
 
 // The home page at weft.zip (components/home/Home.tsx), served by the deployed Weft on Vercel: app/page.tsx renders
 // it instead of the board when isDeployed(), and app/home/page.tsx always does, so it can be seen on localhost.
 // What the page says and links to lives here, where lib/home.test.ts can read it; the release feed lookup that
 // fills the download button is lib/home-release.ts.
 
-export const SITE = "https://weft.zip";
+export { SITE };
 export const REPO = "https://github.com/aimhuge/weft";
 export const RELEASES = `${REPO}/releases`;
 export const FEED = `${RELEASES}/latest/download/update.json`;
