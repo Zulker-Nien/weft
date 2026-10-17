@@ -62,6 +62,11 @@ export default function CopilotChat() {
           });
           if (event.item.kind === "assistant" || event.item.kind === "result") setStreaming("");
           break;
+        case "thread_cleared":
+          if (event.cardId !== COPILOT_ID) break;
+          setItems([]);
+          setStreaming("");
+          break;
         case "delta":
           if (event.cardId === COPILOT_ID) setStreaming((text) => text + event.text);
           break;

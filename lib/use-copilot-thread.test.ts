@@ -112,5 +112,35 @@ describe("useCopilotThread", () => {
     expect(result.current.items).toEqual([]);
     expect(result.current.streaming).toBe("");
     expect(result.current.card?.column).toBe("backlog");
+    expect(result.current.resetting).toBe(false);
+  });
+
+  it("turns New chat off while the reset runs, and back on when it fails", async () => {
+    let finish!: (value: { card: Card }) => void;
+    resetCopilot.mockReturnValueOnce(new Promise((resolve) => (finish = resolve))).mockRejectedValueOnce(new Error("down"));
+    const { result } = renderHook(() => useCopilotThread());
+    let pending!: Promise<void>;
+    act(() => void (pending = result.current.newChat()));
+    expect(result.current.resetting).toBe(true);
+    await act(async () => {
+      finish({ card: pilot({ column: "backlog" }) });
+      await pending;
+    });
+    expect(result.current.resetting).toBe(false);
+    await act(() => expect(result.current.newChat()).rejects.toThrow("down"));
+    expect(result.current.resetting).toBe(false);
+  });
+
+  it("empties the conversation when the server clears the copilot's thread, ignoring other cards", () => {
+    const { result } = renderHook(() => useCopilotThread());
+    act(() => {
+      stream.onEvent({ type: "thread", cardId: "copilot", index: 0, item: say("old") });
+      stream.onEvent({ type: "delta", cardId: "copilot", text: "partial" });
+      stream.onEvent({ type: "thread_cleared", cardId: "other" });
+    });
+    expect(result.current.items).toEqual([say("old")]);
+    act(() => stream.onEvent({ type: "thread_cleared", cardId: "copilot" }));
+    expect(result.current.items).toEqual([]);
+    expect(result.current.streaming).toBe("");
   });
 });

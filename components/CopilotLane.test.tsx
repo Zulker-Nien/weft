@@ -10,6 +10,7 @@ const thread = vi.hoisted(() => ({
   items: [] as ThreadItem[],
   send: vi.fn(async () => {}),
   newChat: vi.fn(async () => {}),
+  resetting: false,
 }));
 
 vi.mock("@/lib/use-copilot-thread", () => ({
@@ -26,6 +27,7 @@ beforeEach(() => {
     { kind: "assistant", text: "All quiet on the board.", at: 11 },
   ];
   thread.send.mockClear();
+  thread.resetting = false;
 });
 
 function lane(state: "hidden" | "peek" | "open", over: Partial<Parameters<typeof CopilotLane>[0]> = {}) {
@@ -131,6 +133,12 @@ describe("CopilotLane open", () => {
     lane("open");
     fireEvent.click(screen.getByText("New chat"));
     expect(thread.newChat).toHaveBeenCalled();
+  });
+
+  it("turns New chat off while a reset runs", () => {
+    thread.resetting = true;
+    lane("open");
+    expect(screen.getByText("Starting…")).toBeDisabled();
   });
 
   it("offers Stop while the copilot works", () => {

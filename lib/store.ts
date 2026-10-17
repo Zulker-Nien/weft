@@ -232,6 +232,7 @@ export function decorateCard(id: string, patch: Partial<Pick<Card, "thumb" | "em
 export function clearThread(id: string) {
   state().threads.set(id, []);
   saveThread(id);
+  publish({ type: "thread_cleared", cardId: id });
 }
 
 export function appendThread(cardId: string, item: ThreadItem): number {

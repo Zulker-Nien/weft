@@ -39,6 +39,11 @@ export function useCopilotThread() {
           });
           if (event.item.kind === "assistant" || event.item.kind === "result") setStreaming("");
           break;
+        case "thread_cleared":
+          if (event.cardId !== COPILOT_ID) break;
+          setItems([]);
+          setStreaming("");
+          break;
         case "delta":
           if (event.cardId === COPILOT_ID) setStreaming((text) => text + event.text);
           break;
@@ -56,12 +61,20 @@ export function useCopilotThread() {
     await api.send(COPILOT_ID, text);
   }, []);
 
+  // The reset ends the copilot's CLI first, which can take a few seconds mid-turn; until it's back,
+  // the New chat button is off so repeat clicks don't queue more resets.
+  const [resetting, setResetting] = useState(false);
   const newChat = useCallback(async () => {
     setItems([]);
     setStreaming("");
-    const { card } = await api.resetCopilot();
-    setCard(card);
+    setResetting(true);
+    try {
+      const { card } = await api.resetCopilot();
+      setCard(card);
+    } finally {
+      setResetting(false);
+    }
   }, []);
 
-  return { card, items, streaming, error, fail, send, newChat };
+  return { card, items, streaming, error, fail, send, newChat, resetting };
 }

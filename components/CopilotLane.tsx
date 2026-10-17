@@ -40,7 +40,7 @@ export default function CopilotLane(props: {
   onOpen: () => void;
   toggleTip: string;
 }) {
-  const { card, items, streaming, error, fail, send, newChat } = useCopilotThread();
+  const { card, items, streaming, error, fail, send, newChat, resetting } = useCopilotThread();
   const live = card ? isLive(card) : false;
 
   if (props.state === "hidden") {
@@ -82,10 +82,11 @@ export default function CopilotLane(props: {
       {isOpen && (
         <button
           onClick={() => void newChat().catch(fail)}
+          disabled={resetting}
           title="Start a new conversation"
-          className="rounded-md bg-black/30 px-2 py-1 text-[11.5px] text-ink hover:bg-black/50"
+          className="rounded-md bg-black/30 px-2 py-1 text-[11.5px] text-ink hover:bg-black/50 disabled:opacity-60"
         >
-          New chat
+          {resetting ? "Starting…" : "New chat"}
         </button>
       )}
       <button

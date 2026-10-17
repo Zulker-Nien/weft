@@ -149,7 +149,12 @@ describe("store threads", () => {
       { kind: "user", text: "b", at: 2 },
     ]);
     expect(store.getThread("c")).toHaveLength(2);
+    const { subscribe } = await import("./bus");
+    const seen: unknown[] = [];
+    const off = subscribe((e) => seen.push(e));
     store.clearThread("c");
+    off();
+    expect(seen).toContainEqual({ type: "thread_cleared", cardId: "c" });
     expect(store.getThread("c")).toEqual([]);
     expect(JSON.parse(fs.readFileSync(path.join(dir, "threads", "c.json"), "utf8"))).toEqual([]);
   });
