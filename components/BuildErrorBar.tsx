@@ -5,11 +5,13 @@ import { useBuildError } from "@/lib/build-error";
 import Icon from "./Icon";
 
 // Stands in for Next's Build Error overlay (lib/build-error.ts): the board behind it is the last version that
-// compiled and still works, so say which file broke and get out of the way.
+// compiled and still works, so say which file broke and get out of the way. × hides it until a different error shows.
 export default function BuildErrorBar() {
   const error = useBuildError();
   const [open, setOpen] = useState(false);
-  if (!error) return null;
+  const [dismissed, setDismissed] = useState<string | null>(null);
+  const key = error && `${error.file}\n${error.message}`;
+  if (!error || key === dismissed) return null;
   return (
     <div
       role="alert"
@@ -23,6 +25,14 @@ export default function BuildErrorBar() {
         </span>
         <button onClick={() => setOpen(!open)} className="shrink-0 font-medium text-accent hover:underline">
           {open ? "Hide" : "Details"}
+        </button>
+        <button
+          onClick={() => setDismissed(key)}
+          aria-label="Dismiss"
+          title="Dismiss until a different error"
+          className="-mr-1 shrink-0 text-muted hover:text-ink"
+        >
+          <Icon name="x" size={14} />
         </button>
       </div>
       {open && (

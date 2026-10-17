@@ -58,3 +58,10 @@ How it loads:
 - Never build JSX in a module-level constant when a function or a component would do; it moves render work to load time.
 - Tests: `components/guarded.test.tsx` (load, preload, failed load caught and retried, Close, placeholder) and
   `components/crash-guards.test.tsx` (inline chip, Modal, one broken message).
+
+## Build errors
+
+A file that doesn't parse fails the route before React runs, so no boundary sees it. `lib/build-error.ts` reads Next's
+Build Error overlay (dev mode only, polled once a second), hides it, and `components/BuildErrorBar.tsx` draws a small bar
+instead: the file that broke, **Details** for the message, and **×** to dismiss. A dismissal holds for that error only
+(same file and message); a different build error brings the bar back. Test: `components/BuildErrorBar.test.tsx`.
