@@ -18,7 +18,9 @@ is the contract between the parts:
   before the scrub one such item failed the whole batch on every retry and nothing uploaded. If the server still
   refuses a chunk with a data error (Postgres class 22), its rows go one at a time and the refused ones are skipped
   and named in `lastError` ("Skipped N items the server refused"); a dropped connection or row-level security
-  stays a backoff that keeps everything. Signed out or no workspace: entries wait. An
+  stays a backoff that keeps everything. A request holds one row per primary key (`lastPerKey`): Codex reuses tool ids like
+  `item_1` from turn to turn, and Postgres refuses an upsert that names a row twice. Known gap: `cloud_tool_outputs` is keyed
+  by (card, tool id), so two long outputs with one id still overwrite each other remotely; the later wins. Signed out or no workspace: entries wait. An
   error: backoff from 1 s doubling to 5 min, one warning per streak. Cards go to the user's personal workspace (the
   first org they own).
 - `lib/blob-store.ts`: images, attachments and `~/.weft/show` pages referenced by an item are hashed (sha256),

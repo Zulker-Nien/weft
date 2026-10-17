@@ -127,7 +127,14 @@ async function putItems(ctx: UploadCtx, client: SupabaseClient, orgId: string, e
     items.push({ org_id: orgId, card_id: entry.cardId, seq: entry.seq, kind: item.kind, item, at: new Date(live.at).toISOString() });
     if (output) outputs.push({ org_id: orgId, card_id: entry.cardId, ...output });
   }
-  if (outputs.length) check(await client.from("cloud_tool_outputs").upsert(scrub(outputs)));
-  if (items.length) check(await client.from("cloud_thread_items").upsert(scrub(items)));
+  if (outputs.length) check(await client.from("cloud_tool_outputs").upsert(scrub(lastPerKey(outputs, (o) => `${o.card_id}/${o.tool_id}`))));
+  if (items.length) check(await client.from("cloud_thread_items").upsert(scrub(lastPerKey(items, (i) => `${i.card_id}/${i.seq}`))));
   return items.length;
+}
+
+// One row per primary key in a request: Postgres refuses an upsert that names a row twice ("ON CONFLICT DO UPDATE
+// command cannot affect row a second time"). Codex reuses tool ids like "item_1" from turn to turn, so a chunk can
+// hold two outputs for one key; the later one wins, as it would across requests.
+function lastPerKey<T>(rows: T[], key: (row: T) => string): T[] {
+  return [...new Map(rows.map((row) => [key(row), row])).values()];
 }

@@ -149,6 +149,17 @@ describe("uploadPending", () => {
     expect(left).toEqual([]);
   });
 
+  it("sends one tool output per tool id in a request, the latest, when a thread reuses an id", async () => {
+    const tool = (result: string) => ({ kind: "tool", id: "item_1", name: "Bash", result });
+    addCard("c1", [tool("a".repeat(3000)), { text: "between" }, tool("b".repeat(4000))]);
+    const { client, sent } = fakeClient();
+    await run(itemEntries("c1", 3), client);
+    expect(sent.cloud_tool_outputs).toHaveLength(1);
+    expect(sent.cloud_tool_outputs![0]).toHaveLength(1);
+    expect(sent.cloud_tool_outputs![0]![0]).toMatchObject({ tool_id: "item_1", bytes: 4000 });
+    expect(sent.cloud_thread_items![0]).toHaveLength(3);
+  });
+
   it("consumes entries whose card or item is gone without sending them", async () => {
     addCard("c1", [{}]);
     const { client, sent } = fakeClient();
