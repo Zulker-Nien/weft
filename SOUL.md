@@ -80,7 +80,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   checkout/restore or `clean -f` in the shared tree), `lib/check-guard.ts` (no `tsc` or `eslint` run directly where the
   project's `pnpm typecheck`/`pnpm lint` take turns through `scripts/one-at-a-time.mjs`; plain Claude Code sessions get it from `.claude/settings.json`), `lib/route-import-guard.ts` (refuses an edit that makes `app/**/page.tsx`,
   a layout, a `route.ts` or middleware import a module that isn't there yet), `lib/claim-guard.ts` (symbol claims: asks before an edit to a top-level
-  symbol another busy card is editing; `lib/claims.ts`, parsed by `lib/symbols.ts`) (docs/architecture/thread-guards.md).
+  symbol another busy card is editing, with **Wait** until it lets go, `lib/permission-wait.ts`; `lib/claims.ts`, parsed by `lib/symbols.ts`; the prompt's readable diff and reason chip are `lib/edit-preview.ts` + `components/PermissionInput.tsx`) (docs/architecture/thread-guards.md).
   Codex gets the filtered `cliEnv()` but not these per-tool hooks; `lib/codex-runner.ts` asks it not to read `.env` files. It does get
   Weft's MCP tools, over HTTP: `lib/weft-mcp.ts` builds the servers every CLI gets, `lib/mcp-bridge.ts` opens a per-turn token and
   `app/api/mcp/[server]` serves them to `codex exec --config mcp_servers.*`. Puku and Codex don't read `.claude/skills` or Codex `CLAUDE.md`,
@@ -195,7 +195,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   one IPC handler, a fresh `Menu` from the items the board sends, the click → resolve wiring behind a `setTimeout`
   (because click fires before the callback on macOS but not on every platform). `Menu` and `BrowserWindow` are
   injected so the test can pass mocks without a real Electron.
-- `lib/copilot.ts` + `lib/board-tools.ts`: the copilot thread and its `mcp__board__*` tools. `lib/copilot-suggest.ts` + `lib/copilot-context.ts` + `lib/copilot-sources.ts` + `lib/copilot-setup.ts` (what isn't linked yet, for onboarding chips and the copilot's `setup_status`) + `app/api/copilot/suggestions`: the empty chat's chips Haiku writes from the cards and every source Weft can read (pile, scout, blanks, Vercel and Supabase via the control server's `/vercel/status` and `/supabase/status`, `gh`), refreshed in the background after a move. `components/CopilotLane.tsx` +
+- `lib/copilot.ts` + `lib/board-tools.ts`: the copilot thread and its `mcp__board__*` tools. `lib/copilot-suggest.ts` + `lib/copilot-context.ts` + `lib/copilot-sources.ts` + `lib/copilot-setup.ts` (what isn't linked yet, for onboarding chips and the copilot's `setup_status`) + `app/api/copilot/suggestions`: the empty chat's chips Haiku writes from the cards and every source Weft can read (pile, scout, blanks, Vercel and Supabase via the control server's `/vercel/status` and `/supabase/status`, `gh`), refreshed in the background after a move; one run labels every chip with its project and `chipsFor` (`lib/copilot-starters.ts`) filters to the board's selected project (docs/architecture/copilot-suggestions.md). `components/CopilotLane.tsx` +
   `lib/copilot-lane.ts` + `lib/use-copilot-thread.ts`: its lane on the right of the board with three states,
   like Intercom's hider: hidden (a 36px pill, the default), peek (a 236px digest column), open (a 520px chat
   over `public/copilots/wingman.jpg`, the cockpit); ⌘J cycles them via `LANE_CYCLE` and the two
@@ -278,6 +278,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - `keep-working.md` — the menu bar icon's switch to keep the Mac awake with the lid shut so threads keep running in a bag.
   - `analytics.md` — GA4 on the home page only; `GoogleAnalytics` is gated on the home being mounted, so the board route never calls home.
   - `cloud-sync.md` — server-side cards: the outbox, the content-addressed blob store, thread paging, the `cloud_*` tables and their policies.
+  - `copilot-suggestions.md` — the copilot's empty-chat chips: what Haiku reads, the one run per board labeled by project, the client filter, setup gaps and `setup_status`.
 
   When a new doc lands in this folder, add it here on the same change.
 
