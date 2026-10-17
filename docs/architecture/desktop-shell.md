@@ -263,6 +263,11 @@ macOS show its own prompt the first time. If the answer is already No (`EPERM`/`
 dialog explains it and **Open Settings** opens `Privacy_FilesAndFolders`; the tool tells the thread which button the user
 took (and to retry after a restart). The packaged app's Info.plist carries `NSDownloadsFolderUsageDescription`; the dev
 Electron binary has none, so its prompt has no purpose line.
+Dev Weft is ad-hoc signed `Electron.app`, so macOS ties a Full Disk Access or Files and Folders grant to that exact
+binary's hash: after Electron is updated or reinstalled the Settings list still shows "Electron" switched on, but the
+grant no longer matches and reads of a protected folder get `Operation not permitted` (seen 2026-10-17: Desktop and
+Documents read fine, Downloads didn't). Remove the Electron entry with **−**, add `node_modules/electron/dist/Electron.app`
+again with **+**, and relaunch Weft. The "Weft" entries are the `~/Applications/Weft.app` launcher, a different app.
 
 `pnpm dist` runs `THREADBOARD_DIST=.next-dist THREADBOARD_STANDALONE=1 next
 build && node scripts/prepare-standalone.mjs .next-dist && electron-builder --mac
