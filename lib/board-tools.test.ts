@@ -72,7 +72,10 @@ vi.mock("./store", () => ({
 }));
 
 vi.mock("./restart-when-idle", () => ({ armRestart: vi.fn() }));
-const remembered: string[][] = []; // the tag catalog (lib/tag-store.ts) writes ~/.weft/tags.json; here it records what joined it
+vi.mock("./copilot-setup", () => ({ setupReport: vi.fn() }));
+vi.mock("./copilot-sources", () => ({ activeProjects: vi.fn() }));
+// the tag catalog (lib/tag-store.ts) writes ~/.weft/tags.json; here it records what joined it
+const remembered: string[][] = [];
 vi.mock("./tag-store", () => ({ rememberTags: (tags: string[]) => remembered.push(tags) }));
 
 const touched: string[] = [];
@@ -422,17 +425,8 @@ describe("threadBoardMcpServer", () => {
 describe("boardMcpServer (copilot)", () => {
   it("registers the full set of board tools for the copilot", () => {
     boardMcpServer({ start: vi.fn(), stop: async () => {}, answer: vi.fn(), isBusy: () => false });
-    expect(captures.map((t) => t.name)).toEqual([
-      "list_cards",
-      "read_thread",
-      "create_card",
-      "set_tags",
-      "start_card",
-      "send_message",
-      "move_card",
-      "stop_card",
-      "answer_permission",
-    ]);
+    const names = ["list_cards", "read_thread", "create_card", "set_tags", "start_card", "send_message", "move_card", "stop_card", "setup_status", "answer_permission"];
+    expect(captures.map((t) => t.name)).toEqual(names);
   });
 
   it("exposes the copilot prompt with the board-tool description", () => {

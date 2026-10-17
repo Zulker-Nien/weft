@@ -736,6 +736,7 @@ export default function Board() {
         <CopilotLane
           state={laneState}
           cards={cards}
+          project={project}
           onOpenCard={openCard}
           onHide={() => setCopilotState("hidden")}
           onPeek={() => setCopilotState("peek")}

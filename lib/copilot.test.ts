@@ -20,6 +20,8 @@ vi.mock("./puku-trial", () => ({ startPukuTrial: vi.fn((onSignIn: () => void) =>
 vi.mock("./import", () => ({ startSessionSync: vi.fn() }));
 vi.mock("./search", () => ({ startSearchIndex: vi.fn() }));
 vi.mock("./scheduler", () => ({ startScheduler: vi.fn() }));
+const suggest = vi.hoisted(() => ({ startSuggestRefresh: vi.fn(), chipCardId: vi.fn<(text: string) => string | undefined>() }));
+vi.mock("./copilot-suggest", () => suggest);
 vi.mock("./resume", () => ({ resumeInterrupted: vi.fn() }));
 vi.mock("./github-issues", () => ({ startIssueSync: vi.fn() }));
 vi.mock("./github-hooks", () => ({ startHookListener: vi.fn() }));
@@ -118,6 +120,18 @@ describe("sendToCopilot", () => {
     expect([id, text]).toEqual([COPILOT_ID, "what's new?"]);
     expect(opts!.cli).toMatch(/^\[Weft board update.*\n- Finished, in Review: "a" \(a\): Done the thing\n\nwhat's new\?$/);
     expect(lastSeen()).toEqual({ a: { column: "review", error: undefined } });
+  });
+
+  it("tells the CLI which card a suggested chip is about, and skips a card that's gone", () => {
+    card(COPILOT_ID, { role: "copilot" });
+    card("a", { column: "running", title: "Fix login" });
+    g.__weftCopilotSeen = { a: { column: "running" } };
+    suggest.chipCardId.mockReturnValueOnce("a").mockReturnValueOnce("gone");
+    sendToCopilot("Commit Fix login");
+    sendToCopilot("Other chip");
+    const calls = vi.mocked(runner.sendUserMessage).mock.calls;
+    expect(calls[0]?.[2]).toEqual({ cli: '[Weft: this is a suggested chip about card "Fix login" (a); read_thread it before acting. Not written by the user.]\n\nCommit Fix login' });
+    expect(calls[1]?.[2]).toEqual({ cli: "Other chip" });
   });
 
   it("with no snapshot yet, counts cards that changed after the copilot's last turn", () => {

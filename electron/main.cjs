@@ -65,7 +65,7 @@ const timer = createStartupTimer({
 
 // The secrets vault, set up further down; the pane types its values in for threads (fillSecret).
 // With it, commands and dev servers run with vault values (secret-run.cjs) and the push to Vercel (vercel-env.cjs).
-let vault, secretRun, vercelEnv;
+let vault, secretRun, vercelEnv, vercelApi, supabaseApi;
 // Small native warning dialog; shared by pageLinks (walk-through buttons) and accountLink (OAuth callback).
 const warnUser = (message, detail) => dialog.showMessageBox(win, { type: "warning", message, detail });
 const pane = createBrowserPane({
@@ -92,6 +92,8 @@ const pane = createBrowserPane({
     "POST /webhooks/ask-add": ({ folder, id }) => (sendMenu("add-webhook", JSON.stringify({ folder, id })), { ok: true }), // mcp__webhooks__ask_add: the board opens 🪝 on a recorded webhook
     // mcp__secrets__push_to_vercel: a vault value onto the card's linked Vercel project, after Touch ID.
     ...require("./vercel-env.cjs").envRoutes(() => vercelEnv),
+    // The copilot's chips (lib/copilot-sources.ts): the latest deploy and unapplied migrations per folder, read-only.
+    ...Object.fromEntries(Object.entries({ vercel: () => vercelApi, supabase: () => supabaseApi }).map(([name, api]) => [`POST /${name}/status`, ({ folders }) => api()?.status((folders ?? []).map(String)) ?? { folders: [] }])),
     // mcp__board_view__*: threads see and drive the board itself, secrets redacted (electron/board-view.cjs).
     ...boardViewRoutes(createBoardView({ board: () => appView?.webContents })),
   },
@@ -418,9 +420,9 @@ ipcMain.on("shell:reveal", (_e, folder) => path.isAbsolute(String(folder)) && fs
 vault = require("./vault.cjs").setupVault({ ipcMain, dataDir: dataDir(), window: () => win, board: () => appView?.webContents });
 secretRun = require("./secret-run.cjs").setupSecretRun({ vault, dataDir: dataDir(), window: () => win });
 // So does Vercel: its token is in the Keychain and its links are .vercel/project.json.
-vercelEnv = require("./vercel.cjs").setupVercel({ ipcMain, dataDir: dataDir(), board: () => appView?.webContents, vault }).env;
+({ vercel: vercelApi, env: vercelEnv } = require("./vercel.cjs").setupVercel({ ipcMain, dataDir: dataDir(), board: () => appView?.webContents, vault }));
 // And Supabase: its token is in the Keychain and its links are supabase/.temp/project-ref.
-require("./supabase.cjs").setupSupabase({ ipcMain, dataDir: dataDir(), board: () => appView?.webContents, vault });
+supabaseApi = require("./supabase.cjs").setupSupabase({ ipcMain, dataDir: dataDir(), board: () => appView?.webContents, vault });
 // And BlastCP: its sign-in is in the Keychain too, and which property a folder posts as is in the data folder.
 require("./blastcp.cjs").setupBlastcp({ ipcMain, dataDir: dataDir(), board: () => appView?.webContents });
 // And Cloudflare: its token is in the Keychain and which Worker or Pages project a folder is is in the data folder.

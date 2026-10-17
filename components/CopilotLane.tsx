@@ -32,6 +32,8 @@ function Status({ card }: { card: Card | null }) {
 export default function CopilotLane(props: {
   state: LaneState;
   cards: Card[];
+  // The board's selected project (null: All), so the empty chat's chips match it.
+  project?: string | null;
   onOpenCard: (card: Card) => void;
   onHide: () => void;
   onPeek: () => void;
@@ -162,7 +164,7 @@ export default function CopilotLane(props: {
               onSend={send}
               onAnswer={(allow, answers) => void api.answer(COPILOT_ID, allow, answers, card.pending?.id).catch(fail)}
               placeholder="Ask about your threads, or tell me what to start"
-              empty={<CopilotEmpty onAsk={(text) => void send(text).catch(fail)} />}
+              empty={<CopilotEmpty project={props.project} onAsk={(text) => void send(text).catch(fail)} />}
             />
           </CrashGuard>
         </div>

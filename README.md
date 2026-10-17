@@ -615,6 +615,22 @@ sees, of what finished, needs you or failed on the board since your last message
 (`lib/copilot-digest.ts`); nothing runs a copilot turn on its own. "New chat" starts a fresh copilot session. In a normal browser tab the
 copilot opens as a pop-up at `/copilot`.
 
+A new copilot chat suggests what to ask: up to four chips Haiku writes from what Weft knows about your work, most
+urgent first ("Restart the deckcp auth wiring card, it was killed by SIGTERM", "Fill the Stripe vault blanks in weft:
+STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET"). It reads every open card in full (how long it has waited, its latest reply,
+an open question with each option's meaning, the error, rate limits), the last day's finished cards, cards editing the
+same file, spend and plan limits, the uncommitted pile, code quality and the refactor scout, your streak, Backlog, vault
+and webhook blanks, what you asked the copilot lately and which chips you clicked, the latest Vercel deploy, unapplied
+Supabase migrations, open GitHub PRs and issues, and which analytics each project ships (`lib/copilot-context.ts`,
+`lib/copilot-sources.ts`, each source with its own timeout). The chips refresh in the background after a card moves and
+sit above seven fixed starters, minus any a chip already covers (`lib/copilot-suggest.ts`). A chip sends itself, and
+when it's about a card the copilot is told which one. `GET /api/copilot/suggestions?context=1` shows exactly what Haiku read.
+
+The copilot also onboards you. It checks what isn't linked yet for your projects (`lib/copilot-setup.ts`: the Weft account,
+the GitHub CLI's sign-in, Vercel, Supabase, Cloudflare, analytics), offers one "link it" chip when that would help, and
+on "Help me get started" (or when a task needs it) reads `setup_status` and walks you through one link at a time, pointing
+at the right rail drawer or offering a thread that adds PostHog or GA4 to a project.
+
 On the board the copilot is a lane of its own on the right, after Done, instead of a card. Minimized (236px) it reads
 like a column: what finished since you last asked it something, the cards waiting on you (click one to open it), its
 latest reply, a peek into the cockpit and an ask box that sends your question and opens the lane. Open (520px), it's

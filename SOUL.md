@@ -192,7 +192,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   one IPC handler, a fresh `Menu` from the items the board sends, the click → resolve wiring behind a `setTimeout`
   (because click fires before the callback on macOS but not on every platform). `Menu` and `BrowserWindow` are
   injected so the test can pass mocks without a real Electron.
-- `lib/copilot.ts` + `lib/board-tools.ts`: the copilot thread and its `mcp__board__*` tools. `components/CopilotLane.tsx` +
+- `lib/copilot.ts` + `lib/board-tools.ts`: the copilot thread and its `mcp__board__*` tools. `lib/copilot-suggest.ts` + `lib/copilot-context.ts` + `lib/copilot-sources.ts` + `lib/copilot-setup.ts` (what isn't linked yet, for onboarding chips and the copilot's `setup_status`) + `app/api/copilot/suggestions`: the empty chat's chips Haiku writes from the cards and every source Weft can read (pile, scout, blanks, Vercel and Supabase via the control server's `/vercel/status` and `/supabase/status`, `gh`), refreshed in the background after a move. `components/CopilotLane.tsx` +
   `lib/copilot-lane.ts` + `lib/use-copilot-thread.ts`: its lane on the right of the board with three states,
   like Intercom's hider: hidden (a 36px pill, the default), peek (a 236px digest column), open (a 520px chat
   over `public/copilots/wingman.jpg`, the cockpit); ⌘J cycles them via `LANE_CYCLE` and the two

@@ -19,8 +19,9 @@ vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
   tool: (name: string, _description: string, _schema: unknown, handler: CapturedTool["handler"]) => ({ name, handler }),
 }));
 vi.mock("./restart-when-idle", () => ({ armRestart }));
-vi.mock("./store", () => ({ createCard: vi.fn(), getCard: vi.fn(), getThread: vi.fn(() => []), listCards: vi.fn(() => []), updateCard: vi.fn() }));
+vi.mock("./store", () => ({ DATA_DIR: "/tmp", createCard: vi.fn(), getCard: vi.fn(), getThread: vi.fn(() => []), listCards: vi.fn(() => []), updateCard: vi.fn() }));
 vi.mock("./tag-store", () => ({ rememberTags: vi.fn() }));
+vi.mock("./copilot-setup", () => ({ setupReport: vi.fn() }));
 vi.mock("./settings", () => ({ touchProject: vi.fn(), defaultPermissionMode: () => "auto", automations: () => [] }));
 
 const { SAFE_BOARD_TOOLS, describeBoardTool, isTrustedTool, threadBoardMcpServer } = await import("./board-tools");

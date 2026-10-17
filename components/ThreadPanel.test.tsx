@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { makeCard } from "./test-utils";
 import ThreadPanel from "./ThreadPanel";
 
-const api = vi.hoisted(() => ({ skills: vi.fn(() => Promise.resolve({ skills: [] })), stop: vi.fn(() => Promise.resolve()) }));
+const api = vi.hoisted(() => ({ skills: vi.fn(() => Promise.resolve({ skills: [] })), copilotSuggestions: vi.fn(() => Promise.resolve({ chips: [], covers: [] })), copilotChipClicked: vi.fn(() => Promise.resolve({ ok: true })), stop: vi.fn(() => Promise.resolve()) }));
 vi.mock("@/lib/client", () => ({ api }));
 vi.mock("./Composer", () => import("./composer-mock"));
 // ThreadView listens for live thread events itself; jsdom has no EventSource.

@@ -3,6 +3,8 @@ import { z } from "zod";
 import { firstMessage } from "./automations";
 import { boardCard, cardLine, LIST_LIMIT, readThreadText } from "./board-tools-format";
 import { markSeen } from "./copilot-digest";
+import { setupReport } from "./copilot-setup";
+import { activeProjects } from "./copilot-sources";
 import { resolveFolder } from "./folders";
 import { folderAccessTool } from "./folder-access-tool";
 import { restartTool } from "./restart-tool";
@@ -229,6 +231,12 @@ export function boardMcpServer(actions: BoardActions) {
           await actions.stop(card.id);
           return `Stopped “${card.title}”.`;
         }),
+      ),
+      tool(
+        "setup_status",
+        "What isn't linked yet for the user's projects (Weft account, GitHub CLI, Vercel, Supabase, Cloudflare, analytics): what each unlocks and where the user links it. Read-only. Defaults to the projects of open cards.",
+        { folder: z.string().optional().describe("One project folder, absolute or ~/..., instead of the open cards' projects") },
+        ({ folder }) => attempt(() => setupReport(folder ? [resolveFolder(folder)] : activeProjects(listCards()))),
       ),
       tool(
         "answer_permission",

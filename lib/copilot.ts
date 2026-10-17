@@ -12,6 +12,7 @@ import { startPukuTrial } from "./puku-trial";
 import { endSession, ensureSpare, retryPukuWithTrial, sendUserMessage, warmUp } from "./runner";
 import { resumeInterrupted } from "./resume";
 import { startScheduler } from "./scheduler";
+import { chipCardId, startSuggestRefresh } from "./copilot-suggest";
 import { modelFor } from "./new-thread";
 import { copilotModel, defaultPermissionMode, listProjects } from "./settings";
 import { clearThread, createCard, getCard, listCards, updateCard } from "./store";
@@ -44,11 +45,14 @@ export function ensureCopilot() {
 }
 
 // A message you typed to the copilot. Its CLI also gets what finished, needs you or failed on the
-// board since your last message; the thread shows only your text.
+// board since your last message, and, for a suggested chip about a card, which card; the thread shows only your text.
 export function sendToCopilot(text: string) {
   const cards = listCards();
   const digest = boardDigest(cards, lastSeen(), getCard(COPILOT_ID)?.lastWeftTurn);
-  sendUserMessage(COPILOT_ID, text, { cli: withDigest(digest, text) });
+  const about = chipCardId(text);
+  const card = about ? getCard(about) : undefined;
+  const note = card ? `[Weft: this is a suggested chip about card "${card.title}" (${card.id}); read_thread it before acting. Not written by the user.]` : "";
+  sendUserMessage(COPILOT_ID, text, { cli: withDigest([digest, note].filter(Boolean).join("\n\n"), text) });
   rememberSeen(snapshot(cards));
 }
 
@@ -97,6 +101,8 @@ export function prewarm() {
   startAccountCloudSync();
   // Keep Weft's Puku trial token fresh, and give puku threads waiting on a login the trial when you sign in to Weft.
   startPukuTrial(() => void retryPukuWithTrial());
+  // Keep the copilot's board-made chips fresh as cards move (lib/copilot-suggest.ts).
+  startSuggestRefresh();
   // Carry on the turns the last quit cut off (lib/resume.ts).
   resumeInterrupted();
   ensureCopilot();

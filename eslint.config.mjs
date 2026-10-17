@@ -34,6 +34,7 @@ const OVERSIZE = {
   "components/RepoPicker.tsx": 304,
   "lib/cloud-sync.test.ts": 561,
   "app/api/thread-page-routes.test.ts": 766,
+  "lib/copilot-sources.test.ts": 652,
 };
 const COMPLEX = {
   "components/Board.tsx": 75,
