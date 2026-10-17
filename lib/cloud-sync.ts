@@ -8,18 +8,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { accountClient } from "./account";
 import { appendOutbox, compactOutbox, readOutbox, replaceOutboxHead } from "./cloud-outbox";
-import {
-  TOOL_RESULT_INLINE_MAX,
-  type BlobStore,
-  type CloudThreadItemRow,
-  type CloudToolOutputRow,
-  type OutboxEntry,
-} from "./cloud-sync-types";
-import { cardRows } from "./cloud-sync-cards";
+import type { BlobStore, OutboxEntry } from "./cloud-sync-types";
+import { uploadPending } from "./cloud-sync-upload";
 import { globalSingleton } from "./global-singleton";
 import { syncFolders } from "./settings";
 import { getCard, getThread, listCards } from "./store";
-import type { BoardEvent, ThreadItem } from "./types";
+import type { BoardEvent } from "./types";
 import type { CloudSyncStatus } from "./cloud-sync-view";
 import { subscribe } from "./bus";
 
@@ -210,11 +204,11 @@ async function flush(ctx: Ctx) {
     }
     s.lastSignedOut = false;
     s.lastNoWorkspace = false;
-    const uploaded = await uploadPending(ctx, client, orgId, pending);
-    replaceOutboxHead(pending.length, []);
-    s.uploaded += uploaded;
+    // uploadPending drops what it ships from the outbox as it goes, so a failure keeps only the rest.
+    const skipped = await uploadPending(ctx, client, orgId, pending, (n) => (s.uploaded += n));
     s.lastSyncAt = ctx.now();
-    s.lastError = null;
+    // Rows the server refused for good are skipped so they can't hold the backlog back; say so rather than hide it.
+    s.lastError = skipped ? `Skipped ${skipped.count} item${skipped.count === 1 ? "" : "s"} the server refused: ${skipped.message}` : null;
     s.backoffMs = 0;
     s.warnedThisStreak = false;
   } catch (err) {
@@ -258,49 +252,6 @@ async function resolveOrgId(s: SyncState, client: SupabaseClient, userId: string
   const org = data?.org_id ?? null;
   s.orgs.set(userId, org);
   return org;
-}
-
-// Cards first (items reference them), then deletes and truncates, then items and tool outputs in one upsert each.
-// Returns the number of items shipped — every entry that was actually uploaded, not the outbox count.
-async function uploadPending(ctx: Ctx, client: SupabaseClient, orgId: string, pending: OutboxEntry[]): Promise<number> {
-  const cards = await cardRows(ctx.blobs, orgId, pending, ctx.now());
-  if (cards.length) check(await client.from("cloud_cards").upsert(cards));
-  for (const entry of pending) {
-    // The row keeps the card json it last uploaded; a card that never synced matches no row.
-    if (entry.op === "card_deleted") {
-      const at = new Date(ctx.now()).toISOString();
-      check(await client.from("cloud_cards").update({ deleted: true, updated_at: at }).eq("org_id", orgId).eq("card_id", entry.cardId));
-    }
-    if (entry.op === "truncate") {
-      check(await client.from("cloud_thread_items").delete().eq("org_id", orgId).eq("card_id", entry.cardId).gte("seq", entry.seq));
-    }
-  }
-  const items: CloudThreadItemRow[] = [];
-  const outputs: CloudToolOutputRow[] = [];
-  for (const entry of pending) {
-    if (entry.op !== "item" || !getCard(entry.cardId)) continue;
-    const live = getThread(entry.cardId)[entry.seq];
-    if (!live) continue;
-    const { item, output } = splitToolResult(await ctx.blobs.rewriteItem(live, orgId));
-    items.push({ org_id: orgId, card_id: entry.cardId, seq: entry.seq, kind: item.kind, item, at: new Date(live.at).toISOString() });
-    if (output) outputs.push({ org_id: orgId, card_id: entry.cardId, ...output });
-  }
-  if (outputs.length) check(await client.from("cloud_tool_outputs").upsert(outputs));
-  if (items.length) check(await client.from("cloud_thread_items").upsert(items));
-  return items.length;
-}
-
-// Supabase hands errors back as plain objects; throw them as Errors so the backoff's warning can read them.
-function check(result: { error: { message: string } | null }) {
-  if (result.error) throw new Error(result.error.message);
-}
-
-// Pulls a long tool result out of its item, leaving resultBytes in its place. The full string goes to
-// cloud_tool_outputs, keyed by the tool id.
-function splitToolResult(item: ThreadItem): { item: ThreadItem; output?: Omit<CloudToolOutputRow, "org_id" | "card_id"> } {
-  if (item.kind !== "tool" || !item.result || item.result.length <= TOOL_RESULT_INLINE_MAX) return { item };
-  const { result, ...rest } = item;
-  return { item: { ...rest, resultBytes: result.length }, output: { tool_id: item.id, result, bytes: result.length } };
 }
 
 // A live view for the Sync page (lib/use-cloud-sync.ts): how many outbox entries are waiting, when

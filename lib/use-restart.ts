@@ -9,6 +9,7 @@ import type { RestartStatus } from "./types";
 export function useRestart() {
   const [restart, setRestart] = useState<RestartStatus | null>(null);
   const reload = useCallback(() => {
+    // Background poll: the chip shows nothing while unarmed, so a failed fetch just leaves it hidden.
     api.restartStatus().then(setRestart, () => {});
   }, []);
   return { restart, apply: setRestart, reload };

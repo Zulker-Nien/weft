@@ -126,7 +126,7 @@ export function useNewCardDialog(home: string, defaultCwd: string | undefined, r
   const chooseFolder = useCallback((folder: string) => {
     setCwd(folder);
     setError(null);
-    api.warm({ cwd: folder, backend }).catch(() => {});
+    api.warm({ cwd: folder, backend }).catch(() => {}); // best-effort prefetch
   }, [backend]);
 
   const promptToStart = useCallback((read: () => string, focus: () => void) => {

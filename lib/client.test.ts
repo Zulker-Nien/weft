@@ -42,6 +42,24 @@ describe("api calls", () => {
     await expect(api.copilot()).rejects.toThrow("Internal Server Error");
   });
 
+  it("says the server couldn't be reached when the connection drops, instead of 'Failed to fetch'", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new TypeError("Failed to fetch"))));
+    await expect(api.stop("x")).rejects.toThrow(/Couldn't reach Weft's server/);
+    await expect(api.transcribe(new Blob(["x"]))).rejects.toThrow(/Couldn't reach Weft's server/);
+  });
+
+  it("lets a caller's own abort through untouched", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new DOMException("aborted", "AbortError"))));
+    await expect(api.stop("x")).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("reports the status when a failed reply isn't JSON, and the bad reply when a good one isn't", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response("<html>oops</html>", { status: 502 }))));
+    await expect(api.copilot()).rejects.toThrow("Request failed (502).");
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response("<html>hi</html>", { status: 200 }))));
+    await expect(api.copilot()).rejects.toThrow("isn't JSON");
+  });
+
   // Pins every route and payload the board relies on.
   const input: NewCardInput = { prompt: "p", cwd: "/w", backend: "claude", start: true };
   const cases: [string, () => Promise<unknown>, string, string, unknown][] = [

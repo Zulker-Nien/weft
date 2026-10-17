@@ -61,16 +61,69 @@ function webSignInHref(provider: AuthProvider, next: string): string {
   return `/auth/sign-in?${params.toString()}`;
 }
 
-export function LoginForm({ defaultNext = "/app", providers = ["github"], showEmail = false, deployed = false }: LoginFormProps) {
-  const { busy, error, waiting, signInWithOAuth } = useAuth({ defaultNext });
+// The magic-link email row, lifted out of LoginForm to keep that function under the
+// complexity cap. Catches the API error and shows it inline so a server restart doesn't
+// surface as an unhandled rejection.
+function EmailMagicLink({ busy }: { busy: AuthProvider | "signout" | null }) {
   const [email, setEmail] = useState("");
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   async function sendMagicLink(e: SubmitEvent) {
     e.preventDefault();
-    if (!email.trim()) return;
-    await api.magicLink(email.trim());
-    setEmail("");
+    const trimmed = email.trim();
+    if (!trimmed) return;
+    setEmailError(null);
+    try {
+      await api.magicLink(trimmed);
+      setEmail("");
+    } catch (err) {
+      setEmailError(err instanceof Error ? err.message : String(err));
+    }
   }
+
+  return (
+    <>
+      <form
+        onSubmit={(e) => {
+          void sendMagicLink(e);
+        }}
+        className="mt-2 flex flex-col gap-1.5"
+      >
+        <label htmlFor="login-email" className="text-[12px] font-medium text-muted">
+          Or sign in with a magic link
+        </label>
+        <div className="flex gap-2">
+          <input
+            id="login-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            autoComplete="email"
+            required
+            disabled={busy !== null}
+            className="min-w-0 flex-1 rounded-md border border-line-strong bg-card px-3 py-2 text-[13px] text-ink outline-none focus:border-accent disabled:opacity-60"
+          />
+          <button
+            type="submit"
+            disabled={busy !== null || !email.trim()}
+            className="rounded-md border border-line-strong bg-card px-3 py-2 text-[13px] text-ink hover:bg-sunken disabled:opacity-50"
+          >
+            Send link
+          </button>
+        </div>
+      </form>
+      {emailError && (
+        <p className="text-[12.5px] text-danger" role="alert">
+          {emailError}
+        </p>
+      )}
+    </>
+  );
+}
+
+export function LoginForm({ defaultNext = "/app", providers = ["github"], showEmail = false, deployed = false }: LoginFormProps) {
+  const { busy, error, waiting, signInWithOAuth } = useAuth({ defaultNext });
 
   // The callback page can come back with `?error=link&reason=…`. Read it on the
   // first render (no effect): a fresh form instance is mounted for every
@@ -134,38 +187,7 @@ export function LoginForm({ defaultNext = "/app", providers = ["github"], showEm
         </button>
       ))}
 
-      {showEmail && (
-        <form
-          onSubmit={(e) => {
-            void sendMagicLink(e);
-          }}
-          className="mt-2 flex flex-col gap-1.5"
-        >
-          <label htmlFor="login-email" className="text-[12px] font-medium text-muted">
-            Or sign in with a magic link
-          </label>
-          <div className="flex gap-2">
-            <input
-              id="login-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              autoComplete="email"
-              required
-              disabled={busy !== null}
-              className="min-w-0 flex-1 rounded-md border border-line-strong bg-card px-3 py-2 text-[13px] text-ink outline-none focus:border-accent disabled:opacity-60"
-            />
-            <button
-              type="submit"
-              disabled={busy !== null || !email.trim()}
-              className="rounded-md border border-line-strong bg-card px-3 py-2 text-[13px] text-ink hover:bg-sunken disabled:opacity-50"
-            >
-              Send link
-            </button>
-          </div>
-        </form>
-      )}
+      {showEmail && <EmailMagicLink busy={busy} />}
 
       {error && (
         <p className="text-[12.5px] text-danger" role="alert">

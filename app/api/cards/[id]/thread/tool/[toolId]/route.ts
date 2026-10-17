@@ -12,7 +12,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const { id, toolId } = await params;
   const card = getCard(id);
   if (!card) return fail("No such card.", 404);
-  const result = findToolResult(getThread(id), toolId);
-  if (result === undefined) return fail("No such tool result.", 404);
-  return Response.json({ result });
+  try {
+    const result = findToolResult(getThread(id), toolId);
+    if (result === undefined) return fail("No such tool result.", 404);
+    return Response.json({ result });
+  } catch (err) {
+    return fail(err);
+  }
 }

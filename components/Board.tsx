@@ -361,7 +361,7 @@ export default function Board() {
       void Promise.all([before, shown]).then(([state]) => {
         bridge.browser.setActive(selectedRef.current);
         if (!selectedRef.current) bridge.browser.setVisible(state.visible);
-      });
+      }).catch(() => {});
     };
   }, [showNew]);
 

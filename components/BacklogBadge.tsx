@@ -46,7 +46,8 @@ export default function BacklogBadge({
     setBusy(true);
     try {
       const r = await fetch(`/api/sprint?cwd=${encodeURIComponent(cwd)}&prompt=1`);
-      const d = (await r.json()) as { prompt?: string; title?: string; error?: string };
+      // A restarting dev server answers with an HTML page; treat that as no prompt rather than a SyntaxError.
+      const d = (await r.json().catch(() => ({}))) as { prompt?: string; title?: string; error?: string };
       if (!d.prompt) throw new Error(d.error ?? "Nothing in Backlog to plan.");
       await onStart(cwd, d.prompt, d.title ?? "Plan the backlog into sprints");
     } finally {

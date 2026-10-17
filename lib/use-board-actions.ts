@@ -48,7 +48,7 @@ export function useBoardActions({
       setNewCwd(folder);
       setShowNew(true);
       const cwd = folder ?? project ?? lastFolder();
-      if (cwd) api.warm({ cwd }).catch(() => {});
+      if (cwd) api.warm({ cwd }).catch(() => {}); // best-effort prefetch; a cold start is fine
     },
     [project, setNewCwd, setShowNew],
   );
@@ -57,7 +57,7 @@ export function useBoardActions({
     (card: Card) => {
       select(card.id);
       // Start its CLI now so a reply doesn't wait.
-      if (!card.warm && card.column !== "done") api.warm({ cardId: card.id }).catch(() => {});
+      if (!card.warm && card.column !== "done") api.warm({ cardId: card.id }).catch(() => {}); // best-effort prefetch
     },
     [select],
   );

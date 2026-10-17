@@ -10,8 +10,15 @@ is the contract between the parts:
 - `lib/cloud-sync.ts`: the outbox. A bus listener (no network, no awaits) turns `card`, `card_deleted` and `thread`
   events for opted-in folders into lines in `~/.weft/sync-outbox.jsonl` (`lib/cloud-outbox.ts`). A turn's `result`
   item flushes at once; everything else waits for a 10 s tick, so a streaming turn is one batch. A flush compacts the
-  file, then uploads from the store's current state (not the event), one upsert per table, and drops the lines it
-  read by position, so an update that lands mid-upload stays queued. Signed out or no workspace: entries wait. An
+  file, then uploads from the store's current state (not the event; the upload half is `lib/cloud-sync-upload.ts`):
+  cards, deletes and truncates first, then thread items 100 to a request, each chunk dropped from the outbox by
+  position as it lands, so an update that lands mid-upload stays queued and a backlog of tens of thousands makes
+  progress instead of one giant request. Every row goes through `scrub()` first: Postgres refuses a NUL or a lone
+  UTF-16 surrogate in text and jsonb ("unsupported Unicode escape sequence"), and a terminal's output has both;
+  before the scrub one such item failed the whole batch on every retry and nothing uploaded. If the server still
+  refuses a chunk with a data error (Postgres class 22), its rows go one at a time and the refused ones are skipped
+  and named in `lastError` ("Skipped N items the server refused"); a dropped connection or row-level security
+  stays a backoff that keeps everything. Signed out or no workspace: entries wait. An
   error: backoff from 1 s doubling to 5 min, one warning per streak. Cards go to the user's personal workspace (the
   first org they own).
 - `lib/blob-store.ts`: images, attachments and `~/.weft/show` pages referenced by an item are hashed (sha256),

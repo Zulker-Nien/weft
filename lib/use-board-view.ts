@@ -39,7 +39,7 @@ export function useBoardView({ select, setWebBrowserOpen }: BoardViewDeps) {
       setProject(path);
       writeViewPrefs({ project: path, sort });
       // Have a CLI ready in that folder for the next new thread.
-      if (path) api.warm({ cwd: path }).catch(() => {});
+      if (path) api.warm({ cwd: path }).catch(() => {}); // best-effort prefetch
     },
     [project, sort, select, setWebBrowserOpen],
   );

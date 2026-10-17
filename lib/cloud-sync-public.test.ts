@@ -35,7 +35,7 @@ vi.mock("./bus", () => ({
 
 const writesByTable: Record<string, unknown[][]> = {};
 const rowsByTable: Record<string, unknown[]> = {};
-const errorsByTable: Record<string, { message: string } | null> = {};
+const errorsByTable: Record<string, { message: string; code?: string } | null> = {};
 const authSession: { id: string } = { id: "u1" };
 
 function makeClient() {
@@ -225,6 +225,22 @@ describe("cloudSyncStatus / syncNow / queueFolder", () => {
     publish({ type: "card", card: cards.get("a")! });
     for (let i = 0; i < 20; i++) await vi.advanceTimersByTimeAsync(0);
     expect(mod.cloudSyncStatus().lastError).toBeNull();
+  });
+
+  it("skips items the server refuses for good, reports them in lastError, and carries on", async () => {
+    cardInStore("a");
+    threads.set("a", [{ kind: "assistant", text: "x", at: 1 }, { kind: "assistant", text: "y", at: 2 }] as ThreadItem[]);
+    await start();
+    errorsByTable.cloud_thread_items = { message: "unsupported Unicode escape sequence", code: "22P05" };
+    const { appendOutbox } = await import("./cloud-outbox");
+    appendOutbox([{ op: "item", cardId: "a", seq: 0, at: 1 }, { op: "item", cardId: "a", seq: 1, at: 1 }]);
+    const mod = await import("./cloud-sync");
+    mod.syncNow();
+    await vi.advanceTimersByTimeAsync(1);
+    for (let i = 0; i < 20; i++) await vi.advanceTimersByTimeAsync(0);
+    expect(mod.cloudSyncStatus().lastError).toBe("Skipped 2 items the server refused: unsupported Unicode escape sequence");
+    expect(mod.cloudSyncStatus().waiting).toBe(0);
+    expect(mod.cloudSyncStatus().lastSyncAt).not.toBeNull();
   });
 
   it("syncNow() is a no-op when cloud sync was never started", async () => {

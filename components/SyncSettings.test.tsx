@@ -74,6 +74,22 @@ describe("SyncSettings", () => {
     expect(api.syncNow).toHaveBeenCalledTimes(1);
   });
 
+  it("shows why a switch failed instead of throwing", async () => {
+    api.setFolder = vi.fn(() => Promise.reject(new Error("Couldn't reach Weft's server.")));
+    useCloudSync.mockReturnValue(api);
+    render(<SyncSettings recentProjects={["/other"]} />);
+    await userEvent.click(screen.getAllByRole("switch")[0]!);
+    expect(await screen.findByText(/Couldn't save that: Couldn't reach Weft's server\./)).toBeInTheDocument();
+  });
+
+  it("shows why Sync now failed instead of throwing", async () => {
+    api.syncNow = vi.fn(() => Promise.reject(new Error("Server busy.")));
+    useCloudSync.mockReturnValue(api);
+    render(<SyncSettings recentProjects={[]} />);
+    await userEvent.click(screen.getByRole("button", { name: /sync now/i }));
+    expect(await screen.findByText(/Couldn't sync: Server busy\./)).toBeInTheDocument();
+  });
+
   it("calls setFolder when a project's switch is flipped on", async () => {
     render(<SyncSettings recentProjects={["/sync", "/other"]} />);
     const switches = screen.getAllByRole("switch");

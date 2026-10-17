@@ -30,7 +30,7 @@ function Section({ title, children }: { title?: string; children: ReactNode }) {
   );
 }
 
-function StatusCard({ status, busy, onSyncNow, error, now }: { status: { waiting: number; lastSyncAt: number | null; uploaded: number; lastError: string | null; signedOut: boolean; noWorkspace: boolean }; busy: boolean; onSyncNow: () => void; error: string | null; now: number }) {
+function StatusCard({ status, busy, onSyncNow, error, syncError, now }: { status: { waiting: number; lastSyncAt: number | null; uploaded: number; lastError: string | null; signedOut: boolean; noWorkspace: boolean }; busy: boolean; onSyncNow: () => void; error: string | null; syncError: string | null; now: number }) {
   const headline = status.signedOut
     ? "Sign in to Weft to sync"
     : status.noWorkspace
@@ -55,12 +55,13 @@ function StatusCard({ status, busy, onSyncNow, error, now }: { status: { waiting
         </p>
         {status.lastError && <p className="text-[12.5px] text-danger">Last error: {status.lastError}</p>}
         {error && <p className="text-[12.5px] text-danger">Couldn&apos;t reach the server: {error}</p>}
+        {syncError && <p className="text-[12.5px] text-danger">Couldn&apos;t sync: {syncError}</p>}
       </div>
     </Section>
   );
 }
 
-function ProjectsCard({ folders, synced, busy, onToggle }: { folders: string[]; synced: string[]; busy: boolean; onToggle: (folder: string, on: boolean) => void }) {
+function ProjectsCard({ folders, synced, busy, error, onToggle }: { folders: string[]; synced: string[]; busy: boolean; error: string | null; onToggle: (folder: string, on: boolean) => void }) {
   // Only the user's recent projects are listed; the server resolves and 400s anything else.
   return (
     <Section title="Projects">
@@ -90,6 +91,7 @@ function ProjectsCard({ folders, synced, busy, onToggle }: { folders: string[]; 
           <Spinner size={11} /> Saving
         </p>
       )}
+      {error && <p className="mt-3 text-[12.5px] text-danger">Couldn&apos;t save that: {error}</p>}
     </Section>
   );
 }
@@ -130,6 +132,8 @@ export default function SyncSettings({ recentProjects }: { recentProjects: strin
   // useNow ticks once a second so "Last sync" reads stay fresh; Date.now() during render is impure.
   const now = useNow();
   const [busy, setBusy] = useState<"sync" | "folder" | null>(null);
+  // A toggle or Sync now that failed (the server restarting, a folder it refused), shown by the card it came from.
+  const [failed, setFailed] = useState<{ folder?: string; sync?: string }>({});
 
   // The server only knows the opt-in folders; the page shows the user's recent projects so a folder
   // can be turned on before it ships a card.
@@ -137,8 +141,11 @@ export default function SyncSettings({ recentProjects }: { recentProjects: strin
 
   async function onToggle(folder: string, on: boolean) {
     setBusy("folder");
+    setFailed((f) => ({ ...f, folder: undefined }));
     try {
       await setFolder(folder, on);
+    } catch (err) {
+      setFailed((f) => ({ ...f, folder: err instanceof Error ? err.message : String(err) }));
     } finally {
       setBusy(null);
     }
@@ -146,8 +153,11 @@ export default function SyncSettings({ recentProjects }: { recentProjects: strin
 
   async function onSyncNow() {
     setBusy("sync");
+    setFailed((f) => ({ ...f, sync: undefined }));
     try {
       await syncNow();
+    } catch (err) {
+      setFailed((f) => ({ ...f, sync: err instanceof Error ? err.message : String(err) }));
     } finally {
       setBusy(null);
     }
@@ -160,9 +170,9 @@ export default function SyncSettings({ recentProjects }: { recentProjects: strin
       ) : status.noWorkspace && signedIn ? (
         <NoWorkspaceCard />
       ) : (
-        <StatusCard status={status} busy={busy === "sync"} onSyncNow={() => void onSyncNow()} error={error} now={now} />
+        <StatusCard status={status} busy={busy === "sync"} onSyncNow={() => void onSyncNow()} error={error} syncError={failed.sync ?? null} now={now} />
       )}
-      <ProjectsCard folders={listed} synced={folders} busy={busy === "folder"} onToggle={(folder, on) => void onToggle(folder, on)} />
+      <ProjectsCard folders={listed} synced={folders} busy={busy === "folder"} error={failed.folder ?? null} onToggle={(folder, on) => void onToggle(folder, on)} />
       <Section>
         <p className={SUBTLE}>
           Cards, thread items and long tool results go to your Weft workspace on weft.zip, and pictures and pages once each by content. Open the

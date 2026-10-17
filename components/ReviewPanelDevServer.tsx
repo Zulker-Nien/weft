@@ -22,6 +22,7 @@ export function ReviewPanelDevServer({ cardId, plan }: { cardId: string; plan: R
       api
         .devStatus(cardId)
         .then((r) => alive && setStatus(r.status))
+        // Best-effort 3-second poll; a transient error is picked up on the next tick.
         .catch(() => {});
     api
       .devAction(cardId, "start")

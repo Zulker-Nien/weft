@@ -15,10 +15,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ server:
   const { server: name } = await params;
   const server = token ? bridgeServer(token, name) : undefined;
   if (!server) return deny(401, "Unknown token or server");
-  // Stateless: one server and transport per request, answered as plain JSON rather than a stream.
-  const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-  await server.connect(transport);
-  return transport.handleRequest(req);
+  try {
+    // Stateless: one server and transport per request, answered as plain JSON rather than a stream.
+    const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+    await server.connect(transport);
+    return await transport.handleRequest(req);
+  } catch (err) {
+    return deny(500, err instanceof Error ? err.message : String(err));
+  }
 }
 
 // The spec lets a server decline the optional GET stream and the DELETE that ends a session.

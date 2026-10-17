@@ -151,11 +151,15 @@ export async function DELETE(req: Request, { params }: Ctx) {
   const denied = guard(req);
   if (denied) return denied;
   const { id } = await params;
-  if (getCard(id)?.role === "copilot") return fail("The copilot can't be deleted. Start a new chat instead.");
-  const card = getCard(id);
-  await endSession(id);
-  // A picked-up session stays deleted; the sync won't bring it back.
-  if (card?.source === "claude-code" && card.sessionId) dismissSession(card.sessionId);
-  deleteCard(id);
-  return Response.json({ ok: true });
+  try {
+    if (getCard(id)?.role === "copilot") return fail("The copilot can't be deleted. Start a new chat instead.");
+    const card = getCard(id);
+    await endSession(id);
+    // A picked-up session stays deleted; the sync won't bring it back.
+    if (card?.source === "claude-code" && card.sessionId) dismissSession(card.sessionId);
+    deleteCard(id);
+    return Response.json({ ok: true });
+  } catch (err) {
+    return fail(err);
+  }
 }
