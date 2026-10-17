@@ -115,14 +115,19 @@ function RosterRow({
     <>
       <tr>
         <td>
-          <div className="wz-rosterName">
-            <span className="wz-rosterNamePrimary">
-              {displayName(member)}
-              {member.isYou ? <span className="wz-rosterYou">You</span> : null}
+          <div className="wz-rosterWho">
+            <span className="wz-rosterAvatar" aria-hidden="true">
+              {(displayName(member)[0] ?? "?").toUpperCase()}
             </span>
-            {member.email && displayName(member) !== member.email ? (
-              <span className="wz-rosterNameSecondary">{member.email}</span>
-            ) : null}
+            <div className="wz-rosterName">
+              <span className="wz-rosterNamePrimary">
+                {displayName(member)}
+                {member.isYou ? <span className="wz-rosterYou">You</span> : null}
+              </span>
+              {member.email && displayName(member) !== member.email ? (
+                <span className="wz-rosterNameSecondary">{member.email}</span>
+              ) : null}
+            </div>
           </div>
         </td>
         <td>
@@ -141,7 +146,7 @@ function RosterRow({
               ))}
             </select>
           ) : (
-            <span>{member.roleLabel}</span>
+            <span className="wz-rolePill">{member.roleLabel}</span>
           )}
         </td>
         <td className="wz-rosterDate">{formatJoined(member.joinedAt)}</td>

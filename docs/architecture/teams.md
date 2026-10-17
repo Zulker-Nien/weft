@@ -58,9 +58,15 @@ cannot dot into a temporary client reference"; reproduced 2026-10-13 on Next 16.
 - `lib/team-actions.ts`: the server actions: invite (or add straight in when the address already has an account),
   change role, remove or leave, revoke an invite. Each re-checks the role on the server, and none leaves a workspace
   without an owner.
-- `app/team` (redirect to the current workspace), `app/[orgSlug]/layout.tsx` (the workspace shell: name, switcher,
-  Team and Billing), `app/[orgSlug]/team`, `app/invite/[token]` (a Join button, so link-preview bots can't accept an
-  invite), `components/team/*`.
+- `app/team` (redirect to the current workspace), `app/[orgSlug]/layout.tsx` (the workspace shell: a sidebar with the
+  Weft mark, the workspace switcher, Board / Team / Billing with the current page lit from the URL, and your account
+  and Sign out at the foot; a top bar under 860px), `app/[orgSlug]/team`, `app/invite/[token]` (a Join button, so
+  link-preview bots can't accept an invite), `components/team/*`.
+- `components/team/team.css`: the whole dashboard's look (Team, Billing, the web board's frame, the `/team`, `/app` and
+  invite cards), self-contained under `.wz-app` with its own tokens: surfaces raised in steps (`--bg` < `--side` <
+  `--panel` < `--panel-2`) over the home page's indigo, cream and clay. It doesn't lean on `home.css` (a direct hit on
+  `/team` never loaded it). Preview without signing in by rendering the components to static HTML with esbuild and the
+  stylesheet beside it; the admin pages use the board's Tailwind tokens instead.
 
 ## In the desktop's Settings
 

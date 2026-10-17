@@ -10,9 +10,9 @@ export const metadata: Metadata = { title: "Weft admin — Settings" };
 
 function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="rounded-md border border-admin-border bg-admin-surface px-3 py-2 text-sm">
-      <div className="text-xs text-admin-muted">{label}</div>
-      <div className="font-mono text-admin-text">{value}</div>
+    <div className="flex flex-col gap-1 rounded-xl border border-admin-border bg-admin-surface px-4 py-3 text-sm shadow-sm">
+      <div className="text-[11px] font-medium uppercase tracking-wider text-admin-muted">{label}</div>
+      <div className="break-words font-mono text-[15px] text-admin-text">{value}</div>
     </div>
   );
 }
@@ -36,10 +36,10 @@ export default async function AdminSettingsPage() {
   const data = loadAdminLocalOverview();
 
   return (
-    <div className="flex flex-col gap-4 p-4 text-admin-text">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 p-6 text-admin-text">
       <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold text-admin-text">Local Weft install</h1>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-admin-border bg-admin-surface px-3 py-2 text-xs">
+        <h1 className="text-2xl font-semibold tracking-tight text-admin-text">Local Weft install</h1>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-admin-border bg-admin-surface px-4 py-2.5 text-xs">
           <strong className="text-admin-accent">SuperAdmin</strong>
           <span className="inline-flex items-center gap-1">
             <strong className="text-admin-muted">Name:</strong>

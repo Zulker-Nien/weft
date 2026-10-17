@@ -173,6 +173,12 @@ with **Push to Vercel** or `mcp__secrets__push_to_vercel`.
 - `app/api/billing/status/route.ts` + `app/api/billing/status/route.test.ts` — the deployed Weft's endpoint.
 - `app/api/account/billing/route.ts` + `app/api/account/billing/route.test.ts` — the board's localhost-only proxy.
 - `components/BillingStatus.tsx` + `components/BillingStatus.test.tsx` — Settings → Accounts → Weft account plan row.
+- `app/[orgSlug]/billing/sections.tsx` — the Billing page's pieces; its invoices are tickets (`InvoiceTicket`) that link to the sheet.
+- `app/[orgSlug]/billing/invoices/[number]/page.tsx` + `components/team/InvoiceSheet.tsx` (+ test) + `components/team/ScanCode.tsx` — one invoice
+  as a full page: read through `billing.invoice(service, orgId, number)` (org-scoped, so another workspace's number is a 404) and drawn
+  from the invoice's own frozen figures (lines, tax, paid, due, period), with the default card from `billing.account`, the billing profile's
+  company and email as addressee, and the provider's `pdfUrl` / `hostedUrl` as the only ways out (the scan stripe is decoration). The look
+  is `components/team/team.css` (`wz-sheet*`, `wz-invoice*`); `@media print` leaves the sheet alone, so the browser's Print is a PDF too.
 - `supabase/migrations/20261013180000_billing.sql` — the package's two SQL files, copied verbatim.
 
 ## Known gaps

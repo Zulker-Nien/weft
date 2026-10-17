@@ -5,6 +5,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceHeader } from "./WorkspaceHeader";
 import "../test-utils";
 
+// The sidebar lights the current page from the URL when no `current` prop is passed.
+const nav = vi.hoisted((): { pathname: string | null } => ({ pathname: "/ada/team" }));
+vi.mock("next/navigation", () => ({ usePathname: () => nav.pathname }));
+
 // The TeamContext type lives in lib/teams.ts (written by the parallel
 // agent). We build a structural local type so this test typechecks before
 // the other module lands; the `as never` cast at the call site keeps
@@ -141,5 +145,18 @@ describe("WorkspaceHeader", () => {
     expect(form).toHaveAttribute("method", "post");
     const btn = form?.querySelector("button[type='submit']");
     expect(btn).toHaveTextContent("Sign out");
+  });
+
+  it("lights the page the URL is on when no current prop is given", () => {
+    nav.pathname = "/ada/billing";
+    render(<WorkspaceHeader ctx={makeCtx()} />);
+    expect(screen.getByRole("link", { name: "Billing" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Team" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("lights nothing on a page outside the three sections", () => {
+    nav.pathname = null;
+    render(<WorkspaceHeader ctx={makeCtx()} />);
+    expect(document.querySelector("[aria-current='page']")).toBeNull();
   });
 });

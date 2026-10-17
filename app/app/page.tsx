@@ -10,6 +10,7 @@ import { Suspense } from "react";
 import { readSessionIdentity } from "@/lib/auth";
 import { downloadLink } from "@/lib/home";
 import { latestRelease } from "@/lib/home-release";
+import "@/components/team/team.css";
 
 export const metadata: Metadata = {
   title: "Signed in to Weft",
@@ -24,7 +25,7 @@ async function AppBody() {
   const download = downloadLink(await latestRelease());
   const who = identity?.name ?? identity?.email ?? "your Weft account";
   return (
-    <div className="wz-root wz-auth">
+    <div className="wz-app wz-auth">
       <main className="wz-authCard">
         <h1 className="wz-authTitle">You&apos;re signed in</h1>
         <p className="wz-authSub">
@@ -49,10 +50,10 @@ async function AppBody() {
 
 function AppFallback() {
   return (
-    <div className="wz-root wz-auth">
+    <div className="wz-app wz-auth">
       <main className="wz-authCard">
         <h1 className="wz-authTitle">Signed in to Weft</h1>
-        <p className="wz-authSub">Loading your account…</p>
+        <p className="wz-authSub wz-loading">Loading your account…</p>
       </main>
     </div>
   );

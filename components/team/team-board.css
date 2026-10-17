@@ -40,6 +40,23 @@
   text-align: right;
 }
 
+/* The web dashboard's avatar beside each name has no room in the board's settings list. */
+.wz-board .wz-rosterAvatar {
+  display: none;
+}
+
+.wz-board .wz-rosterWho {
+  display: contents;
+}
+
+.wz-board .wz-rolePill {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: inherit;
+  color: inherit;
+}
+
 .wz-board .wz-rosterName {
   display: flex;
   flex-direction: column;

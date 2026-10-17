@@ -20,6 +20,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { isDeployed } from "@/lib/home";
 import { currentWorkspaceSlug } from "@/lib/teams";
+import "@/components/team/team.css";
 
 export const metadata = {
   title: "Your team",
@@ -32,7 +33,7 @@ function NotDeployedCard() {
   // sees, and a Weft with no VERCEL / WEFT_HOME still gets a recognizable
   // page.
   return (
-    <div className="wz-root wz-auth">
+    <div className="wz-app wz-auth">
       <main className="wz-authCard">
         <h1 className="wz-authTitle">Your team</h1>
         <p className="wz-authSub">Workspaces live on weft.zip. In the desktop app, the board&apos;s account button is the way in.</p>
@@ -43,7 +44,7 @@ function NotDeployedCard() {
 
 function NoWorkspaceCard() {
   return (
-    <div className="wz-root wz-auth">
+    <div className="wz-app wz-auth">
       <main className="wz-authCard">
         <h1 className="wz-authTitle">No workspace yet</h1>
         <p className="wz-authSub">
@@ -68,10 +69,10 @@ async function TeamRedirectBody() {
 
 function TeamRedirectFallback() {
   return (
-    <div className="wz-root wz-auth">
+    <div className="wz-app wz-auth">
       <main className="wz-authCard">
         <h1 className="wz-authTitle">Your team</h1>
-        <p className="wz-authSub">Loading your workspace…</p>
+        <p className="wz-authSub wz-loading">Loading your workspace…</p>
       </main>
     </div>
   );

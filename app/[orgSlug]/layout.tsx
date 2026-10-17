@@ -22,7 +22,7 @@ import "@/components/team/team.css";
 
 function NotDeployedCard({ slug }: { slug: string }) {
   return (
-    <div className="wz-root wz-auth">
+    <div className="wz-app wz-auth">
       <main className="wz-authCard">
         <h1 className="wz-authTitle">Workspace: {slug}</h1>
         <p className="wz-authSub">Workspaces live on weft.zip. In the desktop app, the board&apos;s account button is the way in.</p>
@@ -37,7 +37,7 @@ async function WorkspaceShellBody({ orgSlug, children }: { orgSlug: string; chil
   // a successful return hands the child the resolved context.
   const ctx: TeamContext = await requireTeam(orgSlug, `/${orgSlug}/team`);
   return (
-    <div className="wz-root wz-workspace">
+    <div className="wz-app wz-workspace">
       <WorkspaceHeader ctx={{ user: ctx.user, org: ctx.org, role: ctx.role, orgs: ctx.orgs }} />
       <main className="wz-workspaceMain">{children}</main>
     </div>
@@ -46,12 +46,20 @@ async function WorkspaceShellBody({ orgSlug, children }: { orgSlug: string; chil
 
 function WorkspaceShellFallback() {
   return (
-    <div className="wz-root wz-workspace">
-      <header className="wz-workspaceHeader">
-        <div className="wz-workspaceBrand">Loading workspace…</div>
-      </header>
+    <div className="wz-app wz-workspace">
+      <aside className="wz-workspaceHeader" aria-busy="true">
+        <div className="wz-workspaceHome">
+          <span className="wz-workspaceWordmark">Weft</span>
+        </div>
+        <div className="wz-skeleton" />
+        <div className="wz-workspaceNav">
+          <div className="wz-skeleton" />
+          <div className="wz-skeleton" />
+          <div className="wz-skeleton" />
+        </div>
+      </aside>
       <main className="wz-workspaceMain">
-        <div className="wz-workspaceLoading">Loading…</div>
+        <div className="wz-workspaceLoading wz-loading">Loading your workspace…</div>
       </main>
     </div>
   );

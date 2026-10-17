@@ -3,6 +3,7 @@
 // here takes plain props (no data fetching) so its complexity stays low. CSS classes, copy and
 // conditional structure are unchanged from when the page rendered them inline.
 import { formatCompact, formatMoney } from "@aimhuge/billing";
+import { ScanCode } from "@/components/team/ScanCode";
 
 // Notices renders the stack of small messages above the main sections. Each notice pushes its own
 // conditional down here, so the page doesn't accumulate a long if/then chain just to label Stripe
@@ -218,8 +219,10 @@ export function ManageSection({
 // InvoicesSection renders the last few invoices. The package's `formatMoney` gives us the canonical
 // money string; dates are formatted in the user's locale.
 export function InvoicesSection({
+  orgSlug,
   invoices,
 }: {
+  orgSlug: string;
   invoices: { id: string; number: string; issuedAt: string; totalCents: number; currency: string; status: string }[];
 }) {
   return (
@@ -228,21 +231,11 @@ export function InvoicesSection({
       {invoices.length === 0 ? (
         <p className="wz-billingSub">No invoices yet.</p>
       ) : (
-        <table className="wz-billingInvoiceTable">
-          <thead>
-            <tr>
-              <th>Number</th>
-              <th>Date</th>
-              <th>Total</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {invoices.map((inv) => (
-              <InvoiceRow key={inv.id} inv={inv} />
-            ))}
-          </tbody>
-        </table>
+        <ol className="wz-invoices">
+          {invoices.map((inv) => (
+            <InvoiceTicket key={inv.id} orgSlug={orgSlug} inv={inv} />
+          ))}
+        </ol>
       )}
     </section>
   );
@@ -267,14 +260,24 @@ function UsageBar({ used, allowance }: { used: number; allowance: number }) {
   );
 }
 
-// Renders a single invoice row. The package's formatMoney gives us the canonical money string.
-function InvoiceRow({ inv }: { inv: { number: string; issuedAt: string; totalCents: number; currency: string; status: string } }) {
+// One invoice as a ticket, linked to its full sheet: number and date on the left, the amount large, its status as a glowing chip,
+// and a scan stripe on the stub. The package's formatMoney gives us the canonical money string.
+function InvoiceTicket({ orgSlug, inv }: { orgSlug: string; inv: { number: string; issuedAt: string; totalCents: number; currency: string; status: string } }) {
   return (
-    <tr className="wz-billingInvoiceRow">
-      <td>{inv.number}</td>
-      <td>{new Date(inv.issuedAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}</td>
-      <td>{formatMoney(inv.totalCents, inv.currency)}</td>
-      <td><span className={`wz-billingInvoiceStatus wz-billingInvoiceStatus-${inv.status}`}>{inv.status}</span></td>
-    </tr>
+    <li className={`wz-invoice wz-invoice-${inv.status}`}>
+      <div className="wz-invoiceMain">
+        <a className="wz-invoiceNo" href={`/${orgSlug}/billing/invoices/${encodeURIComponent(inv.number)}`}>
+          {inv.number}
+        </a>
+        <span className="wz-invoiceDate">
+          {new Date(inv.issuedAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+        </span>
+      </div>
+      <div className="wz-invoiceAmount">{formatMoney(inv.totalCents, inv.currency)}</div>
+      <div className="wz-invoiceStub">
+        <span className={`wz-billingInvoiceStatus wz-billingInvoiceStatus-${inv.status}`}>{inv.status}</span>
+        <ScanCode seed={inv.number} />
+      </div>
+    </li>
   );
 }

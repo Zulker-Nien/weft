@@ -1,9 +1,11 @@
 "use client";
 
-// The header strip at the top of every /[orgSlug]/* page on weft.zip: the
-// workspace name, a switcher (only when the user belongs to more than one),
-// the Team / Billing nav, the signed-in identity, and a Sign-out form that
-// posts to /auth/sign-out (a same-origin cookie round trip — no JS needed).
+// The sidebar down the left of every /[orgSlug]/* page on weft.zip (a top bar
+// on a phone): the Weft mark, the workspace (a switcher when the user belongs
+// to more than one), the Board / Team / Billing nav with the current page lit,
+// and at the foot the signed-in identity with a Sign-out form that posts to
+// /auth/sign-out (a same-origin cookie round trip, no JS needed). The class
+// names keep their wz-workspaceHeader prefix from when this was a thin strip.
 //
 // The switcher uses the same dropdown pattern as components/TagsDrawer and
 // the existing AccountButton: a button that toggles aria-expanded, click-
@@ -11,7 +13,9 @@
 // links so the browser does the navigation (and middle-click / right-click
 // work). The current workspace is marked with aria-current="true".
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Check, ChevronsUpDown, CreditCard, LayoutGrid, LogOut, Users } from "lucide-react";
 import type { TeamContext } from "@/lib/teams";
 
 // What the header needs from the gate: everything but the service-role client, which must never reach the browser.
@@ -28,6 +32,10 @@ function userDisplayName(name: string | null, email: string | null): string {
 
 function formatOrgLabel(org: TeamContext["orgs"][number]): string {
   return org.name.trim() || org.slug;
+}
+
+function orgInitial(org: TeamContext["orgs"][number]): string {
+  return (formatOrgLabel(org)[0] ?? "?").toUpperCase();
 }
 
 function useClickOutside(open: boolean, onClose: () => void, ref: React.RefObject<HTMLElement | null>) {
@@ -50,7 +58,14 @@ function WorkspaceSwitcher({ ctx }: { ctx: HeaderContext }) {
   // a dead end. Sorted oldest-first (the team-actions contract on listUserOrgs),
   // so the dropdown's order matches the order they joined.
   if (ctx.orgs.length <= 1) {
-    return <span className="wz-workspaceBrand">{formatOrgLabel(ctx.org)}</span>;
+    return (
+      <div className="wz-workspaceSwitcher">
+        <div className="wz-workspaceBrand">
+          <span className="wz-workspaceMark" aria-hidden="true">{orgInitial(ctx.org)}</span>
+          <span className="wz-workspaceLabel">{formatOrgLabel(ctx.org)}</span>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -69,8 +84,9 @@ function WorkspaceSwitcher({ ctx }: { ctx: HeaderContext }) {
           }
         }}
       >
-        <span>{formatOrgLabel(ctx.org)}</span>
-        <ChevronDown className="wz-workspaceSwitcherCaret" aria-hidden="true" />
+        <span className="wz-workspaceMark" aria-hidden="true">{orgInitial(ctx.org)}</span>
+        <span className="wz-workspaceLabel">{formatOrgLabel(ctx.org)}</span>
+        <ChevronsUpDown className="wz-workspaceSwitcherCaret" aria-hidden="true" />
       </button>
       {open ? (
         <div className="wz-workspaceSwitcherMenu" role="menu">
@@ -85,8 +101,9 @@ function WorkspaceSwitcher({ ctx }: { ctx: HeaderContext }) {
                 aria-current={isCurrent ? "true" : undefined}
                 onClick={() => setOpen(false)}
               >
-                {formatOrgLabel(o)}
-                {isCurrent ? " ✓" : ""}
+                <span className="wz-workspaceMark wz-workspaceMarkSm" aria-hidden="true">{orgInitial(o)}</span>
+                <span className="wz-workspaceLabel">{formatOrgLabel(o)}</span>
+                {isCurrent ? <Check className="wz-workspaceSwitcherCheck" aria-hidden="true" /> : null}
               </a>
             );
           })}
@@ -96,33 +113,34 @@ function WorkspaceSwitcher({ ctx }: { ctx: HeaderContext }) {
   );
 }
 
-function WorkspaceNav({ orgSlug, current }: { orgSlug: string; current: "team" | "billing" | "board" | "other" }) {
-  // aria-current is on whichever page is rendering; the layout doesn't know
-  // the segment, so the page passes it. The page is rendered at /[orgSlug]/*
-  // — the nav stays the same for any future page that wants in.
+type Section = "team" | "billing" | "board" | "other";
+
+// The layout doesn't know the segment, so the sidebar reads it off the URL; a page may still pass it.
+function sectionOf(pathname: string | null): Section {
+  const segment = pathname?.split("/")[2];
+  return segment === "board" || segment === "team" || segment === "billing" ? segment : "other";
+}
+
+const NAV = [
+  { id: "board", label: "Board", Icon: LayoutGrid },
+  { id: "team", label: "Team", Icon: Users },
+  { id: "billing", label: "Billing", Icon: CreditCard },
+] as const;
+
+function WorkspaceNav({ orgSlug, current }: { orgSlug: string; current: Section }) {
   return (
     <nav className="wz-workspaceNav" aria-label="Workspace sections">
-      <a
-        className="wz-workspaceNavLink"
-        href={`/${orgSlug}/board`}
-        aria-current={current === "board" ? "page" : undefined}
-      >
-        Board
-      </a>
-      <a
-        className="wz-workspaceNavLink"
-        href={`/${orgSlug}/team`}
-        aria-current={current === "team" ? "page" : undefined}
-      >
-        Team
-      </a>
-      <a
-        className="wz-workspaceNavLink"
-        href={`/${orgSlug}/billing`}
-        aria-current={current === "billing" ? "page" : undefined}
-      >
-        Billing
-      </a>
+      {NAV.map(({ id, label, Icon }) => (
+        <a
+          key={id}
+          className="wz-workspaceNavLink"
+          href={`/${orgSlug}/${id}`}
+          aria-current={current === id ? "page" : undefined}
+        >
+          <Icon className="wz-workspaceNavIcon" aria-hidden="true" />
+          {label}
+        </a>
+      ))}
     </nav>
   );
 }
@@ -134,24 +152,53 @@ function WorkspaceUser({ user }: { user: TeamContext["user"] }) {
       <span className="wz-workspaceUserAvatar" aria-hidden="true">
         {user.avatar ? <img src={user.avatar} alt="" /> : userInitials(user.name, user.email)}
       </span>
-      <span className="wz-workspaceUserName">{display}</span>
+      <span className="wz-workspaceUserText">
+        <span className="wz-workspaceUserName">{display}</span>
+        {user.email && user.email !== display ? <span className="wz-workspaceUserEmail">{user.email}</span> : null}
+      </span>
     </span>
   );
 }
 
-export function WorkspaceHeader({ ctx, current = "other" }: { ctx: HeaderContext; current?: "team" | "billing" | "board" | "other" }) {
+function WeaveMark() {
   return (
-    <header className="wz-workspaceHeader">
+    <svg className="wz-workspaceMarkSvg" viewBox="0 0 32 32" aria-hidden="true">
+      <defs>
+        <linearGradient id="wz-mark-bg" x1="0" y1="0" x2="0" y2="32" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#2c3756" />
+          <stop offset="1" stopColor="#171d31" />
+        </linearGradient>
+      </defs>
+      <rect width="32" height="32" rx="8" fill="url(#wz-mark-bg)" />
+      <rect x="5" y="12" width="22" height="3.5" rx="1.75" fill="#da7a4c" />
+      <rect x="5" y="19" width="22" height="3.5" rx="1.75" fill="#8f98b3" />
+      <rect x="11" y="5" width="3.5" height="22" rx="1.75" fill="#ece5d8" />
+      <rect x="18" y="5" width="3.5" height="22" rx="1.75" fill="#ece5d8" opacity="0.7" />
+    </svg>
+  );
+}
+
+export function WorkspaceHeader({ ctx, current }: { ctx: HeaderContext; current?: Section }) {
+  const pathname = usePathname();
+  return (
+    <aside className="wz-workspaceHeader">
+      <Link className="wz-workspaceHome" href="/" aria-label="Weft home">
+        <WeaveMark />
+        <span className="wz-workspaceWordmark">Weft</span>
+      </Link>
       <WorkspaceSwitcher ctx={ctx} />
-      <WorkspaceNav orgSlug={ctx.org.slug} current={current} />
-      <WorkspaceUser user={ctx.user} />
-      {/* Plain POST form to /auth/sign-out: the route signs the visitor out
-          and 303s to /login. No JS required. */}
-      <form method="post" action="/auth/sign-out">
-        <button type="submit" className="wz-workspaceSignOut">
-          Sign out
-        </button>
-      </form>
-    </header>
+      <WorkspaceNav orgSlug={ctx.org.slug} current={current ?? sectionOf(pathname)} />
+      <div className="wz-workspaceFoot">
+        <WorkspaceUser user={ctx.user} />
+        {/* Plain POST form to /auth/sign-out: the route signs the visitor out
+            and 303s to /login. No JS required. */}
+        <form method="post" action="/auth/sign-out">
+          <button type="submit" className="wz-workspaceSignOut" title="Sign out">
+            <LogOut className="wz-workspaceSignOutIcon" aria-hidden="true" />
+            <span>Sign out</span>
+          </button>
+        </form>
+      </div>
+    </aside>
   );
 }

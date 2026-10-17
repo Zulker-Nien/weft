@@ -1,154 +1,441 @@
-/* The /[orgSlug]/* page styles (app/[orgSlug]/layout.tsx, app/[orgSlug]/team/page.tsx,
-   app/invite/[token]/page.tsx). Same wz- prefix and palette as
-   components/home/home.css so the workspace shell looks like part of
-   weft.zip rather than a bolt-on. Plain global CSS — next.config.ts routes
-   every .css through the Tailwind loader, which drops module exports, so
-   there's no class hashing to lean on. Variables that the home page sets on
-   .wz-root are inherited; this file adds the layout primitives the team
-   pages need. */
+/* The weft.zip dashboard: every /[orgSlug]/* page (app/[orgSlug]/layout.tsx), the /team entry card and the
+   invite page (app/invite/[token]/page.tsx). Self-contained on purpose: the pages used to borrow their tokens
+   from .wz-root in components/home/home.css, which a direct hit on /team or an invite link never loaded.
+   .wz-app is the root and the token scope: indigo cloth, cream thread, clay accent, the home page's palette
+   (components/home/home.css) with surfaces raised in steps (--bg < --side < --panel < --panel-2) so cards,
+   the sidebar and inputs read as layers instead of one flat dark. Plain global CSS with a wz- prefix:
+   next.config.ts routes every .css through the Tailwind loader, which drops module exports. */
 
-/* Workspace shell: header + main, both inside .wz-root's overflow container. */
+.wz-app {
+  --bg: #0e1220;
+  --side: #10152a;
+  --panel: #171d31;
+  --panel-2: #1f2742;
+  --field: #0c101d;
+  --line: rgb(236 229 216 / 0.08);
+  --line-2: rgb(236 229 216 / 0.16);
+  --thread: #ece5d8;
+  --thread-2: #c4bcad;
+  --thread-3: #8d887e;
+  --clay: #da7a4c;
+  --clay-2: #f0995f;
+  --clay-soft: rgb(218 122 76 / 0.14);
+  --ok: #86d4a4;
+  --ok-soft: rgb(134 212 164 / 0.14);
+  --warn: #f2c36b;
+  --bad: #f08577;
+  --bad-soft: rgb(240 133 119 / 0.14);
+  --display: var(--font-fraunces), "Iowan Old Style", Georgia, serif;
+  --body: var(--font-instrument), system-ui, sans-serif;
+  --mono: var(--font-geist-mono), ui-monospace, Menlo, monospace;
+  --shadow: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 18px 40px -24px rgb(0 0 0 / 0.7);
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  color-scheme: dark;
+  background: var(--bg);
+  color: var(--thread);
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Two warm and cool glows and a faint weave, behind everything, so the page has depth without a picture. */
+.wz-app::before,
+.wz-app::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.wz-app::before {
+  background:
+    radial-gradient(820px 460px at 88% -8%, rgb(218 122 76 / 0.11), transparent 62%),
+    radial-gradient(720px 520px at 4% 108%, rgb(96 114 188 / 0.12), transparent 62%);
+}
+
+.wz-app::after {
+  background-image:
+    repeating-linear-gradient(0deg, rgb(236 229 216 / 0.028) 0 1px, transparent 1px 36px),
+    repeating-linear-gradient(90deg, rgb(236 229 216 / 0.028) 0 1px, transparent 1px 36px);
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 85% 0%, #000, transparent 75%);
+  mask-image: radial-gradient(ellipse 80% 70% at 85% 0%, #000, transparent 75%);
+}
+
+.wz-app *,
+.wz-app *::before,
+.wz-app *::after {
+  box-sizing: border-box;
+}
+
+.wz-app > * {
+  position: relative;
+  z-index: 1;
+}
+
+.wz-app ::selection {
+  background: var(--clay);
+  color: var(--bg);
+}
+
+.wz-app a {
+  color: var(--thread-2);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.wz-app a:hover {
+  color: var(--thread);
+}
+
+.wz-app :focus-visible {
+  outline: 2px solid var(--clay-2);
+  outline-offset: 2px;
+}
+
+.wz-app button {
+  font-family: inherit;
+}
+
+/* Buttons shared by the auth cards and the invite page. */
+.wz-app .wz-btnPrimary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 20px;
+  border-radius: 10px;
+  font-size: 14.5px;
+  font-weight: 600;
+  background: var(--clay);
+  color: #1a0e07;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.22) inset,
+    0 10px 26px -12px rgb(218 122 76 / 0.7);
+  transition:
+    transform 0.2s cubic-bezier(0.2, 0.7, 0.2, 1),
+    background 0.15s;
+}
+
+.wz-app .wz-btnPrimary:hover {
+  color: #1a0e07;
+  background: var(--clay-2);
+  transform: translateY(-1px);
+}
+
+/* Auth cards: /team's entry and fallbacks, the invite states, the "not deployed" notice. */
+.wz-auth {
+  display: grid;
+  place-items: center;
+  padding: 48px 20px;
+}
+
+.wz-authCard {
+  position: relative;
+  width: 100%;
+  max-width: 460px;
+  padding: 36px 38px 36px;
+  overflow: hidden;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgb(31 39 66 / 0.9), rgb(23 29 49 / 0.95));
+  border: 1px solid var(--line-2);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.06) inset,
+    0 30px 70px -28px rgb(0 0 0 / 0.8);
+}
+
+.wz-authCard::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--clay), var(--clay-2), transparent);
+  opacity: 0.85;
+}
+
+.wz-authTitle {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 32px;
+  line-height: 1.12;
+  letter-spacing: -0.025em;
+  color: var(--thread);
+  text-wrap: balance;
+}
+
+/* The Weft mark above every auth card's title, so a bare card still says whose page it is. */
+.wz-authTitle::before {
+  content: "";
+  display: block;
+  width: 38px;
+  height: 38px;
+  margin-bottom: 20px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='32' gradientUnits='userSpaceOnUse'%3E%3Cstop offset='0' stop-color='%232c3756'/%3E%3Cstop offset='1' stop-color='%23171d31'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23g)'/%3E%3Crect x='5' y='12' width='22' height='3.5' rx='1.75' fill='%23da7a4c'/%3E%3Crect x='5' y='19' width='22' height='3.5' rx='1.75' fill='%238f98b3'/%3E%3Crect x='11' y='5' width='3.5' height='22' rx='1.75' fill='%23ece5d8'/%3E%3Crect x='18' y='5' width='3.5' height='22' rx='1.75' fill='%23ece5d8' opacity='.7'/%3E%3C/svg%3E") center / contain no-repeat;
+  filter: drop-shadow(0 6px 14px rgb(0 0 0 / 0.5));
+}
+
+.wz-authSub {
+  margin: 10px 0 0;
+  font-size: 15px;
+  color: var(--thread-2);
+  text-wrap: pretty;
+}
+
+.wz-authCard .wz-ctas {
+  margin-top: 24px;
+}
+
+/* A loading line: a small clay spinner ahead of the words. */
+.wz-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wz-loading::before {
+  content: "";
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--line-2);
+  border-top-color: var(--clay-2);
+  animation: wz-spin 0.8s linear infinite;
+}
+
+@keyframes wz-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* The shell: sidebar and a scrolling main. */
 
 .wz-workspace {
-  display: flex;
-  flex-direction: column;
-  min-height: 100%;
+  display: grid;
+  grid-template-columns: 252px minmax(0, 1fr);
+  height: 100%;
 }
 
 .wz-workspaceHeader {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 18px 28px;
-  border-bottom: 1px solid rgb(236 229 216 / 0.1);
-  background: rgb(28 34 50 / 0.5);
-  backdrop-filter: blur(6px);
+  flex-direction: column;
+  gap: 20px;
+  min-height: 0;
+  padding: 18px 14px 14px;
+  overflow-y: auto;
+  background: linear-gradient(180deg, rgb(16 21 42 / 0.96), rgb(14 18 34 / 0.96));
+  border-right: 1px solid var(--line);
 }
 
-.wz-workspaceBrand {
+.wz-workspaceHome {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  align-self: flex-start;
+  padding: 2px 6px;
+  color: var(--thread) !important;
+}
+
+.wz-workspaceMarkSvg {
+  width: 30px;
+  height: 30px;
+  filter: drop-shadow(0 4px 10px rgb(0 0 0 / 0.5));
+}
+
+.wz-workspaceWordmark {
   font-family: var(--display);
   font-weight: 500;
-  font-size: 20px;
-  color: var(--thread);
-  letter-spacing: -0.01em;
+  font-size: 22px;
+  letter-spacing: -0.02em;
 }
 
 .wz-workspaceSwitcher {
   position: relative;
 }
 
-.wz-workspaceSwitcherButton {
-  display: inline-flex;
+.wz-workspaceSwitcherButton,
+.wz-workspaceBrand {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid rgb(236 229 216 / 0.14);
-  background: rgb(15 19 28 / 0.4);
-  color: var(--thread-2);
-  font-size: 13px;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--thread);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  box-shadow: var(--shadow);
+}
+
+.wz-workspaceSwitcherButton {
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
 }
 
 .wz-workspaceSwitcherButton:hover,
 .wz-workspaceSwitcherButton[aria-expanded="true"] {
-  border-color: rgb(236 229 216 / 0.3);
-  color: var(--thread);
+  border-color: var(--line-2);
+  background: var(--panel-2);
+}
+
+.wz-workspaceMark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: linear-gradient(145deg, var(--clay-2), #b85a2e);
+  color: #1a0e07;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.wz-workspaceMarkSm {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+
+.wz-workspaceLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .wz-workspaceSwitcherCaret {
-  width: 10px;
-  height: 10px;
-  flex-shrink: 0;
-  opacity: 0.7;
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--thread-3);
 }
 
 .wz-workspaceSwitcherMenu {
   position: absolute;
+  z-index: 30;
   top: calc(100% + 6px);
   left: 0;
-  min-width: 220px;
+  right: 0;
   padding: 6px;
-  border-radius: 10px;
-  border: 1px solid rgb(236 229 216 / 0.14);
-  background: rgb(28 34 50 / 0.95);
-  box-shadow: 0 12px 40px -10px rgb(0 0 0 / 0.6);
-  backdrop-filter: blur(8px);
-  z-index: 20;
+  border-radius: 14px;
+  border: 1px solid var(--line-2);
+  background: rgb(31 39 66 / 0.98);
+  box-shadow: 0 22px 50px -14px rgb(0 0 0 / 0.75);
+  backdrop-filter: blur(10px);
 }
 
-.wz-workspaceSwitcherItem {
-  display: block;
-  width: 100%;
-  text-align: left;
+.wz-app .wz-workspaceSwitcherItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 8px 10px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--thread);
+  border-radius: 9px;
+  color: var(--thread-2);
   font-size: 14px;
-  cursor: pointer;
-  text-decoration: none;
 }
 
-.wz-workspaceSwitcherItem:hover,
-.wz-workspaceSwitcherItem[aria-current="true"] {
-  background: rgb(236 229 216 / 0.08);
+.wz-app .wz-workspaceSwitcherItem:hover {
+  background: rgb(236 229 216 / 0.07);
+  color: var(--thread);
+}
+
+.wz-app .wz-workspaceSwitcherItem[aria-current="true"] {
+  color: var(--thread);
+  font-weight: 600;
+}
+
+.wz-workspaceSwitcherCheck {
+  flex: none;
+  width: 15px;
+  height: 15px;
   color: var(--clay-2);
 }
 
 .wz-workspaceNav {
   display: flex;
-  gap: 4px;
-  margin-left: auto;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.wz-workspaceNavLink {
-  padding: 6px 12px;
-  border-radius: 8px;
-  font-size: 13.5px;
+.wz-app .wz-workspaceNavLink {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 12px;
+  border-radius: 10px;
   color: var(--thread-2);
-  text-decoration: none;
-  transition: color 0.15s, background 0.15s;
+  font-size: 14.5px;
+  font-weight: 500;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
-.wz-workspaceNavLink:hover {
-  color: var(--thread);
-  background: rgb(236 229 216 / 0.06);
+.wz-workspaceNavIcon {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  color: var(--thread-3);
+  transition: color 0.15s;
 }
 
-.wz-workspaceNavLink[aria-current="page"] {
+.wz-app .wz-workspaceNavLink:hover {
+  background: rgb(236 229 216 / 0.05);
   color: var(--thread);
-  background: rgb(236 229 216 / 0.1);
+}
+
+.wz-app .wz-workspaceNavLink[aria-current="page"] {
+  background: var(--panel-2);
+  color: var(--thread);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+
+.wz-workspaceNavLink[aria-current="page"] .wz-workspaceNavIcon {
+  color: var(--clay-2);
+}
+
+.wz-workspaceFoot {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
 }
 
 .wz-workspaceUser {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 10px 4px 4px;
-  border-radius: 999px;
-  border: 1px solid rgb(236 229 216 / 0.14);
-  background: rgb(15 19 28 / 0.4);
-  color: var(--thread-2);
-  font-size: 13px;
-  max-width: 180px;
+  gap: 10px;
+  min-width: 0;
+  padding: 6px;
 }
 
 .wz-workspaceUserAvatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 999px;
-  background: var(--clay);
-  color: #1a0e07;
-  font-weight: 600;
-  font-size: 11px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
   overflow: hidden;
-  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--panel-2);
+  box-shadow: 0 0 0 1px var(--line-2);
+  color: var(--thread);
+  font-weight: 600;
+  font-size: 14px;
 }
 
 .wz-workspaceUserAvatar img {
@@ -157,35 +444,71 @@
   object-fit: cover;
 }
 
-.wz-workspaceUserName {
+.wz-workspaceUserText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.wz-workspaceUserName,
+.wz-workspaceUserEmail {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.wz-workspaceSignOut {
-  border: 1px solid rgb(236 229 216 / 0.14);
-  background: transparent;
-  color: var(--thread-2);
-  font-size: 12.5px;
-  font-weight: 500;
-  padding: 6px 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
-}
-
-.wz-workspaceSignOut:hover {
-  border-color: rgb(236 229 216 / 0.3);
+.wz-workspaceUserName {
+  font-size: 13.5px;
+  font-weight: 600;
   color: var(--thread);
 }
 
-.wz-workspaceMain {
-  flex: 1;
-  padding: 36px 28px 64px;
-  max-width: 880px;
+.wz-workspaceUserEmail {
+  font-size: 12px;
+  color: var(--thread-3);
+}
+
+.wz-workspaceSignOut {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
-  margin: 0 auto;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--thread-3);
+  font-size: 13.5px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.wz-workspaceSignOut:hover {
+  background: rgb(236 229 216 / 0.05);
+  color: var(--thread);
+}
+
+.wz-workspaceSignOutIcon {
+  width: 16px;
+  height: 16px;
+}
+
+/* Main scrolls; its children make the reading column, so the scrollbar sits at the window's edge. */
+.wz-workspaceMain {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 44px clamp(20px, 4vw, 56px) 88px;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(236 229 216 / 0.18) transparent;
+}
+
+.wz-workspaceMain > * {
+  max-width: 980px;
+  margin-inline: auto;
 }
 
 .wz-workspaceLoading {
@@ -194,119 +517,228 @@
   font-size: 14px;
 }
 
-/* Team page */
-
-.wz-teamPage {
-  display: flex;
-  flex-direction: column;
-  gap: 36px;
+/* The shell's own loading state: grey bars where the sidebar's rows will be. */
+.wz-skeleton {
+  height: 38px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgb(236 229 216 / 0.04), rgb(236 229 216 / 0.09), rgb(236 229 216 / 0.04));
+  background-size: 200% 100%;
+  animation: wz-shimmer 1.4s ease-in-out infinite;
 }
 
-.wz-teamHeader {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+@keyframes wz-shimmer {
+  to {
+    background-position: -200% 0;
+  }
 }
 
-.wz-teamTitle {
+/* Page heads (team, billing). */
+
+.wz-teamPage,
+.wz-billingPage {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.wz-teamHeader,
+.wz-billingHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+
+.wz-teamTitle,
+.wz-billingTitle {
   margin: 0;
   font-family: var(--display);
   font-weight: 500;
-  font-size: 36px;
-  letter-spacing: -0.02em;
+  font-size: 42px;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
   color: var(--thread);
 }
 
-.wz-teamSub {
+.wz-teamSub,
+.wz-billingSub {
   margin: 0;
-  font-size: 15px;
+  max-width: 44em;
+  font-size: 15.5px;
   color: var(--thread-2);
+  text-wrap: pretty;
 }
 
-.wz-teamSection {
+.wz-teamSub strong,
+.wz-billingSub strong {
+  color: var(--thread);
+  font-weight: 600;
+}
+
+.wz-teamSection,
+.wz-billingSection {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
-.wz-teamSectionTitle {
+.wz-teamSectionTitle,
+.wz-billingSectionTitle {
   margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  color: var(--thread-3);
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 21px;
+  letter-spacing: -0.015em;
+  color: var(--thread);
 }
 
 .wz-teamFooter {
-  margin-top: 16px;
-  padding-top: 20px;
-  border-top: 1px solid rgb(236 229 216 / 0.1);
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px dashed var(--line-2);
   font-size: 13.5px;
   color: var(--thread-3);
-  font-style: italic;
+  text-wrap: pretty;
 }
 
-/* Roster table */
+/* Stat tiles under the team head. */
+
+.wz-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.wz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.wz-statLabel {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--thread-3);
+}
+
+.wz-statValue {
+  font-family: var(--display);
+  font-size: 30px;
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+/* Roster table. */
 
 .wz-roster {
   width: 100%;
-  border-collapse: collapse;
-  border: 1px solid rgb(236 229 216 / 0.1);
-  border-radius: 10px;
+  border-collapse: separate;
+  border-spacing: 0;
   overflow: hidden;
-  background: rgb(28 34 50 / 0.4);
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: var(--shadow);
 }
 
 .wz-roster th,
 .wz-roster td {
-  padding: 12px 16px;
+  padding: 13px 18px;
   text-align: left;
-  font-size: 14px;
+  font-size: 14.5px;
   vertical-align: middle;
 }
 
 .wz-roster th {
-  font-size: 11.5px;
-  font-weight: 600;
-  text-transform: uppercase;
+  padding-top: 11px;
+  padding-bottom: 11px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
   letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--thread-3);
-  background: rgb(15 19 28 / 0.5);
-  border-bottom: 1px solid rgb(236 229 216 / 0.1);
+  background: rgb(255 255 255 / 0.025);
+  border-bottom: 1px solid var(--line);
 }
 
 .wz-roster tr + tr td {
-  border-top: 1px solid rgb(236 229 216 / 0.06);
+  border-top: 1px solid var(--line);
 }
 
-.wz-rosterYou {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 1px 6px;
-  font-size: 10.5px;
+.wz-roster tbody tr:hover td {
+  background: rgb(255 255 255 / 0.02);
+}
+
+.wz-rosterWho {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.wz-rosterAvatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, var(--panel-2), #2a3358);
+  box-shadow: 0 0 0 1px var(--line-2);
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  background: rgb(218 122 76 / 0.15);
-  color: var(--clay-2);
-  border-radius: 4px;
+  font-size: 14px;
+  color: var(--thread);
 }
 
 .wz-rosterName {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  min-width: 0;
+  line-height: 1.3;
 }
 
 .wz-rosterNamePrimary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
   color: var(--thread);
-  font-weight: 500;
 }
 
 .wz-rosterNameSecondary {
-  color: var(--thread-3);
   font-size: 12.5px;
+  color: var(--thread-3);
+}
+
+.wz-rosterYou {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--clay-soft);
+  color: var(--clay-2);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.wz-rolePill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: rgb(236 229 216 / 0.05);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--thread-2);
 }
 
 .wz-rosterDash {
@@ -314,255 +746,267 @@
 }
 
 .wz-rosterDate {
-  color: var(--thread-2);
+  color: var(--thread-3);
   white-space: nowrap;
 }
 
-.wz-rosterSelect {
-  padding: 5px 8px;
-  border-radius: 6px;
-  border: 1px solid rgb(236 229 216 / 0.14);
-  background: rgb(15 19 28 / 0.5);
+.wz-roster th:last-child,
+.wz-roster td:last-child {
+  text-align: right;
+}
+
+.wz-rosterSelect,
+.wz-inviteSelect,
+.wz-inviteInput {
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: var(--field);
   color: var(--thread);
-  font-size: 13px;
+  font-family: inherit;
+  font-size: 14px;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.wz-rosterSelect {
+  padding: 6px 10px;
+  border-radius: 8px;
   cursor: pointer;
 }
 
-.wz-rosterSelect:focus-visible {
-  outline: 2px solid var(--clay);
-  outline-offset: 1px;
+.wz-rosterSelect:hover,
+.wz-inviteSelect:hover,
+.wz-inviteInput:hover {
+  border-color: rgb(236 229 216 / 0.28);
 }
 
-.wz-rosterButton {
-  padding: 5px 10px;
-  border-radius: 6px;
-  border: 1px solid rgb(236 229 216 / 0.14);
+.wz-rosterSelect:focus,
+.wz-inviteSelect:focus,
+.wz-inviteInput:focus {
+  outline: none;
+  border-color: var(--clay);
+  box-shadow: 0 0 0 3px var(--clay-soft);
+}
+
+.wz-rosterButton,
+.wz-pendingRevoke {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line-2);
   background: transparent;
   color: var(--thread-2);
-  font-size: 12.5px;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
 }
 
-.wz-rosterButton:hover:not(:disabled) {
-  border-color: rgb(218 122 76 / 0.6);
-  color: var(--clay-2);
+.wz-rosterButton:hover:not(:disabled),
+.wz-pendingRevoke:hover:not(:disabled) {
+  background: rgb(236 229 216 / 0.06);
+  color: var(--thread);
 }
 
-.wz-rosterButton:disabled {
-  opacity: 0.5;
+.wz-rosterButton:disabled,
+.wz-pendingRevoke:disabled {
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
-.wz-rosterButtonDanger:hover:not(:disabled) {
-  border-color: rgb(220 100 100 / 0.6);
-  color: rgb(255 180 180);
+.wz-rosterButtonDanger:hover:not(:disabled),
+.wz-pendingRevoke:hover:not(:disabled) {
+  border-color: rgb(240 133 119 / 0.5);
+  background: var(--bad-soft);
+  color: var(--bad);
 }
 
 .wz-rosterMessage {
-  margin-top: 4px;
-  font-size: 12.5px;
-  color: var(--thread-2);
+  margin: 0;
+  font-size: 13px;
 }
 
 .wz-rosterMessageError {
-  color: rgb(255 180 180);
+  color: var(--bad);
 }
 
 .wz-rosterMessageOk {
-  color: rgb(150 220 180);
+  color: var(--ok);
 }
 
-/* Invite form */
+/* Invite form. */
 
 .wz-inviteForm {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 18px;
-  border: 1px solid rgb(236 229 216 / 0.1);
-  border-radius: 12px;
-  background: rgb(28 34 50 / 0.4);
+  padding: 22px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: var(--shadow);
 }
 
 .wz-inviteRow {
   display: flex;
-  gap: 10px;
-  align-items: flex-start;
+  gap: 14px;
+  align-items: flex-end;
 }
 
 .wz-inviteField {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
   flex: 1;
+  flex-direction: column;
+  gap: 7px;
   min-width: 0;
 }
 
 .wz-inviteField label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--thread-3);
-  text-transform: uppercase;
+  font-family: var(--mono);
+  font-size: 11px;
   letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--thread-3);
 }
 
-.wz-inviteInput {
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid rgb(236 229 216 / 0.14);
-  background: rgb(15 19 28 / 0.5);
-  color: var(--thread);
-  font-size: 14px;
-  width: 100%;
-}
-
-.wz-inviteInput:focus-visible {
-  outline: 2px solid var(--clay);
-  outline-offset: 1px;
-  border-color: transparent;
-}
-
+.wz-inviteInput,
 .wz-inviteSelect {
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid rgb(236 229 216 / 0.14);
-  background: rgb(15 19 28 / 0.5);
-  color: var(--thread);
-  font-size: 14px;
-  cursor: pointer;
+  width: 100%;
+  height: 42px;
+  padding: 0 14px;
 }
 
-.wz-inviteSelect:focus-visible {
-  outline: 2px solid var(--clay);
-  outline-offset: 1px;
+.wz-inviteInput::placeholder {
+  color: var(--thread-3);
 }
 
 .wz-inviteRoleDescription {
-  margin-top: 4px;
-  font-size: 12.5px;
+  margin: -4px 0 0;
+  font-size: 13px;
   color: var(--thread-3);
-  min-height: 1.4em;
 }
 
-.wz-inviteSubmit {
-  align-self: flex-start;
-  padding: 9px 18px;
-  border-radius: 999px;
+.wz-inviteSubmit,
+.wz-joinSubmit,
+.wz-billingButtonPrimary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 11px 20px;
   border: 0;
+  border-radius: 10px;
   background: var(--clay);
   color: #1a0e07;
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s, transform 0.2s;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.22) inset,
+    0 10px 26px -14px rgb(218 122 76 / 0.8);
+  transition:
+    transform 0.2s cubic-bezier(0.2, 0.7, 0.2, 1),
+    background 0.15s,
+    opacity 0.15s;
 }
 
-.wz-inviteSubmit:hover:not(:disabled) {
+.wz-inviteSubmit:hover:not(:disabled),
+.wz-joinSubmit:hover:not(:disabled),
+.wz-billingButtonPrimary:hover:not(:disabled) {
   background: var(--clay-2);
   transform: translateY(-1px);
 }
 
-.wz-inviteSubmit:disabled {
-  opacity: 0.6;
+.wz-inviteSubmit:disabled,
+.wz-joinSubmit:disabled,
+.wz-billingButtonPrimary:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
-.wz-inviteMessage {
-  font-size: 13px;
-}
-
-.wz-inviteMessageError {
-  color: rgb(255 180 180);
+.wz-inviteMessage,
+.wz-joinMessage,
+.wz-leaveMessage {
+  margin: 0;
+  font-size: 13.5px;
 }
 
 .wz-inviteMessageOk {
-  color: rgb(150 220 180);
+  color: var(--ok);
 }
 
-.wz-inviteFieldError {
-  color: rgb(255 180 180);
-  font-size: 12.5px;
-  margin-top: 2px;
+.wz-inviteMessageError,
+.wz-inviteFieldError,
+.wz-joinMessage,
+.wz-leaveMessageError {
+  color: var(--bad);
 }
 
-/* Pending invites */
+/* Pending invites. */
 
 .wz-pendingList {
   display: flex;
   flex-direction: column;
-  border: 1px solid rgb(236 229 216 / 0.1);
-  border-radius: 10px;
   overflow: hidden;
-  background: rgb(28 34 50 / 0.4);
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: var(--shadow);
 }
 
 .wz-pendingRow {
   display: grid;
-  grid-template-columns: 1fr auto auto auto;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
-  padding: 12px 16px;
+  gap: 16px;
+  padding: 13px 18px;
 }
 
 .wz-pendingRow + .wz-pendingRow {
-  border-top: 1px solid rgb(236 229 216 / 0.06);
+  border-top: 1px solid var(--line);
 }
 
 .wz-pendingEmail {
-  color: var(--thread);
-  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
 }
 
 .wz-pendingRole {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
   font-size: 12.5px;
   color: var(--thread-2);
-  padding: 3px 8px;
-  border-radius: 4px;
-  background: rgb(236 229 216 / 0.06);
 }
 
 .wz-pendingExpiry {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--thread-3);
+  white-space: nowrap;
 }
 
-.wz-pendingRevoke {
-  padding: 5px 10px;
-  border-radius: 6px;
-  border: 1px solid rgb(236 229 216 / 0.14);
-  background: transparent;
-  color: var(--thread-2);
-  font-size: 12.5px;
-  cursor: pointer;
-}
-
-.wz-pendingRevoke:hover:not(:disabled) {
-  border-color: rgb(220 100 100 / 0.6);
-  color: rgb(255 180 180);
-}
-
-.wz-pendingRevoke:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Leave button section */
+/* Leave, join. */
 
 .wz-leaveButton {
-  padding: 9px 18px;
-  border-radius: 8px;
-  border: 1px solid rgb(220 100 100 / 0.4);
+  align-self: flex-start;
+  padding: 9px 16px;
+  border-radius: 10px;
+  border: 1px solid rgb(240 133 119 / 0.4);
   background: transparent;
-  color: rgb(255 180 180);
-  font-size: 13.5px;
+  color: var(--bad);
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   transition: background 0.15s;
 }
 
 .wz-leaveButton:hover:not(:disabled) {
-  background: rgb(220 100 100 / 0.1);
+  background: var(--bad-soft);
 }
 
 .wz-leaveButton:disabled {
@@ -570,173 +1014,58 @@
   cursor: not-allowed;
 }
 
-.wz-leaveMessage {
-  margin-top: 8px;
-  font-size: 13px;
-}
-
-.wz-leaveMessageError {
-  color: rgb(255 180 180);
-}
-
-/* Join form on /invite/[token] */
-
 .wz-joinForm {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  margin-top: 8px;
+  gap: 12px;
+  margin-top: 24px;
 }
 
 .wz-joinSubmit {
-  align-self: flex-start;
-  padding: 11px 22px;
-  border-radius: 999px;
-  border: 0;
-  background: var(--clay);
-  color: #1a0e07;
-  font-size: 14.5px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s, transform 0.2s;
-}
-
-.wz-joinSubmit:hover:not(:disabled) {
-  background: var(--clay-2);
-  transform: translateY(-1px);
-}
-
-.wz-joinSubmit:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.wz-joinMessage {
-  font-size: 13px;
-  color: rgb(255 180 180);
+  padding: 13px 22px;
+  font-size: 15px;
 }
 
 .wz-joinWelcome {
   margin: 0 0 8px;
   font-size: 14px;
-  color: rgb(150 220 180);
+  color: var(--ok);
 }
 
-@media (max-width: 720px) {
-  .wz-workspaceHeader {
-    flex-wrap: wrap;
-    padding: 14px 18px;
-    gap: 10px;
-  }
-
-  .wz-workspaceNav {
-    order: 4;
-    width: 100%;
-    margin-left: 0;
-    overflow-x: auto;
-  }
-
-  .wz-workspaceMain {
-    padding: 24px 18px 48px;
-  }
-
-  .wz-teamTitle {
-    font-size: 30px;
-  }
-
-  .wz-roster th:nth-child(3),
-  .wz-roster td:nth-child(3) {
-    display: none;
-  }
-
-  .wz-inviteRow {
-    flex-direction: column;
-  }
-
-  .wz-pendingRow {
-    grid-template-columns: 1fr auto;
-  }
-
-  .wz-pendingExpiry,
-  .wz-pendingRole {
-    grid-column: 1 / -1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .wz-inviteSubmit,
-  .wz-joinSubmit {
-    transition: none;
-  }
-}
-
-/* billing */
-
-.wz-billingPage {
-  display: flex;
-  flex-direction: column;
-  gap: 36px;
-}
-
-.wz-billingHeader {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.wz-billingTitle {
-  margin: 0;
-  font-family: var(--display);
-  font-weight: 500;
-  font-size: 36px;
-  letter-spacing: -0.02em;
-  color: var(--thread);
-}
-
-.wz-billingSub {
-  margin: 0;
-  font-size: 15px;
-  color: var(--thread-2);
-}
-
-.wz-billingSection {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.wz-billingSectionTitle {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  color: var(--thread-3);
-}
+/* Billing. */
 
 .wz-billingNotice {
-  padding: 14px 18px;
-  border-radius: 10px;
-  background: rgb(218 122 76 / 0.1);
-  border: 1px solid rgb(218 122 76 / 0.3);
-  color: var(--clay-2);
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid rgb(240 133 119 / 0.35);
+  background: var(--bad-soft);
+  color: var(--thread);
   font-size: 14px;
 }
 
 .wz-billingNoticeMuted {
+  border-color: var(--line);
   background: rgb(236 229 216 / 0.04);
-  border-color: rgb(236 229 216 / 0.12);
   color: var(--thread-2);
 }
 
-.wz-billingPlanCard {
+.wz-billingPlanCard,
+.wz-billingUsage,
+.wz-billingProCard {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 20px 22px;
-  border: 1px solid rgb(236 229 216 / 0.1);
-  border-radius: 12px;
-  background: rgb(28 34 50 / 0.4);
+  gap: 12px;
+  padding: 22px 24px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.wz-billingPlanCard {
+  background:
+    radial-gradient(420px 160px at 100% 0%, rgb(218 122 76 / 0.12), transparent 70%),
+    var(--panel);
 }
 
 .wz-billingPlanHead {
@@ -748,36 +1077,46 @@
 .wz-billingPlanName {
   font-family: var(--display);
   font-weight: 500;
-  font-size: 22px;
+  font-size: 28px;
+  letter-spacing: -0.02em;
   color: var(--thread);
 }
 
-.wz-billingPlanStatus {
-  font-size: 11.5px;
-  font-weight: 600;
-  text-transform: uppercase;
+.wz-billingPlanStatus,
+.wz-billingInvoiceStatus {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 11px;
+  font-weight: 700;
   letter-spacing: 0.08em;
-  padding: 3px 8px;
-  border-radius: 4px;
-  background: rgb(150 220 180 / 0.15);
-  color: rgb(150 220 180);
+  text-transform: uppercase;
 }
 
 .wz-billingPlanStatus-active,
-.wz-billingPlanStatus-trialing {
-  background: rgb(150 220 180 / 0.15);
-  color: rgb(150 220 180);
+.wz-billingPlanStatus-trialing,
+.wz-billingInvoiceStatus-paid {
+  background: var(--ok-soft);
+  color: var(--ok);
 }
 
 .wz-billingPlanStatus-past_due,
 .wz-billingPlanStatus-canceled,
-.wz-billingPlanStatus-incomplete {
-  background: rgb(255 180 180 / 0.15);
-  color: rgb(255 180 180);
+.wz-billingPlanStatus-incomplete,
+.wz-billingInvoiceStatus-void,
+.wz-billingInvoiceStatus-uncollectible {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+.wz-billingInvoiceStatus-open {
+  background: var(--clay-soft);
+  color: var(--clay-2);
 }
 
 .wz-billingPlanMeta {
-  font-size: 14px;
+  font-size: 14.5px;
   color: var(--thread-2);
 }
 
@@ -785,29 +1124,25 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 14px;
-  border-radius: 8px;
-  background: rgb(255 180 180 / 0.06);
-  border: 1px solid rgb(255 180 180 / 0.2);
-  font-size: 13.5px;
-  color: rgb(255 180 180);
-  margin-top: 4px;
-}
-
-.wz-billingUsage {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 20px 22px;
-  border: 1px solid rgb(236 229 216 / 0.1);
+  gap: 14px;
+  padding: 12px 14px;
   border-radius: 12px;
-  background: rgb(28 34 50 / 0.4);
+  background: rgb(242 195 107 / 0.1);
+  border: 1px solid rgb(242 195 107 / 0.3);
+  color: var(--warn);
+  font-size: 14px;
 }
 
 .wz-billingUsageText {
-  font-size: 15px;
+  font-size: 16px;
+  color: var(--thread-2);
+}
+
+.wz-billingUsageText strong {
   color: var(--thread);
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 500;
 }
 
 .wz-billingUsageMeta {
@@ -818,105 +1153,111 @@
 .wz-billingUsageBar {
   position: relative;
   width: 100%;
-  height: 8px;
-  border-radius: 999px;
-  background: rgb(236 229 216 / 0.08);
+  height: 10px;
   overflow: hidden;
+  border-radius: 999px;
+  background: var(--field);
+  box-shadow: inset 0 0 0 1px var(--line);
 }
 
 .wz-billingUsageBarFill {
   position: absolute;
   inset: 0 auto 0 0;
-  background: linear-gradient(90deg, var(--clay), var(--clay-2));
   border-radius: 999px;
+  background: linear-gradient(90deg, var(--clay), var(--clay-2));
+  box-shadow: 0 0 14px rgb(218 122 76 / 0.55);
   transition: width 0.3s ease-out;
 }
 
 .wz-billingUsageMuted {
-  font-style: italic;
+  color: var(--thread-3);
+  font-size: 14px;
 }
 
 .wz-billingProCard {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  padding: 24px 26px;
-  border: 1px solid rgb(218 122 76 / 0.3);
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgb(218 122 76 / 0.05), rgb(28 34 50 / 0.4));
+  background:
+    radial-gradient(520px 200px at 0% 0%, rgb(96 114 188 / 0.16), transparent 70%),
+    var(--panel);
 }
 
 .wz-billingProBlurb {
-  font-size: 15px;
+  font-size: 15.5px;
   color: var(--thread-2);
+  text-wrap: pretty;
 }
 
 .wz-billingProPrice {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .wz-billingProPriceRow {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   padding: 14px 16px;
-  border: 1px solid rgb(236 229 216 / 0.12);
-  border-radius: 10px;
-  background: rgb(15 19 28 / 0.4);
+  border-radius: 12px;
+  border: 1px solid var(--line-2);
+  background: rgb(12 16 29 / 0.55);
 }
 
 .wz-billingProPriceLabel {
-  font-size: 11.5px;
-  font-weight: 600;
-  text-transform: uppercase;
+  font-family: var(--mono);
+  font-size: 11px;
   letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--thread-3);
 }
 
 .wz-billingProPriceValue {
   font-family: var(--display);
+  font-size: 30px;
   font-weight: 500;
-  font-size: 26px;
-  letter-spacing: -0.01em;
-  color: var(--thread);
+  letter-spacing: -0.02em;
 }
 
 .wz-billingProPriceCadence {
-  font-size: 14px;
-  font-weight: 400;
-  color: var(--thread-3);
   margin-left: 4px;
+  font-family: var(--body);
+  font-size: 14px;
+  color: var(--thread-3);
 }
 
 .wz-billingProPriceSavings {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--ok-soft);
+  color: var(--ok);
   font-size: 12px;
-  color: rgb(150 220 180);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .wz-billingProActions {
   display: flex;
-  gap: 10px;
   flex-wrap: wrap;
+  gap: 10px;
 }
 
 .wz-billingButton {
-  padding: 9px 18px;
-  border-radius: 999px;
-  border: 1px solid rgb(236 229 216 / 0.18);
-  background: rgb(15 19 28 / 0.4);
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: rgb(236 229 216 / 0.05);
   color: var(--thread);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    opacity 0.15s;
 }
 
 .wz-billingButton:hover:not(:disabled) {
-  border-color: rgb(236 229 216 / 0.3);
-  color: var(--clay-2);
+  background: rgb(236 229 216 / 0.1);
 }
 
 .wz-billingButton:disabled {
@@ -924,105 +1265,952 @@
   cursor: not-allowed;
 }
 
-.wz-billingButtonPrimary {
+.wz-billingButton.wz-billingButtonPrimary {
   border: 0;
   background: var(--clay);
   color: #1a0e07;
-  font-weight: 600;
 }
 
-.wz-billingButtonPrimary:hover:not(:disabled) {
+.wz-billingButton.wz-billingButtonPrimary:hover:not(:disabled) {
   background: var(--clay-2);
-  color: #1a0e07;
 }
 
 .wz-billingButtonGhost {
   background: transparent;
-  border-color: rgb(150 220 180 / 0.4);
-  color: rgb(150 220 180);
-}
-
-.wz-billingButtonGhost:hover:not(:disabled) {
-  border-color: rgb(150 220 180 / 0.7);
-  color: rgb(180 230 200);
 }
 
 .wz-billingButtonDanger {
+  border-color: rgb(240 133 119 / 0.4);
   background: transparent;
-  border-color: rgb(220 100 100 / 0.4);
-  color: rgb(255 180 180);
+  color: var(--bad);
 }
 
 .wz-billingButtonDanger:hover:not(:disabled) {
-  border-color: rgb(220 100 100 / 0.7);
-  color: rgb(255 200 200);
+  background: var(--bad-soft);
 }
 
-.wz-billingInvoiceTable {
-  width: 100%;
-  border-collapse: collapse;
-  border: 1px solid rgb(236 229 216 / 0.1);
-  border-radius: 10px;
-  overflow: hidden;
-  background: rgb(28 34 50 / 0.4);
+/* Narrow windows: the sidebar becomes a bar across the top. */
+
+@media (max-width: 860px) {
+  .wz-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .wz-workspaceHeader {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 12px;
+    padding: 12px 16px;
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .wz-workspaceSwitcher {
+    flex: 1;
+    min-width: 150px;
+    max-width: 280px;
+  }
+
+  .wz-workspaceNav {
+    order: 4;
+    flex-direction: row;
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .wz-workspaceFoot {
+    flex-direction: row;
+    align-items: center;
+    margin: 0 0 0 auto;
+    padding: 0;
+    border-top: 0;
+  }
+
+  .wz-workspaceUserText,
+  .wz-workspaceSignOut span {
+    display: none;
+  }
+
+  .wz-workspaceSignOut {
+    width: auto;
+    padding: 8px;
+  }
+
+  .wz-workspaceMain {
+    padding: 28px 18px 56px;
+  }
+
+  .wz-teamTitle,
+  .wz-billingTitle {
+    font-size: 34px;
+  }
 }
 
-.wz-billingInvoiceTable th,
-.wz-billingInvoiceTable td {
-  padding: 12px 16px;
-  text-align: left;
-  font-size: 14px;
-  vertical-align: middle;
-}
+@media (max-width: 640px) {
+  .wz-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
 
-.wz-billingInvoiceTable th {
-  font-size: 11.5px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--thread-3);
-  background: rgb(15 19 28 / 0.5);
-  border-bottom: 1px solid rgb(236 229 216 / 0.1);
-}
+  .wz-stat {
+    padding: 12px;
+  }
 
-.wz-billingInvoiceRow + .wz-billingInvoiceRow td {
-  border-top: 1px solid rgb(236 229 216 / 0.06);
-}
+  .wz-statLabel {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+  }
 
-.wz-billingInvoiceStatus {
-  font-size: 11.5px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  padding: 3px 8px;
-  border-radius: 4px;
-  background: rgb(236 229 216 / 0.08);
-  color: var(--thread-2);
-}
+  .wz-statValue {
+    font-size: 22px;
+  }
 
-.wz-billingInvoiceStatus-paid {
-  background: rgb(150 220 180 / 0.15);
-  color: rgb(150 220 180);
-}
+  /* A table too wide for the phone scrolls inside its card instead of pushing the page sideways. */
+  .wz-roster {
+    display: block;
+    overflow-x: auto;
+  }
 
-.wz-billingInvoiceStatus-open {
-  background: rgb(218 122 76 / 0.15);
-  color: var(--clay-2);
-}
+  .wz-rosterAvatar {
+    display: none;
+  }
 
-.wz-billingInvoiceStatus-void,
-.wz-billingInvoiceStatus-uncollectible {
-  background: rgb(255 180 180 / 0.15);
-  color: rgb(255 180 180);
-}
+  .wz-roster th:nth-child(3),
+  .wz-roster td:nth-child(3) {
+    display: none;
+  }
 
-@media (max-width: 720px) {
+  .wz-roster th,
+  .wz-roster td {
+    padding: 12px 12px;
+  }
+
+  .wz-inviteRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .wz-inviteField {
+    flex: none !important;
+  }
+
+  .wz-pendingRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .wz-pendingExpiry,
+  .wz-pendingRole {
+    grid-column: 1 / -1;
+  }
+
   .wz-billingProPrice {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .wz-billingCancelNotice {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .wz-authCard {
+    padding: 28px 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wz-loading::before,
+  .wz-skeleton {
+    animation: none;
+  }
+
+  .wz-inviteSubmit,
+  .wz-joinSubmit,
+  .wz-billingButtonPrimary,
+  .wz-app .wz-btnPrimary {
+    transition: none;
+  }
+}
+
+.wz-app .wz-note {
+  margin: 16px 0 0;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--thread-3);
+}
+
+/* Weft's photography. The same five scenes as the board's themes (public/brand/scenes, copies of
+   electron/assets): the speeder over twin suns in the sidebar and behind the auth cards, and a
+   different road under each page's title. Plain background images, so no markup beyond a class. */
+
+.wz-app {
+  --scene-twin-suns: url("/brand/scenes/twin-suns.jpg");
+  --scene-coast-road: url("/brand/scenes/coast-road.jpg");
+  --scene-canyon: url("/brand/scenes/canyon.jpg");
+  --scene-neon-city: url("/brand/scenes/neon-city.jpg");
+  --scene-snow-pass: url("/brand/scenes/snow-pass.jpg");
+}
+
+/* The sidebar's foot: the speeder crossing the dunes under twin suns, rising out of the panel. The nav and
+   the account sit above it. */
+.wz-workspaceHeader {
+  position: relative;
+  isolation: isolate;
+}
+
+.wz-workspaceHeader::before {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  z-index: -1;
+  height: 420px;
+  background:
+    linear-gradient(180deg, rgb(14 18 34) 0%, rgb(14 18 34 / 0.6) 30%, rgb(14 18 34 / 0) 62%),
+    linear-gradient(0deg, rgb(14 18 34 / 0.78) 0%, rgb(14 18 34 / 0) 34%),
+    var(--scene-twin-suns) 78% 100% / 620px auto no-repeat;
+}
+
+.wz-workspaceHome,
+.wz-workspaceNavLink {
+  text-shadow: 0 1px 10px rgb(0 0 0 / 0.55);
+}
+
+.wz-workspaceSwitcherButton,
+.wz-workspaceBrand {
+  background: rgb(23 29 49 / 0.62);
+  backdrop-filter: blur(14px) saturate(1.2);
+  border-color: rgb(236 229 216 / 0.16);
+}
+
+/* Page heads: a photographic banner under a left-to-right scrim, the title on the dark side of it. */
+.wz-hero {
+  position: relative;
+  isolation: isolate;
+  min-height: 230px;
+  justify-content: flex-end;
+  overflow: hidden;
+  padding: 30px 34px !important;
+  border-radius: 20px;
+  border: 1px solid var(--line-2);
+  background: var(--scene-coast-road) 50% 72% / cover no-repeat;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.06) inset,
+    0 30px 60px -34px rgb(0 0 0 / 0.85);
+}
+
+.wz-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(90deg, rgb(14 18 32 / 0.82) 0%, rgb(14 18 32 / 0.42) 40%, rgb(14 18 32 / 0) 78%),
+    linear-gradient(0deg, rgb(14 18 32 / 0.4), transparent 50%);
+}
+
+.wz-heroCanyon {
+  background-image: var(--scene-canyon);
+  background-position: 50% 72%;
+}
+
+.wz-heroNeon {
+  background-image: var(--scene-neon-city);
+  background-position: 50% 64%;
+}
+
+.wz-hero .wz-teamTitle,
+.wz-hero .wz-billingTitle {
+  text-shadow: 0 2px 22px rgb(0 0 0 / 0.55);
+}
+
+.wz-hero .wz-teamSub,
+.wz-hero .wz-billingSub {
+  color: rgb(236 229 216 / 0.88);
+  text-shadow: 0 1px 12px rgb(0 0 0 / 0.6);
+}
+
+/* Auth cards sit on the speeder scene, the way the sign-in page does. */
+.wz-auth::before {
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 50%, rgb(14 18 32 / 0.1), rgb(14 18 32 / 0.6) 90%),
+    linear-gradient(180deg, rgb(14 18 32 / 0.4), rgb(14 18 32 / 0.05) 40%, rgb(14 18 32 / 0.55)),
+    var(--scene-twin-suns) 70% 62% / cover no-repeat;
+}
+
+.wz-auth::after {
+  display: none;
+}
+
+.wz-authCard {
+  background: linear-gradient(180deg, rgb(31 39 66 / 0.78), rgb(23 29 49 / 0.88));
+  backdrop-filter: blur(16px) saturate(1.15);
+}
+
+@media (max-width: 860px) {
+  .wz-workspaceHeader::before {
+    display: none;
+  }
+
+  .wz-hero {
+    min-height: 170px;
+    padding: 22px 22px !important;
+  }
+}
+
+/* Invoices as tickets: a stub with a status and a scan stripe, notches where it tears, an edge that
+   shifts from clay to blue light, and the amount big in the display face. */
+
+.wz-invoices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 430px), 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wz-invoice {
+  --edge: linear-gradient(120deg, rgb(240 153 95 / 0.75), rgb(236 229 216 / 0.12) 38%, rgb(120 150 255 / 0.55));
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 20px;
+  padding: 18px 0 18px 22px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgb(31 39 66 / 0.95), rgb(20 26 46 / 0.97));
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.05) inset,
+    0 22px 40px -28px rgb(0 0 0 / 0.9);
+  transition: transform 0.2s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* The gradient edge: a border drawn as a masked ::before so it can be a gradient. */
+.wz-invoice::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: var(--edge);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* A faint scan line sweeping the ticket, once, on hover. */
+.wz-invoice::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(105deg, transparent 40%, rgb(240 153 95 / 0.12) 50%, transparent 60%) -120% 0 / 220% 100% no-repeat;
+  pointer-events: none;
+  transition: background-position 0.9s ease;
+}
+
+.wz-invoice:hover {
+  transform: translateY(-2px);
+}
+
+.wz-invoice:hover::after {
+  background-position: 120% 0;
+}
+
+.wz-invoiceMain {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.wz-invoiceNo {
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  color: var(--thread);
+}
+
+.wz-invoiceDate {
+  font-size: 13px;
+  color: var(--thread-3);
+}
+
+.wz-invoiceAmount {
+  font-family: var(--display);
+  font-size: 34px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--thread);
+}
+
+/* The tear-off stub: a dashed divider with a notch top and bottom, the status over a scan stripe. */
+.wz-invoiceStub {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  align-self: stretch;
+  justify-content: center;
+  width: 132px;
+  padding: 0 20px 0 18px;
+  border-left: 1px dashed var(--line-2);
+}
+
+.wz-invoiceStub::before,
+.wz-invoiceStub::after {
+  content: "";
+  position: absolute;
+  left: -9px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+
+.wz-invoiceStub::before {
+  top: -27px;
+  clip-path: inset(50% 0 0 0);
+}
+
+.wz-invoiceStub::after {
+  bottom: -27px;
+  clip-path: inset(0 0 50% 0);
+}
+
+.wz-invoiceCode {
+  width: 100%;
+  height: 22px;
+  fill: var(--thread-3);
+  opacity: 0.8;
+}
+
+.wz-invoice-paid .wz-billingInvoiceStatus {
+  box-shadow: 0 0 14px rgb(134 212 164 / 0.35);
+}
+
+.wz-invoice-open {
+  --edge: linear-gradient(120deg, rgb(240 153 95 / 0.95), rgb(242 195 107 / 0.25) 45%, rgb(240 153 95 / 0.7));
+}
+
+.wz-invoice-open .wz-billingInvoiceStatus {
+  box-shadow: 0 0 14px rgb(218 122 76 / 0.45);
+}
+
+.wz-invoice-void,
+.wz-invoice-uncollectible {
+  --edge: linear-gradient(120deg, rgb(240 133 119 / 0.7), rgb(236 229 216 / 0.1) 50%, rgb(240 133 119 / 0.4));
+}
+
+/* The Team banner is the garage: the crew on the speeder. */
+.wz-heroGarage {
+  background-image: var(--scene-garage);
+  background-position: 50% 44%;
+}
+
+.wz-app {
+  --scene-garage: url("/brand/scenes/garage.jpg");
+}
+
+@media (max-width: 640px) {
+  .wz-invoice {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-right: 0;
+  }
+
+  .wz-invoiceStub {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    width: auto;
+    padding: 12px 18px 0 0;
+    border-left: 0;
+    border-top: 1px dashed var(--line-2);
+  }
+
+  .wz-invoiceStub::before,
+  .wz-invoiceStub::after {
+    display: none;
+  }
+
+  .wz-invoiceCode {
+    flex: 1;
+  }
+}
+
+/* The invoice sheet (components/team/InvoiceSheet.tsx): the speeder over the twin suns, a stamp for the status,
+   the route from Weft to the workspace, line items, a gradient total, and a tear-off foot. */
+
+.wz-eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--thread-3);
+}
+
+.wz-sheet {
+  --stamp: var(--ok);
+  position: relative;
+  max-width: 860px;
+  overflow: hidden;
+  border-radius: 26px;
+  background: linear-gradient(160deg, rgb(31 39 66 / 0.92), rgb(18 23 40 / 0.97));
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.06) inset,
+    0 50px 100px -44px rgb(0 0 0 / 0.95);
+}
+
+.wz-sheet::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(130deg, rgb(240 153 95 / 0.85), rgb(236 229 216 / 0.1) 35%, rgb(120 150 255 / 0.6) 70%, rgb(134 212 164 / 0.5));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.wz-sheet-open,
+.wz-sheet-draft {
+  --stamp: var(--clay-2);
+}
+
+.wz-sheet-void,
+.wz-sheet-uncollectible {
+  --stamp: var(--bad);
+}
+
+.wz-sheetTop {
+  position: relative;
+  height: 220px;
+  background:
+    linear-gradient(90deg, rgb(14 18 32 / 0.88), rgb(14 18 32 / 0.3) 58%, rgb(14 18 32 / 0)),
+    linear-gradient(0deg, rgb(18 23 40), transparent 62%),
+    var(--scene-twin-suns) 50% 76% / cover;
+}
+
+.wz-app .wz-sheetBack {
+  position: absolute;
+  left: 30px;
+  top: 26px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: rgb(14 18 32 / 0.5);
+  backdrop-filter: blur(8px);
+  font-size: 13px;
+  color: var(--thread);
+}
+
+.wz-sheetStamp {
+  position: absolute;
+  right: 32px;
+  top: 28px;
+  display: grid;
+  place-items: center;
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  border: 2px solid var(--stamp);
+  background: rgb(14 18 32 / 0.5);
+  backdrop-filter: blur(6px);
+  box-shadow:
+    0 0 30px color-mix(in srgb, var(--stamp) 35%, transparent),
+    inset 0 0 24px color-mix(in srgb, var(--stamp) 16%, transparent);
+  color: var(--stamp);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  transform: rotate(-10deg);
+}
+
+.wz-sheetStamp::after {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  border-radius: 50%;
+  border: 1px dashed color-mix(in srgb, var(--stamp) 50%, transparent);
+}
+
+.wz-sheetNo {
+  position: absolute;
+  left: 34px;
+  bottom: 26px;
+}
+
+.wz-sheetNo h1 {
+  margin: 4px 0 0;
+  font-family: var(--display);
+  font-size: 44px;
+  font-weight: 500;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  text-shadow: 0 2px 22px rgb(0 0 0 / 0.55);
+}
+
+.wz-sheetBody {
+  padding: 28px 34px 4px;
+}
+
+.wz-sheetRoute {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 20px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: rgb(12 16 29 / 0.55);
+}
+
+.wz-sheetRoute b {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.wz-sheetRoute small {
+  font-size: 13px;
+  color: var(--thread-3);
+}
+
+.wz-sheetTo {
+  text-align: right;
+}
+
+.wz-sheetTrace {
+  width: 120px;
+  height: 1px;
+  background: repeating-linear-gradient(90deg, var(--clay-2) 0 6px, transparent 6px 10px);
+  position: relative;
+}
+
+.wz-sheetTrace::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: -4px;
+  width: 8px;
+  height: 8px;
+  border-top: 1px solid var(--clay-2);
+  border-right: 1px solid var(--clay-2);
+  transform: rotate(45deg);
+}
+
+.wz-sheetMeta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 20px 0 6px;
+}
+
+.wz-sheetTile {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgb(255 255 255 / 0.02);
+}
+
+.wz-sheetTile b {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+
+.wz-sheetHeading {
+  margin: 28px 0 12px;
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.wz-sheetEmpty {
+  color: var(--thread-3);
+}
+
+.wz-sheetLines {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.wz-sheetLines th {
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--line-2);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-align: left;
+  text-transform: uppercase;
+  color: var(--thread-3);
+}
+
+.wz-sheetLines td {
+  padding: 15px 0;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.wz-sheetLines small {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--thread-3);
+}
+
+.wz-sheetLines th:last-child,
+.wz-sheetLines td:last-child,
+.wz-sheetLines .wz-sheetNum {
+  text-align: right;
+}
+
+.wz-sheetLines .wz-sheetNum {
+  font-family: var(--mono);
+  font-size: 15px;
+}
+
+.wz-sheetTag {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--clay-soft);
+  color: var(--clay-2);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.wz-sheetSum {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 28px;
+  padding: 24px 0 30px;
+}
+
+.wz-sheetTotals {
+  display: grid;
+  gap: 6px;
+  max-width: 280px;
+  margin: 0;
+  font-size: 14px;
+  color: var(--thread-2);
+}
+
+.wz-sheetTotals div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.wz-sheetTotals dt,
+.wz-sheetTotals dd {
+  margin: 0;
+}
+
+.wz-sheetTotal {
+  text-align: right;
+}
+
+.wz-sheetBig {
+  font-family: var(--display);
+  font-size: 72px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  background: linear-gradient(120deg, var(--thread) 20%, var(--clay-2) 60%, #9db4ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.wz-sheetFoot {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 18px;
+  padding: 22px 34px 26px;
+  border-top: 1px dashed var(--line-2);
+  background: rgb(12 16 29 / 0.5);
+}
+
+.wz-sheetFoot::before,
+.wz-sheetFoot::after {
+  content: "";
+  position: absolute;
+  top: -10px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  z-index: 3;
+}
+
+.wz-sheetFoot::before {
+  left: -10px;
+}
+
+.wz-sheetFoot::after {
+  right: -10px;
+}
+
+.wz-sheetCode {
+  width: 150px;
+  height: 34px;
+  fill: var(--thread-3);
+  opacity: 0.85;
+}
+
+.wz-sheetFoot code {
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: var(--thread-2);
+}
+
+.wz-sheetActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.wz-app .wz-sheetLink,
+.wz-app .wz-sheetPdf {
+  padding: 11px 18px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.wz-app .wz-sheetLink {
+  border: 1px solid var(--line-2);
+  color: var(--thread);
+}
+
+.wz-app .wz-sheetLink:hover {
+  background: rgb(236 229 216 / 0.07);
+}
+
+.wz-app .wz-sheetPdf {
+  background: var(--clay);
+  color: #1a0e07;
+  box-shadow: 0 10px 26px -12px rgb(218 122 76 / 0.8);
+}
+
+.wz-app .wz-sheetPdf:hover {
+  background: var(--clay-2);
+  color: #1a0e07;
+}
+
+/* A ticket opens its sheet: the number's link stretches over the whole ticket. */
+.wz-app .wz-invoiceNo {
+  color: var(--thread);
+}
+
+.wz-invoiceNo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: 16px;
+}
+
+@media (max-width: 640px) {
+  .wz-sheetTop {
+    height: 190px;
+  }
+
+  .wz-sheetNo h1 {
+    font-size: 32px;
+  }
+
+  .wz-sheetStamp {
+    width: 82px;
+    height: 82px;
+    font-size: 10px;
+  }
+
+  .wz-sheetBody {
+    padding: 22px 20px 0;
+  }
+
+  .wz-sheetRoute {
+    grid-template-columns: 1fr;
+  }
+
+  .wz-sheetTo {
+    text-align: left;
+  }
+
+  .wz-sheetTrace {
+    display: none;
+  }
+
+  .wz-sheetSum {
+    grid-template-columns: 1fr;
+  }
+
+  .wz-sheetTotal {
+    text-align: left;
+  }
+
+  .wz-sheetBig {
+    font-size: 54px;
+  }
+
+  .wz-sheetFoot {
+    grid-template-columns: 1fr;
+    padding: 20px;
+  }
+
+  .wz-sheetActions {
+    justify-content: flex-start;
+  }
+}
+
+/* On paper: the sheet alone, on white-ish ink, so the browser's Print is a usable PDF. */
+@media print {
+  .wz-workspaceHeader {
+    display: none;
+  }
+
+  .wz-workspace {
+    display: block;
+  }
+
+  .wz-app,
+  .wz-workspaceMain {
+    height: auto;
+    overflow: visible;
+  }
+
+  .wz-app::before,
+  .wz-app::after,
+  .wz-sheetBack,
+  .wz-sheetActions {
+    display: none;
   }
 }

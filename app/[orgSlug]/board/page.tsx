@@ -35,7 +35,7 @@ export const metadata: Metadata = {
 
 function NotDeployedCard({ slug }: { slug: string }) {
   return (
-    <div className="wz-root wz-auth">
+    <div className="wz-app wz-auth">
       <main className="wz-authCard">
         <h1 className="wz-authTitle">Board · {slug}</h1>
         <p className="wz-authSub">Workspaces live on weft.zip. In the desktop app, the board&apos;s account button is the way in.</p>

@@ -38,7 +38,7 @@ export const metadata: Metadata = {
 
 function NotDeployedCard({ slug }: { slug: string }) {
   return (
-    <div className="wz-root wz-auth">
+    <div className="wz-app wz-auth">
       <main className="wz-authCard">
         <h1 className="wz-authTitle">Billing · {slug}</h1>
         <p className="wz-authSub">Workspaces live on weft.zip. In the desktop app, the board&apos;s account button is the way in.</p>
@@ -107,10 +107,10 @@ async function BillingPageBody({ orgSlug, searchParams }: { orgSlug: string; sea
 
   return (
     <div className="wz-billingPage">
-      <header className="wz-billingHeader">
+      <header className="wz-billingHeader wz-hero wz-heroCanyon">
         <h1 className="wz-billingTitle">Billing</h1>
         <p className="wz-billingSub">
-          The plan and Puku allowance for <strong>{ctx.org.name}</strong>. You&apos;re signed in as a {roleLabel(ctx.role).toLowerCase()}.
+          The plan and Puku allowance for <strong>{ctx.org.name}</strong>. You&apos;re signed in as {/^[aeiou]/i.test(roleLabel(ctx.role)) ? "an" : "a"} {roleLabel(ctx.role).toLowerCase()}.
         </p>
       </header>
 
@@ -151,7 +151,7 @@ async function BillingPageBody({ orgSlug, searchParams }: { orgSlug: string; sea
         />
       ) : null}
 
-      {isPro && account ? <InvoicesSection invoices={account.invoices} /> : null}
+      {isPro && account ? <InvoicesSection orgSlug={orgSlug} invoices={account.invoices} /> : null}
     </div>
   );
 }
@@ -159,7 +159,7 @@ async function BillingPageBody({ orgSlug, searchParams }: { orgSlug: string; sea
 function NotConfiguredPage() {
   return (
     <div className="wz-billingPage">
-      <header className="wz-billingHeader">
+      <header className="wz-billingHeader wz-hero wz-heroCanyon">
         <h1 className="wz-billingTitle">Billing</h1>
         <p className="wz-billingSub">Billing isn&apos;t configured on this Weft.</p>
       </header>
@@ -170,7 +170,7 @@ function NotConfiguredPage() {
 function BillingPageFallback() {
   return (
     <div className="wz-billingPage">
-      <header className="wz-billingHeader">
+      <header className="wz-billingHeader wz-hero wz-heroCanyon">
         <h1 className="wz-billingTitle">Billing</h1>
         <p className="wz-billingSub">Loading your workspace&apos;s plan…</p>
       </header>

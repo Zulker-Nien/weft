@@ -36,7 +36,7 @@ export const metadata: Metadata = {
 
 function NotDeployedCard() {
   return (
-    <div className="wz-root wz-auth">
+    <div className="wz-app wz-auth">
       <main className="wz-authCard">
         <h1 className="wz-authTitle">You&apos;re invited to a Weft workspace</h1>
         <p className="wz-authSub">Invites live on weft.zip. In the desktop app, the board&apos;s account button is the way in.</p>
@@ -53,7 +53,7 @@ function SignedOutCard({ token }: { token: string }) {
   const next = `/invite/${token}`;
   const params = new URLSearchParams({ provider: "github", next });
   return (
-    <div className="wz-root wz-auth">
+    <div className="wz-app wz-auth">
       <main className="wz-authCard">
         <h1 className="wz-authTitle">You&apos;re invited to a Weft workspace</h1>
         <p className="wz-authSub">
@@ -71,7 +71,7 @@ function SignedOutCard({ token }: { token: string }) {
 
 function ExpiredCard() {
   return (
-    <div className="wz-root wz-auth">
+    <div className="wz-app wz-auth">
       <main className="wz-authCard">
         <h1 className="wz-authTitle">This invite link is no longer valid</h1>
         <p className="wz-authSub">
@@ -109,10 +109,10 @@ async function InviteBody({ token }: { token: string }) {
 
 function InviteFallback() {
   return (
-    <div className="wz-root wz-auth">
+    <div className="wz-app wz-auth">
       <main className="wz-authCard">
         <h1 className="wz-authTitle">Join a Weft workspace</h1>
-        <p className="wz-authSub">Checking your invite…</p>
+        <p className="wz-authSub wz-loading">Checking your invite…</p>
       </main>
     </div>
   );

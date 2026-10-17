@@ -1,6 +1,6 @@
 /* The /[orgSlug]/board page (app/[orgSlug]/board/page.tsx). The board itself is the desktop's own
    Tailwind components, so all this file does is give them the room and the palette: the workspace
-   shell's 880px reading column becomes the whole window, and .wz-desk re-themes its subtree to the
+   shell's reading column becomes the whole main area, and .wz-desk re-themes its subtree to the
    desktop's dark tokens (app/globals.css, `[data-theme="dark"]`). Plain global CSS: next.config.ts
    routes every .css through the Tailwind loader, which drops module exports. */
 
@@ -15,9 +15,15 @@
   max-width: none;
   margin: 0;
   padding: 0;
+  overflow: hidden;
 }
 
-.wz-root:has(.wz-desk) {
+.wz-workspaceMain:has(.wz-desk) > * {
+  max-width: none;
+  margin: 0;
+}
+
+.wz-app:has(.wz-desk) {
   overflow: hidden;
 }
 

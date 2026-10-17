@@ -17,6 +17,11 @@ import { PendingInvites, inviteRow } from "./PendingInvites";
 import { Roster } from "./Roster";
 import { webTeamActions } from "./web-actions";
 
+// "a member", "an owner": the role labels are words, so the vowel test is enough.
+function article(label: string): string {
+  return /^[aeiou]/i.test(label) ? "an" : "a";
+}
+
 export function WebTeam({
   orgSlug,
   snapshot,
@@ -39,12 +44,27 @@ export function WebTeam({
   const isOwner = snapshot.role === "owner";
   return (
     <div className="wz-teamPage">
-      <header className="wz-teamHeader">
+      <header className="wz-teamHeader wz-hero wz-heroGarage">
         <h1 className="wz-teamTitle">Team</h1>
         <p className="wz-teamSub">
-          {roster.length} {roster.length === 1 ? "person" : "people"} in <strong>{snapshot.org.name}</strong>. You&apos;re signed in as a {snapshot.roleLabels[snapshot.role].toLowerCase()}.
+          {roster.length} {roster.length === 1 ? "person" : "people"} in <strong>{snapshot.org.name}</strong>. You&apos;re signed in as {article(snapshot.roleLabels[snapshot.role])} {snapshot.roleLabels[snapshot.role].toLowerCase()}.
         </p>
       </header>
+
+      <div className="wz-stats">
+        <div className="wz-stat">
+          <span className="wz-statLabel">Members</span>
+          <span className="wz-statValue">{roster.length}</span>
+        </div>
+        <div className="wz-stat">
+          <span className="wz-statLabel">Pending invites</span>
+          <span className="wz-statValue">{pending.length}</span>
+        </div>
+        <div className="wz-stat">
+          <span className="wz-statLabel">Your role</span>
+          <span className="wz-statValue">{snapshot.roleLabels[snapshot.role]}</span>
+        </div>
+      </div>
 
       <section className="wz-teamSection">
         <h2 className="wz-teamSectionTitle">Members</h2>
