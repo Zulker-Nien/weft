@@ -31,6 +31,13 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   // The desktop shell loads the app from 127.0.0.1, not localhost.
   allowedDevOrigins: ["127.0.0.1"],
+  experimental: {
+    // Server Fast Refresh sometimes sends a launch into a loop: each request for the board applies a server update
+    // that counts as a change, which makes the board refetch, a couple of times a second, so it never gets past
+    // its placeholder cards (vercel/next.js#94915). Off, a server file change reloads that route's server modules
+    // on the next request instead; runner state lives on globalThis, so threads and sessions survive it.
+    turbopackServerFastRefresh: false,
+  },
   turbopack: {
     rules: {
       "*.css": {
