@@ -18,6 +18,9 @@ import type { CloudSyncStatus } from "./cloud-sync-view";
 import { subscribe } from "./bus";
 
 const FLUSH_INTERVAL_MS = 10_000;
+// How long a turn's items gather before they go up: soon enough that the web board reads a turn as it runs, long enough
+// that a burst of tool calls is one request, not one per item.
+const FLUSH_SOON_MS = 1_000;
 const BACKOFF_MAX_MS = 5 * 60 * 1000;
 
 export interface CloudSyncOptions {
@@ -118,8 +121,9 @@ export function startCloudSync(opts: CloudSyncOptions): () => void {
     const entries = entriesForEvent(event, ctx.now());
     if (!entries.length || !cardInSyncedFolder(event)) return;
     appendOutbox(entries);
-    // A turn's end flushes now; anything else waits for the tick, so a streaming turn is one batch, not hundreds.
-    if (event.type !== "thread" || event.item.kind === "result") trigger(ctx);
+    // A card change, a message you sent and a turn's end go now; a turn's other items gather for a second first.
+    if (event.type !== "thread" || event.item.kind === "result" || event.item.kind === "user") trigger(ctx);
+    else soon(ctx);
   });
   // The tick flushes whatever piled up since the last one, and picks up entries left from before a restart.
   // The backoff timer (set on a previous error) takes precedence: the tick is a no-op while it's set.
@@ -169,6 +173,16 @@ function trigger(ctx: Ctx, delay = 0) {
   }
   clearTimer(ctx.s);
   ctx.s.timer = setTimeout(() => void flush(ctx), delay);
+}
+
+// Arms a flush a moment from now unless one is already armed (a backoff included), so a stream of items can't keep
+// pushing it back.
+function soon(ctx: Ctx) {
+  if (ctx.s.inFlight) {
+    ctx.s.dirty = true;
+    return;
+  }
+  if (!ctx.s.timer) ctx.s.timer = setTimeout(() => void flush(ctx), FLUSH_SOON_MS);
 }
 
 async function flush(ctx: Ctx) {

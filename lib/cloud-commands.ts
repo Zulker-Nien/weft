@@ -1,6 +1,7 @@
 // Commands the weft.zip board sends to a Mac (public.cloud_commands, supabase/migrations/*_card_commands.sql).
-// Today there is one kind: start a card in a synced folder. The web builds the row with `newCardCommand`, the Mac
-// (lib/cloud-inbox.ts) reads the payload back with `newCardBody`; both live here so the two sides can't drift.
+// Two kinds: start a card in a synced folder (`newCardCommand` → `newCardBody`) and reply to a card's thread
+// (`replyCommand` → `replyBody`). The web builds the row, the Mac (lib/cloud-inbox.ts) reads the payload back;
+// both live here so the two sides can't drift.
 import { backendFor, CODEX_DEFAULT_MODEL } from "./new-thread";
 import type { Backend, Effort } from "./types";
 
@@ -17,16 +18,24 @@ export interface NewCardPayload {
   tags?: string[];
 }
 
+// A message typed into a card's thread on the web, for the Mac that runs the card to send as if typed there.
+export interface ReplyPayload {
+  cardId: string;
+  text: string;
+}
+
+export type CloudCommandKind = "new_card" | "reply";
+
 // public.cloud_commands.
 export interface CloudCommandRow {
   id: string;
   org_id: string;
   created_by: string;
-  kind: "new_card";
+  kind: CloudCommandKind;
   // The Mac that runs it (cloud_cards.owner_device) and the folder it runs in (cloud_cards.folder).
   target_device: string;
   folder: string;
-  payload: NewCardPayload;
+  payload: NewCardPayload | ReplyPayload;
   status: CloudCommandStatus;
   card_id: string | null;
   error: string | null;
@@ -66,6 +75,13 @@ export function newCardCommand(target: { orgId: string; device: string; folder: 
   return { org_id: target.orgId, kind: "new_card", target_device: target.device, folder: target.folder, payload };
 }
 
+// The row the web inserts to reply to a card, addressed to the Mac and folder the card runs in; null for an empty reply.
+export function replyCommand(target: { orgId: string; device: string; folder: string; cardId: string }, text: string): NewCommand | null {
+  const message = text.trim();
+  if (!message) return null;
+  return { org_id: target.orgId, kind: "reply", target_device: target.device, folder: target.folder, payload: { cardId: target.cardId, text: message } };
+}
+
 const text = (v: unknown) => (typeof v === "string" ? v : undefined);
 
 // The request body POST /api/cards takes (lib/new-card.ts), from a command as a Mac reads it. The payload came
@@ -84,3 +100,18 @@ export function newCardBody(command: Pick<CloudCommandRow, "folder" | "payload">
     cwd: command.folder,
   };
 }
+
+// A reply as a Mac reads it off the network: the card and the text, or null when either is missing.
+export function replyBody(command: Pick<CloudCommandRow, "payload">): ReplyPayload | null {
+  const raw: unknown = command.payload;
+  const p: Partial<Record<keyof ReplyPayload, unknown>> = raw && typeof raw === "object" ? raw : {};
+  const cardId = text(p.cardId);
+  const message = text(p.text)?.trim();
+  return cardId && message ? { cardId, text: message } : null;
+}
+
+// A command's prompt for the strip and the reply box: a new card's prompt or a reply's text.
+export const commandText = (command: Pick<CloudCommandRow, "payload">): string => {
+  const p = command.payload as Partial<NewCardPayload & ReplyPayload>;
+  return p.prompt ?? p.text ?? "";
+};

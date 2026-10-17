@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
-import { newCardCommand, type CloudCommandRow, type NewCardForm } from "@/lib/cloud-commands";
+import { newCardCommand, replyCommand, type CloudCommandRow, type NewCardForm, type NewCommand } from "@/lib/cloud-commands";
 import { BLOB_BUCKET, THREAD_PAGE_SIZE, type CloudCardRow, type CloudThreadItemRow } from "@/lib/cloud-sync-types";
 import { SUPABASE_KEY, SUPABASE_URL } from "@/lib/supabase-project";
 import {
@@ -106,6 +106,8 @@ export function useWebBoard({ orgId, userId, initialCommands, initialCards, open
         if (change.new && change.new.created_by !== userId) return;
         if (change.new?.status === "done" && change.new.card_id && sent.current.delete(change.new.id)) openWhenSeen.current = change.new.card_id;
         setCommands((prev) => applyCommandChange(prev, change as CloudCommandChange));
+        // A reply that went is in the thread now; its row has nothing left to say.
+        if (change.new?.kind === "reply" && change.new.status === "done") void client.from("cloud_commands").delete().eq("id", change.new.id);
       })
       .subscribe((status: string) => {
         if (cancelled) return;
@@ -192,19 +194,41 @@ export function useWebBoard({ orgId, userId, initialCommands, initialCards, open
     );
   }, [client, orgId, thread]);
 
-  // Asks the Mac that owns `target` to start a card (lib/cloud-inbox.ts runs it). Resolves to why it couldn't be
-  // sent, or null once the command is in; the card turns up on the board by itself when the Mac has made it.
+  // Puts a command in for a Mac (lib/cloud-inbox.ts runs it). Resolves to the row, or why it couldn't be sent.
+  const sendCommand = useCallback(
+    async (row: NewCommand): Promise<CloudCommandRow | string> => {
+      const { data, error } = await client.from("cloud_commands").insert(row).select().single<CloudCommandRow>();
+      if (error) return error.message;
+      setCommands((prev) => applyCommandChange(prev, { eventType: "INSERT", new: data, old: null }));
+      return data;
+    },
+    [client],
+  );
+
+  // Asks the Mac that owns `target` to start a card. Resolves to why it couldn't be sent, or null once the command is
+  // in; the card turns up on the board by itself when the Mac has made it.
   const startCard = useCallback(
     async (target: WebTarget, form: NewCardForm): Promise<string | null> => {
       const row = newCardCommand({ orgId, device: target.device, folder: target.folder }, form);
       if (!row) return "Write a prompt first.";
-      const { data, error } = await client.from("cloud_commands").insert(row).select().single<CloudCommandRow>();
-      if (error) return error.message;
-      sent.current.add(data.id);
-      setCommands((prev) => applyCommandChange(prev, { eventType: "INSERT", new: data, old: null }));
+      const sentRow = await sendCommand(row);
+      if (typeof sentRow === "string") return sentRow;
+      sent.current.add(sentRow.id);
       return null;
     },
-    [client, orgId],
+    [orgId, sendCommand],
+  );
+
+  // Asks the Mac that runs a card to send a reply in its thread, as if typed there. Resolves like startCard; the
+  // message shows in the thread once the Mac has sent it.
+  const sendReply = useCallback(
+    async (row: CloudCardRow, text: string): Promise<string | null> => {
+      const command = replyCommand({ orgId, device: row.owner_device, folder: row.folder, cardId: row.card_id }, text);
+      if (!command) return "Write a message first.";
+      const sentRow = await sendCommand(command);
+      return typeof sentRow === "string" ? sentRow : null;
+    },
+    [orgId, sendCommand],
   );
 
   // Takes a command back before the Mac has run it, or clears one that failed. A delete the database refuses
@@ -244,5 +268,5 @@ export function useWebBoard({ orgId, userId, initialCommands, initialCards, open
   // The cards as CardView draws them: a thumb ref becomes its signed URL once it has one.
   const shown = useMemo(() => withThumbUrls(cards, blobUrls), [cards, blobUrls]);
 
-  return { cards: shown, commands, activeCardId, thread, blobUrls, live, openCard, closeCard, loadOlder, toolOutput, startCard, dropCommand };
+  return { cards: shown, commands, activeCardId, thread, blobUrls, live, openCard, closeCard, loadOlder, toolOutput, startCard, sendReply, dropCommand };
 }

@@ -102,6 +102,9 @@ export const control = {
   }),
   startCard: vi.fn<(card: unknown) => void>(),
   syncNow: vi.fn<() => void>(),
+  // The cards on this Mac, for a reply to find its thread.
+  cards: new Map<string, { id: string; cwd: string; role?: string }>(),
+  sendUserMessage: vi.fn<(cardId: string, text: string) => void>(),
 };
 
 export const accountMock = { accountClient: () => control.account() };
@@ -112,6 +115,9 @@ export const newCardMock = {
   createCardFromBody: (body: Record<string, unknown>) => control.createCardFromBody(body),
   startCard: (card: unknown) => control.startCard(card),
 };
+
+export const runnerMock = { sendUserMessage: (cardId: string, text: string) => control.sendUserMessage(cardId, text) };
+export const storeMock = { getCard: (id: string) => control.cards.get(id) };
 
 export const command = (over: Partial<CloudCommandRow> = {}): CloudCommandRow => ({
   id: "cmd-1",
@@ -142,6 +148,7 @@ export function resetInbox() {
   db.selects.length = 0;
   db.channels.length = 0;
   control.made.length = 0;
+  control.cards.clear();
   control.folders = ["/dev/app"];
   control.org = "org1";
   control.account = () => client;

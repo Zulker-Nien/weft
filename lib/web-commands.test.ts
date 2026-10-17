@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { cardRow, commandRow } from "../components/web-board/web-board-harness";
-import { applyCommandChange, commandLine, webTargets } from "./web-commands";
+import { applyCommandChange, boardCommands, canReply, cardReplies, commandLine, replyNote, webTargets } from "./web-commands";
 
 describe("webTargets", () => {
   it("offers the folders of your own Macs, most recently active first", () => {
@@ -82,5 +82,36 @@ describe("commandLine", () => {
 
   it("falls back to a title for an empty prompt", () => {
     expect(line({ payload: { prompt: "" } }).title).toBe("New thread");
+  });
+});
+
+describe("replies", () => {
+  const reply = (over: Parameters<typeof commandRow>[0] = {}) => commandRow({ id: "r1", kind: "reply", payload: { cardId: "c1", text: "ship it" }, ...over });
+
+  it("stay out of the board's strip", () => {
+    expect(boardCommands([commandRow(), reply()]).map((c) => c.id)).toEqual(["cmd-1"]);
+  });
+
+  it("show under their own card while open or failed, not once done", () => {
+    const list = [reply(), reply({ id: "r2", status: "failed" }), reply({ id: "r3", status: "done" }), reply({ id: "r4", payload: { cardId: "c2", text: "x" } }), commandRow()];
+    expect(cardReplies(list, "c1").map((c) => c.id)).toEqual(["r1", "r2"]);
+  });
+
+  it("can only go to a card your own account runs, and not a deleted one", () => {
+    expect(canReply(cardRow(), "u1")).toBe(true);
+    expect(canReply(cardRow({ owner_user: "u2" }), "u1")).toBe(false);
+    expect(canReply(cardRow({ deleted: true }), "u1")).toBe(false);
+  });
+
+  it("say how far they got", () => {
+    expect(replyNote(reply())).toMatch(/Waiting for your Mac/);
+    expect(replyNote(reply({ status: "claimed" }))).toMatch(/Sending/);
+    expect(replyNote(reply({ status: "failed", error: "gone" }))).toBe("gone");
+    expect(replyNote(reply({ status: "failed" }))).toMatch(/couldn't send/);
+    expect(replyNote(reply({ status: "done" }))).toBe("Sent.");
+  });
+
+  it("read as their text in the strip's wording", () => {
+    expect(commandLine(reply()).title).toBe("ship it");
   });
 });

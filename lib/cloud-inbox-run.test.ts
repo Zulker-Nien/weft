@@ -7,6 +7,8 @@ vi.mock("./settings", async () => (await import("./cloud-inbox.harness")).settin
 vi.mock("./device-id", async () => (await import("./cloud-inbox.harness")).deviceMock);
 vi.mock("./cloud-sync", async () => (await import("./cloud-inbox.harness")).cloudSyncMock);
 vi.mock("./new-card", async () => (await import("./cloud-inbox.harness")).newCardMock);
+vi.mock("./runner", async () => (await import("./cloud-inbox.harness")).runnerMock);
+vi.mock("./store", async () => (await import("./cloud-inbox.harness")).storeMock);
 
 const { refreshCloudInbox } = await import("./cloud-inbox");
 
@@ -43,7 +45,7 @@ describe("refusing a command", () => {
   });
 
   it("a kind it doesn't know, and a command from another account", async () => {
-    await failsWith(command({ kind: "reply" as never }), /doesn't know that kind/);
+    await failsWith(command({ kind: "share" as never }), /doesn't know that kind/);
     db.updates.length = 0;
     await failsWith(command({ id: "cmd-2", created_by: "u2" }), /wasn't made by the account/);
   });

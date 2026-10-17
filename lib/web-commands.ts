@@ -1,6 +1,6 @@
 // The weft.zip board's side of starting a card (lib/cloud-commands.ts is the row, lib/cloud-inbox.ts the Mac that
 // runs it): where a new card can run, and how the commands this board sent are tracked as Realtime moves them.
-import type { CloudCommandRow } from "./cloud-commands";
+import { commandText, isOpenCommand, type CloudCommandRow } from "./cloud-commands";
 import type { CloudCardRow } from "./cloud-sync-types";
 import { folderName } from "./format";
 import { headline } from "./new-thread";
@@ -53,7 +53,7 @@ export function applyCommandChange(commands: CloudCommandRow[], change: CloudCom
 
 // The strip under the header: what you asked for and how far it got.
 export function commandLine(command: CloudCommandRow): { title: string; note: string } {
-  const title = headline(command.payload.prompt) || "New thread";
+  const title = headline(commandText(command)) || "New thread";
   switch (command.status) {
     case "pending":
       return { title, note: "Waiting for your Mac to pick it up. It has to be on and running Weft." };
@@ -63,5 +63,30 @@ export function commandLine(command: CloudCommandRow): { title: string; note: st
       return { title, note: command.error ?? "Your Mac couldn't start it." };
     case "done":
       return { title, note: "Started." };
+  }
+}
+
+// The strip under the header follows new threads; a reply shows under the reply box of its card instead.
+export const boardCommands = (commands: CloudCommandRow[]) => commands.filter((c) => c.kind !== "reply");
+
+// The replies sent to one card that haven't landed in its thread yet, or that failed.
+export function cardReplies(commands: CloudCommandRow[], cardId: string): CloudCommandRow[] {
+  return commands.filter((c) => c.kind === "reply" && (c.payload as { cardId?: string }).cardId === cardId && (isOpenCommand(c) || c.status === "failed"));
+}
+
+// Whether the web can reply to a card: only the Mac of the account that runs it obeys (lib/cloud-inbox.ts).
+export const canReply = (row: Pick<CloudCardRow, "owner_user" | "deleted">, userId: string) => row.owner_user === userId && !row.deleted;
+
+// Under the reply box: how far a reply got.
+export function replyNote(command: CloudCommandRow): string {
+  switch (command.status) {
+    case "pending":
+      return "Waiting for your Mac. It has to be on and running Weft.";
+    case "claimed":
+      return "Sending on your Mac…";
+    case "failed":
+      return command.error ?? "Your Mac couldn't send it.";
+    case "done":
+      return "Sent.";
   }
 }

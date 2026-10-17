@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isOpenCommand, newCardBody, newCardCommand, type CloudCommandRow } from "./cloud-commands";
+import { commandText, isOpenCommand, newCardBody, newCardCommand, replyBody, replyCommand, type CloudCommandRow } from "./cloud-commands";
 import { CODEX_DEFAULT_MODEL } from "./new-thread";
 
 const target = { orgId: "o1", device: "mac-1", folder: "/dev/app" };
@@ -65,5 +65,38 @@ describe("isOpenCommand", () => {
   it("is true until the Mac has finished with it", () => {
     const at = (status: CloudCommandRow["status"]) => isOpenCommand({ status });
     expect([at("pending"), at("claimed"), at("done"), at("failed")]).toEqual([true, true, false, false]);
+  });
+});
+
+describe("replyCommand", () => {
+  const to = { ...target, cardId: "c1" };
+
+  it("is nothing to send for an empty reply", () => {
+    expect(replyCommand(to, "  \n ")).toBeNull();
+  });
+
+  it("addresses the card's Mac and folder, with the card and the trimmed text", () => {
+    expect(replyCommand(to, " ship it ")).toEqual({ org_id: "o1", kind: "reply", target_device: "mac-1", folder: "/dev/app", payload: { cardId: "c1", text: "ship it" } });
+  });
+});
+
+describe("replyBody", () => {
+  it("reads the card and the text back", () => {
+    expect(replyBody({ payload: { cardId: "c1", text: " hi " } })).toEqual({ cardId: "c1", text: "hi" });
+  });
+
+  it("is null when the card or the text is missing or the wrong type", () => {
+    expect(replyBody({ payload: { cardId: "c1", text: "  " } })).toBeNull();
+    expect(replyBody({ payload: { text: "hi" } as never })).toBeNull();
+    expect(replyBody({ payload: { cardId: 4, text: "hi" } as never })).toBeNull();
+    expect(replyBody({ payload: null as never })).toBeNull();
+  });
+});
+
+describe("commandText", () => {
+  it("is a new card's prompt or a reply's text", () => {
+    expect(commandText({ payload: { prompt: "Add dark mode" } })).toBe("Add dark mode");
+    expect(commandText({ payload: { cardId: "c1", text: "go" } })).toBe("go");
+    expect(commandText({ payload: {} as never })).toBe("");
   });
 });

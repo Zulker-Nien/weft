@@ -317,18 +317,30 @@ describe("startCloudSync", () => {
     expect(rows).toHaveLength(1);
   });
 
-  it("non-result thread items do not trigger an immediate flush — they wait for the 10s tick", async () => {
+  it("a turn's other items gather for a second, then go up together", async () => {
     cardInStore("a");
     const assistant: ThreadItem = { kind: "assistant", text: "hi", at: 1 };
-    threads.set("a", [assistant]);
+    const tool: ThreadItem = { kind: "tool", id: "t1", name: "Bash", summary: "ls", at: 2 };
+    threads.set("a", [assistant, tool]);
     await start();
     publish({ type: "thread", cardId: "a", item: assistant, index: 0 });
-    // Advance only a tiny amount — less than the 10s tick.
+    await vi.advanceTimersByTimeAsync(600);
+    // A second item doesn't push the flush back.
+    publish({ type: "thread", cardId: "a", item: tool, index: 1 });
     await vi.advanceTimersByTimeAsync(100);
     expect(allRows("cloud_thread_items")).toHaveLength(0);
-    // After 10s the tick fires and flushes.
-    await vi.advanceTimersByTimeAsync(10_000);
+    await vi.advanceTimersByTimeAsync(400);
     for (let i = 0; i < 20; i++) await vi.advanceTimersByTimeAsync(0);
+    expect(allRows("cloud_thread_items")).toHaveLength(2);
+  });
+
+  it("a message you sent goes up at once", async () => {
+    cardInStore("a");
+    const user: ThreadItem = { kind: "user", text: "go", at: 1 };
+    threads.set("a", [user]);
+    await start();
+    publish({ type: "thread", cardId: "a", item: user, index: 0 });
+    await flush();
     expect(allRows("cloud_thread_items")).toHaveLength(1);
   });
 
@@ -367,6 +379,27 @@ describe("startCloudSync", () => {
     for (let i = 0; i < 20; i++) await vi.advanceTimersByTimeAsync(0);
     const seqs = (allRows("cloud_thread_items") as CloudThreadItemRow[]).map((r) => r.seq).sort((a, b) => a - b);
     expect(seqs).toEqual([0, 1]);
+  });
+
+  it("an item that lands mid-flush goes up right after it, without waiting the second", async () => {
+    cardInStore("a");
+    const resultItem: ThreadItem = { kind: "result", text: "done", isError: false, at: 5 };
+    const assistant: ThreadItem = { kind: "assistant", text: "more", at: 6 };
+    threads.set("a", [resultItem, assistant]);
+    let resolveRewrite: (v: ThreadItem) => void = () => {};
+    let held = false;
+    blobsRewrite = (item) => {
+      if (held) return Promise.resolve(item);
+      held = true;
+      return new Promise<ThreadItem>((resolve) => (resolveRewrite = resolve));
+    };
+    await start();
+    publish({ type: "thread", cardId: "a", item: resultItem, index: 0 });
+    await vi.advanceTimersByTimeAsync(0);
+    publish({ type: "thread", cardId: "a", item: assistant, index: 1 });
+    resolveRewrite(resultItem);
+    for (let i = 0; i < 20; i++) await vi.advanceTimersByTimeAsync(0);
+    expect(allRows("cloud_thread_items")).toHaveLength(2);
   });
 
   it("backs off on error and warns once per streak (resets on success)", async () => {

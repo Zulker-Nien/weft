@@ -1,19 +1,22 @@
-// The Mac's side of "start a card from the weft.zip board" (docs/architecture/cloud-sync.md). The web inserts a
-// cloud_commands row addressed to this device; this hears it over Realtime (and a 30 s check, since a socket
-// can drop while the Mac sleeps), claims it, makes the card in the folder it names and starts the thread. The
-// card then syncs back through the outbox like any other, so the web board sees it appear.
+// The Mac's side of "start a card from the weft.zip board" and "reply to a thread from it" (docs/architecture/cloud-sync.md).
+// The web inserts a cloud_commands row addressed to this device; this hears it over Realtime (and a 30 s check, since a
+// socket can drop while the Mac sleeps), claims it, and makes the card in the folder it names and starts the thread, or
+// sends the reply to the card as if it were typed here. Either way the result syncs back through the outbox like any
+// other change, so the web board sees it appear.
 //
 // It only obeys a command that is (1) for this device, (2) created by the account signed in here, (3) for a
 // folder switched on in Settings → Sync and (4) for the workspace this Mac syncs to. A Realtime event is just
 // a nudge: what runs is always read back from the table, never taken from the event.
 import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
 import { accountClient } from "./account";
-import { newCardBody, type CloudCommandRow } from "./cloud-commands";
+import { newCardBody, replyBody, type CloudCommandRow } from "./cloud-commands";
 import { syncNow, syncOrgId } from "./cloud-sync";
 import { deviceId } from "./device-id";
 import { globalSingleton } from "./global-singleton";
 import { createCardFromBody, startCard } from "./new-card";
+import { sendUserMessage } from "./runner";
 import { syncFolders } from "./settings";
+import { getCard } from "./store";
 
 const CHECK_MS = 30_000;
 const BATCH = 20;
@@ -156,14 +159,29 @@ async function run(client: SupabaseClient, uid: string, command: CloudCommandRow
 async function startFromCommand(client: SupabaseClient, uid: string, command: CloudCommandRow): Promise<string> {
   // A newer web board may send a kind this version doesn't know.
   const kind: string = command.kind;
-  if (kind !== "new_card") throw new Error("This version of Weft doesn't know that kind of request. Update the desktop app.");
+  if (kind !== "new_card" && kind !== "reply") throw new Error("This version of Weft doesn't know that kind of request. Update the desktop app.");
   if (command.created_by !== uid) throw new Error("That request wasn't made by the account signed in on this Mac.");
   if (!syncFolders().includes(command.folder)) throw new Error(`${command.folder} isn't switched on in Settings → Sync on this Mac.`);
   const org = await syncOrgId(client, uid);
   if (org !== command.org_id) throw new Error("That workspace isn't the one this Mac syncs its cards to.");
+  if (kind === "reply") return replyFromCommand(command);
   const card = createCardFromBody(newCardBody(command));
   startCard(card);
   // The card and its first items are already in the outbox; send them now so the board sees it start.
+  syncNow();
+  return card.id;
+}
+
+// A reply goes to the card the way the reply box sends one: now, or after the turn that's running (the card shows it
+// queued). Only to a card in the command's folder, so a reply can't reach a thread outside a synced folder.
+function replyFromCommand(command: CloudCommandRow): string {
+  const reply = replyBody(command);
+  if (!reply) throw new Error("That reply is empty.");
+  const card = getCard(reply.cardId);
+  if (!card || card.cwd !== command.folder) throw new Error("That thread isn't on this Mac anymore.");
+  if (card.role === "copilot") throw new Error("The copilot can't be answered from the web.");
+  sendUserMessage(card.id, reply.text);
+  // The message is in the outbox already; this sends it now rather than on the next tick.
   syncNow();
   return card.id;
 }
