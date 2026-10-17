@@ -49,11 +49,19 @@ export function applyTheme() {
   else delete root.dataset.scene;
 }
 
+// The first launch has no choice saved yet, so the board opens on the scene that matches the
+// system's light or dark and keeps it, instead of plain System. Only on the desktop board (served
+// on 127.0.0.1): weft.zip's pages can't load the pictures (app/api/scenes is localhost-only).
+export const FIRST_SCENES: Record<Base, SceneId> = { dark: "twin-suns", light: "salt-flats" };
+const LOCAL_HOST = "^(127\\.0\\.0\\.1|localhost)$";
+const MAX_AGE = 10 * 365 * 24 * 60 * 60;
+
 export function setTheme(theme: Theme) {
-  document.cookie = `${THEME_COOKIE}=${theme}; path=/; max-age=${10 * 365 * 24 * 60 * 60}; SameSite=Lax`;
+  document.cookie = `${THEME_COOKIE}=${theme}; path=/; max-age=${MAX_AGE}; SameSite=Lax`;
   applyTheme();
 }
 
-// applyTheme, inlined into <head> so the page never paints in the wrong theme.
+// applyTheme, inlined into <head> so the page never paints in the wrong theme, plus the first
+// launch's pick (any weft-theme cookie, even "system", means the user has chosen).
 const BASES = JSON.stringify({ light: "light", dark: "dark", ...Object.fromEntries(SCENES.map((s) => [s.id, s.base])) });
-export const THEME_SCRIPT = `(function(){try{var b=${BASES},m=document.cookie.match(/(?:^|; )${THEME_COOKIE}=(${SAVED})(?:;|$)/),v=m?m[1]:"",r=document.documentElement;r.dataset.theme=b[v]||(matchMedia("${DARK_QUERY}").matches?"dark":"light");if(b[v]&&v!==b[v])r.dataset.scene=v}catch(e){}})()`;
+export const THEME_SCRIPT = `(function(){try{var b=${BASES},c=document.cookie,m=c.match(/(?:^|; )${THEME_COOKIE}=(${SAVED})(?:;|$)/),v=m?m[1]:"",r=document.documentElement,d=matchMedia("${DARK_QUERY}").matches;if(!/(?:^|; )${THEME_COOKIE}=[^;]/.test(c)&&new RegExp(${JSON.stringify(LOCAL_HOST)}).test(location.hostname)){v=d?"${FIRST_SCENES.dark}":"${FIRST_SCENES.light}";document.cookie="${THEME_COOKIE}="+v+"; path=/; max-age=${MAX_AGE}; SameSite=Lax"}r.dataset.theme=b[v]||(d?"dark":"light");if(b[v]&&v!==b[v])r.dataset.scene=v}catch(e){}})()`;

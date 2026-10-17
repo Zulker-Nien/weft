@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { runInThisContext } from "node:vm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { applyTheme, DARK_QUERY, SCENES, savedTheme, sceneOf, sceneUrl, setTheme, THEME_COOKIE, THEME_SCRIPT, THEMES } from "./theme";
+import { applyTheme, DARK_QUERY, FIRST_SCENES, SCENES, savedTheme, sceneOf, sceneUrl, setTheme, THEME_COOKIE, THEME_SCRIPT, THEMES } from "./theme";
 
 function systemDark(dark: boolean) {
   const matchMedia = vi.fn((q: string) => ({ matches: q === DARK_QUERY && dark }));
@@ -133,6 +133,41 @@ describe("THEME_SCRIPT", () => {
     runInThisContext(THEME_SCRIPT);
     expect(root().theme).toBe("dark");
     expect(root().scene).toBeUndefined();
+  });
+
+  it("on the first launch, picks and keeps the scene that matches the system", () => {
+    vi.stubGlobal("location", { hostname: "127.0.0.1" });
+    systemDark(true);
+    runInThisContext(THEME_SCRIPT);
+    expect(root()).toMatchObject({ theme: "dark", scene: FIRST_SCENES.dark });
+    expect(savedTheme()).toBe(FIRST_SCENES.dark);
+
+    clearCookie();
+    delete root().scene;
+    systemDark(false);
+    runInThisContext(THEME_SCRIPT);
+    expect(root()).toMatchObject({ theme: "light", scene: FIRST_SCENES.light });
+    expect(savedTheme()).toBe(FIRST_SCENES.light);
+  });
+
+  it("leaves a saved choice alone, System included", () => {
+    vi.stubGlobal("location", { hostname: "127.0.0.1" });
+    systemDark(true);
+    setTheme("system");
+    delete root().scene;
+    runInThisContext(THEME_SCRIPT);
+    expect(root().theme).toBe("dark");
+    expect(root().scene).toBeUndefined();
+    expect(document.cookie).toContain(`${THEME_COOKIE}=system`);
+  });
+
+  it("picks nothing off the desktop board, e.g. on weft.zip", () => {
+    vi.stubGlobal("location", { hostname: "weft.zip" });
+    systemDark(true);
+    runInThisContext(THEME_SCRIPT);
+    expect(root().theme).toBe("dark");
+    expect(root().scene).toBeUndefined();
+    expect(document.cookie).not.toMatch(new RegExp(`${THEME_COOKIE}=[^;]`));
   });
 
   it("swallows errors, e.g. no matchMedia", () => {

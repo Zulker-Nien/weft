@@ -17,7 +17,10 @@ one of Weft's own pictures behind the board, with a palette drawn from it and cl
 - `lib/theme.ts`: `SCENES` (id, label, picture, base palette) is the one list; `Theme` is `"system" | "light" | "dark" | SceneId`.
   `savedTheme()` reads the `weft-theme` cookie, `setTheme()` writes it and applies it, `applyTheme()` sets
   `<html data-theme>` (the base, light or dark) and `<html data-scene>` (the scene, if any).
-  `THEME_SCRIPT` is the same logic inlined into `<head>` so the first paint is right.
+  `THEME_SCRIPT` is the same logic inlined into `<head>` so the first paint is right. It also makes the first launch's pick:
+  with no `weft-theme` cookie (or an empty one) on `127.0.0.1`/`localhost`, it saves `FIRST_SCENES[dark|light]`
+  (Twin Suns or Salt Flats, by the system's mode) before painting. Any saved value, `system` included, is a choice and
+  is left alone; weft.zip never gets a pick, since its pages can't load the pictures (`app/api/scenes` is localhost-only).
 - The weft.zip home page's third-party tracking (Google Analytics, mounted only on the marketing page)
   lives in `docs/architecture/analytics.md`.
 - `app/globals.css`: the light palette on `:root` and the dark one on `:root[data-theme="dark"]`; each scene is a
