@@ -10,6 +10,7 @@ runs, in every permission mode (bypass included), and the denial's reason goes b
 | Restart guard | `lib/restart-guard.ts` | killing or restarting Weft's own server, app or port while other cards' turns run; points the thread at `mcp__board__restart_weft_when_idle` |
 | Git guard | `lib/git-guard.ts` | git commands that throw away or hide uncommitted work in the shared tree |
 | Route import guard | `lib/route-import-guard.ts` | an edit that makes a route file import a module that isn't there yet |
+| Prerender check | `lib/prerender-check.ts` (run by the route import guard) | a route segment config export `next build` refuses under cacheComponents; warns (doesn't deny) on runtime data awaited outside `<Suspense>` |
 | Import guard | `lib/import-check.ts` | (PostToolUse) reports an edit that breaks an import |
 | Dropped-import check | `lib/dropped-imports.ts` | (PostToolUse, with the import guard) reports an edit that drops an import the file still uses |
 | Symbol claims | `lib/claim-guard.ts` | asks (doesn't deny) before an edit to a symbol another busy card is editing |
@@ -162,6 +163,31 @@ parse) can't help. The import guard's PostToolUse report comes too late for thes
   set by `cliEnv()`), a few steps with no shell between. `CLAUDE_CODE_ENTRYPOINT=sdk-ts` can't tell, because a
   thread's Bash passes it on: a `puku-cli -p` a thread started used to skip every check (2026-10-16, a Board.tsx split
   that dropped `columnMinWidth` from its imports while still calling it, and the board threw on every reload).
+
+## Prerender check (cacheComponents)
+
+With `cacheComponents: true` in `next.config.ts`, `next build` refuses two things nothing else notices: `pnpm test`,
+lint, typecheck and `next dev` all pass, and the Vercel build fails 14 minutes in. It happened three times: the admin
+pages' `force-dynamic` (2026-10-16, f8aa47f), then `app/s/[id]/page.tsx`'s `force-dynamic` (88e1ff1) and its `await
+params` before its `<Suspense>` (fcc13a8), both 2026-10-17. `lib/prerender-check.ts` finds both with the TypeScript
+parser (comments and strings don't count):
+
+- **Segment config** (`kind: "config"`, a certain build error): an exported `dynamic`, `revalidate`, `fetchCache` or
+  `dynamicParams` in `app/**/page|layout` or `route.ts`, declared or `export { … }`-ed.
+- **Runtime data before `<Suspense>`** (`kind: "blocking"`, a heuristic): `await params`, `await searchParams`
+  (or `props.params`), `await cookies()` or `await headers()` at the top level of a page's or layout's default export
+  (followed through `export default Name`), or of `generateMetadata`/`generateViewport`. Not flagged: awaits in
+  nested functions or helpers it calls; `params` with `generateStaticParams` exported (ISR wants it there); params and
+  searchParams in a `"use cache"` function; a default export already inside a boundary, from a `loading.tsx` beside the
+  page or above, or a layout above that renders its `children` inside `<Suspense>` (`app/[orgSlug]/layout.tsx` covers
+  its pages). Metadata functions are never covered. `connection()` isn't flagged: the admin pages await it at the top
+  and build.
+- **Where it runs**: `lib/prerender-check.test.ts` walks the real tree (`treeProblems`) so `pnpm test` fails before a
+  deploy; and the route import guard runs `prerenderCheck` on every Edit/MultiEdit/Write to a route file, only when the
+  project's next.config turns cacheComponents on, and only for problems the edit adds: a segment config is denied, a
+  blocking read comes back as `additionalContext` and the edit goes through. The parser loads lazily (`import()`), so
+  only route-file edits pay for it. `scripts/import-check-hook.mjs` does the same outside Weft (exit 2, or the warning
+  as JSON on stdout).
 
 ## Dropped-import check
 

@@ -2,8 +2,10 @@
 // itself (a `puku-cli -p` run); board threads get the same checks in-process (lib/env.ts guardedCli), so it
 // skips them (lib/weft-thread.ts). Anything going wrong here never gets in an edit's way.
 // - PreToolUse: refuses an edit that makes a route file (app/**/page.tsx, a layout, a route.ts…) import a
-//   module that isn't there yet, which would take the whole app down (lib/route-import-guard.ts), and Bash
-//   running tsc or eslint directly instead of the pnpm scripts that take turns (lib/check-guard.ts).
+//   module that isn't there yet, which would take the whole app down (lib/route-import-guard.ts), or export a
+//   segment config cacheComponents refuses, and warns on runtime data awaited outside <Suspense>
+//   (lib/prerender-check.ts); and Bash running tsc or eslint directly instead of the pnpm scripts that take
+//   turns (lib/check-guard.ts).
 // - PostToolUse: after an Edit or Write, tells the session about any import the edit broke
 //   (lib/import-check.ts), before the dev server shows it as a build error over the board, and any
 //   import it dropped that the file still uses (lib/dropped-imports.ts), which throws when it draws.
@@ -39,12 +41,16 @@ try {
       process.exit(2);
     }
   } else if (event === "PreToolUse") {
-    const { routeImportCheck } = await import("../lib/route-import-guard.ts");
-    const why = routeImportCheck(tool, input, cwd ?? ".");
+    const { prerenderCheck, routeImportCheck } = await import("../lib/route-import-guard.ts");
+    const missing = routeImportCheck(tool, input, cwd ?? ".");
+    const { deny, warn } = missing ? { deny: "", warn: "" } : await prerenderCheck(tool, input, cwd ?? ".");
+    const why = missing || deny;
     if (why) {
       process.stderr.write(`${why}\n`);
       process.exit(2);
     }
+    // A warning lets the edit through and reaches the session as context.
+    if (warn) process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: warn } }));
   } else if (typeof file === "string") {
     const { brokenImports, importReport } = await import("../lib/import-check.ts");
     const { droppedImports } = await import("../lib/dropped-imports.ts");

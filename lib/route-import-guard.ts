@@ -10,8 +10,10 @@ import { projectRoot, resolveSpec } from "./import-check";
 // build for files that don't parse. On 2026-10-13 a card imported "@/components/home/Home" from
 // app/page.tsx before writing it and the board was down ~5 minutes (docs/bug-fixes/010). lib/import-check.ts
 // reports a broken import after the edit; for these files that's too late, so this one denies it before.
-// Text matching and existsSync only: it runs on every Edit/Write. Only node: imports and ./import-check here:
-// scripts/import-check-hook.mjs loads this file with Node's type stripping, for sessions outside Weft.
+// Text matching and existsSync only: it runs on every Edit/Write. Only node: imports and ./import-check here
+// (./prerender-check loads lazily, for route files): scripts/import-check-hook.mjs loads this file with Node's
+// type stripping, for sessions outside Weft. It also refuses (or warns on) what `next build` alone refuses under
+// cacheComponents, which cost two production deploys on 2026-10-17 (prerenderCheck).
 
 // The files whose broken import takes the whole app down, relative to the project's root.
 const ROUTE_FILE = /^(?:src\/)?app\/(?:.*\/)?(?:(?:page|layout|template|error|global-error|not-found|loading|default)\.[jt]sx?|route\.[jt]s)$/;
@@ -120,10 +122,40 @@ function readText(file: string): string | null {
   }
 }
 
-export const routeImportGuard: HookCallback = (input) => {
-  if (input.hook_event_name !== "PreToolUse") return Promise.resolve({});
-  const why = routeImportCheck(input.tool_name, input.tool_input, input.cwd);
-  return Promise.resolve(why ? { hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: why } } : {});
+// What an edit to a page, layout or route handler adds of what `next build` refuses under cacheComponents
+// (lib/prerender-check.ts): `deny` for a segment config export, a certain build error; `warn` for runtime data
+// awaited outside <Suspense>, a heuristic. Problems the file already had aren't this edit's. The check parses with
+// TypeScript, so it loads only when a route file is edited, never on the start-a-card path.
+export async function prerenderCheck(tool: string, input: unknown, cwd: string): Promise<{ deny: string; warn: string }> {
+  const fields = (input ?? {}) as Record<string, unknown>;
+  const none = { deny: "", warn: "" };
+  if (typeof fields.file_path !== "string") return none;
+  const file = path.resolve(cwd, fields.file_path);
+  const root = projectRoot(file);
+  if (!root || !isRouteFile(root, file)) return none;
+  const before = readText(file);
+  const after = contentAfter(tool, fields, before);
+  const { cacheComponentsOn, prerenderProblems } = await import("./prerender-check");
+  if (after === null || !cacheComponentsOn(root)) return none;
+  const had = new Set(before === null ? [] : prerenderProblems(root, file, before).map((p) => p.message));
+  const added = prerenderProblems(root, file, after).filter((p) => !had.has(p.message));
+  const say = (kind: string, lead: string) => {
+    const lines = added.filter((p) => p.kind === kind).map((p) => `- ${p.message}`);
+    return lines.length ? [lead, ...lines].join("\n") : "";
+  };
+  return {
+    deny: say("config", "Refused: cacheComponents is on (next.config), so `next build` fails on this and the deploy with it; `next dev`, lint, typecheck and tests don't notice."),
+    warn: say("blocking", "Heads up: `next build` will likely fail on this edit under cacheComponents (only it checks; `next dev` won't show it):"),
+  };
+}
+
+export const routeImportGuard: HookCallback = async (input) => {
+  if (input.hook_event_name !== "PreToolUse") return {};
+  const missing = routeImportCheck(input.tool_name, input.tool_input, input.cwd);
+  const { deny, warn } = missing ? { deny: "", warn: "" } : await prerenderCheck(input.tool_name, input.tool_input, input.cwd);
+  const why = missing || deny;
+  if (why) return { hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: why } };
+  return warn ? { hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: warn } } : {};
 };
 
 // For PreToolUse in every board thread (lib/env.ts guardedCli).

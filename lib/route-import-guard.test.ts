@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import type { HookInput } from "@anthropic-ai/claude-agent-sdk";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { addedImportProblems, contentAfter, importSpecs, isRouteFile, ROUTE_IMPORT_GUARD_MATCHER, routeImportCheck, routeImportGuard, routeImportReason } from "./route-import-guard";
+import { addedImportProblems, contentAfter, importSpecs, isRouteFile, prerenderCheck, ROUTE_IMPORT_GUARD_MATCHER, routeImportCheck, routeImportGuard, routeImportReason } from "./route-import-guard";
 
 let root: string;
 
@@ -128,5 +128,48 @@ describe("routeImportCheck and routeImportGuard", () => {
 
   it("runs on Edit, MultiEdit and Write", () => {
     expect(ROUTE_IMPORT_GUARD_MATCHER).toMatchObject({ matcher: "Edit|MultiEdit|Write", hooks: [routeImportGuard] });
+  });
+});
+
+describe("prerenderCheck: what only `next build` refuses under cacheComponents", () => {
+  const pre = (tool_name: string, tool_input: unknown) =>
+    ({ hook_event_name: "PreToolUse", tool_name, tool_input, tool_use_id: "t", session_id: "s", transcript_path: "", cwd: root }) as unknown as HookInput;
+  const run = (input: HookInput) => routeImportGuard(input, undefined, { signal: new AbortController().signal });
+  const PAGE = "app/s/[id]/page.tsx";
+  const AWAITS = "export default async function Page({ params }) { await params; return null; }\n";
+
+  beforeEach(() => write({ "next.config.ts": "export default { cacheComponents: true };" }));
+
+  it("denies the 88e1ff1 edit: a dynamic segment config", async () => {
+    const out = await run(pre("Write", { file_path: PAGE, content: 'export const dynamic = "force-dynamic";\nexport default function Page() { return null; }\n' }));
+    expect(out).toMatchObject({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny" } });
+    expect(JSON.stringify(out)).toContain("exports `dynamic`");
+  });
+
+  it("warns, without refusing, on the fcc13a8 edit: params awaited before the <Suspense>", async () => {
+    const out = await run(pre("Write", { file_path: PAGE, content: AWAITS }));
+    expect(out).toEqual({ hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: expect.any(String) as string } });
+    expect(JSON.stringify(out)).toContain("the default export awaits params outside <Suspense>");
+  });
+
+  it("says nothing about problems the file already had, or with cacheComponents off", async () => {
+    write({ [PAGE]: AWAITS });
+    expect(await run(pre("Edit", { file_path: PAGE, old_string: "null", new_string: "1" }))).toEqual({});
+    write({ "next.config.ts": "export default {};" });
+    expect(await prerenderCheck("Write", { file_path: "app/x/page.tsx", content: 'export const revalidate = 1;' }, root)).toEqual({ deny: "", warn: "" });
+  });
+
+  it("skips files that aren't routes, edits that can't apply and calls without a file", async () => {
+    const none = { deny: "", warn: "" };
+    expect(await prerenderCheck("Write", { file_path: "lib/x.ts", content: "export const dynamic = 1;" }, root)).toEqual(none);
+    expect(await prerenderCheck("Edit", { file_path: PAGE, old_string: "a", new_string: "b" }, root)).toEqual(none);
+    expect(await prerenderCheck("Write", null, root)).toEqual(none);
+    expect(await prerenderCheck("Write", { file_path: "/no-project-here/app/page.tsx", content: "" }, root)).toEqual(none);
+  });
+
+  it("leaves it to the import check when the edit imports a missing module", async () => {
+    const out = await run(pre("Write", { file_path: PAGE, content: 'import X from "./nope";\nexport const dynamic = 1;\n' }));
+    expect(JSON.stringify(out)).toContain("doesn't exist yet");
+    expect(JSON.stringify(out)).not.toContain("exports `dynamic`");
   });
 });

@@ -10,6 +10,7 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Added
 
+- **Prerender check.** What only `next build` refuses under cacheComponents now fails `pnpm test` and is caught at edit time: a route segment config export (`dynamic`, `revalidate`, `fetchCache`, `dynamicParams`) is refused, and `await params`/`searchParams`/`cookies()`/`headers()` in a page's default export or generateMetadata outside `<Suspense>` gets a warning (`lib/prerender-check.ts`, docs/architecture/thread-guards.md).
 - **Share a card.** **Share…** on a card makes a `weft.zip/s/<id>` link that shows its thread and its browser pane side by side, live: private to the workspace, public, behind an email or a password (`@aimhuge/share`). Shown pages run sandboxed, a localhost page shows as its latest capture, key-shaped text is masked and long tool outputs aren't shared (docs/architecture/sharing.md).
 
 - **Drag files from Finder anywhere in Weft.** Drop on a card to open it with the files in its reply box, on an open thread (or the copilot) to attach them there, or on empty board to start a new thread with them; a pill says where they'll go. A file let go outside a composer no longer navigates the board away (`lib/file-drop.ts`, `lib/use-file-drop.ts`, `components/FileDrop.tsx`).

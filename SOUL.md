@@ -44,7 +44,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - My Vitest suite (`pnpm test`, ~3,500 tests) covers every line of `lib/` and `app/api/` (98.6% of branches,
     `pnpm coverage`): a test file beside each module, routes with their libs mocked, the runner's SDK loop
     against a fake `query()` (`lib/runner.harness.ts`, shared by `lib/runner*.test.ts`), and browser code and React hooks under happy-dom +
-    @testing-library/react (`// @vitest-environment happy-dom`). Component tests have started under jsdom
+    @testing-library/react (`// @vitest-environment happy-dom`). `lib/prerender-check.test.ts` walks app/**/page|layout|route for what only `next build` refuses under cacheComponents (segment config exports, `await params`/`cookies()` before `<Suspense>`; two failed deploys on 2026-10-17), and `lib/route-import-guard.ts` runs the same check on each edit. Component tests have started under jsdom
     (`components/*.test.tsx`: CardView, ReplyBox, NewCardDialog, TagsDialog, TagsDrawer, ThreadPanel, ColumnHeader, SettingsDialog, LibraryRail; Composer stubbed by `components/composer-mock.tsx`);
     `electron/main-menu-popup.test.ts` is the first test in `electron/`. The rest of `components/` and `electron/`
     are untested and outside the coverage set; add tests with any risky change, and keep new lib code at 100%.
@@ -79,7 +79,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   `lib/restart-guard.ts` (no restarting Weft mid-turns), `lib/git-guard.ts` (no `git stash`, `reset --hard`, path
   checkout/restore or `clean -f` in the shared tree), `lib/check-guard.ts` (no `tsc` or `eslint` run directly where the
   project's `pnpm typecheck`/`pnpm lint` take turns through `scripts/one-at-a-time.mjs`; plain Claude Code sessions get it from `.claude/settings.json`), `lib/route-import-guard.ts` (refuses an edit that makes `app/**/page.tsx`,
-  a layout, a `route.ts` or middleware import a module that isn't there yet), `lib/claim-guard.ts` (symbol claims: asks before an edit to a top-level
+  a layout, a `route.ts` or middleware import a module that isn't there yet, or export a segment config cacheComponents refuses; `lib/prerender-check.ts`), `lib/claim-guard.ts` (symbol claims: asks before an edit to a top-level
   symbol another busy card is editing, with **Wait** until it lets go, `lib/permission-wait.ts`; `lib/claims.ts`, parsed by `lib/symbols.ts`; the prompt's readable diff and reason chip are `lib/edit-preview.ts` + `components/PermissionInput.tsx`) (docs/architecture/thread-guards.md).
   Codex gets the filtered `cliEnv()` but not these per-tool hooks; `lib/codex-runner.ts` asks it not to read `.env` files. It does get
   Weft's MCP tools, over HTTP: `lib/weft-mcp.ts` builds the servers every CLI gets, `lib/mcp-bridge.ts` opens a per-turn token and
