@@ -157,6 +157,8 @@ export const api = {
   setTags: (id: string, tags: string[]) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { tags }),
   // The user granted read access to a path outside the project. Persists on the card and queues
   // a /add-dir slash command for the live session so the in-flight turn can keep reading.
+  // "Always allow" on an outside-folder prompt: every card may use it (lib/folder-guard.ts).
+  allowFolder: (folder: string) => call("POST", "/api/folders", { folder }),
   setReadScope: (id: string, path: string) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { readScope: path }),
   remove: (id: string) => call("DELETE", `/api/cards/${id}`),
   send: (id: string, text: string) => call<{ card: Card }>("POST", `/api/cards/${id}/messages`, { text }),

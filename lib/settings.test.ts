@@ -234,6 +234,17 @@ describe("settings", () => {
     expect(s.issueFolders()).toEqual(["/a"]);
   });
 
+  it("remembers the folders allowed for every card, without duplicates, across a reload", async () => {
+    let s = await load();
+    expect(s.allowedFolders()).toEqual([]);
+    s.allowFolder("/Users/me/Downloads");
+    s.allowFolder("/Users/me/Music");
+    s.allowFolder("/Users/me/Downloads");
+    expect(s.allowedFolders()).toEqual(["/Users/me/Downloads", "/Users/me/Music"]);
+    s = await load();
+    expect(s.allowedFolders()).toEqual(["/Users/me/Downloads", "/Users/me/Music"]);
+  });
+
   it("turns cloud sync on and off per folder, without duplicates, and keeps it across a reload", async () => {
     let s = await load();
     expect(s.syncFolders()).toEqual([]);

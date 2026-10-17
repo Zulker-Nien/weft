@@ -177,9 +177,10 @@ export interface PendingPermission {
 }
 
 // A permission prompt's reason, as a category chip and a short detail (components/PermissionInput.tsx).
-// same-code / overlap / whole-file: another busy card's claim (lib/claims.ts); mode: the card's permission mode.
+// same-code / overlap / whole-file: another busy card's claim (lib/claims.ts); mode: the card's permission mode;
+// outside: a folder beyond the card's project (lib/folder-guard.ts).
 export interface PromptReason {
-  category: "same-code" | "overlap" | "whole-file" | "mode";
+  category: "same-code" | "overlap" | "whole-file" | "mode" | "outside";
   detail: string;
   // For a clash: the card holding the claim and its claim key, so Wait can watch for its release (lib/permission-wait.ts).
   holder?: { id: string; title: string; claim: string };

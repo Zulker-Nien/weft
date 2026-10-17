@@ -3,7 +3,7 @@ import { messageContent } from "./attachments";
 import type { BoardActions } from "./board-tools";
 import type { CliProcess } from "./cli-process";
 import type { EditPreview } from "./edit-preview";
-import { keepAliveMinutes } from "./settings";
+import { allowedFolders, keepAliveMinutes } from "./settings";
 import type { BoardStatus } from "./status";
 import { getCard, updateCard } from "./store";
 import type { Backend, CacheState, Card, Effort, PermissionMode, PromptReason, Question } from "./types";
@@ -171,6 +171,12 @@ export function errorText(err: unknown) {
 // through effortFor at the point we build the spec the CLI actually runs with. A card left over
 // from before switchBackend's xhigh guard is caught here on the next turn. Same for a Claude model id
 // left on a puku card (modelOn).
+// The directories a session may read beyond its folder: what the card was granted, and what the user allowed for every card.
+function readScopeFor(card: Card): string[] | undefined {
+  const dirs = [...new Set([...(card.readScope ?? []), ...allowedFolders()])];
+  return dirs.length ? dirs : undefined;
+}
+
 export function specFor(card: Card): Spec {
   return {
     cwd: card.cwd,
@@ -180,7 +186,7 @@ export function specFor(card: Card): Spec {
     effort: effortFor(card.backend, card.effort),
     sessionId: card.sessionId,
     copilot: card.role === "copilot",
-    readScope: card.readScope && card.readScope.length ? card.readScope : undefined,
+    readScope: readScopeFor(card),
   };
 }
 

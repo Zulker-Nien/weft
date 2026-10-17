@@ -7,6 +7,7 @@ import { runsOn } from "./cli-defaults";
 import { executableFor } from "./cli-path";
 import { spawnCli, withStderr } from "./cli-process";
 import { claimQuestion, claimSymbols, claimWhy } from "./claim-guard";
+import { folderAsk, grantedRead } from "./folder-guard";
 import { guardedCli } from "./env";
 import { isNotLoggedInError, isRateLimitError } from "./login";
 import { hitRateLimit } from "./rate-limit";
@@ -205,10 +206,14 @@ function queryOptions(session: Session, executable: string | undefined): Options
         return Promise.resolve({ behavior: "allow", updatedInput: input });
       }
       if (!session.cardId) return Promise.resolve({ behavior: "deny", message: "No card is attached yet." });
-      // A symbol-claim clash (lib/claim-guard.ts) asks in its own words.
-      return askUser(session.cardId, session, toolName, input, opts.signal, claimQuestion(opts.toolUseID) ?? opts.title, {
+      // A folder the user granted (lib/folder-guard.ts) is read without the CLI's own working-directory prompt.
+      if (grantedRead(toolName, input, session.spec.cwd, session.cardId)) return Promise.resolve({ behavior: "allow", updatedInput: input });
+      // A folder outside the project (lib/folder-guard.ts) or a symbol-claim clash (lib/claim-guard.ts) asks in its own words.
+      const folder = folderAsk(opts.toolUseID);
+      return askUser(session.cardId, session, toolName, input, opts.signal, folder?.question ?? claimQuestion(opts.toolUseID) ?? opts.title, {
         symbols: claimSymbols(opts.toolUseID),
-        why: claimWhy(opts.toolUseID),
+        why: folder?.why ?? claimWhy(opts.toolUseID),
+        folder: folder?.folder,
       });
     },
     // Its own spawn, so ending the session ends puku-cli's `Puku` child too (lib/cli-process.ts).

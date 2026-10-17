@@ -169,6 +169,7 @@ export const importMock = (h: Harness) => ({ isOpenElsewhere: () => h.openElsewh
 
 export const settingsMock = (h: Harness) => ({
   keepAliveMinutes: () => h.keepAlive,
+  allowedFolders: () => [] as string[],
   threadPrompt: () => "THREAD PROMPT",
   DEFAULT_THREAD_PROMPT: "DEFAULT THREAD PROMPT",
   subagentModel: () => h.subagentModel,

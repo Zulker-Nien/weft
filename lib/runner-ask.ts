@@ -93,7 +93,8 @@ export function askUser(
   signal: AbortSignal,
   title?: string,
   // From the claim guard: the symbols the edit touches, for its preview, and why it asked.
-  claim: { symbols?: string[]; why?: PromptReason } = {},
+  // From the folder guard: the folder outside the project the call reaches, for the buttons that grant it.
+  claim: { symbols?: string[]; why?: PromptReason; folder?: { directory: string; token: string } } = {},
 ): Promise<PermissionResult> {
   return new Promise((resolve) => {
     const questions = toolName === "AskUserQuestion" ? readQuestions(input) : undefined;
@@ -106,7 +107,7 @@ export function askUser(
     const id = randomUUID();
     const index = appendThread(cardId, { kind: "permission", id, toolName, title: label, at: Date.now() });
     // The first question that names a folder outside the project wins; more buttons would be noise.
-    const readScope = questions?.map((q) => suggestReadScope(q.question, session.spec.cwd)).find((s) => s !== undefined);
+    const readScope = questions ? questions.map((q) => suggestReadScope(q.question, session.spec.cwd)).find((s) => s !== undefined) : claim.folder;
     const previewUrl = questions ? questionPreview(cardId, questions) : undefined;
     const edit = questions ? undefined : editPreview(toolName, input, session.spec.cwd, claim.symbols);
     const why = questions ? undefined : (claim.why ?? modeWhy(session.spec.permissionMode, toolName));

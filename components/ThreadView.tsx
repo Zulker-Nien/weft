@@ -188,6 +188,14 @@ export default function ThreadView({
     onAnswer(allow);
   }
 
+  // "This card" / "Always" on an outside-folder prompt: grant the folder, then allow the call (lib/folder-guard.ts).
+  function grant(scope: "card" | "always") {
+    const dir = card.pending?.readScope?.directory;
+    if (!dir) return;
+    const granted = scope === "always" ? api.allowFolder(dir) : api.setReadScope(card.id, dir);
+    void granted.catch(() => {}).finally(() => answer(true));
+  }
+
   async function send(text: string) {
     await onSend(text);
     stick.current = true;
@@ -240,6 +248,7 @@ export default function ThreadView({
             answered={answered}
             onAnswer={answer}
             onWait={() => card.pending && void api.waitPermission(card.id, card.pending.id).catch(() => {})}
+            onGrant={grant}
           />
         </div>
         </CrashGuard>

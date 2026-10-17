@@ -57,6 +57,8 @@ interface Settings {
   issueFolders?: string[];
   // Project folders whose cards sync to the cloud (lib/cloud-sync.ts). Off by default.
   syncFolders?: string[];
+  // Folders outside a card's project that every thread may use without asking (lib/folder-guard.ts), granted with "Always".
+  allowedFolders?: string[];
 }
 
 const FILE = path.join(DATA_DIR, "settings.json");
@@ -79,6 +81,7 @@ function settings(): Settings {
       dismissedSessions: saved.dismissedSessions ?? [],
       issueFolders: saved.issueFolders ?? [],
       syncFolders: saved.syncFolders ?? [],
+      allowedFolders: saved.allowedFolders ?? [],
     };
   });
 }
@@ -237,6 +240,17 @@ export function setIssueSync(folder: string, on: boolean) {
   const s = settings();
   const rest = (s.issueFolders ?? []).filter((f) => f !== folder);
   s.issueFolders = on ? [...rest, folder] : rest;
+  save();
+}
+
+// The folders outside any project that threads may use without asking (lib/folder-guard.ts), in the order they were allowed.
+export function allowedFolders(): string[] {
+  return [...(settings().allowedFolders ?? [])];
+}
+
+export function allowFolder(folder: string) {
+  const s = settings();
+  s.allowedFolders = [...new Set([...(s.allowedFolders ?? []), folder])];
   save();
 }
 

@@ -26,6 +26,7 @@ export const REASONS: Record<PromptReason["category"], { label: string; tip: str
   overlap: { label: "Overlapping code", tip: `This edit and another busy card's change sit one inside the other. ${SHARED}` },
   "whole-file": { label: "Whole file", tip: `One side rewrites the whole file another busy card is editing. ${SHARED}` },
   mode: { label: "Permission mode", tip: "This card's permission mode asks before this tool. Change it from the thread header." },
+  outside: { label: "Outside project", tip: "This reaches a folder beyond the card's project. Allow it once, for this card, or for every card." },
 };
 
 function Reason({ why }: { why: PromptReason }) {
@@ -124,11 +125,14 @@ export function PermissionActions({
   answered,
   onAnswer,
   onWait,
+  onGrant,
 }: {
   pending: PendingPermission;
   answered: boolean;
   onAnswer: (allow: boolean) => void;
   onWait: () => void;
+  // A folder outside the project (pending.readScope): allow it for this card or for every card, then answer yes.
+  onGrant?: (scope: "card" | "always") => void;
 }) {
   const holder = pending.why?.holder;
   const deny = (
@@ -149,6 +153,21 @@ export function PermissionActions({
           </button>
           {deny}
         </span>
+      </div>
+    );
+  if (pending.readScope && onGrant)
+    return (
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button onClick={() => onAnswer(true)} disabled={answered} className={PRIMARY}>
+          Allow once
+        </button>
+        <button onClick={() => onGrant("card")} disabled={answered} className={SECONDARY} title={`Let this card use ${pending.readScope.token} from now on`}>
+          This card
+        </button>
+        <button onClick={() => onGrant("always")} disabled={answered} className={SECONDARY} title={`Let every card use ${pending.readScope.token} from now on`}>
+          Always
+        </button>
+        {deny}
       </div>
     );
   return (

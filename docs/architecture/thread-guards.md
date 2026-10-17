@@ -13,6 +13,32 @@ runs, in every permission mode (bypass included), and the denial's reason goes b
 | Import guard | `lib/import-check.ts` | (PostToolUse) reports an edit that breaks an import |
 | Dropped-import check | `lib/dropped-imports.ts` | (PostToolUse, with the import guard) reports an edit that drops an import the file still uses |
 | Symbol claims | `lib/claim-guard.ts` | asks (doesn't deny) before an edit to a symbol another busy card is editing |
+| Folder gate | `lib/folder-guard.ts` | asks (doesn't deny) before a file tool or Bash command reaches a folder outside the card's project |
+
+## Folder gate
+
+A thread works in its card's project folder. `lib/folder-guard.ts` is a PreToolUse hook (Read, Edit, MultiEdit,
+Write, NotebookEdit, Glob, Grep, LS, Bash) that answers "ask" when a call reaches anywhere else, whether or not macOS
+would refuse it, so Weft, not the OS, decides. The paths come from the tool's file or folder argument (`pathsOf`); for
+Bash, from every absolute, `~/`, `$HOME` and `../` token in the command, and only those under the user's own files
+(home, `/Users`, `/Volumes`), a heuristic that can't see a path a script builds. Paths are resolved first (`~`, `..`,
+symlinks, a file not created yet by its nearest folder).
+
+- **Never asked about**: the project, `card.readScope`, `settings.allowedFolders`, Weft's data folder (`~/.weft`),
+  `~/.claude`, temp dirs, `/dev`, `/tmp` and the system's tool and library paths.
+- **The prompt** reads "Outside the project: read ~/Downloads" with an **Outside project** chip. The folder is the call's
+  project root (nearest ancestor with a `.git`, `package.json`…, below home), else the file's folder, never home itself
+  (`grantRoot`). `folderAsk` carries the question, reason and folder from the hook to `canUseTool`
+  (`lib/runner-session.ts`), whose `askUser` puts the folder on the pending request as `readScope`.
+- **Buttons** (`PermissionActions`): **Allow once**; **This card** (`PATCH /api/cards/:id { readScope }`, the card's
+  `additionalDirectories` from the next session and a `/add-dir` after the current turn); **Always** (`POST /api/folders`
+  → `settings.allowedFolders`, which every new session also gets as `additionalDirectories`); Deny.
+- **After a grant**, a read-only call (Read, Glob, Grep, LS) whose paths are all in granted folders is allowed with no
+  prompt at all (`grantedRead`), including the CLI's own working-directory prompt; writes and Bash in a granted folder
+  follow the card's permission mode as usual.
+- **Not covered**: Codex (no per-tool hooks), the copilot, and the macOS layer. If the OS still says "Operation not
+  permitted" after Weft allows it, that's `mcp__board__request_folder_access` (`electron/folder-access.cjs`), and the
+  grant macOS needs is for the app that actually runs (dev Weft is `Electron.app`, not the `~/Applications/Weft.app` launcher).
 
 ## Symbol claims
 

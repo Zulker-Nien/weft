@@ -22,6 +22,11 @@ const edit: EditPreview = {
 };
 
 describe("PermissionInput", () => {
+  it("names an outside-project folder with its own chip", () => {
+    render(<PermissionInput input={{ command: "ls ~/Downloads" }} why={{ category: "outside", detail: "~/Downloads isn't in this card's project folder" }} />);
+    expect(screen.getByText("⚠ Outside project").parentElement?.title).toBe(REASONS.outside.tip);
+  });
+
   it("shows a held edit as who asks, the file, its symbols, counts and a diff", () => {
     render(<PermissionInput input={input} edit={edit} askedBy="Fix login" why={{ category: "same-code", detail: "‘Restyle’ (running) has uncommitted edits to setupGaps" }} />);
     expect(screen.getByText("⚠ Same code").parentElement?.title).toBe(REASONS["same-code"].tip);
@@ -87,6 +92,22 @@ describe("PermissionActions", () => {
     expect(screen.getByText("Waiting for ‘Fix login’ to finish…")).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Go ahead now" }));
     expect(onAnswer).toHaveBeenLastCalledWith(true);
+    await userEvent.click(screen.getByRole("button", { name: "Deny" }));
+    expect(onAnswer).toHaveBeenLastCalledWith(false);
+  });
+
+  it("offers Allow once, This card and Always for a folder outside the project", async () => {
+    const onAnswer = vi.fn();
+    const onGrant = vi.fn();
+    const pending = { ...base, why: { category: "outside" as const, detail: "~/Downloads isn't in this card's project folder" }, readScope: { directory: "/Users/me/Downloads", token: "~/Downloads" } };
+    render(<PermissionActions pending={pending} answered={false} onAnswer={onAnswer} onWait={vi.fn()} onGrant={onGrant} />);
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Allow once", "This card", "Always", "Deny"]);
+    await userEvent.click(screen.getByRole("button", { name: "Allow once" }));
+    expect(onAnswer).toHaveBeenLastCalledWith(true);
+    await userEvent.click(screen.getByRole("button", { name: "This card" }));
+    expect(onGrant).toHaveBeenLastCalledWith("card");
+    await userEvent.click(screen.getByRole("button", { name: "Always" }));
+    expect(onGrant).toHaveBeenLastCalledWith("always");
     await userEvent.click(screen.getByRole("button", { name: "Deny" }));
     expect(onAnswer).toHaveBeenLastCalledWith(false);
   });

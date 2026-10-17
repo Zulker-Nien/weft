@@ -1,5 +1,6 @@
 import type { Options } from "@anthropic-ai/claude-agent-sdk";
 import { claimHooks } from "./claim-guard";
+import { folderGuardMatcher } from "./folder-guard";
 import { CHECK_GUARD_MATCHER } from "./check-guard";
 import { GIT_GUARD_MATCHER } from "./git-guard";
 import { IMPORT_GUARD_MATCHER } from "./import-check";
@@ -54,14 +55,14 @@ export { RESTART_PROMPT } from "./restart-guard";
 // environment dumps in every permission mode, the one that won't restart Weft while other cards' turns
 // run (otherTurns counts them), the one that won't stash, reset --hard or clean away other cards' uncommitted
 // work, the one that sends tsc and eslint through the pnpm scripts that take turns, the one that refuses
-// an edit making a route file import a module that isn't there yet, the one that reports an edit breaking an import, and symbol claims, which ask before an edit to what
-// another busy card is editing (cardId names the session's card, once it has one).
+// an edit making a route file import a module that isn't there yet, the one that reports an edit breaking an import, symbol claims, which ask before an edit to what
+// another busy card is editing, and the folder gate, which asks before a tool reaches outside the card's project (cardId names the session's card, once it has one).
 export function guardedCli(otherTurns: () => number, cardId: () => string | undefined): Pick<Options, "env" | "hooks"> {
   const claims = claimHooks(cardId);
   return {
     env: cliEnv(),
     hooks: {
-      PreToolUse: [SECRET_GUARD_MATCHER, restartGuardMatcher(otherTurns), GIT_GUARD_MATCHER, CHECK_GUARD_MATCHER, ROUTE_IMPORT_GUARD_MATCHER, claims.pre],
+      PreToolUse: [SECRET_GUARD_MATCHER, restartGuardMatcher(otherTurns), GIT_GUARD_MATCHER, CHECK_GUARD_MATCHER, ROUTE_IMPORT_GUARD_MATCHER, folderGuardMatcher(cardId), claims.pre],
       PostToolUse: [IMPORT_GUARD_MATCHER, claims.post],
     },
   };

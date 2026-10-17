@@ -221,6 +221,8 @@ claims the whole file. When another busy card in the same tree goes to edit a cl
 stops on a permission prompt: "Card ‘Fix login’ is editing LoginForm in Login.tsx. Wait, or go ahead?" A card's
 claims drop when it reaches Done or is archived, and a file's when the commit walk-through commits it.
 
+A thread works in its card's project folder. When a file tool or a Bash command reaches anywhere else (say `~/Downloads`), Weft asks first, whether or not macOS would have refused it: **Allow once**, **This card** or **Always**, with an **Outside project** chip saying which folder.
+
 Every thread runs inside Weft's own server, so restarting Weft cuts off every running turn. A thread
 can't do that behind your back: while other cards are running, a `kill`, `pkill`, `killall` or port-freeing
 aimed at Weft's server, app or port, or a second `pnpm dev` in Weft's folder, is turned away with how

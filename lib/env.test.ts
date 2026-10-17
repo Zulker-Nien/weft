@@ -116,7 +116,7 @@ describe("cliEnv", () => {
 });
 
 describe("guardedCli", () => {
-  it("starts a thread with the stripped env, the secret guard, the restart guard, the git guard, the check guard, the route import guard, the import guard and symbol claims", () => {
+  it("starts a thread with the stripped env, the secret guard, the restart guard, the git guard, the check guard, the route import guard, the import guard, the folder gate and symbol claims", () => {
     vi.stubEnv("THREADBOARD_SHELL_TOKEN", "secret");
     const opts = guardedCli(() => 0, () => undefined);
     expect(opts.env).not.toHaveProperty("THREADBOARD_SHELL_TOKEN");
@@ -129,7 +129,8 @@ describe("guardedCli", () => {
     expect(pre[2]).toBe(GIT_GUARD_MATCHER);
     expect(pre[3]).toBe(CHECK_GUARD_MATCHER);
     expect(pre[4]).toBe(ROUTE_IMPORT_GUARD_MATCHER);
-    expect(pre[5]?.matcher).toBe("Edit|MultiEdit|Write|NotebookEdit");
+    expect(pre[5]?.matcher).toBe("Read|Edit|MultiEdit|Write|NotebookEdit|Glob|Grep|LS|Bash"); // the folder gate
+    expect(pre[6]?.matcher).toBe("Edit|MultiEdit|Write|NotebookEdit");
   });
 
   it("counts other cards' turns with the function it's given", async () => {
