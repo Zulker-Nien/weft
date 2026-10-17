@@ -15,22 +15,12 @@ import { buildShareLive } from "@/lib/share-live";
 import { serviceClient } from "@/lib/web-session";
 import { SharedCard } from "@/components/share-view/SharedCard";
 
-export const dynamic = "force-dynamic";
-
-const NOT_DEPLOYED_TITLE = "Shared thread · Weft";
-
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
-  const { id } = await params;
-  const access = await shareAccess(id);
-  if (access.kind === "ok") {
-    const card = access.share.card?.card as { title?: string } | undefined;
-    return {
-      title: card?.title || NOT_DEPLOYED_TITLE,
-      robots: { index: false, follow: false },
-    };
-  }
-  return { title: NOT_DEPLOYED_TITLE, robots: { index: false, follow: false } };
-}
+// Static on purpose: under Cache Components a generateMetadata that reads the gate's cookie raises an error while the
+// shell prerenders, and a card's title in the tab isn't worth it. The page itself is dynamic inside its <Suspense>.
+export const metadata: Metadata = {
+  title: "Shared thread · Weft",
+  robots: { index: false, follow: false },
+};
 
 function NotDeployed() {
   return (
