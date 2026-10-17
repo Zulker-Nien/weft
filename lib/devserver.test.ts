@@ -128,10 +128,21 @@ describe("devStatus", () => {
 });
 
 describe("startDev", () => {
-  it("spawns the command in a detached shell in the card's folder", async () => {
+  it("spawns the command in the card's folder without a shell (L-4 narrowing)", async () => {
     await dev.startDev("a", "npm run dev", "/app");
-    expect(spawn).toHaveBeenCalledWith("npm run dev", { cwd: "/app", env: { PATH: "/bin" }, shell: true, detached: true, stdio: ["ignore", "pipe", "pipe"] });
+    // No shell: argv is split and the bin is the first token, not the whole command string.
+    expect(spawn).toHaveBeenCalledWith("npm", ["run", "dev"], { cwd: "/app", env: { PATH: "/bin" }, shell: false, detached: true, stdio: ["ignore", "pipe", "pipe"] });
     expect(devSecrets).toHaveBeenCalledWith("a", "npm run dev", "/app", undefined);
+  });
+
+  it("refuses shell metacharacters instead of falling back to a shell", async () => {
+    await dev.startDev("a", "npm run dev | tee log", "/app");
+    // The error path spawns /bin/sh to write a one-line error to stderr; what we care about is
+    // that the original command never reached a shell with its metacharacter intact. The
+    // error message goes through shellEscape, which wraps it in single quotes — we check the
+    // first word to avoid matching the quote-escaped form.
+    expect(spawn.mock.calls[0]?.[0]).toBe("/bin/sh");
+    expect((spawn.mock.calls[0]?.[1] as string[] | undefined)?.[1]).toMatch(/Won.* run dev command through a shell/);
   });
 
   it("starts through the secrets launcher when the vault has values, writing its request to stdin", async () => {
@@ -212,6 +223,35 @@ describe("stopDev", () => {
   });
 });
 
+describe("restartDev", () => {
+  it("does nothing for a card with no server", async () => {
+    await dev.restartDev("a");
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("stops the server and starts it again the same way", async () => {
+    await dev.startDev("a", "npm run dev", "/app", "A", "http://localhost:3000");
+    const first = last();
+    await dev.restartDev("a");
+    expect(kill).toHaveBeenCalledWith(-first.pid, "SIGTERM");
+    expect(spawn).toHaveBeenCalledTimes(2);
+    // Same argv split, not the original string.
+    expect(spawn.mock.calls[1]?.[0]).toBe("npm");
+    expect(spawn.mock.calls[1]?.[1]).toEqual(["run", "dev"]);
+    expect(spawn.mock.calls[1]?.[2]).toMatchObject({ cwd: "/app" });
+    expect((await dev.devStatus("a")).command).toBe("npm run dev");
+  });
+
+  it("bumps the new run's restarts to 1, then 2, on each restart", async () => {
+    await dev.startDev("a", "npm run dev", "/app");
+    expect(dev.runs.get("a")?.restarts).toBeUndefined();
+    await dev.restartDev("a");
+    expect(dev.runs.get("a")?.restarts).toBe(1);
+    await dev.restartDev("a");
+    expect(dev.runs.get("a")?.restarts).toBe(2);
+  });
+});
+
 describe("on exit", () => {
   it("stops every server Weft started", async () => {
     expect(exitHooks).toHaveLength(1);
@@ -228,5 +268,35 @@ describe("on exit", () => {
     vi.resetModules();
     await import("./devserver");
     expect(exitHooks).toHaveLength(1);
+  });
+});
+
+describe("splitCommand", () => {
+  it("splits the launchers lib/dev-commands.ts produces", () => {
+    expect(dev.splitCommand("npm run dev")).toEqual(["npm", "run", "dev"]);
+    expect(dev.splitCommand("pnpm dev")).toEqual(["pnpm", "dev"]);
+    expect(dev.splitCommand("yarn storybook dev --ci")).toEqual(["yarn", "storybook", "dev", "--ci"]);
+    expect(dev.splitCommand("bin/rails server")).toEqual(["bin/rails", "server"]);
+    expect(dev.splitCommand("bin/dev")).toEqual(["bin/dev"]);
+    expect(dev.splitCommand("make dev")).toEqual(["make", "dev"]);
+    expect(dev.splitCommand("deno task dev")).toEqual(["deno", "task", "dev"]);
+    expect(dev.splitCommand("npx wrangler dev")).toEqual(["npx", "wrangler", "dev"]);
+    expect(dev.splitCommand("python3 manage.py runserver")).toEqual(["python3", "manage.py", "runserver"]);
+    expect(dev.splitCommand(".venv/bin/python manage.py runserver")).toEqual([".venv/bin/python", "manage.py", "runserver"]);
+  });
+
+  it("keeps quoted text as a single argv", () => {
+    expect(dev.splitCommand(`node -e "console.log('hi')"`)).toEqual(["node", "-e", "console.log('hi')"]);
+    expect(dev.splitCommand(`node -e 'console.log("hi")'`)).toEqual(["node", "-e", `console.log("hi")`]);
+  });
+
+  it("collapses tabs and runs of spaces", () => {
+    expect(dev.splitCommand("pnpm   dev")).toEqual(["pnpm", "dev"]);
+    expect(dev.splitCommand("pnpm\tdev")).toEqual(["pnpm", "dev"]);
+  });
+
+  it("returns an empty array for whitespace", () => {
+    expect(dev.splitCommand("")).toEqual([]);
+    expect(dev.splitCommand("   ")).toEqual([]);
   });
 });

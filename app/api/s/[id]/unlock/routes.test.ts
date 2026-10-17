@@ -3,18 +3,21 @@
 // have their own branch.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { loadShare, grantGatePass, getShareGate, serviceClient, insertShareVisit, verifySharePassword } = vi.hoisted(() => ({
+const { loadShare, grantGatePass, getShareGate, serviceClient, insertShareVisit, verifySharePassword, checkAndRecord, hashIp } = vi.hoisted(() => ({
   loadShare: vi.fn(),
   grantGatePass: vi.fn(),
   getShareGate: vi.fn(),
   serviceClient: vi.fn(),
   insertShareVisit: vi.fn(),
   verifySharePassword: vi.fn(),
+  checkAndRecord: vi.fn(),
+  hashIp: vi.fn(),
 }));
 
 vi.mock("@/lib/share-access", () => ({ loadShare, insertShareVisit }));
 vi.mock("@/lib/share-gate", () => ({ getShareGate }));
 vi.mock("@/lib/web-session", () => ({ serviceClient }));
+vi.mock("@/lib/share-unlock-rate", () => ({ checkAndRecord, hashIp }));
 vi.mock("@aimhuge/share/server", () => ({ grantGatePass, verifySharePassword }));
 
 const cookies = vi.hoisted(() => vi.fn());
@@ -27,6 +30,7 @@ async function load() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  process.env.SHARE_UNLOCK_PEPPER = "pepper";
   getShareGate.mockReturnValue({
     cookieName: (id: string) => `weft_share_${id.slice(0, 4)}`,
     sign: (id: string) => `signed:${id}`,
@@ -36,10 +40,15 @@ beforeEach(() => {
   });
   grantGatePass.mockResolvedValue(true);
   serviceClient.mockReturnValue({ from: () => ({ insert: vi.fn(() => Promise.resolve({ error: null })) }) });
+  // hashIp is deterministic on the input so a test can drive "same caller".
+  hashIp.mockImplementation((ip: string) => `hash:${ip}`);
+  // checkAndRecord default: allow. Tests that want to drive the 429 path override.
+  checkAndRecord.mockResolvedValue({ allowed: true, windowResetAt: Date.now() + 60_000 });
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  delete process.env.SHARE_UNLOCK_PEPPER;
 });
 
 function ctx(id: string) {
@@ -51,16 +60,33 @@ function postReq(body: unknown, headers: Record<string, string> = {}): Request {
 }
 
 describe("POST /api/s/[id]/unlock", () => {
-  it("returns 429 after 10 attempts in a window from the same ip+id", async () => {
+  it("returns 429 when the shared rate limit denies the attempt", async () => {
+    checkAndRecord.mockResolvedValue({ allowed: false, windowResetAt: Date.now() + 60_000 });
+    const { POST } = await load();
+    const res = await POST(postReq({ password: "wrong" }, { "x-real-ip": "1.1.1.1" }), ctx("x"));
+    expect(res.status).toBe(429);
+    expect(res.headers.get("retry-after")).toBeTruthy();
+  });
+
+  it("trusts x-real-ip but not x-forwarded-for (the M-1 fix)", async () => {
+    const { POST } = await load();
+    // x-forwarded-for alone (no x-real-ip) is treated as the same unknown bucket, so both
+    // requests collapse to one caller; x-real-ip is the only signal the route keys on.
+    await POST(postReq({ password: "wrong" }, { "x-forwarded-for": "9.9.9.9" }), ctx("x"));
+    await POST(postReq({ password: "wrong" }, { "x-forwarded-for": "8.8.8.8" }), ctx("x"));
+    expect(hashIp).toHaveBeenLastCalledWith("unknown", "pepper");
+    await POST(postReq({ password: "wrong" }, { "x-real-ip": "1.1.1.1" }), ctx("x"));
+    expect(hashIp).toHaveBeenLastCalledWith("1.1.1.1", "pepper");
+  });
+
+  it("skips the rate check when SHARE_UNLOCK_PEPPER isn't set (route stays 503-able)", async () => {
+    delete process.env.SHARE_UNLOCK_PEPPER;
     loadShare.mockResolvedValue({ share: { id: "x", org_id: "o", card_id: "c", mode: "password", password_hash: "scrypt$1$2" } });
     verifySharePassword.mockReturnValue(false);
     const { POST } = await load();
-    for (let i = 0; i < 10; i++) {
-      const res = await POST(postReq({ password: "wrong" }, { "x-forwarded-for": "1.1.1.1" }), ctx("x"));
-      expect(res.status).toBe(401);
-    }
-    const res = await POST(postReq({ password: "wrong" }, { "x-forwarded-for": "1.1.1.1" }), ctx("x"));
-    expect(res.status).toBe(429);
+    const res = await POST(postReq({ password: "wrong" }, { "x-real-ip": "1.1.1.1" }), ctx("x"));
+    expect(res.status).toBe(401);
+    expect(checkAndRecord).not.toHaveBeenCalled();
   });
 
   it("returns 503 when the share row is missing", async () => {

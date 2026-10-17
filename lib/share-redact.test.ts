@@ -54,6 +54,31 @@ describe("redactText", () => {
     // @ts-expect-error testing runtime guard
     expect(redactText(undefined)).toBeUndefined();
   });
+
+  it("redacts a long high-entropy opaque token (M-2 narrowing)", () => {
+    // A custom in-house API key: 44 chars, URL-safe base64 alphabet, no known pattern. The entropy
+    // pass picks it up; the pattern pass alone would not.
+    const token = "Qx9zT3vKfL2mY8wRjP5cE7nB4hG1aDsUo6iW0eTrYlA"; // gitleaks:allow
+    const out = redactText(`key=${token} end`);
+    expect(out).toContain("‹hidden: an opaque value›");
+    expect(out).not.toContain(token);
+  });
+
+  it("leaves a long URL path alone (slashes break the run, no high-entropy run)", () => {
+    const url = "https://example.com/v1/projects/abcdefghijklmnop/abcdefghijklmnop/abcdefghijklmnop";
+    const out = redactText(url);
+    expect(out).toBe(url);
+  });
+
+  it("leaves a 64-char hex hash alone (whitelisted)", () => {
+    const hash = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
+    expect(redactText(`sha256:${hash}`)).toBe(`sha256:${hash}`);
+  });
+
+  it("leaves a UUID alone (whitelisted)", () => {
+    const uuid = "550e8400-e29b-41d4-a716-446655440000";
+    expect(redactText(`id ${uuid} end`)).toBe(`id ${uuid} end`);
+  });
 });
 
 describe("redactItem", () => {

@@ -1,43 +1,30 @@
 // POST /api/s/[id]/unlock — the gate's submit. The body matches what ShareGateForm posts
 // (@aimhuge/share/client): a JSON object with EITHER `password` (a password gate) or `email` (an
 // email gate). On success the route grants the gate pass; on a bad mode for the body it answers
-// 400. A best-effort in-memory rate limit per (ip, id) keeps the route from being a brute force.
+// 400. The rate limit per (ip, share_id) lives in Supabase (lib/share-unlock-rate) so it survives
+// redeploys and load-balanced instances, and the IP itself is read from `x-real-ip` (Vercel
+// rewrites it on the edge) — not the `x-forwarded-for` chain, which any client can forge.
 //
-// No localhost guard: the route is the public gate. SUPABASE_SECRET_KEY is set on the deployed
-// site only, so a local Weft that hasn't set the key answers 503 for "Sharing isn't set up" —
-// the same fallback a misconfigured deployment answers with.
+// No localhost guard: the route is the public gate. SUPABASE_SECRET_KEY and SHARE_UNLOCK_PEPPER
+// are set on the deployed site only; a local Weft that hasn't set them answers 503 for "Sharing
+// isn't set up on this server" — the same fallback a misconfigured deployment answers with.
 import { grantGatePass, verifySharePassword } from "@aimhuge/share/server";
 import { getShareGate } from "@/lib/share-gate";
 import { insertShareVisit, loadShare } from "@/lib/share-access";
 import { serviceClient } from "@/lib/web-session";
+import { checkAndRecord, hashIp } from "@/lib/share-unlock-rate";
 import { isPlausibleEmail } from "@aimhuge/teams";
 
-const RATE_WINDOW_MS = 10 * 60 * 1000;
-const RATE_MAX = 10;
-
-interface Bucket {
-  count: number;
-  resetAt: number;
-}
-const rate = new Map<string, Bucket>();
-
-function rateCheck(key: string): boolean {
-  const now = Date.now();
-  const entry = rate.get(key);
-  if (!entry || entry.resetAt <= now) {
-    rate.set(key, { count: 1, resetAt: now + RATE_WINDOW_MS });
-    return true;
-  }
-  if (entry.count >= RATE_MAX) return false;
-  entry.count += 1;
-  return true;
-}
-
-function clientIp(req: Request): string {
-  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "unknown";
-}
-
 const NO_STORE = { "Cache-Control": "no-store" } as const;
+
+// x-real-ip is set by Vercel at the edge (and by a few other trusted proxies); it is the only
+// trustworthy source for the client's IP. x-forwarded-for is whatever the client put there, so an
+// attacker can pick a new value per request and slip past an in-memory rate limit. Falling back to
+// "unknown" collapses all unverified callers into one bucket — the limit still bites, just per
+// share rather than per caller.
+function clientIp(req: Request): string {
+  return req.headers.get("x-real-ip")?.trim() || "unknown";
+}
 
 interface UnlockBody {
   password?: unknown;
@@ -48,11 +35,34 @@ function asString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
+// What `tryUnlockRateLimit` needs from the runtime: clock and pepper. `pepper` is read off the
+// service env so a misconfigured deployment (no SHARE_UNLOCK_PEPPER) answers 503 with the rest of
+// the route, not a silently-broken rate limit.
+interface RateEnv {
+  now: number;
+  pepper: string | null;
+}
+
+async function tryUnlockRateLimit(req: Request, id: string, env: RateEnv): Promise<Response | null> {
+  if (!env.pepper) return null;
+  const service = serviceClient();
+  if (!service) return null;
+  const ip = clientIp(req);
+  const ipHash = await hashIp(ip, env.pepper);
+  const verdict = await checkAndRecord(service, ipHash, id, env.now);
+  if (verdict.allowed) return null;
+  const retryAfter = Math.max(1, Math.ceil((verdict.windowResetAt - env.now) / 1000));
+  return Response.json(
+    { error: "Too many attempts. Try again in a few minutes." },
+    { status: 429, headers: { ...NO_STORE, "Retry-After": String(retryAfter) } },
+  );
+}
+
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  if (!rateCheck(`${clientIp(req)}:${id}`)) {
-    return Response.json({ error: "Too many attempts. Try again in a few minutes." }, { status: 429, headers: NO_STORE });
-  }
+  const blocked = await tryUnlockRateLimit(req, id, { now: Date.now(), pepper: process.env.SHARE_UNLOCK_PEPPER ?? null });
+  if (blocked) return blocked;
+
   let body: UnlockBody;
   try {
     body = (await req.json()) as UnlockBody;

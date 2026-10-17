@@ -20,10 +20,10 @@ const os = require("node:os");
 const path = require("node:path");
 const { registerAboutBridge } = require("./about.cjs");
 const { createBrowserPane } = require("./browser-pane.cjs");
-const { createBoardView, boardViewRoutes } = require("./board-view.cjs");
 const { createMenus } = require("./menus.cjs");
 const { createPageLinks } = require("./page-links.cjs");
 const { createPanePages } = require("./pane-pages.cjs");
+const { paneRoutes } = require("./pane-routes.cjs");
 const { removeShellToken, writeShellToken } = require("./shell-token.cjs");
 const { appendToolchain, fixPath } = require("./env.cjs");
 const { startServer } = require("./server.cjs");
@@ -35,7 +35,7 @@ const { loadWindowState, trackWindowState } = require("./window-state.cjs");
 const { createAccountLink } = require("./account-link.cjs");
 const { argvLink } = require("./argv-link.cjs");
 const { createMenuPopup } = require("./main-menu-popup.cjs");
-const { createFolderAccess } = require("./folder-access.cjs");
+const { createNewThreadLink } = require("./new-thread-link.cjs");
 
 const APP_NAME = "Weft";
 const TAGLINE = "Engineering the future, one thread at a time";
@@ -75,28 +75,12 @@ const pane = createBrowserPane({
   pages: createPanePages(dataDir()),
   // weft:// links clicked inside a pane page, like a walk-through's buttons.
   onLink: (url, from) => pageLinks.handle(url, from) || handleLink(url),
-  routes: {
-    // The Weft account's session, sealed by safeStorage; the server reads it here instead of a plain file.
-    ...require("./account-store.cjs").accountRoutesFor(dataDir()),
-    // mcp__secrets__add_blank and set_value: blanks into the card's vault, and a value a thread generated into one.
-    ...require("./vault-routes.cjs").vaultRoutes(() => vault),
-    // mcp__secrets__ask_add, and a fill or run that found a key missing: the name goes in as a blank
-    // (lib/secret-ask.ts). The ask's input shows in the thread itself (components/SecretAskInput.tsx).
-    "POST /secrets/ask-add": async ({ folder, name, environment }) => {
-      await vault?.addBlanks(String(folder), [String(name)], [String(environment || "development")], { source: "a thread" }).catch(() => null);
-      return { added: true };
-    },
-    // mcp__board__request_folder_access: a thread that got "Operation not permitted" on Downloads asks; macOS prompts, or a dialog opens Settings.
-    "POST /folder-access/ask": ({ folder }) => createFolderAccess({ app, dialog, shell, window: () => win }).ask(folder),
-    "POST /app/restart": ({ then }) => require("./restart-when-idle.cjs").restartFor({ then, updater: menus.updater, app }), // the server's restart when idle, once nothing runs
-    "POST /webhooks/ask-add": ({ folder, id }) => (sendMenu("add-webhook", JSON.stringify({ folder, id })), { ok: true }), // mcp__webhooks__ask_add: the board opens 🪝 on a recorded webhook
-    // mcp__secrets__push_to_vercel: a vault value onto the card's linked Vercel project, after Touch ID.
-    ...require("./vercel-env.cjs").envRoutes(() => vercelEnv),
-    // The copilot's chips (lib/copilot-sources.ts): the latest deploy and unapplied migrations per folder, read-only.
-    ...Object.fromEntries(Object.entries({ vercel: () => vercelApi, supabase: () => supabaseApi }).map(([name, api]) => [`POST /${name}/status`, ({ folders }) => api()?.status((folders ?? []).map(String)) ?? { folders: [] }])),
-    // mcp__board_view__*: threads see and drive the board itself, secrets redacted (electron/board-view.cjs).
-    ...boardViewRoutes(createBoardView({ board: () => appView?.webContents })),
-  },
+  // What threads and the server ask main for, over the pane's control server (electron/pane-routes.cjs).
+  routes: paneRoutes({
+    dataDir: dataDir(), app, dialog, shell, sendMenu,
+    window: () => win, board: () => appView?.webContents, updater: () => menus.updater,
+    vault: () => vault, vercelEnv: () => vercelEnv, vercelApi: () => vercelApi, supabaseApi: () => supabaseApi,
+  }),
 });
 // A walk-through page's buttons: replies, and commits that run with no turn.
 const pageLinks = createPageLinks({
@@ -242,7 +226,7 @@ function createMainWindow() {
 
   // Links in the board open in the browser pane, not a new window.
   appView.webContents.setWindowOpenHandler(({ url }) => {
-    pane.open(url).catch(() => {});
+    pane.open(url, undefined, false, { fromBoard: true }).catch(() => {});
     return { action: "deny" };
   });
   menus.attachContextMenu(appView.webContents);
@@ -279,7 +263,7 @@ function createCopilot() {
   });
   trackWindowState("copilot", copilotWin);
   copilotWin.webContents.setWindowOpenHandler(({ url }) => {
-    pane.open(url).catch(() => {});
+    pane.open(url, undefined, false, { fromBoard: true }).catch(() => {});
     return { action: "deny" };
   });
   menus.attachContextMenu(copilotWin.webContents);
@@ -318,7 +302,7 @@ function toggleCopilot() {
 }
 
 // ---- weft:// links ----
-// weft://new?prompt=…&folder=…&title=…&cli=puku&start=1   create a card (in the most recent project by default)
+// weft://new?prompt=…&folder=…&title=…&cli=puku           create a card (L-3: dialog pre-filled, Start required)
 // weft://card/<id>                                        open a card
 // weft://copilot                                          open the copilot
 // weft://reply and weft://commit come from a card's own page in the pane (page-links.cjs)
@@ -343,33 +327,8 @@ async function handleLink(raw) {
   return handleNewThreadLink(url);
 }
 
-async function handleNewThreadLink(url) {
-  const prompt = url.searchParams.get("prompt");
-  if (!prompt) return sendMenu("new-thread");
-  try {
-    let folder = url.searchParams.get("folder");
-    if (!folder) {
-      const settings = await (await fetch(`${server.url}/api/settings`)).json();
-      folder = settings.projects?.[0]?.path ?? os.homedir();
-    }
-    const res = await fetch(`${server.url}/api/cards`, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-threadboard": "1" },
-      body: JSON.stringify({
-        prompt,
-        title: url.searchParams.get("title") ?? undefined,
-        cwd: folder,
-        backend: url.searchParams.get("cli") === "puku" ? "puku" : "claude",
-        start: url.searchParams.get("start") === "1",
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error ?? res.statusText);
-    sendMenu("open-card", data.card.id);
-  } catch (err) {
-    dialog.showMessageBox(win, { type: "warning", message: "Couldn't create the card", detail: err.message });
-  }
-}
+// weft://new — L-3: the dialog is pre-filled but the user has to click Start; start=1 is ignored.
+const handleNewThreadLink = createNewThreadLink({ getServer: () => server, getWin: () => win, sendMenu });
 
 // ---- Menus, tray, dock (menus.cjs) ----
 
@@ -392,7 +351,10 @@ const menus = createMenus({
 // ---- IPC from the board and copilot ----
 
 // A page that won't load (a dev server that isn't running) is shown in the pane; it isn't an error for the board.
-ipcMain.handle("browser:open", (_e, url, key) => pane.open(url, key || undefined, true).catch((err) => ({ error: String(err.message || err) })));
+// (L-5) Only the board may open URLs in the pane; a compromised renderer can't pivot it to a fresh host.
+ipcMain.handle("browser:open", (e, url, key) => e.sender && e.sender === appView?.webContents
+  ? pane.open(url, key || undefined, true, { fromBoard: true }).catch((err) => ({ error: String(err.message || err) }))
+  : { error: "Browser pane only answers the board window." });
 ipcMain.handle("browser:state", () => pane.state());
 ipcMain.on("browser:visible", (_e, visible) => pane.setVisible(Boolean(visible)));
 ipcMain.on("browser:active", (_e, key) => pane.setActive(key));
@@ -408,7 +370,7 @@ ipcMain.on("browser:forward", () => pane.forward());
 ipcMain.on("browser:reload", () => pane.reload());
 ipcMain.on("browser:zoom", (_e, action) => pane.zoom(action));
 ipcMain.on("copilot:toggle", () => toggleCopilot());
-const killTerminals = registerTerminal(ipcMain);
+const killTerminals = registerTerminal(ipcMain, { isBoard: (sender) => Boolean(sender) && sender === appView?.webContents });
 ipcMain.handle("dialog:openFolder", async () => {
   const result = await dialog.showOpenDialog(win, { properties: ["openDirectory", "createDirectory"] });
   return result.canceled ? null : result.filePaths[0];

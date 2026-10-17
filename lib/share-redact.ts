@@ -2,7 +2,9 @@
 // with `‹hidden: <kind>›` so a leaked share link can't leak your API tokens. The patterns come from
 // lib/secret-detect.ts — same shapes the Composer flags, the pre-commit hook scans for, the thread
 // env strips — so an API key that wasn't safe to paste into the chat isn't safe to paste through
-// a share either.
+// a share either. A second pass over what's left flags any long high-entropy opaque token
+// (lib/share-redact-entropy.ts) the patterns didn't know about — a custom in-house API key, a
+// freshly-minted one-off, an internal SaaS token — and redacts it as "an opaque value".
 //
 // The redactor walks an item like collectBlobRefs walks a thread (lib/web-board.ts): strings are
 // scanned, arrays/objects recursed. A tool result over TOOL_RESULT_INLINE_MAX is dropped entirely;
@@ -10,6 +12,7 @@
 // against an already-uncut item that slipped through (e.g. one a future outbox version doesn't
 // trim).
 import { findSecret } from "./secret-detect";
+import { findOpaqueToken } from "./share-redact-entropy";
 import { TOOL_RESULT_INLINE_MAX } from "./cloud-sync-types";
 import type { ThreadItem } from "./types";
 
@@ -34,26 +37,35 @@ export function redactText(text: string): string {
 }
 
 function redactOnePass(text: string): string {
-  // findSecret returns the first hit; replace it and scan the rest by re-running on what's left
-  // through a while loop. Each replacement shortens the string, so a pathological input (a string
-  // made of nothing but tokens) ends in REDACT_PASSES iterations.
   let out = "";
   let cursor = 0;
   while (cursor < text.length) {
     const rest = text.slice(cursor);
-    const match = findSecret(rest);
-    if (!match) {
-      out += rest;
-      break;
+    // findSecret returns the first hit; replace it and scan the rest by re-running on what's left
+    // through a while loop. Each replacement shortens the string, so a pathological input (a string
+    // made of nothing but tokens) ends in REDACT_PASSES iterations.
+    const known = findSecret(rest);
+    if (known && known.value.length > 0) {
+      const start = rest.indexOf(known.value);
+      if (start >= 0) {
+        out += rest.slice(0, start);
+        out += `‹hidden: ${known.kind}›`;
+        cursor += start + known.value.length;
+        continue;
+      }
     }
-    const start = match.value.length ? rest.indexOf(match.value) : 0;
-    if (start < 0) {
-      out += rest;
-      break;
+    // The pattern set didn't match: any long high-entropy run that's not a UUID or a known hash
+    // shape is suspicious. This is the M-2 narrowing — a custom in-house key shape, a freshly
+    // minted one-off, an internal SaaS token — that the patterns miss.
+    const opaque = findOpaqueToken(rest);
+    if (opaque) {
+      out += rest.slice(0, opaque.index);
+      out += `‹hidden: an opaque value›`;
+      cursor += opaque.index + opaque.value.length;
+      continue;
     }
-    out += rest.slice(0, start);
-    out += `‹hidden: ${match.kind}›`;
-    cursor += start + match.value.length;
+    out += rest;
+    break;
   }
   return out;
 }
