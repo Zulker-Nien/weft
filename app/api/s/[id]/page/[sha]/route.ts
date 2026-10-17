@@ -9,6 +9,7 @@
 // THIS card's current pane: a share link is for one card, not for every file the workspace has uploaded.
 import { shareAccess } from "@/lib/share-access";
 import { loadPaneAcrossThread } from "@/lib/share-live";
+import { isTextType, pageContentType } from "@/lib/share-page";
 import { redactText } from "@/lib/share-redact";
 import { serviceClient } from "@/lib/web-session";
 
@@ -41,10 +42,11 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string; sh
   const path = `${orgId}/${sha}`;
   const { data, error } = await service.storage.from("weft-blobs").download(path);
   if (error) return new Response("Not found", { status: 404, headers: NO_STORE });
-  // The blob's stored type wins; we don't sniff (X-Content-Type-Options: nosniff is on). Anything that isn't text
-  // (an image, a PDF) passes through as bytes.
-  const type = data.type || "application/octet-stream";
+  // Storage answers HTML as text/plain, so the type comes from the file (lib/share-page.ts), not the header. Anything
+  // that isn't text (an image, a PDF) passes through as bytes.
+  const bytes = await data.arrayBuffer();
+  const type = pageContentType(data.type, new TextDecoder().decode(bytes.slice(0, 512)));
   // The page is the owner's own file, but a key typed into it shouldn't reach a stranger: mask text the way the thread is.
-  const body = type.startsWith("text/") ? redactText(await data.text()) : await data.arrayBuffer();
+  const body = isTextType(type) ? redactText(new TextDecoder().decode(bytes)) : bytes;
   return new Response(body, { status: 200, headers: { ...HEADERS, "Content-Type": type } });
 }

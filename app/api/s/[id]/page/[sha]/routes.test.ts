@@ -84,11 +84,19 @@ describe("GET /api/s/[id]/page/[sha]", () => {
     download(new Blob(["<html>hi</html>"], { type: "text/html" }));
     const res = await get();
     expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toBe("text/html");
+    expect(res.headers.get("content-type")).toBe("text/html; charset=utf-8");
     expect(res.headers.get("content-security-policy")).toBe("sandbox allow-scripts allow-popups allow-forms");
     expect(res.headers.get("x-content-type-options")).toBe("nosniff");
     expect(res.headers.get("cache-control")).toBe("private, max-age=300");
     expect(await res.text()).toBe("<html>hi</html>");
+  });
+
+  it("serves HTML as a page when Storage hands it back as text/plain, with its UTF-8 intact", async () => {
+    download(new Blob(["<!doctype html><title>Done → ok</title>"], { type: "text/plain;charset=UTF-8" }));
+    const res = await get();
+    expect(res.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    expect(res.headers.get("content-security-policy")).toBe("sandbox allow-scripts allow-popups allow-forms");
+    expect(await res.text()).toBe("<!doctype html><title>Done → ok</title>");
   });
 
   it("masks key-shaped text in a page, the way the thread is", async () => {

@@ -55,6 +55,7 @@ the whole thread, as one of three kinds:
   the page runs, but in an opaque origin, so its scripts can never read weft.zip's cookies.
   The route serves only the blob of this card's own current pane (`loadPaneAcrossThread`), never another upload in the
   workspace, and masks key-shaped text in what it serves, the way the thread is.
+  The type comes from the file, not from Storage, which answers HTML as `text/plain` (`lib/share-page.ts`; bug-fixes/022).
 - `site`: a public URL, framed directly, with an Open link for the sites that refuse to be framed.
 - `local`: only reachable on the owner's Mac (localhost, a file that didn't upload). The viewer shows the card's pane
   capture instead: the thumbnail `lib/glance.ts` takes after each turn, which the outbox now uploads as a blob too.
