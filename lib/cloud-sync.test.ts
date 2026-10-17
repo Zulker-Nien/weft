@@ -442,6 +442,21 @@ describe("startCloudSync", () => {
     expect((await outboxEntries()).length).toBe(1);
   });
 
+  it("uploads after you sign in: a signed-out flush doesn't leave the outbox stuck in flight", async () => {
+    cardInStore("a");
+    cardInStore("b");
+    let signedIn = false;
+    clientProvider = () => (signedIn ? fakeClient : null);
+    await start();
+    publish({ type: "card", card: cards.get("a")! });
+    await flush();
+    expect(allRows("cloud_cards")).toHaveLength(0);
+    signedIn = true;
+    publish({ type: "card", card: cards.get("b")! });
+    await flush();
+    expect(allRows("cloud_cards").map((r) => (r as { card_id: string }).card_id).sort()).toEqual(["a", "b"]);
+  });
+
   it("no user (session null): keeps entries, doesn't back off, doesn't warn", async () => {
     cardInStore("a");
     fakeClient.auth.getSession.mockResolvedValueOnce({ data: { session: null } });

@@ -181,6 +181,9 @@ async function flush(ctx: Ctx) {
   const { s } = ctx;
   s.timer = null;
   s.inFlight = true;
+  // The early returns below (nothing queued, signed out, no workspace) must still let go of inFlight, or every later
+  // trigger only sets dirty and the outbox never uploads again until Weft restarts.
+  let retryIn: number | null = null;
   try {
     const raw = readOutbox();
     if (!raw.length) return;
@@ -224,12 +227,12 @@ async function flush(ctx: Ctx) {
     s.lastError = message;
     s.backoffMs = Math.min(s.backoffMs ? s.backoffMs * 2 : 1_000, BACKOFF_MAX_MS);
     s.dirty = false;
+    retryIn = s.backoffMs;
+  } finally {
     s.inFlight = false;
-    trigger(ctx, s.backoffMs);
-    return;
   }
-  s.inFlight = false;
-  if (s.dirty) {
+  if (retryIn !== null) trigger(ctx, retryIn);
+  else if (s.dirty) {
     s.dirty = false;
     trigger(ctx);
   }
