@@ -25,12 +25,10 @@ const originals = fs.readdirSync(DIR).filter((n) => RASTER.test(n) && !n.endsWit
 const sizeOf = (file) => (fs.existsSync(file) ? fs.statSync(file).size : 0);
 const mb = (bytes) => `${(bytes / 1024 ** 2).toFixed(1)} MB`;
 
+// Weft's Electron or its next dev server. ps, not pgrep: pgrep -f missed Weft's own Electron here.
 function weftRunning() {
-  try {
-    return execFileSync("pgrep", ["-f", "node_modules/electron/dist/Electron.app/Contents/MacOS/Electron"], { encoding: "utf8" }).trim() !== "";
-  } catch {
-    return false;
-  }
+  const procs = execFileSync("ps", ["-A", "-o", "command="], { encoding: "utf8" });
+  return /node_modules\/electron\/dist\/Electron\.app\/Contents\/MacOS\/Electron |next-server|next\/dist\/bin\/next dev/.test(procs);
 }
 
 // Every text file under a folder, for finding which attachment names it mentions.
