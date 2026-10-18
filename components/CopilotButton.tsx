@@ -6,9 +6,10 @@ export default function CopilotButton(props: { open: boolean; needsYou: boolean;
     <button
       onClick={props.onClick}
       title={props.title}
-      className={`relative flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12.5px] ${props.open ? "border-accent bg-accent-soft text-accent" : "border-line-strong text-ink hover:bg-sunken"}`}
+      aria-label="Copilot"
+      className={`relative flex items-center gap-1.5 rounded-md border p-1.5 ${props.open ? "border-accent bg-accent-soft text-accent" : "border-line-strong text-ink hover:bg-sunken"}`}
     >
-      <Icon name="sparkles" size={14} /> Copilot
+      <Icon name="sparkles" size={15} />
       {props.needsYou && (
         <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-warn" title="The copilot needs you" />
       )}
