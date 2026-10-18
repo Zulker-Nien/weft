@@ -143,9 +143,11 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   file size, lint, types, guardrails); `lib/scout.ts` + `lib/scout-view.ts` + `app/api/scout`: the refactor scout, a cached
   read-only Sonnet run whose findings take the score's last 10 points so it never hits 100. `components/QualityBadge.tsx`
   draws it, `components/ScoutMenu.tsx` starts a card per finding; its hover bubble is `components/Tip.tsx` (native titles don't show in Electron).
+- `lib/welcome.ts` + `lib/welcome-preview.ts` + `lib/welcome-client.ts` + `app/api/welcome` + `components/WelcomeDialog.tsx` + `components/WelcomeSteps.tsx` + `components/HistorySettings.tsx`: first launch's welcome, for everyone: the Wefter Profile your Claude Code history makes (Opt out / OK) and the projects to bring in (Start fresh / OK); the session sync (`lib/import-sync.ts`) adds no cards until it's answered, a board with cards is adopted silently, and `countsAt` keeps opted-out history off the game. Settings → General changes it and replays it.
 - `lib/activity.ts` + `lib/game*.ts` + `lib/craft.ts` (the skills each Done card's transcript ran, behind Craft) + `lib/project-checks.ts` + `app/api/game`: streaks, XP, badges, the builder card and the
   production-ready tree, from the append-only `~/.weft/activity.jsonl`; `components/GameBadge.tsx` is the header chip and
-  `components/LoomDialog.tsx` its dialog (docs/architecture/gamification.md).
+  `components/LoomDialog.tsx` its dialog, titled Wefter Profile (docs/architecture/gamification.md). `lib/usage-scan.ts` + `lib/usage.ts` read every Claude Code and puku-cli transcript
+  incrementally (`~/.weft/usage.json`) into tokens per day and plan-limit hits, which `components/LoomUsage.tsx` charts and the ⏳/🗓️ limit badges read.
 - `lib/commit-pile.ts` + `app/api/pile` + `components/PileBadge.tsx`: the header's "+N/-N" uncommitted counter and the card it
   starts to commit that pile one Review card at a time; its page's Commit buttons are `weft://commit` links
   (`electron/page-links.cjs`) that `lib/pile-commit.ts` runs with no turn (commit by path, push, move to Done).
@@ -181,6 +183,9 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   account gets one through `supabase/migrations/20261013170000_teams.sql`), on the visitor's own cookie session. Uses `@aimhuge/teams`
   (`vendor/*.tgz`) for its helpers only: its `requireOrg` and actions pass a client into `"use cache"`, which Next 16 refuses, so the
   gate is Weft's own. Never pass the gate's `service` client to a client component (docs/architecture/teams.md, teams-vault.md).
+- `lib/profile-card.ts` + `lib/profile-card-sync.ts` + `lib/signed-in-client.ts` + `lib/public-profile.ts` + `components/profile/*` + `supabase/migrations/20261018135430_profile_cards.sql`: the public Wefter Profile at `weft.zip/@username` (`app/u/[username]`):
+  the signed-in Mac posts the Loom's You and Badges tabs as one snapshot (`profileCard()`, every 10 min on the league timer and on opening the dialog, never projects or folders) into `profile_cards` through
+  `profile_card_submit`; `loadPublicProfile` re-validates it with `parseProfileCard`, adds league rank and public mini apps, and the page is server components with plain SVG charts and no JS (docs/architecture/profiles.md).
 - `electron/vault*.cjs` + `electron/dotenv.cjs` + `electron/device-key.cjs` + `components/VaultDrawer.tsx`: the 🔐 secrets vault
   (docs/architecture/secrets.md); decryption only in main, IPC to the board window only, `lib/vault-view.ts` + `lib/use-vault.ts` on the board side.
   A thread that needs a key it doesn't have puts the name in as a blank right away with `mcp__secrets__add_blank` (with a hint for where
