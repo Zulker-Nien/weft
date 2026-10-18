@@ -9,7 +9,7 @@ import { forwardTeam } from "@/lib/team-remote";
 // x-threadboard header the guard checks for.
 
 export async function GET(req: Request) {
-  const denied = guard(req, { write: false });
+  const denied = guard(req, { write: false, sensitive: true });
   if (denied) return denied;
   await connection();
   try {

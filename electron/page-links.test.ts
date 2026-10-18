@@ -1,7 +1,19 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { commitBody, createPageLinks, notify, ownPage } from "./page-links.cjs";
 
-const PAGE = "file:///tmp/weft-show/commit-app/index.html";
+// A real folder standing in for ~/.weft: ownPage only trusts files that exist under it.
+const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "weft-own-"));
+const WEFT = path.join(ROOT, ".weft");
+fs.mkdirSync(path.join(WEFT, "show"), { recursive: true });
+fs.mkdirSync(path.join(ROOT, "Downloads"));
+fs.writeFileSync(path.join(WEFT, "show", "index.html"), "");
+fs.writeFileSync(path.join(ROOT, "Downloads", "b.html"), "");
+fs.symlinkSync(path.join(ROOT, "Downloads", "b.html"), path.join(WEFT, "show", "link.html"));
+const PAGE = pathToFileURL(path.join(WEFT, "show", "index.html")).href;
 const from = { card: "pile", page: PAGE };
 
 function page(url = PAGE) {
@@ -10,7 +22,7 @@ function page(url = PAGE) {
 
 function links(wc = page()) {
   const warn = vi.fn();
-  const api = createPageLinks({ getServer: () => ({ url: "http://127.0.0.1:3457" }), contentsFor: () => wc, warn });
+  const api = createPageLinks({ getServer: () => ({ url: "http://127.0.0.1:3457" }), contentsFor: () => wc, warn, weftDir: WEFT });
   return { api, warn, wc };
 }
 
@@ -24,10 +36,17 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("ownPage / commitBody", () => {
   it("is only a card's local file page", () => {
-    expect(ownPage(from)).toBe(true);
+    expect(ownPage(from, WEFT)).toBe(true);
     expect(ownPage({ card: "pile", page: "https://evil.example" })).toBe(false);
     expect(ownPage({ card: null, page: PAGE })).toBe(false);
     expect(ownPage(undefined)).toBe(false);
+  });
+
+  it("refuses a file outside the weft folder, a symlink out of it and a missing file", () => {
+    const at = (...p: string[]) => ({ card: "pile", page: pathToFileURL(path.join(ROOT, ...p)).href });
+    expect(ownPage(at("Downloads", "b.html"), WEFT)).toBe(false);
+    expect(ownPage(at(".weft", "show", "link.html"), WEFT)).toBe(false);
+    expect(ownPage(at(".weft", "show", "gone.html"), WEFT)).toBe(false);
   });
 
   it("reads every path and the flags from the link", () => {

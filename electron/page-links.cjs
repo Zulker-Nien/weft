@@ -4,8 +4,23 @@
 //                       commit those paths with no turn (the commit walk-through's Commit buttons, lib/pile-commit.ts)
 // Only a local file page (one a thread wrote) in that card's own pane can, so no website can talk to a thread.
 
-function ownPage(from) {
-  return Boolean(from?.card && typeof from.page === "string" && from.page.startsWith("file:"));
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { fileURLToPath } = require("node:url");
+
+// ~/.weft is where Weft and its threads write pages (show/, pages/, apps/); a file from anywhere else (a download) isn't theirs.
+const WEFT_DIR = path.join(os.homedir(), ".weft");
+
+function ownPage(from, weftDir = WEFT_DIR) {
+  if (!from?.card || typeof from.page !== "string" || !from.page.startsWith("file:")) return false;
+  try {
+    // realpath, so a symlink inside ~/.weft that points elsewhere doesn't count.
+    const file = fs.realpathSync(fileURLToPath(from.page));
+    return file.startsWith(fs.realpathSync(weftDir) + path.sep);
+  } catch {
+    return false;
+  }
 }
 
 // The link's query as the commit route's body (app/api/cards/[id]/commit), checked there.
@@ -26,7 +41,7 @@ function notify(wc, page, name, detail) {
 
 // getServer: the board's server ({ url }) once it's up. contentsFor: a card's pane page (webContents).
 // warn: tells the user something didn't go through.
-function createPageLinks({ getServer, contentsFor, warn }) {
+function createPageLinks({ getServer, contentsFor, warn, weftDir = WEFT_DIR }) {
   async function post(card, route, body) {
     const res = await fetch(`${getServer().url}/api/cards/${encodeURIComponent(card)}/${route}`, {
       method: "POST",
@@ -40,7 +55,7 @@ function createPageLinks({ getServer, contentsFor, warn }) {
 
   async function reply(raw, from) {
     const text = new URL(raw).searchParams.get("text")?.trim();
-    if (!getServer() || !text || !ownPage(from)) return;
+    if (!getServer() || !text || !ownPage(from, weftDir)) return;
     try {
       await post(from.card, "messages", { text });
     } catch (err) {
@@ -50,7 +65,7 @@ function createPageLinks({ getServer, contentsFor, warn }) {
 
   // The board commits, pushes and moves the card; the page hears back as a `weft-commit` event.
   async function commit(raw, from) {
-    if (!getServer() || !ownPage(from)) return;
+    if (!getServer() || !ownPage(from, weftDir)) return;
     const body = commitBody(raw);
     let result;
     try {

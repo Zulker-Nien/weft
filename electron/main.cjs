@@ -25,6 +25,7 @@ const { createPageLinks } = require("./page-links.cjs");
 const { createPanePages } = require("./pane-pages.cjs");
 const { paneRoutes } = require("./pane-routes.cjs");
 const { removeShellToken, writeShellToken } = require("./shell-token.cjs");
+const { attachApiToken } = require("./api-token.cjs");
 const { appendToolchain, fixPath } = require("./env.cjs");
 const { startServer } = require("./server.cjs");
 const { createStartupScreen } = require("./startup-screen.cjs");
@@ -177,6 +178,7 @@ async function boot() {
     return;
   }
   timer.mark("server");
+  attachApiToken(session.defaultSession, server.url, TOKEN);
   await startup.loadBoard(server.url);
   timer.mark("page");
   for (const link of pendingLinks.splice(0)) handleLink(link);

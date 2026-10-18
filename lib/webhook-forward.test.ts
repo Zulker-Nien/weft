@@ -156,6 +156,12 @@ describe("targetUrl", () => {
     expect(fwd.targetUrl("http://localhost:3000/hook", "//evil.example/x")).toMatch(/^http:\/\/localhost:3000\//);
     expect(fwd.targetUrl("http://localhost:3000/hook", "@evil.example")).toBe("http://localhost:3000/hook");
   });
+
+  it("can't climb out of the target's path to another route", () => {
+    for (const extra of ["/../cards/x/shell", "/%2e%2e/%2E%2e/cards/x/shell", "/a/./b", "/a/%2e/b"]) {
+      expect(fwd.targetUrl("http://localhost:3000/api/stripe/webhook", extra)).toBe("http://localhost:3000/api/stripe/webhook");
+    }
+  });
 });
 
 describe("forward", () => {
