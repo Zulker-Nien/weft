@@ -67,6 +67,18 @@ export function removeApp(id: unknown) {
   writeApps(apps.filter((a) => a.id !== id));
 }
 
+// Insert an app with the given id at the given position; the position is clamped to the list size.
+// No-op when an app with that id is already there. Used by lib/app-cloud.ts when a pull brings a
+// row down from prod.
+export function insertAppAt(id: string, app: Omit<MiniApp, "id">, at: number): MiniApp | undefined {
+  const apps = listApps();
+  if (apps.find((a) => a.id === id)) return undefined;
+  const clamped = Math.max(0, Math.min(apps.length, Math.trunc(at)));
+  const inserted: MiniApp = { id, ...app };
+  writeApps([...apps.slice(0, clamped), inserted, ...apps.slice(clamped)]);
+  return inserted;
+}
+
 // The app's share link as Supabase last answered it (lib/app-share.ts); written only when it changed.
 export function rememberAppShare(id: string, share: CardShareMemo) {
   const apps = listApps();
