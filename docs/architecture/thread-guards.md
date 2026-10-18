@@ -153,6 +153,10 @@ parse) can't help. The import guard's PostToolUse report comes too late for thes
   text that the old text didn't have. A local one (`./`, `../`, `@/`) must resolve through `resolveSpec()` in
   `lib/import-check.ts` (same extensions and `index` files); a package must be in a `node_modules` at or above the
   file. Builtins, `#` and `~` aliases are skipped, and packages too when there's no `node_modules` at all.
+- **`@/` follows the project's tsconfig** (`lib/ts-paths.ts` `aliasBases()`): `compilerOptions.paths` against `baseUrl`
+  (else the tsconfig's folder), a relative `extends` followed, the exact key or longest prefix winning as in TypeScript. DeckCP's
+  `@/*` -> `./src/*` and Weft's `@/*` -> `./*` both resolve; with no mapping `@/x` tries the root, then `src/`. The reason's
+  "write X first" names the first target. A tsconfig is parsed once per modification time (comments and trailing commas allowed).
 - **The reason says what to do**: `"@/components/home/Home" doesn't exist yet: write components/home/Home.tsx first,
   then import it from app/page.tsx.` (the importer's extension when the import has none), or `install <pkg> first`.
 - **Speed**: regexes and `stat`s on the added imports, no type-checker and no git; it only reads the edited file.

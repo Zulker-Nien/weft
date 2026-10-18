@@ -2,7 +2,7 @@ import type { HookCallback, HookCallbackMatcher } from "@anthropic-ai/claude-age
 import fs from "node:fs";
 import { isBuiltin } from "node:module";
 import path from "node:path";
-import { projectRoot, resolveSpec } from "./import-check";
+import { projectRoot, resolveSpec, specBases } from "./import-check";
 
 // Refuses an edit that makes a route file import something that isn't there yet. A missing module in
 // app/page.tsx (or a layout, or a route handler) fails the whole route before React runs, and with Next's
@@ -73,7 +73,7 @@ function packageInstalled(file: string, name: string): boolean {
 
 // Where a missing local import should be written: its path with the importer's extension when it has none.
 function suggestedFile(root: string, file: string, spec: string): string {
-  const base = spec.startsWith("@/") ? path.join(root, spec.slice(2)) : path.resolve(path.dirname(file), spec);
+  const base = (specBases(root, file, spec) as string[])[0] as string; // only asked for a spec that resolved to ""
   return path.relative(root, path.extname(base) ? base : base + path.extname(file));
 }
 

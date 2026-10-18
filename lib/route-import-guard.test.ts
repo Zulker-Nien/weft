@@ -83,6 +83,28 @@ describe("addedImportProblems", () => {
     expect(addedImportProblems(at("app/page.tsx"), 'import X from "@/gone";', 'import X from "@/gone";\nconst a = 1;')).toEqual([]);
   });
 
+  it("resolves @/ through a tsconfig that maps it to ./src/* (DeckCP)", () => {
+    write({ "tsconfig.json": '{ "compilerOptions": { "paths": { "@/*": ["./src/*"] } } }', "src/app/(decks)/decks/[deckSlug]/DeckGate.tsx": "export default 1;" });
+    const page = at("src/app/(decks)/decks/[deckSlug]/page.tsx");
+    expect(addedImportProblems(page, null, 'import DeckGate from "@/app/(decks)/decks/[deckSlug]/DeckGate";')).toEqual([]);
+    expect(addedImportProblems(page, null, 'import Gone from "@/app/Gone";')).toEqual([
+      '"@/app/Gone" doesn\'t exist yet: write src/app/Gone.tsx first, then import it from src/app/(decks)/decks/[deckSlug]/page.tsx.',
+    ]);
+  });
+
+  it("resolves @/ through a tsconfig that maps it to ./* (Weft), and still refuses a missing target", () => {
+    write({ "tsconfig.json": '{ "compilerOptions": { "paths": { "@/*": ["./*"] } } }', "components/Board.tsx": "", "src/components/Only.tsx": "" });
+    expect(addedImportProblems(at("app/page.tsx"), null, 'import B from "@/components/Board";')).toEqual([]);
+    expect(addedImportProblems(at("app/page.tsx"), null, 'import O from "@/components/Only";')).toEqual([
+      '"@/components/Only" doesn\'t exist yet: write components/Only.tsx first, then import it from app/page.tsx.',
+    ]);
+  });
+
+  it("falls back to the root and then src/ for @/ without a tsconfig", () => {
+    write({ "src/lib/x.ts": "" });
+    expect(addedImportProblems(at("src/app/page.tsx"), null, 'import "@/lib/x";')).toEqual([]);
+  });
+
   it("checks packages against node_modules, skipping builtins, aliases and subpath imports", () => {
     const src = ['import "next/font/google";', 'import "@scope/pkg/x";', 'import fs from "node:fs";', 'import p from "path";', 'import "#internal";', 'import "~/x";', 'import "left-pad";'].join("\n");
     expect(addedImportProblems(at("app/layout.tsx"), null, src)).toEqual(['"left-pad" isn\'t installed: install left-pad first, then import it from app/layout.tsx.']);

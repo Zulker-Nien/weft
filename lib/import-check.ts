@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { droppedImports } from "./dropped-imports";
+import { aliasBases } from "./ts-paths";
 
 // Catches a broken import the moment an edit makes it, before the dev server shows it as a build error
 // over the whole board: one thread removes an export (or a whole module) another file still imports,
@@ -63,15 +64,21 @@ function braceNames(list: string, side: "local" | "exported"): string[] {
     });
 }
 
-// The file a local import names, "" when that file isn't there, or null for a package. "@/x" is the
-// project root's x (tsconfig's paths).
+// Where a local import could be, before extensions: a relative path, or an alias under the project's
+// tsconfig `paths` ("@/x" is src/x in DeckCP, x in Weft). Null for a package.
+export function specBases(root: string, fromFile: string, spec: string): string[] | null {
+  return spec.startsWith(".") ? [path.resolve(path.dirname(fromFile), spec)] : aliasBases(root, spec);
+}
+
+// The file a local import names, "" when that file isn't there, or null for a package.
 export function resolveSpec(root: string, fromFile: string, spec: string): string | null {
-  let base: string;
-  if (spec.startsWith("@/")) base = path.join(root, spec.slice(2));
-  else if (spec.startsWith(".")) base = path.resolve(path.dirname(fromFile), spec);
-  else return null;
-  if (isFile(base)) return base;
-  return EXTENSIONS.map((ext) => base + ext).find(isFile) ?? "";
+  const bases = specBases(root, fromFile, spec);
+  if (!bases) return null;
+  for (const base of bases) {
+    const found = isFile(base) ? base : EXTENSIONS.map((ext) => base + ext).find(isFile);
+    if (found) return found;
+  }
+  return "";
 }
 
 function isFile(p: string) {

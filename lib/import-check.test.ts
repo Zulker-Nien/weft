@@ -89,6 +89,12 @@ describe("resolveSpec and projectRoot", () => {
 });
 
 describe("brokenImports", () => {
+  it("follows the tsconfig's @/* -> ./src/* when checking an edited file's imports", () => {
+    write({ "tsconfig.json": '{ "compilerOptions": { "paths": { "@/*": ["./src/*"] } } }', "src/lib/a.ts": "export const a = 1;\n", "src/app/page.tsx": 'import { a } from "@/lib/a";\nimport { b } from "@/lib/b";\n' });
+    expect(resolveSpec(root, path.join(root, "src/app/page.tsx"), "@/lib/a")).toBe(path.join(root, "src/lib/a.ts"));
+    expect(brokenImports(path.join(root, "src/app/page.tsx"))).toEqual(['src/app/page.tsx:2 imports "@/lib/b", which doesn\'t exist.']);
+  });
+
   it("reports a file that still imports an export another thread removed (the starMenu build error)", () => {
     write({
       "lib/card-menu.ts": "export function cardMenu() {}\n",
