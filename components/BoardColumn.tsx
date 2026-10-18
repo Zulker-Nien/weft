@@ -154,6 +154,12 @@ export default function BoardColumn({
   );
 }
 
+// What a card draws while CardView's module loads: a card-sized blank, so the column keeps its
+// height and "Show N more" stays below the cards instead of floating up and then jumping away.
+export function CardSkeleton() {
+  return <div aria-hidden className="h-[72px] shrink-0 rounded-lg border border-line bg-card opacity-60" />;
+}
+
 // Re-export the helper for callers that still want to compute "is this card overlapping?"
 export { busyHere };
 
