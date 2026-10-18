@@ -10,6 +10,7 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Added
 
+- **Many teams, and projects in a team.** Settings → Team always names the team you're managing ("Team: X" with your role), the switcher lists every team with your role in it and remembers your pick, and **+ New team** makes one you own. A team has many projects (GitHub repos): owners and admins **Add project** (from the board's repos or `owner/name`) and **Remove** them. **People on your projects** lists the repos' GitHub collaborators with an Invite button. Needs the `org_projects` migration (`supabase/migrations/20261019030000_org_projects.sql`). Cards still sync to your first owned team; per-project routing is next (`components/TeamSettings.tsx`, `components/team/Projects.tsx`, `lib/team-projects.ts`, `lib/team-create.ts`, `lib/github-collaborators.ts`).
 - **Icon-only header buttons.** Copilot, Browser and New thread in the top bar are icons now (names and shortcuts stay in the tooltip), saving width on a 13" screen (`components/BoardHeader.tsx`, `components/CopilotButton.tsx`).
 - **Three intro screens in the welcome.** Before the Wefter Profile and the projects, the first-launch welcome shows an open card with the browser pane explaining threads and the copilot, an empty board with each swimlane explained (Review as a walkthrough, Done as commit, refactor and docs), and the left bar. Drawn as mockups with the app's colors; **Next** / **Back**, five dots (`components/WelcomeIntro.tsx`).
 

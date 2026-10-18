@@ -33,11 +33,13 @@ export const loadWelcome = (replay = false) => fetch(`/api/welcome${replay ? "?r
 
 // Settings → General's "Replay the welcome" asks the dialog to show itself again, as a preview.
 export const REPLAY_EVENT = "weft:welcome-replay";
+// Its "Test it" asks the dialog to load the real welcome again, once the server has been told to show it.
+export const TEST_EVENT = "weft:welcome-test";
 
 export const answerWelcome = (answer: WelcomeAnswer) =>
   fetch("/api/welcome", { method: "POST", headers: WRITE, body: JSON.stringify(answer) }).then((r) => json<{ welcome: Welcome }>(r));
 
-export const changeWelcome = (patch: { countHistory: boolean } | { importAll: true }) =>
+export const changeWelcome = (patch: { countHistory: boolean } | { importAll: true } | { test: true }) =>
   fetch("/api/welcome", { method: "PATCH", headers: WRITE, body: JSON.stringify(patch) }).then((r) => json<{ welcome: Welcome | null }>(r));
 
 // Screen 2's ticks to the answer: OK skips the unticked folders, Start fresh brings in none of the old ones.
