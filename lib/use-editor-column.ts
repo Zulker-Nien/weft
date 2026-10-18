@@ -13,6 +13,7 @@ import {
   openTab,
   saveTabs,
   setActive,
+  setLine,
   setMode,
   type EditorTab,
   type EditorTabsState,
@@ -54,6 +55,7 @@ function applyRequestTo(state: EditorTabsState, req: OpenFileRequest, cwd: strin
   const opened = openTab(state, path, cwd);
   let next = setActive(opened, path);
   if (req.diff && !isMarkdownPath(path)) next = setMode(next, path, "changes");
+  if (req.line) next = setLine(next, path, req.line);
   return next;
 }
 

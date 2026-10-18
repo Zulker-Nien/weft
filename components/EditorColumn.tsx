@@ -248,7 +248,7 @@ function ActiveEditor({
     );
   }
   if (activeTab.mode === "edit") {
-    return <CodeEditor path={activeTab.path} text={file.text} onChange={file.setText} onSave={onCodeSave} />;
+    return <CodeEditor path={activeTab.path} text={file.text} onChange={file.setText} onSave={onCodeSave} line={activeTab.line} />;
   }
   if (headLoading) {
     return <DiffEmptyView state="loading" />;

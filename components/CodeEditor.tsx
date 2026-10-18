@@ -202,8 +202,9 @@ export default function CodeEditor({ path, text, onChange, onSave, line }: CodeE
     view.dispatch({ selection: { anchor: pos, head: pos }, effects: EditorView.scrollIntoView(pos, { y: "center" }) });
     view.focus();
     // Only on the first mount for a given line request; the line prop changes when the user opens
-    // a new file in this tab.
-  }, [line]);
+    // a new file in this tab. path is here because the view is rebuilt for a new file, and b.ts:10
+    // after a.ts:10 is the same line.
+  }, [line, path]);
 
   return <div ref={hostRef} className="cm-host h-full w-full overflow-auto" data-language={path.split(".").pop() ?? ""} />;
 }

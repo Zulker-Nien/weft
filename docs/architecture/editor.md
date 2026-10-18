@@ -27,7 +27,9 @@ file path in the thread opens the file in the editor.
 
 `lib/open-file.ts` is one window event, `weft:open-file`, carrying `{cardId, path, line?, diff?}`. `openFile()` also
 queues the request: the board opens the editor column when it hears one for the open card (`onOpenFile`), and the
-editor, mounted a moment later, takes the queue with `drainOpenFiles(cardId)`. Callers:
+editor, mounted a moment later, takes the queue with `drainOpenFiles(cardId)`. A request's `line` rides on its tab
+(`setLine` in `lib/editor-tabs.ts`, applied by `lib/use-editor-column.ts`, not persisted) and `EditorColumn` passes it to
+`CodeEditor`, which scrolls to it when the file's view is built. Callers:
 
 - a file named in a thread message, in prose, in inline code or as a markdown link (`[x](lib/a.ts:9)`). Names are matched
   against the folder's real file list (`lib/file-refs.ts`), so only files that are there link: a full or absolute path, a

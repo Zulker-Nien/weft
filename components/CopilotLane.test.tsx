@@ -69,6 +69,23 @@ describe("CopilotLane hidden", () => {
     expect(props.onPeek).not.toHaveBeenCalled();
   });
 
+  it("peeks when the mouse rests on the pill, not when it passes over", () => {
+    vi.useFakeTimers();
+    try {
+      const props = lane("hidden");
+      const pill = screen.getByLabelText(/Open the copilot/);
+      fireEvent.mouseEnter(pill);
+      fireEvent.mouseLeave(pill);
+      vi.advanceTimersByTime(1000);
+      expect(props.onPeek).not.toHaveBeenCalled();
+      fireEvent.mouseEnter(pill);
+      vi.advanceTimersByTime(400);
+      expect(props.onPeek).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("opens the chat on Enter or Space", () => {
     const props = lane("hidden");
     const pill = screen.getByLabelText(/Open the copilot/);

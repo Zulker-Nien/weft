@@ -12,6 +12,7 @@ import {
   openTab,
   saveTabs,
   setActive,
+  setLine,
   setMode,
   type EditorTabsState,
 } from "./editor-tabs";
@@ -157,6 +158,12 @@ describe("setActive / closeTab / setMode", () => {
   it("setMode is a no-op for an unknown tab", () => {
     const next = setMode(a, "nope.ts", "changes");
     expect(next).toBe(a);
+  });
+
+  it("setLine marks the line to jump to on one tab, and ignores an unknown one", () => {
+    const next = setLine(a, "b.ts", 42);
+    expect(next.tabs.map((t) => t.line)).toEqual([undefined, 42]);
+    expect(setLine(a, "nope.ts", 3)).toBe(a);
   });
 });
 

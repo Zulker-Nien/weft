@@ -2,6 +2,7 @@
 
 // The copilot lane's hidden state: the 36px pill on the right edge, and the persona's avatar the
 // header shares with it.
+import { useEffect, useRef } from "react";
 import { laneDigest } from "@/lib/copilot-lane";
 import { personaOf, type PersonaInfo } from "@/lib/copilot-personas";
 import type { Card } from "@/lib/types";
@@ -17,8 +18,10 @@ export function Avatar({ size, picture }: { size: number; picture: PersonaInfo["
   );
 }
 
-// The 36px pill pinned to the right edge: avatar, needs-you dot, count, rotated "Copilot" label. Hover
-// (or having news) auto-expands into peek; click opens the chat.
+// The 36px pill pinned to the right edge: avatar, needs-you dot, count, rotated "Copilot" label. Resting
+// the mouse on it for PEEK_DELAY_MS peeks (a pass on the way to the window edge doesn't); click opens the chat.
+export const PEEK_DELAY_MS = 350;
+
 export default function CopilotHider(props: {
   card: Card | null;
   cards: Card[];
@@ -32,12 +35,22 @@ export default function CopilotHider(props: {
   const waiting = digest.needsYou.length;
   const news = waiting + digest.finished;
   const persona = personaOf(props.card?.persona);
+  const peekTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(peekTimer.current), []);
 
   return (
     <div
       role="button"
       tabIndex={0}
-      onClick={props.onOpen}
+      onClick={() => {
+        window.clearTimeout(peekTimer.current);
+        props.onOpen();
+      }}
+      onMouseEnter={() => {
+        window.clearTimeout(peekTimer.current);
+        peekTimer.current = window.setTimeout(props.onPeek, PEEK_DELAY_MS);
+      }}
+      onMouseLeave={() => window.clearTimeout(peekTimer.current)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();

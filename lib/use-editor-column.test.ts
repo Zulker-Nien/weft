@@ -74,6 +74,16 @@ describe("useEditorColumn — live open events", () => {
     expect(result.current.activeTab?.mode).toBe("changes");
   });
 
+  it("carries a file.ts:42 request's line to the tab, for CodeEditor to jump to", () => {
+    openFile({ cardId, path: "lib/q.ts", line: 7 });
+    const { result } = renderHook(() => useEditorColumn(cardId, cwd));
+    expect(result.current.activeTab).toMatchObject({ path: "lib/q.ts", line: 7 });
+    act(() => {
+      openFile({ cardId, path: "lib/q.ts", line: 42 });
+    });
+    expect(result.current.activeTab?.line).toBe(42);
+  });
+
   it("ignores openFile for other cards", () => {
     const { result } = renderHook(() => useEditorColumn(cardId, cwd));
     act(() => {

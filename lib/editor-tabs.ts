@@ -9,6 +9,8 @@ export type EditorMode = "edit" | "changes" | "source";
 export interface EditorTab {
   path: string;
   mode: EditorMode;
+  // 1-based line the last open request asked for ("lib/x.ts:42"); CodeEditor scrolls to it. Not persisted.
+  line?: number;
 }
 
 export interface EditorTabsState {
@@ -114,6 +116,11 @@ export function setMode(state: EditorTabsState, path: string, mode: EditorMode):
   if (state.tabs[idx]?.mode === safe) return state;
   const tabs = state.tabs.map((t, i) => (i === idx ? { ...t, mode: safe } : t));
   return { ...state, tabs };
+}
+
+export function setLine(state: EditorTabsState, path: string, line: number): EditorTabsState {
+  if (!state.tabs.some((t) => t.path === path)) return state;
+  return { ...state, tabs: state.tabs.map((t) => (t.path === path ? { ...t, line } : t)) };
 }
 
 // Reads one stored tab entry; returns the cleaned tab or null if it's invalid.
