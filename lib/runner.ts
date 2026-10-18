@@ -14,6 +14,7 @@ import { withShellContext } from "./shell";
 import { switchSpare } from "./spare-switch";
 import { archiveAfter, close, errorText, hooks, isBusy, queued, safeUpdate, sessions, specFor, type Session } from "./runner-state";
 import { panePage } from "./pane-page";
+import { findDescendantGroups, signalGroups } from "./process-tree";
 import { skillInvocation } from "./skills";
 import { appendThread, foldThread, getCard, getThread, updateCard } from "./store";
 import { takeTaskNote } from "./task-ledger";
@@ -226,6 +227,9 @@ function sendQueued(cardId: string) {
   }
 }
 
+// How long the CLI gets to end an interrupted turn before its process is ended.
+const STOP_GRACE_MS = 1_500;
+
 // Ends the current turn but keeps the thread's CLI open.
 export async function stop(cardId: string) {
   const session = sessions.get(cardId);
@@ -238,12 +242,15 @@ export async function stop(cardId: string) {
     await session.done;
     return;
   }
+  // SIGTERM the commands the CLI is running first, so a long Bash call ends at once instead of after the interrupt.
+  const pgid = session.process?.pid;
+  if (pgid) signalGroups(findDescendantGroups(pgid), "SIGTERM");
   // If the CLI doesn't end the turn (it may still be starting, or stuck), end the process.
   setTimeout(() => {
     if (session.busy && session.stopping) session.abort.abort();
-  }, 5_000);
+  }, STOP_GRACE_MS);
   try {
-    await Promise.race([session.query?.interrupt(), new Promise((resolve) => setTimeout(resolve, 5_000))]);
+    await Promise.race([session.query?.interrupt(), new Promise((resolve) => setTimeout(resolve, STOP_GRACE_MS))]);
   } catch {
     session.abort.abort();
   }

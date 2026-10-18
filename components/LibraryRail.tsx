@@ -15,7 +15,7 @@ import { blankCount, failingCount, filterWebhooks, webhooksTitle } from "@/lib/w
 import { useVercel } from "@/lib/use-vercel";
 import { vercelTitle } from "@/lib/vercel-view";
 import { useSupabase } from "@/lib/use-supabase";
-import { supabaseTitle } from "@/lib/supabase-view";
+import { pendingCount, supabaseTitle } from "@/lib/supabase-view";
 import { useBlastcp } from "@/lib/use-blastcp";
 import { blastcpTitle } from "@/lib/blastcp-view";
 import { useCloudflare } from "@/lib/use-cloudflare";
@@ -204,7 +204,7 @@ export default function SideRail({
           onClick={toggle("webhooks")}
         />
         <RailIconButton icon="▲" label="Vercel" open={open === "vercel"} title={vercelTitle(vercel.status, project)} onClick={toggle("vercel")} />
-        <RailIconButton icon={<SupabaseLogo />} label="Supabase" open={open === "supabase"} title={supabaseTitle(supabase.status, project)} onClick={toggle("supabase")} />
+        <RailIconButton icon={<SupabaseLogo />} label="Supabase" open={open === "supabase"} title={supabaseTitle(supabase.status, project)} count={pendingCount(supabase.status, project)} tone="bad" onClick={toggle("supabase")} />
         <RailIconButton icon={<CloudflareLogo />} label="Cloudflare" open={open === "cloudflare"} title={cloudflareTitle(cloudflare.status, project)} onClick={toggle("cloudflare")} />
         <RailIconButton icon={<BlastcpLogo />} label="BlastCP" open={open === "blastcp"} title={blastcpTitle(blastcp.status, project)} onClick={toggle("blastcp")} />
         <RailIconButton icon={<GithubLogo />} label="GitHub" open={open === "github"} title={githubTitle(github.status, project)} onClick={toggle("github")} />

@@ -12,6 +12,8 @@ const welcomeMock = vi.hoisted(() => ({
   saveWelcome: vi.fn(),
   setCountHistory: vi.fn(),
   importAll: vi.fn(),
+  testWelcome: vi.fn(),
+  testingWelcome: vi.fn(() => false),
 }));
 vi.mock("@/lib/welcome", () => welcomeMock);
 
@@ -49,6 +51,8 @@ beforeEach(() => {
   welcomeMock.saveWelcome.mockReset();
   welcomeMock.setCountHistory.mockReset();
   welcomeMock.importAll.mockReset();
+  welcomeMock.testWelcome.mockReset();
+  welcomeMock.testingWelcome.mockReset().mockReturnValue(false);
   previewMock.welcomePreview.mockReset().mockReturnValue({ projects: [], profile: { sessions: 0 } as never });
   importMock.sessionsToImport.mockReset().mockResolvedValue([]);
   importMock.syncSessions.mockReset().mockResolvedValue({ sessions: 0, added: 0, updated: 0 });
@@ -144,6 +148,18 @@ describe("POST /welcome", () => {
 });
 
 describe("PATCH /welcome", () => {
+  it("starts a test of the real welcome", async () => {
+    const res = await route.PATCH(make("PATCH", { test: true }));
+    expect(welcomeMock.testWelcome).toHaveBeenCalledTimes(1);
+    expect(await res.json()).toEqual({ welcome: null });
+  });
+
+  it("previews every session while the welcome is being tested", async () => {
+    welcomeMock.testingWelcome.mockReturnValue(true);
+    await route.GET(make("GET"));
+    expect(importMock.sessionsToImport).toHaveBeenCalledWith({ all: true });
+  });
+
   it("flips countHistory and returns the saved welcome", async () => {
     welcomeMock.welcomeOrAdopt.mockReturnValueOnce({ at: 1, countHistory: false, fresh: false, skip: [] });
     const res = await route.PATCH(make("PATCH", { countHistory: false }));

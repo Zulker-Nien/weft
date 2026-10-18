@@ -8,7 +8,6 @@
 import { createContext, useContext } from "react";
 import { api } from "./client";
 import { filesApi } from "./client-files";
-import { openCardById } from "./open-card";
 import { THREAD_PAGE_SIZE } from "./cloud-sync-types";
 import { applyThreadEvent, type ThreadPage } from "./thread-page";
 import type { BoardEvent, ThreadItem } from "./types";
@@ -29,8 +28,8 @@ export interface ThreadTransport {
   // Only where the Mac itself runs the card:
   shell?: (cardId: string, command: string) => Promise<void>;
   editLast?: (cardId: string, text: string) => Promise<void>;
-  // Summarizes the card and starts a new one with the summary, its touched files and the typed message.
-  handoff?: (cardId: string, message: string) => Promise<string>;
+  // A cold card's next message in a new session of the same card, started from a brief of the thread.
+  fresh?: (cardId: string, message: string) => Promise<void>;
   // An outside-folder prompt's "This card" (and the question form's /add-dir); "always" adds it to every card.
   grantFolder?: (cardId: string, directory: string, scope: "card" | "always") => Promise<void>;
   waitPermission?: (cardId: string, pendingId: string) => Promise<void>;
@@ -70,12 +69,7 @@ export const localTransport: ThreadTransport = {
   stop: (cardId) => api.stop(cardId).then(() => {}),
   shell: (cardId, command) => api.shell(cardId, command).then(() => {}),
   editLast: (cardId, text) => api.editLast(cardId, text).then(() => {}),
-  // The new card replaces the old one in the panel as soon as it's made.
-  handoff: (cardId, message) =>
-    api.handoff(cardId, message).then(({ card }) => {
-      openCardById(card.id);
-      return card.title;
-    }),
+  fresh: (cardId, message) => api.fresh(cardId, message).then(() => {}),
   grantFolder: (cardId, directory, scope) => (scope === "always" ? api.allowFolder(directory) : api.setReadScope(cardId, directory)).then(() => {}),
   waitPermission: (cardId, pendingId) => api.waitPermission(cardId, pendingId).then(() => {}),
   stopTask: (cardId, taskId) => api.stopTask(cardId, taskId).then(() => {}),

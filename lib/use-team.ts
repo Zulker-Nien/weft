@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ACCOUNT_EVENT } from "./auth/hooks";
-import type { TeamActionResult, TeamClientActions, TeamOp, TeamSnapshot } from "./team-types";
+import type { NewTeamOp, NewTeamResult, TeamActionResult, TeamClientActions, TeamOp, TeamSnapshot } from "./team-types";
 
 // The board's view of one workspace on the deployed weft.zip (docs/architecture/teams.md). The desktop's
 // local Next server is the only thing that holds the desktop user's access token, so this hook talks to
@@ -96,14 +96,14 @@ export function useTeamPrefetch(userId: string | undefined): void {
 // One action: POST a TeamOp with the loaded org's slug, then refresh. Called from the team UI, so a
 // failure with a clear message is what the form shows. A 401 inside an action means the user signed
 // out between the load and the click; we return an error so the form can say so.
-async function postOp(op: TeamOp): Promise<TeamActionResult> {
+async function postOp(op: TeamOp | NewTeamOp): Promise<NewTeamResult> {
   let res: Response;
   try {
     res = await fetch("/api/account/team", { method: "POST", headers: WRITE_HEADERS, body: JSON.stringify(op) });
   } catch {
     return { ok: false, message: "Couldn't reach weft.zip." };
   }
-  const body = (await res.json().catch(() => ({}))) as TeamActionResult & { error?: unknown };
+  const body = (await res.json().catch(() => ({}))) as NewTeamResult & { error?: unknown };
   if (res.status === 401) return { ok: false, message: "Signed out." };
   if (res.status === 502) return { ok: false, message: "Couldn't reach weft.zip." };
   if (res.status === 404) return { ok: false, message: "No workspace found." };
@@ -113,7 +113,11 @@ async function postOp(op: TeamOp): Promise<TeamActionResult> {
   // The 2xx body is what weft.zip's POST handler returns; truthy `ok` is the success branch and the
   // action shapes the form's result off it. A payload without `ok` is treated as failure so a broken
   // deployment can't masquerade as success.
-  return { ok: body.ok, message: typeof body.message === "string" ? body.message : undefined };
+  return {
+    ok: body.ok,
+    message: typeof body.message === "string" ? body.message : undefined,
+    ...(typeof body.slug === "string" ? { slug: body.slug } : {}),
+  };
 }
 
 export function useTeam(org?: string): TeamHook {
@@ -156,35 +160,31 @@ export function useTeam(org?: string): TeamHook {
   // Same body as `refresh`; kept under another name so the action handlers read like actions.
   const trigger = refresh;
 
+  // Every op on the loaded workspace: post it, and refresh when it worked.
+  const onTeam = (build: (org: string) => TeamOp): Promise<TeamActionResult> => {
+    if (state.kind !== "ok") return Promise.resolve(noTeamMessage);
+    return postOp(build(state.team.org.slug)).then((r) => {
+      if (r.ok) trigger();
+      return r;
+    });
+  };
+
   const actions: TeamClientActions = {
-    invite: (email, role) => {
-      if (state.kind !== "ok") return Promise.resolve(noTeamMessage);
-      return postOp({ org: state.team.org.slug, action: "invite", email, role }).then((r) => {
-        if (r.ok) trigger();
+    invite: (email, role) => onTeam((org) => ({ org, action: "invite", email, role })),
+    changeRole: (userId, role) => onTeam((org) => ({ org, action: "role", userId, role })),
+    remove: (userId) => onTeam((org) => ({ org, action: "remove", userId })),
+    revoke: (inviteId) => onTeam((org) => ({ org, action: "revoke", inviteId })),
+    addProject: (repo) => onTeam((org) => ({ org, action: "link-project", repo })),
+    removeProject: (repo) => onTeam((org) => ({ org, action: "unlink-project", repo })),
+    // A new workspace changes every cached snapshot's `orgs` list, so forget them all before the refresh.
+    createTeam: (name) =>
+      postOp({ action: "create", name }).then((r) => {
+        if (r.ok) {
+          clearTeamCache();
+          trigger();
+        }
         return r;
-      });
-    },
-    changeRole: (userId, role) => {
-      if (state.kind !== "ok") return Promise.resolve(noTeamMessage);
-      return postOp({ org: state.team.org.slug, action: "role", userId, role }).then((r) => {
-        if (r.ok) trigger();
-        return r;
-      });
-    },
-    remove: (userId) => {
-      if (state.kind !== "ok") return Promise.resolve(noTeamMessage);
-      return postOp({ org: state.team.org.slug, action: "remove", userId }).then((r) => {
-        if (r.ok) trigger();
-        return r;
-      });
-    },
-    revoke: (inviteId) => {
-      if (state.kind !== "ok") return Promise.resolve(noTeamMessage);
-      return postOp({ org: state.team.org.slug, action: "revoke", inviteId }).then((r) => {
-        if (r.ok) trigger();
-        return r;
-      });
-    },
+      }),
   };
 
   return { state, refresh, actions };

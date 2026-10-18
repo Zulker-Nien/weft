@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { limitResetAt, replyBoxMode, replyMode, turnCutOff, type ReplyModeInput } from "./reply-mode";
+import { COLD_MIN_TOKENS, limitResetAt, replyBoxMode, replyMode, turnCutOff, type ReplyModeInput } from "./reply-mode";
 
 const NOW = new Date("2026-10-19T12:00:00").getTime();
 const base: ReplyModeInput = { live: false, question: false, shell: false, editing: false, empty: false, cutOff: false, canSchedule: true, now: NOW };
@@ -57,13 +57,19 @@ describe("replyMode", () => {
     expect(at({ empty: true, cutOff: true }).primary).toMatchObject({ action: "continue", label: "Continue" });
     expect(at({ empty: true, cutOff: false }).primary.action).toBe("send");
     expect(at({ empty: false, cutOff: true }).primary.action).toBe("send");
-    expect(actions({ empty: false, cutOff: true })).toEqual(["continue", "later"]);
+    expect(at({ empty: false, cutOff: true }).cont).toMatchObject({ action: "continue", label: "Continue" });
+    expect(at({ empty: true, cutOff: true }).cont).toBeUndefined();
   });
 
-  it("makes a new card the default when the cache is cold, with Send here in the menu", () => {
+  it("always offers a Continue button beside Done while idle, none while queuing", () => {
+    expect(at({ cutOff: false }).cont).toMatchObject({ action: "continue", keys: "mod+shift+Enter" });
+    expect(at({ live: true }).cont).toBeUndefined();
+  });
+
+  it("sends fresh on a long thread's cold cache, with the full-history send in the menu", () => {
     const view = at({ cold: { tokens: "184k" }, cutOff: true });
-    expect(view).toMatchObject({ chip: "Cache cold · 184k", primary: { action: "handoff", label: "New card" } });
-    expect(view.menu.map((m) => m.label)).toEqual(["Send here · re-sends 184k", "Continue here", "Send later…"]);
+    expect(view).toMatchObject({ chip: "Cache cold · 184k", primary: { action: "fresh", label: "Send fresh" } });
+    expect(view.menu.map((m) => m.label)).toEqual(["Send with full history · 184k", "Send later…"]);
   });
 
   it("schedules for the reset when the 5-hour window is used up", () => {
@@ -71,8 +77,17 @@ describe("replyMode", () => {
     const view = at({ limitResetAt: reset });
     expect(view).toMatchObject({ chip: "5-hour limit used up", primary: { action: "schedule", label: "Send at 10:39pm" } });
     expect(view.menu.map((m) => m.label)).toEqual(["Send now anyway", "Send later…"]);
-    expect(at({ limitResetAt: reset, cold: { tokens: "9k" } }).menu.map((m) => m.action)).toEqual(["send", "handoff", "later"]);
+    expect(at({ limitResetAt: reset, cold: { tokens: "9k" } }).menu.map((m) => m.action)).toEqual(["send", "fresh", "later"]);
     expect(at({ limitResetAt: reset, canSchedule: false }).primary.action).toBe("send");
+  });
+});
+
+describe("Done button", () => {
+  it("is offered while idle, cold or not, and not while busy", () => {
+    expect(at({}).done).toMatchObject({ action: "done", label: "Done" });
+    expect(at({ cold: { tokens: "184k" } }).done?.action).toBe("done");
+    expect(at({ live: true }).done).toBeUndefined();
+    expect(at({ shell: true }).done).toBeUndefined();
   });
 });
 
@@ -108,7 +123,8 @@ describe("replyBoxMode", () => {
   const box = { live: false, question: false, shell: false, editing: false, empty: false, cwd: "/dev/weft", cutOff: false, now: NOW };
   const cold = { at: NOW - 3600_000, ttl: 300, hit: 0, tokens: 184_100 };
   it("reads a cold cache only while idle", () => {
-    expect(replyBoxMode({ ...box, cache: cold }).view.primary.action).toBe("handoff");
+    expect(replyBoxMode({ ...box, cache: cold }).view.chip).toBe("Cache cold · 184.1k");
+    expect(replyBoxMode({ ...box, cache: { ...cold, tokens: COLD_MIN_TOKENS - 1 } }).view).toMatchObject({ primary: { action: "send", label: "Send" } });
     expect(replyBoxMode({ ...box, cache: cold, live: true }).view.primary.action).toBe("queue");
     expect(replyBoxMode({ ...box, cache: { ...cold, at: NOW } }).view.primary.action).toBe("send");
     expect(replyBoxMode({ ...box, cache: cold, now: 0 }).view.primary.action).toBe("send");

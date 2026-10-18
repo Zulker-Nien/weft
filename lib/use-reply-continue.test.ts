@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useReplyContinue } from "./use-reply-continue";
 import { useShortcutListener, useShortcutList } from "./hotkeys";
 
-// ⌘. is a Mac shortcut — hotkeys.ts matches "mod" against metaKey only when the user agent looks
+// ⌘⇧↵ is a Mac shortcut — hotkeys.ts matches "mod" against metaKey only when the user agent looks
 // like macOS. jsdom defaults to Linux, so stub the UA to Mac for these tests.
 function onMac() {
   vi.stubGlobal("navigator", { userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)" });
@@ -30,9 +30,9 @@ function setup(over: Partial<Opts> = {}): { result: { current: { canContinue: bo
   return { result, opts };
 }
 
-// ⌘. on macOS, Ctrl+. elsewhere.
+// ⌘⇧↵ on macOS, Ctrl+Shift+↵ elsewhere.
 function fireDot() {
-  const e = new KeyboardEvent("keydown", { key: ".", metaKey: true, bubbles: true, cancelable: true });
+  const e = new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, metaKey: true, bubbles: true, cancelable: true });
   window.dispatchEvent(e);
   return e;
 }
@@ -80,8 +80,8 @@ describe("sendContinue", () => {
   });
 });
 
-describe("⌘. shortcut", () => {
-  it("sends 'continue' on the metaKey+. keydown", async () => {
+describe("⌘⇧↵ shortcut", () => {
+  it("sends 'continue' on the metaKey+shift+Enter keydown", async () => {
     onMac();
     const { opts } = setup();
     fireDot();
@@ -98,7 +98,7 @@ describe("⌘. shortcut", () => {
   it("does nothing on plain '.' without the modifier", () => {
     onMac();
     const { opts } = setup();
-    const e = new KeyboardEvent("keydown", { key: ".", bubbles: true, cancelable: true });
+    const e = new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true, cancelable: true });
     window.dispatchEvent(e);
     expect(opts.onSend).not.toHaveBeenCalled();
   });
@@ -107,7 +107,7 @@ describe("⌘. shortcut", () => {
 // Pulls the registered shortcut out of the registry, so the help dialog's shortcut list keeps a
 // "reply-continue" entry (the "?" sheet is one of the review tour's stops).
 describe("registry", () => {
-  it("registers a shortcut in the Thread group with mod+.", () => {
+  it("registers a shortcut in the Thread group with mod+shift+Enter", () => {
     const { result } = renderHook(() => {
       useShortcutListener();
       useReplyContinue({
@@ -123,6 +123,6 @@ describe("registry", () => {
     const entry = result.current.find((s) => s.id === "reply-continue");
     expect(entry).toBeDefined();
     expect(entry?.group).toBe("Thread");
-    expect(entry?.keys).toEqual(["mod+."]);
+    expect(entry?.keys).toEqual(["mod+shift+Enter"]);
   });
 });

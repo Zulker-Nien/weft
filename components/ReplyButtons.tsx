@@ -66,6 +66,30 @@ export default function ReplyButtons({
           </button>
         </Tip>
       )}
+      {view.cont && (
+        <Tip text={<span className="flex items-center gap-1.5">{view.cont.tip} <KeyCaps spec={view.cont.keys} small /></span>} className="inline-flex">
+          <button
+            type="button"
+            onClick={() => onAction("continue")}
+            disabled={sending}
+            className={`flex h-8 items-center whitespace-nowrap rounded-md px-2.5 text-[12.5px] font-medium hover:opacity-90 disabled:opacity-40 ${TONE.neutral}`}
+          >
+            {view.cont.label}
+          </button>
+        </Tip>
+      )}
+      {view.done && (
+        <Tip text={view.done.tip} className="inline-flex">
+          <button
+            type="button"
+            onClick={() => onAction("done")}
+            disabled={sending}
+            className={`flex h-8 items-center whitespace-nowrap rounded-md px-2.5 text-[12.5px] font-medium hover:opacity-90 disabled:opacity-40 ${TONE.neutral}`}
+          >
+            {view.done.label}
+          </button>
+        </Tip>
+      )}
       <div className={`flex h-8 overflow-hidden rounded-md ${tone}`}>
         <Tip text={view.primary.tip} className="inline-flex">
           <button

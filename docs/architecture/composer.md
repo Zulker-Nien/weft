@@ -16,25 +16,37 @@ twice: on a chip inside the box's frame and on the primary button.
 |---|---|---|---|
 | reply | none | **Send** | Continue here (after a cut-off turn), Send later… |
 | reply, empty box, cut-off turn | none | **Continue** | Send later… |
-| reply, cache cold | Cache cold · 184k | **New card** | Send here · re-sends 184k, Continue here, Send later… |
-| reply, 5h used up | 5-hour limit used up | **Send at 10:39pm** | Send now anyway, Continue in new card (if cold), Send later… |
+| reply, cache cold, 30k+ tokens | Cache cold · 184k | **Send fresh** | Send with full history · 184k, Continue here, Send later… |
+| reply, 5h used up | 5-hour limit used up | **Send at 10:39pm** | Send now anyway, Send fresh now (if cold), Send later… |
 | queue | Queue · after this turn | **Queue** | Send now (stops the turn), Send later… |
 | answer | Answer | **Answer** | none |
 | shell | Shell · *folder* | **Run** (green) | none |
 | replace | Replace last message · N file edits stay · Esc | **Replace** (amber) | none |
 | copy | Editing a copy · this thread can't rewind · Esc | **Send copy** | none |
 
+Every idle reply also shows a neutral **Done** button beside the primary: it sends `/weft:done` and leaves the draft alone; when the cache is cold it goes fresh too.
+
 The modes take precedence in the order edit, shell, question, live, idle. Each item names a `ReplyAction`;
 `ReplyBox` routes it (`onAction`) to the existing paths: `submit`, the question form's `enter`, `sendContinue`
-(`lib/use-reply-continue.ts`), `scheduleAt` (`lib/use-reply-schedule.ts`) or the hand-off (`lib/handoff.ts`).
+(`lib/use-reply-continue.ts`), `scheduleAt` (`lib/use-reply-schedule.ts`) or `sendFresh` (`lib/splice.ts`).
 Enter runs the primary, except it won't start a new card from an empty box (that takes a click).
 
 - **Cut off** is `turnCutOff(card)`: `card.error`, a last line starting "Stopped" (a stop, or the app closing),
   `rateLimitHit` or `interrupted`. ⌘. still sends "continue" whenever the thread is idle.
 - **Limit used up** is `limitResetAt(card.stats.fiveHour, resets.fiveHour, now)`: the window at 100%, with its own
   reset (unix seconds) when it's still ahead, else the plan's next one. Only where Send later is offered.
-- **Cold** is the card's `stats.cache` with no minutes left (`cacheMinutesLeft`), only while idle and only where the
-  transport offers the hand-off.
+- **Cold** is the card's `stats.cache` with no minutes left (`cacheMinutesLeft`) and at least `COLD_MIN_TOKENS` (30k; a short thread re-sends cheaply, so it gets a plain Send), only while idle and only where the
+  transport offers `fresh` (the desktop board).
+- **Send fresh** (`lib/splice.ts` `sendFresh`, `POST /api/cards/[id]/fresh`): the card and its thread stay, but its CLI
+  session ends and a new one starts whose first message carries a brief ahead of yours, in a `<system-reminder>`
+  (`lib/splice-brief.ts`): a Haiku summary of the thread, the last BOARD STATUS's remaining, the touched files and
+  their `git diff HEAD` (`lib/splice-diff.ts`), kept to the hunks that name a symbol this thread edited (other cards
+  share the tree), capped at 32k characters with a `--stat` fallback. A `spliced` item marks the spot in the thread
+  ("Fresh session · 83k not re-sent · show the brief"). The scheduler's 15 s tick writes the summary ahead of time for
+  idle cards whose cache lapses within 5 minutes (or did in the last 6 hours), so the send doesn't wait on Haiku; the
+  diff is always read at send time. A fork (`forkSession`) wouldn't help: it copies the whole history.
+- **Keeping it warm**: `cliEnv()` (`lib/env.ts`) sets `CLAUDE_CODE_PROMPT_CACHE_TTL=1h` for every thread, so a break
+  under an hour never goes cold.
 
 ## The pieces
 

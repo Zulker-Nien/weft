@@ -151,6 +151,7 @@ describe("teamAccess", () => {
         org: ORG,
         role: "admin",
         orgs: [ORG, other],
+        orgRoles: { o1: "admin", o2: "member" },
         service: svc.client,
       },
     });

@@ -17,9 +17,10 @@
 import { connection } from "next/server";
 import { z } from "zod";
 import { SUPABASE_KEY } from "@/lib/supabase-project";
+import { runCreateTeam } from "@/lib/team-create";
 import { teamSnapshot, runTeamOp } from "@/lib/team-ops";
 import { currentWorkspaceFor, teamAccessFor } from "@/lib/teams";
-import { TEAM_ROLES, type TeamOp, type TeamRole } from "@/lib/team-types";
+import { TEAM_ROLES, type NewTeamOp, type TeamOp, type TeamRole } from "@/lib/team-types";
 import { bearerUser } from "@/lib/web-session";
 
 // It reads the request, so each handler awaits connection(); route segment config like `dynamic` isn't allowed
@@ -61,11 +62,22 @@ const TeamOpSchema = z.discriminatedUnion("action", [
   z.object({ org: text, action: z.literal("role"), userId: text, role }),
   z.object({ org: text, action: z.literal("remove"), userId: text }),
   z.object({ org: text, action: z.literal("revoke"), inviteId: text }),
+  z.object({ org: text, action: z.literal("link-project"), repo: text }),
+  z.object({ org: text, action: z.literal("unlink-project"), repo: text }),
+  z.object({ action: z.literal("create"), name: text }),
 ]);
 
-function parseOp(value: unknown): TeamOp | null {
+function parseOp(value: unknown): TeamOp | NewTeamOp | null {
   const parsed = TeamOpSchema.safeParse(value);
   return parsed.success ? parsed.data : null;
+}
+
+// A new workspace has no org to gate on: the bearer user is the only check.
+async function createTeam(req: Request, op: NewTeamOp) {
+  if (!SUPABASE_KEY) return unconfigured();
+  const user = await bearerUser(req);
+  if (!user) return Response.json({ error: "signed-out" }, { status: 401 });
+  return Response.json(await runCreateTeam(user, op.name));
 }
 
 export async function GET(req: Request) {
@@ -81,13 +93,14 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   await connection();
-  let op: TeamOp | null = null;
+  let op: TeamOp | NewTeamOp | null = null;
   try {
     op = parseOp(await req.json());
   } catch {
     op = null;
   }
   if (!op) return Response.json({ error: "bad-request" }, { status: 400 });
+  if (op.action === "create") return createTeam(req, op);
   const auth = await authAndAccess(req, op.org);
   if (auth.kind === "unconfigured") return unconfigured();
   if (auth.kind === "signed-out") return Response.json({ error: "signed-out" }, { status: 401 });

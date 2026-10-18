@@ -13,7 +13,7 @@ const api = vi.hoisted(() => ({
   setReadScope: vi.fn(),
   waitPermission: vi.fn(),
   stopTask: vi.fn(),
-  handoff: vi.fn(),
+  fresh: vi.fn(),
 }));
 vi.mock("./client", () => ({ api }));
 // The live hook's stream: the test fires its events by hand.
@@ -89,14 +89,9 @@ describe("localTransport's actions", () => {
     expect(localTransport.desktop).toBe(true);
   });
 
-  it("handoff opens the new card and resolves to its title", async () => {
-    api.handoff.mockResolvedValue({ card: { id: "n1", title: "Next" } });
-    const opened = vi.fn();
-    window.addEventListener("weft:open-card", (e) => {
-      opened((e as CustomEvent<string>).detail);
-    });
-    await expect(localTransport.handoff?.("c1", "go on")).resolves.toBe("Next");
-    expect(api.handoff).toHaveBeenCalledWith("c1", "go on");
-    expect(opened).toHaveBeenCalledWith("n1");
+  it("fresh sends the message to a new session of the card", async () => {
+    api.fresh.mockResolvedValue({ ok: true });
+    await localTransport.fresh?.("c1", "go on");
+    expect(api.fresh).toHaveBeenCalledWith("c1", "go on");
   });
 });

@@ -15,15 +15,18 @@
 // (prefetchTeam in lib/use-team.ts), so "Loading your team" shows only on
 // a cold start. The shared components' wz-* classes take the board's
 // tokens from team/team-board.css under .wz-board.
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import "./team/team-board.css";
 import { openTeamPage } from "./board-palette";
 import { Spinner } from "./Icon";
 import { InviteForm, type RoleOption } from "./team/InviteForm";
 import { LeaveButton } from "./team/LeaveButton";
 import { PendingInvites, inviteRow } from "./team/PendingInvites";
+import { Projects } from "./team/Projects";
 import { Roster } from "./team/Roster";
-import { useTeam } from "@/lib/use-team";
+import { TeamSwitcher } from "./team/TeamSwitcher";
+import { useBoardRepos } from "@/lib/use-board-repos";
+import { useManagedTeam } from "@/lib/use-managed-team";
 import type { TeamRole } from "@/lib/team-types";
 
 // The same card as the other Settings pages (SettingsDialog's Card).
@@ -53,8 +56,8 @@ function defaultInviteRole(opts: RoleOption[]): TeamRole | undefined {
 }
 
 export default function TeamSettings() {
-  const [org, setOrg] = useState<string | undefined>(undefined);
-  const { state, refresh, actions } = useTeam(org);
+  const { state, refresh, actions, setOrg } = useManagedTeam();
+  const boardRepos = useBoardRepos(state.kind === "ok");
 
   if (state.kind === "loading") {
     return (
@@ -118,7 +121,7 @@ export default function TeamSettings() {
             </span>
             <div className="flex min-w-0 flex-col">
               <span className="flex items-center gap-2">
-                <span className="truncate text-[15px] font-medium text-ink">{team.org.name}</span>
+                <span className="truncate text-[15px] font-medium text-ink">Team: {team.org.name}</span>
                 <span className="rounded-full border border-line-strong px-2 py-px text-[11px] text-muted">
                   {team.roleLabels[team.role]}
                 </span>
@@ -126,29 +129,35 @@ export default function TeamSettings() {
               <span className={SUBTLE}>
                 {count} {count === 1 ? "member" : "members"}
                 {pending.length > 0 ? ` · ${pending.length} invited` : ""}
+                {team.projects.length > 0 ? ` · ${team.projects.length} ${team.projects.length === 1 ? "project" : "projects"}` : ""}
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {team.orgs.length > 1 ? (
-              <select
-                aria-label="Switch workspace"
-                value={team.org.slug}
-                onChange={(e) => setOrg(e.target.value)}
-                className="rounded-md border border-line-strong bg-canvas px-2 py-1 text-[12.5px] text-ink outline-none focus:border-accent"
-              >
-                {team.orgs.map((o) => (
-                  <option key={o.slug} value={o.slug}>
-                    {o.name}
-                  </option>
-                ))}
-              </select>
-            ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <TeamSwitcher
+              orgs={team.orgs}
+              current={team.org.slug}
+              roleLabels={team.roleLabels}
+              actions={actions}
+              onSwitch={setOrg}
+            />
             <button type="button" onClick={openTeamPage} className={BUTTON}>
               Open on weft.zip
             </button>
           </div>
         </div>
+      </Section>
+
+      <Section title="Projects">
+        <Projects
+          projects={team.projects}
+          canManage={team.canManage}
+          actions={actions}
+          boardRepos={boardRepos}
+          roleOptions={roleOptions}
+          members={team.members}
+          pending={team.pending}
+        />
       </Section>
 
       <Section title="Members">

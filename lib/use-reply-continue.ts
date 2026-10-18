@@ -23,7 +23,7 @@ export function useReplyContinue({
   setError: (err: unknown) => void;
 }) {
   // A regular function, not useEffectEvent, because it's only ever called from event handlers
-  // (the Continue button click and the ⌘. shortcut) — never from a useEffect that would need a
+  // (the Continue button click and the ⌘⇧↵ shortcut) — never from a useEffect that would need a
   // stable identity. Guarded again here in case the shortcut is fired after canContinue flips.
   const canContinue = !live && !question && !shell && !editing;
   function sendContinue() {
@@ -34,7 +34,7 @@ export function useReplyContinue({
   useShortcuts([
     {
       id: "reply-continue",
-      keys: ["mod+."],
+      keys: ["mod+shift+Enter"],
       description: "Send “continue” so the thread keeps going",
       group: "Thread",
       allowInInput: true,

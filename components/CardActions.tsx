@@ -44,8 +44,9 @@ export function CardMarks({ card, live, onShare, onStar, onArchive }: CardMarkPr
   );
 }
 
-// Delete waits for the thread's first full turn: before then it's a stray click away from losing a thread that's
-// still starting. A counted turn, or a saved session that isn't running (imported, Codex), counts as one.
+// Delete is for a thread that hasn't finished its first full turn: a wrong start, stopped and gone before it spends
+// more tokens (the DELETE route ends its CLI). After that the header offers only Archive. A counted turn, or a saved
+// session that isn't running (imported, Codex), counts as finished.
 export function hasFinishedTurn(card: Card, live: boolean): boolean {
   return Boolean(card.turns) || (Boolean(card.sessionId) && !live);
 }
@@ -61,9 +62,10 @@ export default function CardActions({ onSend, onDelete, marksInPane = false, ...
     <>
       <CrashGuard inline what="skill menu"><SkillMenu cwd={card.cwd} disabled={live} onRun={(skill) => onSend(`/${skill}`)} /></CrashGuard>
       {!marksInPane && <CardMarks {...marks} />}
-      {hasFinishedTurn(card, live) && <button
+      {!hasFinishedTurn(card, live) && <button
         onClick={() => {
-          if (window.confirm(`Delete “${card.title}”? Its CLI transcript stays on disk.`)) onDelete();
+          const stops = live ? " This stops its turn." : "";
+          if (window.confirm(`Delete “${card.title}”?${stops} Its CLI transcript stays on disk.`)) onDelete();
         }}
         title="Delete card"
         aria-label="Delete card"

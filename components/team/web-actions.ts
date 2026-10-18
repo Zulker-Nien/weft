@@ -10,11 +10,14 @@
 // a server component, so this file is marked "use client" and rendered
 // inside the WebTeam client wrapper (app/[orgSlug]/team/page.tsx).
 
-import type { TeamActionResult, TeamClientActions, TeamRole } from "@/lib/team-types";
+import type { NewTeamResult, TeamActionResult, TeamClientActions, TeamRole } from "@/lib/team-types";
 import {
+  addProject as serverAddProject,
   changeMemberRole as serverChangeMemberRole,
   inviteMember as serverInviteMember,
+  createTeam as serverCreateTeam,
   removeMember as serverRemoveMember,
+  removeProject as serverRemoveProject,
   revokeInvite as serverRevokeInvite,
 } from "@/lib/team-actions";
 
@@ -37,6 +40,16 @@ export function webTeamActions(orgSlug: string): TeamClientActions {
     },
     async revoke(inviteId: string): Promise<TeamActionResult> {
       return serverRevokeInvite(orgSlug, inviteId);
+    },
+    async addProject(repo: string): Promise<TeamActionResult> {
+      return serverAddProject(orgSlug, repo);
+    },
+    async removeProject(repo: string): Promise<TeamActionResult> {
+      return serverRemoveProject(orgSlug, repo);
+    },
+    // The result's slug is the new workspace; the caller navigates to /<slug>/team.
+    async createTeam(name: string): Promise<NewTeamResult> {
+      return serverCreateTeam(name);
     },
   };
 }

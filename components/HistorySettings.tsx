@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Welcome } from "@/lib/welcome";
-import { changeWelcome, loadWelcome, REPLAY_EVENT } from "@/lib/welcome-client";
+import { changeWelcome, loadWelcome, REPLAY_EVENT, TEST_EVENT } from "@/lib/welcome-client";
 import SwitchRow from "./SwitchRow";
 
 // Settings → General: the welcome's two answers, changed later (lib/welcome.ts). Count your Claude Code
@@ -19,11 +19,14 @@ export default function HistorySettings() {
   }, []);
 
   if (!welcome) return null;
-  const change = (patch: { countHistory: boolean } | { importAll: true }) => {
+  const change = (patch: { countHistory: boolean } | { importAll: true } | { test: true }) => {
     setBusy(true);
     setError("");
     changeWelcome(patch)
-      .then((v) => setWelcome(v.welcome))
+      .then((v) => {
+        if ("test" in patch) window.dispatchEvent(new Event(TEST_EVENT));
+        else setWelcome(v.welcome);
+      })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
       .finally(() => setBusy(false));
   };
@@ -39,11 +42,16 @@ export default function HistorySettings() {
       <section className="flex items-center justify-between gap-4">
         <div className="flex flex-col gap-0.5">
           <h3 className="text-[13px] font-medium text-ink">The welcome</h3>
-          <p className="text-[12.5px] text-muted">See the first-launch screens again: your profile from your sessions, and your projects. Nothing changes.</p>
+          <p className="text-[12.5px] text-muted">See the first-launch screens again: your profile from your sessions, and your projects. Replay changes nothing; Test it runs the real one and saves your answers.</p>
         </div>
-        <button type="button" onClick={() => window.dispatchEvent(new Event(REPLAY_EVENT))} className="shrink-0 rounded-md border border-line px-2.5 py-1 text-[12px] text-ink hover:bg-sunken">
-          Replay
-        </button>
+        <span className="flex shrink-0 gap-1.5">
+          <button type="button" onClick={() => window.dispatchEvent(new Event(REPLAY_EVENT))} className="rounded-md border border-line px-2.5 py-1 text-[12px] text-ink hover:bg-sunken">
+            Replay
+          </button>
+          <button type="button" disabled={busy} onClick={() => change({ test: true })} className="rounded-md border border-line px-2.5 py-1 text-[12px] text-ink hover:bg-sunken disabled:opacity-40">
+            Test it
+          </button>
+        </span>
       </section>
       {leftOut && (
         <section className="flex items-center justify-between gap-4">

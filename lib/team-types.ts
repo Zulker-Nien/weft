@@ -4,7 +4,11 @@
 
 export type TeamRole = "owner" | "admin" | "member";
 
-export type TeamOrg = { id: string; slug: string; name: string };
+// `role` is the viewer's role in that workspace; the switcher shows it beside each name.
+export type TeamOrg = { id: string; slug: string; name: string; role?: TeamRole };
+
+// A GitHub repo ("owner/name") linked to a workspace: a team has many projects.
+export type TeamProject = { repo: string; addedAt: string; addedBy: string | null };
 
 export type TeamUser = { id: string; email: string | null; name: string | null; avatar: string | null };
 
@@ -30,6 +34,7 @@ export type TeamSnapshot = {
   canManage: boolean;
   members: TeamMember[];
   pending: TeamInvite[];
+  projects: TeamProject[];
   roleOptions: RoleOption[];
   roleLabels: Record<TeamRole, string>;
 };
@@ -39,7 +44,14 @@ export type TeamOp =
   | { org: string; action: "invite"; email: string; role: TeamRole }
   | { org: string; action: "role"; userId: string; role: TeamRole }
   | { org: string; action: "remove"; userId: string }
-  | { org: string; action: "revoke"; inviteId: string };
+  | { org: string; action: "revoke"; inviteId: string }
+  | { org: string; action: "link-project"; repo: string }
+  | { org: string; action: "unlink-project"; repo: string };
+
+// POST /api/teams with this body makes a new workspace the caller owns (no `org`: it doesn't exist yet).
+// The answer's `slug` is the new workspace, so the page can switch to it.
+export type NewTeamOp = { action: "create"; name: string };
+export type NewTeamResult = TeamActionResult & { slug?: string };
 
 export type TeamActionResult = { ok: boolean; message?: string };
 
@@ -50,7 +62,13 @@ export type TeamClientActions = {
   changeRole: (userId: string, role: TeamRole) => Promise<TeamActionResult>;
   remove: (userId: string) => Promise<TeamActionResult>;
   revoke: (inviteId: string) => Promise<TeamActionResult>;
+  addProject: (repo: string) => Promise<TeamActionResult>;
+  removeProject: (repo: string) => Promise<TeamActionResult>;
+  createTeam: (name: string) => Promise<NewTeamResult>;
 };
+
+// "owner/name" as GitHub spells it.
+export const REPO_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 
 export const TEAM_ROLES: readonly TeamRole[] = ["owner", "admin", "member"];
 

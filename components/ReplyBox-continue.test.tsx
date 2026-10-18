@@ -12,7 +12,7 @@ vi.mock("./Composer", () => import("./composer-mock"));
 type Props = Parameters<typeof ReplyBox>[0];
 
 // jsdom's user agent is Linux by default, so the hotkeys registry's "mod" wouldn't match
-// metaKey. Stub Mac so ⌘. matches the Continue shortcut.
+// metaKey. Stub Mac so ⌘⇧↵ matches the Continue shortcut.
 function onMac() {
   vi.stubGlobal("navigator", { userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)" });
 }
@@ -43,7 +43,7 @@ function setup(props: Partial<Props> = {}) {
 }
 
 function fireModDot() {
-  const e = new KeyboardEvent("keydown", { key: ".", metaKey: true, bubbles: true, cancelable: true });
+  const e = new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, metaKey: true, bubbles: true, cancelable: true });
   window.dispatchEvent(e);
   return e;
 }
@@ -66,15 +66,15 @@ describe("Continue button", () => {
     expect(onSend).toHaveBeenCalledWith("continue");
   });
 
-  it("isn't offered after a turn that finished cleanly: the primary is Send", () => {
+  it("sits beside Send after a turn that finished cleanly", () => {
     setup();
-    expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Send" })).toBeInTheDocument();
   });
 });
 
-describe("Continue ⌘. shortcut", () => {
-  it("sends 'continue' on metaKey+.", () => {
+describe("Continue ⌘⇧↵ shortcut", () => {
+  it("sends 'continue' on metaKey+shift+Enter", () => {
     const { onSend } = setup();
     fireModDot();
     expect(onSend).toHaveBeenCalledWith("continue");

@@ -16,8 +16,10 @@
 import { revalidatePath } from "next/cache";
 import { isTeamRole } from "./team-types";
 import { requireTeam } from "./teams";
+import { runCreateTeam } from "./team-create";
+import { webUser } from "./web-session";
 import { runTeamOp, teamSnapshot } from "./team-ops";
-import type { TeamActionResult, TeamSnapshot } from "./team-types";
+import type { NewTeamResult, TeamActionResult, TeamSnapshot } from "./team-types";
 import type { TeamContext } from "./teams";
 
 export type { TeamActionResult };
@@ -82,4 +84,25 @@ export async function revokeInvite(orgSlug: string, inviteId: string): Promise<T
   const result = await runTeamOp(ctx, { org: orgSlug, action: "revoke", inviteId: cleanId });
   if (result.ok) revalidatePath(`/${orgSlug}/team`);
   return result;
+}
+
+export async function addProject(orgSlug: string, repo: string): Promise<TeamActionResult> {
+  const ctx = await gate(orgSlug);
+  const result = await runTeamOp(ctx, { org: orgSlug, action: "link-project", repo: asString(repo) });
+  if (result.ok) revalidatePath(`/${orgSlug}/team`);
+  return result;
+}
+
+export async function removeProject(orgSlug: string, repo: string): Promise<TeamActionResult> {
+  const ctx = await gate(orgSlug);
+  const result = await runTeamOp(ctx, { org: orgSlug, action: "unlink-project", repo: asString(repo) });
+  if (result.ok) revalidatePath(`/${orgSlug}/team`);
+  return result;
+}
+
+// Makes a workspace the signed-in visitor owns; the answer's slug is where the page goes next.
+export async function createTeam(name: string): Promise<NewTeamResult> {
+  const user = await webUser();
+  if (!user) return { ok: false, message: "Sign in first." };
+  return runCreateTeam(user, asString(name));
 }

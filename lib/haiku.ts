@@ -13,6 +13,7 @@ export async function complete(prompt: string) {
     options: { model: "haiku", tools: [], settingSources: [], strictMcpConfig: true, persistSession: false, maxTurns: 1 },
   })) {
     if (msg.type !== "result") continue;
+    const usage = "usage" in msg ? msg.usage : undefined;
     await captureAiGeneration({
       sessionId: null,
       traceId,
@@ -20,10 +21,10 @@ export async function complete(prompt: string) {
       model: "haiku",
       input: prompt,
       output: msg.subtype === "success" ? msg.result : undefined,
-      inputTokens: msg.usage.input_tokens,
-      outputTokens: msg.usage.output_tokens,
-      cacheReadInputTokens: msg.usage.cache_read_input_tokens,
-      cacheCreationInputTokens: msg.usage.cache_creation_input_tokens,
+      inputTokens: usage?.input_tokens,
+      outputTokens: usage?.output_tokens,
+      cacheReadInputTokens: usage?.cache_read_input_tokens,
+      cacheCreationInputTokens: usage?.cache_creation_input_tokens,
       latencyMs: Date.now() - startedAt,
       isError: msg.subtype !== "success",
       error: msg.subtype !== "success" ? msg.subtype : undefined,

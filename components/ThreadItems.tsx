@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useState } from "react";
+import { formatTokens } from "@/lib/format";
 import { turnId } from "@/lib/show-rail";
 import type { ThreadItem } from "@/lib/types";
 import CrashGuard from "./CrashGuard";
@@ -113,8 +114,33 @@ export const ThreadMessage = memo(function ThreadMessage({ item, cardId }: { ite
       return <ShellLine item={item} />;
     case "notification":
       return <NotificationLine item={item} />;
+    case "spliced":
+      return <SplicedLine item={item} />;
   }
 });
+
+// Where a cold card's fresh session begins (lib/splice.ts): a divider you can open to read the brief it started from.
+function SplicedLine({ item }: { item: Extract<ThreadItem, { kind: "spliced" }> }) {
+  const [open, setOpen] = useState(false);
+  const saved = item.tokens ? ` · ${formatTokens(item.tokens)} not re-sent` : "";
+  return (
+    <div className="text-[11px] text-faint">
+      <div className="flex items-center gap-2 py-1">
+        <div className="h-px flex-1 bg-line" />
+        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex items-center gap-1 hover:text-muted">
+          <Icon name={open ? "chevronDown" : "chevronRight"} size={11} />
+          Fresh session{saved} · {open ? "hide" : "show"} the brief
+        </button>
+        <div className="h-px flex-1 bg-line" />
+      </div>
+      {open && (
+        <div className="mt-1 border-l border-line pl-3 text-[12px] text-muted">
+          <Markdown text={item.brief.replace(/<\/?system-reminder>/g, "").trim()} />
+        </div>
+      )}
+    </div>
+  );
+}
 
 // A background task the CLI told the agent had ended, as the <task-notification> it sent: often what
 // started the turn below it.

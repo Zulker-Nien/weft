@@ -11,6 +11,8 @@ export type Submitters = { submit: () => void; submitAlt?: () => void };
 // or nothing (a new line). ⌘↵ and Ctrl↵ always send; in a reply, Enter does too, unless Shift is held.
 export function submitFor(e: Keys, variant: Variant, hasAlt: boolean, mac: boolean): "submit" | "alt" | null {
   if (e.key !== "Enter") return null;
+  // ⌘⇧↵ in a reply is Continue (lib/use-reply-continue.ts), never a send.
+  if (variant === "reply" && e.shiftKey && (e.metaKey || e.ctrlKey)) return null;
   if (mac && e.ctrlKey && !e.metaKey && hasAlt) return "alt";
   return e.metaKey || e.ctrlKey || (variant === "reply" && !e.shiftKey) ? "submit" : null;
 }
