@@ -10,7 +10,7 @@ function respond(body: unknown) {
   return Promise.resolve(new Response(JSON.stringify(body)));
 }
 
-let fetchMock: ReturnType<typeof vi.fn>;
+let fetchMock: ReturnType<typeof vi.fn<(url: string) => Promise<Response>>>;
 beforeEach(() => {
   fetchMock = vi.fn((url: string) => respond(url.includes("prompt=1") ? { pile: PILE, prompt: "Walk me through", title: "Commit the pile" } : { pile: PILE }));
   vi.stubGlobal("fetch", fetchMock);
@@ -56,6 +56,13 @@ describe("PileBadge", () => {
   it("starts the commit walk-through card on click", async () => {
     const { onStart } = setup();
     await userEvent.click(await screen.findByRole("button", { name: "+12/-4" }));
+    await waitFor(() => expect(onStart).toHaveBeenCalledWith("/dev/app", "Walk me through", "Commit the pile"));
+  });
+
+  it("starts the walk-through from the bubble's own button", async () => {
+    const { onStart } = setup();
+    await userEvent.hover(await screen.findByRole("button", { name: "+12/-4" }));
+    await userEvent.click(screen.getByRole("button", { name: "Review 2 cards" }));
     await waitFor(() => expect(onStart).toHaveBeenCalledWith("/dev/app", "Walk me through", "Commit the pile"));
   });
 

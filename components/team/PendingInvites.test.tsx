@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PendingInvites, type PendingInviteRow } from "./PendingInvites";
-import type { TeamClientActions, TeamRole } from "@/lib/team-types";
+import type { TeamActionResult, TeamClientActions, TeamRole } from "@/lib/team-types";
 import "../test-utils";
 
 const roleLabels: Record<TeamRole, string> = { owner: "Owner", admin: "Admin", member: "Member" };
@@ -26,13 +26,13 @@ const grace: PendingInviteRow = {
 };
 
 function makeActions(): TeamClientActions & {
-  revoke: ReturnType<typeof vi.fn>;
+  revoke: ReturnType<typeof vi.fn<(inviteId: string) => Promise<TeamActionResult>>>;
 } {
   return {
-    invite: vi.fn().mockResolvedValue({ ok: true }),
-    changeRole: vi.fn().mockResolvedValue({ ok: true }),
-    remove: vi.fn().mockResolvedValue({ ok: true }),
-    revoke: vi.fn().mockResolvedValue({ ok: true, message: "Revoked." }),
+    invite: vi.fn<(email: string, role: TeamRole) => Promise<TeamActionResult>>().mockResolvedValue({ ok: true }),
+    changeRole: vi.fn<(userId: string, role: TeamRole) => Promise<TeamActionResult>>().mockResolvedValue({ ok: true }),
+    remove: vi.fn<(userId: string) => Promise<TeamActionResult>>().mockResolvedValue({ ok: true }),
+    revoke: vi.fn<(inviteId: string) => Promise<TeamActionResult>>().mockResolvedValue({ ok: true, message: "Revoked." }),
   };
 }
 

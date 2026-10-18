@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { InviteForm, type RoleOption } from "./InviteForm";
-import type { TeamClientActions } from "@/lib/team-types";
+import type { TeamActionResult, TeamClientActions, TeamRole } from "@/lib/team-types";
 import "../test-utils";
 
 const roleOptions: RoleOption[] = [
@@ -13,13 +13,13 @@ const roleOptions: RoleOption[] = [
 ];
 
 function makeActions(): TeamClientActions & {
-  invite: ReturnType<typeof vi.fn>;
+  invite: ReturnType<typeof vi.fn<(email: string, role: TeamRole) => Promise<TeamActionResult>>>;
 } {
   return {
-    invite: vi.fn().mockResolvedValue({ ok: true, message: "ok" }),
-    changeRole: vi.fn().mockResolvedValue({ ok: true }),
-    remove: vi.fn().mockResolvedValue({ ok: true }),
-    revoke: vi.fn().mockResolvedValue({ ok: true }),
+    invite: vi.fn<(email: string, role: TeamRole) => Promise<TeamActionResult>>().mockResolvedValue({ ok: true, message: "ok" }),
+    changeRole: vi.fn<(userId: string, role: TeamRole) => Promise<TeamActionResult>>().mockResolvedValue({ ok: true }),
+    remove: vi.fn<(userId: string) => Promise<TeamActionResult>>().mockResolvedValue({ ok: true }),
+    revoke: vi.fn<(inviteId: string) => Promise<TeamActionResult>>().mockResolvedValue({ ok: true }),
   };
 }
 
