@@ -13,7 +13,7 @@ vi.mock("@/lib/copilot-sources", () => sources);
 
 const route = await import("./copilot/suggestions/route");
 const URL = "http://localhost:3457/api/copilot/suggestions";
-const WRITE = { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { host: "localhost:3457", "x-weft-token": "1", "content-type": "application/json" };
 
 describe("/api/copilot/suggestions", () => {
   it("GETs the board's chips", async () => {

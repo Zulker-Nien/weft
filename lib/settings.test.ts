@@ -4,22 +4,22 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let dir: string;
-const g = globalThis as unknown as { __threadboardState?: unknown; __threadboardSettings?: unknown };
+const g = globalThis as unknown as { __weftState?: unknown; __weftSettings?: unknown };
 
 async function load() {
   vi.resetModules();
-  delete g.__threadboardState;
-  delete g.__threadboardSettings;
+  delete g.__weftState;
+  delete g.__weftSettings;
   return import("./settings");
 }
 
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-settings-"));
-  process.env.THREADBOARD_DATA = dir;
+  process.env.WEFT_DATA = dir;
 });
 afterEach(() => {
-  delete g.__threadboardSettings;
-  delete g.__threadboardState;
+  delete g.__weftSettings;
+  delete g.__weftState;
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -195,7 +195,7 @@ describe("settings", () => {
     // settings.json (or a test that resets it) can leave it as null, and the fallbacks should still
     // produce a usable array.
     const s = await load();
-    (g as { __threadboardSettings?: { dismissedSessions?: string[] | null } }).__threadboardSettings = {
+    (g as { __weftSettings?: { dismissedSessions?: string[] | null } }).__weftSettings = {
       dismissedSessions: null,
     };
     expect(s.dismissedSessions()).toEqual([]);

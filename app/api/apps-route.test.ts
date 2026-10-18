@@ -28,7 +28,7 @@ const cloudMock = vi.hoisted(() => ({
 vi.mock("@/lib/app-cloud", () => cloudMock);
 
 const route = await import("./apps/route");
-const WRITE = { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { host: "localhost:3457", "x-weft-token": "1", "content-type": "application/json" };
 const make = (method: "GET" | "POST" | "PATCH" | "DELETE", body?: unknown, headers: Record<string, string> = WRITE) =>
   new Request("http://localhost:3457/api/apps", { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
 
@@ -56,13 +56,13 @@ describe("GET /apps", () => {
     expect(cloudMock.syncAppsSoon).toHaveBeenCalledOnce();
   });
 
-  it("does not need the x-threadboard header (read-only)", () => {
+  it("does not need the x-weft-token header (read-only)", () => {
     const res = route.GET(make("GET", undefined, { host: "localhost:3457" }));
     expect(res.status).toBe(200);
   });
 
   it("refuses a non-local host", () => {
-    const res = route.GET(make("GET", undefined, { host: "evil.test", "x-threadboard": "1" }));
+    const res = route.GET(make("GET", undefined, { host: "evil.test", "x-weft-token": "1" }));
     expect(res.status).toBe(403);
   });
 });

@@ -73,7 +73,7 @@ export interface ImportScan {
 
 export type RevealResult = { value: string } | { denied: true } | { missing: true };
 
-// window.threadboard.vault, from electron/preload.cjs.
+// window.weft.vault, from electron/preload.cjs.
 export interface VaultBridge {
   overview(folders: string[]): Promise<VaultOverview>;
   scan(folder: string): Promise<ImportScan>;
@@ -286,5 +286,5 @@ export function copiedText(name: string, result: { label: string; replaced: bool
 }
 
 export function vaultBridge(): VaultBridge | null {
-  return (typeof window !== "undefined" && window.threadboard?.vault) || null;
+  return (typeof window !== "undefined" && window.weft?.vault) || null;
 }

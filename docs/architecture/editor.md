@@ -57,7 +57,7 @@ editor, mounted a moment later, takes the queue with `drainOpenFiles(cardId)`. A
 Paths resolve against the card's `cwd` with the deepest existing ancestor realpath'd, so a symlink can't lead out.
 Anything outside the folder, inside `.git/`, or a secret file (`isSecretFile`, the `.env` family) is refused. Reads stop
 at 2 MB, and binary files (a NUL byte in the first 8 KB) are refused. GETs pass `guard(req, {write: false})` and the PUT
-needs `x-threadboard: 1`, like every other route.
+needs `x-weft-token: 1`, like every other route.
 
 ## The editor
 

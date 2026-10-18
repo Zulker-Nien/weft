@@ -2,7 +2,7 @@
 // scout-save.mjs — merge the scout agent's findings into the report Weft's quality badge reads.
 // Usage: scout-save.mjs <findings.json> <session file> ...
 //
-// The report is <THREADBOARD_DATA or ~/.weft>/scout/<sha1(repo root)[:16]>.json (lib/scout.ts reads
+// The report is <WEFT_DATA or ~/.weft>/scout/<sha1(repo root)[:16]>.json (lib/scout.ts reads
 // the same file). The session files were re-scouted, so their old findings are replaced; findings
 // elsewhere stay open until a later session touches their file.
 import { createHash } from "node:crypto";
@@ -52,7 +52,7 @@ try {
 }
 const fresh = (Array.isArray(raw) ? raw : []).map(toFinding).filter(Boolean);
 
-const dir = path.join(process.env.THREADBOARD_DATA || path.join(os.homedir(), ".weft"), "scout");
+const dir = path.join(process.env.WEFT_DATA || path.join(os.homedir(), ".weft"), "scout");
 const file = path.join(dir, `${createHash("sha1").update(root).digest("hex").slice(0, 16)}.json`);
 let old = null;
 try {

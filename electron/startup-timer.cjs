@@ -28,7 +28,7 @@ const LABELS = {
 /** @typedef {{ total: number, usual: number | null, slow: boolean, slowest: Phase }} Verdict */
 
 function defaultFile() {
-  return path.join(process.env.THREADBOARD_DATA || path.join(os.homedir(), ".weft"), "startup.jsonl");
+  return path.join(process.env.WEFT_DATA || path.join(os.homedir(), ".weft"), "startup.jsonl");
 }
 
 /** @param {string} file @returns {Run[]} */

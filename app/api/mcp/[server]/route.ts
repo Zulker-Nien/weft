@@ -2,7 +2,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { bridgeServer, bridgeToken } from "@/lib/mcp-bridge";
 
 // Weft's tools for a Codex turn, as a streamable-HTTP MCP server (lib/mcp-bridge.ts). Not the guard()'s
-// x-threadboard header: Codex isn't a page, and the turn's bearer token is what says whose tools these are.
+// x-weft-token header: Codex isn't a page, and the turn's bearer token is what says whose tools these are.
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
 function deny(status: number, error: string) {

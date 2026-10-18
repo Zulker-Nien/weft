@@ -34,7 +34,7 @@ vi.mock("@/lib/store", () => ({
 
 vi.mock("@/lib/file-access", () => fileAccess);
 
-const WRITE = { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { host: "localhost:3457", "x-weft-token": "1", "content-type": "application/json" };
 const READ = { host: "localhost:3457" };
 const body = async <T>(res: Response): Promise<T> => (await res.json()) as T;
 
@@ -149,7 +149,7 @@ describe("GET /api/cards/:id/files", () => {
     expect((await body<{ error: string }>(refused)).error).toMatch(/nope/);
   });
 
-  it("rejects a foreign host without x-threadboard (read route)", async () => {
+  it("rejects a foreign host without x-weft-token (read route)", async () => {
     const { GET } = await load();
     const res = await GET(req(`/cards/c1/files?path=a.txt`, { headers: { host: "evil.com" } }), ctx("c1"));
     expect(res.status).toBe(403);
@@ -204,9 +204,9 @@ describe("PUT /api/cards/:id/files", () => {
     expect((await body<{ error: string }>(res)).error).toMatch(/binary/);
   });
 
-  it("rejects a foreign host and a missing x-threadboard", async () => {
+  it("rejects a foreign host and a missing x-weft-token", async () => {
     const { PUT } = await load();
-    const foreign = await PUT(req(`/cards/c1/files`, { method: "PUT", headers: { host: "evil.com", "x-threadboard": "1" }, body: { path: "a.txt", text: "x" } }), ctx("c1"));
+    const foreign = await PUT(req(`/cards/c1/files`, { method: "PUT", headers: { host: "evil.com", "x-weft-token": "1" }, body: { path: "a.txt", text: "x" } }), ctx("c1"));
     expect(foreign.status).toBe(403);
     const noHeader = await PUT(req(`/cards/c1/files`, { method: "PUT", headers: { host: "localhost:3457" }, body: { path: "a.txt", text: "x" } }), ctx("c1"));
     expect(noHeader.status).toBe(403);

@@ -175,7 +175,7 @@ function TokenForm({ error, busy, onSave, onForget }: { error: string | null; bu
             <span>
               Create a setup token with the <b className="text-ink">Create additional tokens</b> template.
             </span>
-            <button type="button" onClick={() => window.threadboard?.openExternal(TOKEN_URL)} className="rounded-md border border-line-strong px-2.5 py-1 text-[12px] text-ink hover:bg-sunken">
+            <button type="button" onClick={() => window.weft?.openExternal(TOKEN_URL)} className="rounded-md border border-line-strong px-2.5 py-1 text-[12px] text-ink hover:bg-sunken">
               Open Cloudflare API tokens ↗
             </button>
           </div>
@@ -266,7 +266,7 @@ function Linked({ link, folder, onOpenUrl }: { link: CloudflareLink; folder: Clo
       {actions.length > 0 && (
         <div className="flex flex-wrap gap-x-2.5 gap-y-0.5">
           {actions.map((a) => (
-            <button key={a.label} onClick={() => window.threadboard?.openExternal(a.url)} className="text-faint hover:text-ink" title={a.url}>
+            <button key={a.label} onClick={() => window.weft?.openExternal(a.url)} className="text-faint hover:text-ink" title={a.url}>
               {a.label} ↗
             </button>
           ))}

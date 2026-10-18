@@ -137,7 +137,7 @@ export interface DevLaunch {
  * undefined starts it the plain way, with a note for its log when there's something to say.
  */
 export async function devSecrets(cardId: string, command: string, cwd: string, thread?: string): Promise<{ launch?: DevLaunch; note?: string }> {
-  if (!process.env.THREADBOARD_SHELL_URL) return {};
+  if (!process.env.WEFT_SHELL_URL) return {};
   let checked;
   try {
     checked = checkCommand(command);
@@ -155,7 +155,7 @@ export async function devSecrets(cardId: string, command: string, cwd: string, t
         bin: asText(r.node),
         args: [asText(r.runner)],
         env: { ELECTRON_RUN_AS_NODE: "1" },
-        stdin: JSON.stringify({ url: process.env.THREADBOARD_SHELL_URL, token: shellToken(), grant: r.grant, argv: checked.argv, env: checked.env }),
+        stdin: JSON.stringify({ url: process.env.WEFT_SHELL_URL, token: shellToken(), grant: r.grant, argv: checked.argv, env: checked.env }),
         names,
       },
     };

@@ -6,7 +6,7 @@ const project = (name: string, over: Partial<VercelProject> = {}): VercelProject
 const folder = (path: string, repo: string | null = null, over: Partial<VercelFolder> = {}): VercelFolder => ({ folder: path, repo, link: null, error: null, ...over });
 
 afterEach(() => {
-  delete (window as unknown as { threadboard?: unknown }).threadboard;
+  delete (window as unknown as { weft?: unknown }).weft;
 });
 
 describe("matchScore", () => {
@@ -121,7 +121,7 @@ describe("vercelBridge", () => {
   it("is the shell's bridge, or null", () => {
     expect(vercelBridge()).toBeNull();
     const bridge = { status: () => null };
-    (window as unknown as { threadboard: unknown }).threadboard = { vercel: bridge };
+    (window as unknown as { weft: unknown }).weft = { vercel: bridge };
     expect(vercelBridge()).toBe(bridge);
   });
 });

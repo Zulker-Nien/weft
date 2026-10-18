@@ -32,7 +32,7 @@ export class FileConflictError extends Error {
   }
 }
 
-const HEADERS = { "content-type": "application/json", "x-threadboard": "1" };
+const HEADERS = { "content-type": "application/json", "x-weft-token": "1" };
 
 async function call<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, { ...init, headers: HEADERS });

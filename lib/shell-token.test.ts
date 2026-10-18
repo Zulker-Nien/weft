@@ -10,7 +10,7 @@ afterEach(() => {
 
 describe("shellToken", () => {
   it("reads the token main wrote, or is empty without one", () => {
-    vi.stubEnv("THREADBOARD_SHELL_TOKEN", undefined);
+    vi.stubEnv("WEFT_SHELL_TOKEN", undefined);
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-token-"));
     expect(shellToken(dir)).toBe("");
     fs.writeFileSync(path.join(dir, "shell-token"), "abc\n");
@@ -18,7 +18,7 @@ describe("shellToken", () => {
   });
 
   it("falls back to the env a server from an older main still has", () => {
-    vi.stubEnv("THREADBOARD_SHELL_TOKEN", "old");
+    vi.stubEnv("WEFT_SHELL_TOKEN", "old");
     expect(shellToken(fs.mkdtempSync(path.join(os.tmpdir(), "weft-token-")))).toBe("old");
   });
 });

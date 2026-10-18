@@ -6,7 +6,7 @@ import type { ScoutState } from "./scout-view";
 // While the scout runs, how often the badge looks for its findings.
 export const POLL_MS = 20_000;
 
-const HEADERS = { "content-type": "application/json", "x-threadboard": "1" };
+const HEADERS = { "content-type": "application/json", "x-weft-token": "1" };
 
 async function scoutOf(res: Promise<Response>) {
   const d = (await (await res).json()) as { scout?: ScoutState | null };

@@ -61,7 +61,7 @@ async function handleAccountCallback(raw, { getServer, showMain, warn }) {
   try {
     const res = await fetch(`${server.url}/api/auth/weft-callback`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-threadboard": "1" },
+      headers: { "content-type": "application/json", "x-weft-token": "1" },
       body: JSON.stringify(body),
     });
     if (res.ok) return;

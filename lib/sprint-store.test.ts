@@ -3,14 +3,14 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// The saved sprints' store, against a real file in a temp dir (THREADBOARD_DATA), never ~/.weft.
+// The saved sprints' store, against a real file in a temp dir (WEFT_DATA), never ~/.weft.
 
 let dir: string;
-const g = globalThis as unknown as { __threadboardState?: unknown };
+const g = globalThis as unknown as { __weftState?: unknown };
 
 async function load() {
   vi.resetModules();
-  delete g.__threadboardState;
+  delete g.__weftState;
   return import("./sprint-store");
 }
 
@@ -18,10 +18,10 @@ const sprintsFile = () => path.join(dir, "sprints.json");
 
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-sprints-"));
-  process.env.THREADBOARD_DATA = dir;
+  process.env.WEFT_DATA = dir;
 });
 afterEach(() => {
-  delete g.__threadboardState;
+  delete g.__weftState;
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

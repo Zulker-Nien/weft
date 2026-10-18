@@ -17,7 +17,7 @@ vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
   },
 }));
 
-process.env.THREADBOARD_DATA = fs.mkdtempSync(path.join(os.tmpdir(), "weft-scout-"));
+process.env.WEFT_DATA = fs.mkdtempSync(path.join(os.tmpdir(), "weft-scout-"));
 const { SECRET_GUARD_HOOKS } = await import("./secret-guard");
 const { headCommit, markStarted, readScout, scoutFile, scoutPrompt, scoutState, startScout } = await import("./scout");
 

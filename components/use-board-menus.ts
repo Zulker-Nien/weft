@@ -27,7 +27,7 @@ export interface BoardMenuDeps {
 
 // The menus are native (electron/main.cjs). In a plain browser tab there's no shell, so the browser's own menu shows.
 export function useBoardMenus(deps: BoardMenuDeps) {
-  const shell = typeof window === "undefined" ? undefined : window.threadboard;
+  const shell = typeof window === "undefined" ? undefined : window.weft;
   // Menu items that have a board shortcut use its key, read from the registry: menu item id -> shortcut id.
   // Keys the open menu handles itself (Return, arrows…) are skipped, so card-open shows O, not ↩.
   const shortcuts = useShortcutList();
@@ -123,7 +123,7 @@ export function useBoardMenus(deps: BoardMenuDeps) {
 
   // The plain menu actions (open, rename, start, stop, reveal, copy, archive, delete): no API, just
   // the deps and shell. Extracted to keep runCardAction's complexity under the cap.
-  async function runSimpleAction(card: Card, action: CardAction, shell: typeof window.threadboard) {
+  async function runSimpleAction(card: Card, action: CardAction, shell: typeof window.weft) {
     switch (action) {
       case "open":
         deps.openCard(card);

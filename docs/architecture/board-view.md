@@ -3,7 +3,7 @@
 Status: built 2026-10-12.
 
 A thread that changes the board (a drawer, a dialog, a card) used to be able to test it only in jsdom: the browser
-pane is a separate browser with no `window.threadboard` bridge (so the 🔐 drawer there just says it "lives in the
+pane is a separate browser with no `window.weft` bridge (so the 🔐 drawer there just says it "lives in the
 desktop app"), and the main window has no debug port. `mcp__board_view__*` gives threads eyes and hands on the real
 board window (`appView` in `electron/main.cjs`).
 

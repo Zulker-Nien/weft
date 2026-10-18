@@ -74,7 +74,7 @@ The top of the Services drawer, above the usage summary (`components/DevLauncher
 - `lib/dev-launchers.ts`: working folders are the non-archived cards' folders minus Weft's own (`process.cwd()`).
   Weft's own folder, when a card works in it, comes last as `{ self: true }`: never probed, never launched
   (`launch` still refuses it, and `pnpm dev` would free port 1024 by killing this board); its row reads "Weft itself" and links
-  its `url` (`http://127.0.0.1:$PORT`, else the dev script's) through `window.threadboard.openExternal`, since the pane refuses Weft's own server.
+  its `url` (`http://127.0.0.1:$PORT`, else the dev script's) through `window.weft.openExternal`, since the pane refuses Weft's own server.
   A run keyed by a card id (a thread's `mcp__devservers__start`) carries `cardId` and `title`, so the row's "· by …" opens it.
   `listLaunchers()` pairs each command with the run serving it (`runFor`: same cwd and command, live first), probing
   its url; with no run, a url that already answers is flagged `answering`. `launch(cwd, command)` only runs a command

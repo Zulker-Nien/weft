@@ -31,7 +31,7 @@ vi.mock("@/lib/cloud-sync", () => ({ cloudSyncStatus, syncNow, queueFolder }));
 
 const route = await import("./cloud-sync/route");
 
-const WRITE = { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { host: "localhost:3457", "x-weft-token": "1", "content-type": "application/json" };
 const READ = { host: "localhost:3457" };
 
 function req(url: string, { method = "GET", body, headers = WRITE }: { method?: string; body?: unknown; headers?: Record<string, string> } = {}) {
@@ -53,7 +53,7 @@ beforeEach(() => {
 });
 
 describe("GET /api/cloud-sync", () => {
-  it("returns folders and status without requiring x-threadboard (read)", async () => {
+  it("returns folders and status without requiring x-weft-token (read)", async () => {
     const res = await route.GET(req("/cloud-sync", { headers: READ }));
     expect(res.status).toBe(200);
     expect(await body(res)).toEqual({
@@ -71,13 +71,13 @@ describe("GET /api/cloud-sync", () => {
 
 describe("POST /api/cloud-sync", () => {
   it("rejects a foreign host", async () => {
-    const res = await route.POST(req("/cloud-sync", { method: "POST", body: { sync: true }, headers: { host: "evil.com", "x-threadboard": "1" } }));
+    const res = await route.POST(req("/cloud-sync", { method: "POST", body: { sync: true }, headers: { host: "evil.com", "x-weft-token": "1" } }));
     expect(res.status).toBe(403);
     expect(setSyncFolder).not.toHaveBeenCalled();
     expect(syncNow).not.toHaveBeenCalled();
   });
 
-  it("rejects a write without x-threadboard", async () => {
+  it("rejects a write without x-weft-token", async () => {
     const res = await route.POST(req("/cloud-sync", { method: "POST", body: { sync: true }, headers: { host: "localhost:3457" } }));
     expect(res.status).toBe(403);
     expect(syncNow).not.toHaveBeenCalled();

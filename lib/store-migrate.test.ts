@@ -5,22 +5,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Card } from "./types";
 
 // The library gave way to ★ and tags: lib/store.ts moves library cards over as it loads the board.
-// Each test points THREADBOARD_DATA at a fresh temp dir and re-imports the store. Never the real ~/.weft.
+// Each test points WEFT_DATA at a fresh temp dir and re-imports the store. Never the real ~/.weft.
 let dir: string;
-const g = globalThis as unknown as { __threadboardState?: unknown };
+const g = globalThis as unknown as { __weftState?: unknown };
 
 async function load() {
   vi.resetModules();
-  delete g.__threadboardState;
+  delete g.__weftState;
   return import("./store");
 }
 
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-store-migrate-"));
-  process.env.THREADBOARD_DATA = dir;
+  process.env.WEFT_DATA = dir;
 });
 afterEach(() => {
-  delete g.__threadboardState;
+  delete g.__weftState;
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

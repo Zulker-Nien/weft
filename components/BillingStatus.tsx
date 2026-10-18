@@ -66,7 +66,7 @@ export default function BillingStatus() {
   const s: BillingStatusView = status;
 
   function openManage() {
-    if (window.threadboard) window.threadboard.openExternal(s.manageUrl);
+    if (window.weft) window.weft.openExternal(s.manageUrl);
   }
 
   return (

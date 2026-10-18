@@ -9,7 +9,7 @@ import { lineRedactor, main, readStdin, HOLD_CHARS } from "./secret-env.cjs";
 const VALUE = "sk_live_wrapper_secret_1234";
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-secret-env-"));
 const server = path.join(dir, "server.js");
-fs.writeFileSync(server, "console.log('key=' + process.env.API_KEY + ' port=' + process.env.PORT + ' token=' + (process.env.THREADBOARD_SHELL_TOKEN || 'none')); process.stdout.write('partial ' + process.env.API_KEY);");
+fs.writeFileSync(server, "console.log('key=' + process.env.API_KEY + ' port=' + process.env.PORT + ' token=' + (process.env.WEFT_SHELL_TOKEN || 'none')); process.stdout.write('partial ' + process.env.API_KEY);");
 
 const sink = () => {
   let text = "";
@@ -66,7 +66,7 @@ describe("main", () => {
         stdin: stdinOf(JSON.stringify({ url, token: "tok", grant: "g1", argv: [process.execPath, server], env: { PORT: "3001" } })),
         stdout,
         stderr,
-        env: { PATH: process.env.PATH, THREADBOARD_SHELL_TOKEN: "tok" },
+        env: { PATH: process.env.PATH, WEFT_SHELL_TOKEN: "tok" },
         exit: resolve,
         onSignal: () => {},
       });

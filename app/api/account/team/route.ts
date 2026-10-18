@@ -6,7 +6,7 @@ import { forwardTeam } from "@/lib/team-remote";
 // The desktop's bridge to weft.zip's /api/teams (docs/architecture/teams.md). The board calls this
 // from lib/use-team.ts; weft.zip's gate is its own, so this just forwards the bearer token and
 // the JSON body, then passes the status and JSON back. POST is a write, so it needs the
-// x-threadboard header the guard checks for.
+// x-weft-token header the guard checks for.
 
 export async function GET(req: Request) {
   const denied = guard(req, { write: false, sensitive: true });

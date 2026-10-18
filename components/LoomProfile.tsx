@@ -4,9 +4,9 @@ import type { GithubProfile } from "@/lib/github-profile";
 
 // The desktop shell opens links in the default browser; the web build uses the link as is.
 function openLink(e: React.MouseEvent, url: string) {
-  if (!window.threadboard) return;
+  if (!window.weft) return;
   e.preventDefault();
-  window.threadboard.openExternal(url);
+  window.weft.openExternal(url);
 }
 
 function Link({ href, children }: { href: string; children: React.ReactNode }) {

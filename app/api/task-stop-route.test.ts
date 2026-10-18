@@ -6,7 +6,7 @@ vi.mock("@/lib/task-stop", () => ({ stopTask }));
 const route = await import("./cards/[id]/tasks/[taskId]/stop/route");
 
 const ctx = { params: Promise.resolve({ id: "c1", taskId: "t1" }) };
-const post = (headers: Record<string, string> = { "x-threadboard": "1" }) =>
+const post = (headers: Record<string, string> = { "x-weft-token": "1" }) =>
   new Request("http://localhost:3000/api/cards/c1/tasks/t1/stop", { method: "POST", headers: { host: "localhost:3000", ...headers } });
 
 beforeEach(() => {

@@ -7,7 +7,7 @@ let dir: string;
 
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-device-id-"));
-  process.env.THREADBOARD_DATA = dir;
+  process.env.WEFT_DATA = dir;
 });
 afterEach(() => {
   vi.resetModules();

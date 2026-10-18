@@ -227,7 +227,7 @@ say "No preview for this option." instead.
 
 `QuestionForm` watches its highlight: as the cursor moves, it opens
 `${previewUrl}#<tab>-<cursor>` in the card's browser pane via
-`window.threadboard.browser.open(url, cardId)` (the bridge that the
+`window.weft.browser.open(url, cardId)` (the bridge that the
 desktop shell provides). The URL is built with `previewHash`
 (`lib/question-answers.ts:120`). When the form has no bridge (a plain
 browser tab, no card pane), the highlighted option's `preview` is shown

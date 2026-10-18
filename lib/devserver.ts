@@ -22,8 +22,8 @@ export interface Run {
   failed: boolean;
 }
 
-const g = globalThis as unknown as { __threadboardDevExit?: boolean };
-export const runs = globalSingleton("__threadboardDevServers", () => new Map<string, Run>());
+const g = globalThis as unknown as { __weftDevExit?: boolean };
+export const runs = globalSingleton("__weftDevServers", () => new Map<string, Run>());
 
 const LOG_LIMIT = 4000;
 
@@ -173,8 +173,8 @@ export async function restartDev(cardId: string) {
 }
 
 // Servers Weft started shouldn't outlive it.
-if (!g.__threadboardDevExit) {
-  g.__threadboardDevExit = true;
+if (!g.__weftDevExit) {
+  g.__weftDevExit = true;
   process.on("exit", () => {
     for (const id of [...runs.keys()]) stopDev(id);
   });

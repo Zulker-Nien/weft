@@ -103,7 +103,7 @@ export default function RepoPicker({
           .then((r) => setLocal(r.repos))
           .catch(() => {});
       } else {
-        const bridge = window.threadboard;
+        const bridge = window.weft;
         if (!bridge) {
           setError("Paste a folder path in the search box, starting with ~ or /.");
           return;

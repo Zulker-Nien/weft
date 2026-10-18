@@ -1,6 +1,6 @@
 // Finishes Next's standalone build so electron-builder can ship it as Weft.app/Contents/Resources/server.
 // Run after `next build` with output: "standalone":
-//   node scripts/prepare-standalone.mjs [distDir]   (default: $THREADBOARD_DIST or .next-dist)
+//   node scripts/prepare-standalone.mjs [distDir]   (default: $WEFT_DIST or .next-dist)
 // 0. Removes project files that whole-project tracing copied in.
 // 1. Copies <distDir>/static and public/ into the standalone folder (Next leaves them out).
 // 2. Makes sure the Agent SDK and its native Claude Code binary are in standalone/node_modules
@@ -12,7 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const distDir = process.argv[2] || process.env.THREADBOARD_DIST || ".next-dist";
+const distDir = process.argv[2] || process.env.WEFT_DIST || ".next-dist";
 const dist = path.join(ROOT, distDir);
 const standalone = path.join(dist, "standalone");
 const platformPkg = `@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}`;
@@ -29,7 +29,7 @@ function copyDir(from, to) {
 }
 
 if (!fs.existsSync(path.join(standalone, "server.js"))) {
-  fail(`${path.relative(ROOT, standalone)}/server.js is missing. Build with THREADBOARD_STANDALONE=1 THREADBOARD_DIST=${distDir} next build first.`);
+  fail(`${path.relative(ROOT, standalone)}/server.js is missing. Build with WEFT_STANDALONE=1 WEFT_DIST=${distDir} next build first.`);
 }
 
 // 0. lib/login.ts makes tracing copy the whole project folder (sources, docs, electron/, build/).

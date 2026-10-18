@@ -1,5 +1,5 @@
 // The board's view of Electron's shell (browser pane, terminal, vault, account, etc.)
-// as exposed by electron/preload.cjs; the `threadboard` global on `window`.
+// as exposed by electron/preload.cjs; the `weft` global on `window`.
 
 import type { MeterBalance } from "@aimhuge/billing";
 import type { MenuItem } from "./card-menu";
@@ -124,6 +124,6 @@ export interface StartupResult {
 
 declare global {
   interface Window {
-    threadboard?: ShellBridge;
+    weft?: ShellBridge;
   }
 }

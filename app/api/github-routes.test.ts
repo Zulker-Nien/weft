@@ -36,7 +36,7 @@ const webhook = await import("./github/webhook/route");
 
 const URL = "http://localhost:3457/api/github/issues";
 const READ = { host: "localhost:3457" };
-const WRITE = { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { host: "localhost:3457", "x-weft-token": "1", "content-type": "application/json" };
 const FOLDER = os.tmpdir();
 
 const send = (method: string, body: unknown, headers: Record<string, string> = WRITE) =>

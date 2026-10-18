@@ -55,7 +55,7 @@ beforeEach(() => {
   appActions.remove.mockReset().mockResolvedValue(undefined);
   shareAppDialogProps.current = null;
   setApps([]);
-  delete (window as unknown as { threadboard?: unknown }).threadboard;
+  delete (window as unknown as { weft?: unknown }).weft;
   // happy-dom's navigator.clipboard is not implemented; the right-click "Copy address" branch needs it.
   Object.defineProperty(navigator, "clipboard", {
     value: { writeText },
@@ -64,7 +64,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  delete (window as unknown as { threadboard?: unknown }).threadboard;
+  delete (window as unknown as { weft?: unknown }).weft;
 });
 
 describe("AppsRail", () => {
@@ -96,7 +96,7 @@ describe("AppsRail", () => {
   it("right-clicks into the desktop menu and runs each action through appActions", async () => {
     setApps(apps);
     const popupMenu = vi.fn().mockResolvedValueOnce("rename").mockResolvedValueOnce("up").mockResolvedValueOnce("down").mockResolvedValueOnce("copy").mockResolvedValueOnce("remove").mockResolvedValueOnce("open").mockResolvedValueOnce(null);
-    (window as unknown as { threadboard: { popupMenu: typeof popupMenu } }).threadboard = { popupMenu };
+    (window as unknown as { weft: { popupMenu: typeof popupMenu } }).weft = { popupMenu };
     const onOpen = vi.fn();
     const notify = vi.fn();
     render(<AppsRail onOpen={onOpen} notify={notify} />);
@@ -145,7 +145,7 @@ describe("AppsRail", () => {
   it("Escape on the rename input drops the change", async () => {
     setApps(apps);
     const popupMenu = vi.fn().mockResolvedValueOnce("rename");
-    (window as unknown as { threadboard: { popupMenu: typeof popupMenu } }).threadboard = { popupMenu };
+    (window as unknown as { weft: { popupMenu: typeof popupMenu } }).weft = { popupMenu };
     render(<AppsRail onOpen={vi.fn()} notify={vi.fn()} />);
     await userEvent.pointer({ keys: "[MouseRight]", target: screen.getByRole("button", { name: "GitHub" }) });
     const input = await screen.findByLabelText("Rename GitHub");
@@ -157,7 +157,7 @@ describe("AppsRail", () => {
   it("opens the share dialog when the right-click menu picks 'share'", async () => {
     setApps(apps);
     const popupMenu = vi.fn().mockResolvedValueOnce("share");
-    (window as unknown as { threadboard: { popupMenu: typeof popupMenu } }).threadboard = { popupMenu };
+    (window as unknown as { weft: { popupMenu: typeof popupMenu } }).weft = { popupMenu };
     render(<AppsRail onOpen={vi.fn()} notify={vi.fn()} />);
     expect(shareAppDialogProps.current).toBeNull();
     await userEvent.pointer({ keys: "[MouseRight]", target: screen.getByRole("button", { name: "Docs" }) });

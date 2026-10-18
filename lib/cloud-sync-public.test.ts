@@ -18,7 +18,7 @@ vi.mock("./store", () => ({
   getCard: (id: string) => cards.get(id),
   getThread: (id: string) => threads.get(id) ?? [],
   listCards: () => [...cards.values()],
-  get DATA_DIR() { return process.env.THREADBOARD_DATA; },
+  get DATA_DIR() { return process.env.WEFT_DATA; },
 }));
 vi.mock("./settings", () => ({ syncFolders: () => [...settings.syncFolders] }));
 const account: { client: () => unknown } = { client: () => null };
@@ -111,7 +111,7 @@ function resetState() {
 beforeEach(() => {
   vi.resetModules();
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-cloud-sync-pub-"));
-  process.env.THREADBOARD_DATA = dir;
+  process.env.WEFT_DATA = dir;
   cards.clear();
   threads.clear();
   busListeners.clear();

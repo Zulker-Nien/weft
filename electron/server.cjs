@@ -153,7 +153,7 @@ function command(port) {
     };
   }
   const nextBin = path.join(ROOT, "node_modules", "next", "dist", "bin", "next");
-  const mode = process.env.THREADBOARD_PROD ? "start" : "dev";
+  const mode = process.env.WEFT_PROD ? "start" : "dev";
   return {
     bin: process.env.npm_node_execpath || "node",
     args: [nextBin, mode, "-H", "127.0.0.1", "-p", String(port)],
@@ -168,7 +168,7 @@ async function startServer({ preferredPort, env, onStatus, onFatal, onMark }) {
   // From source the board always lives on one port: evict any stale server (and its build folder)
   // instead of wandering to another port, so two servers never share `.next`.
   if (!app.isPackaged) {
-    freePort(preferredPort, process.env.THREADBOARD_PROD ? undefined : process.env.THREADBOARD_DIST || ".next");
+    freePort(preferredPort, process.env.WEFT_PROD ? undefined : process.env.WEFT_DIST || ".next");
   }
   const port = await pickPort(preferredPort);
   onMark?.("port");
@@ -211,7 +211,7 @@ async function startServer({ preferredPort, env, onStatus, onFatal, onMark }) {
         return;
       }
       if (classified?.kind === "module-not-found" && classified.exists) {
-        const dist = process.env.THREADBOARD_DIST || ".next";
+        const dist = process.env.WEFT_DIST || ".next";
         const distPath = path.join(ROOT, dist);
         log.write(`--- weft: stale module resolution for "${classified.spec}"; removing ${dist} and retrying\n`);
         try { fs.rmSync(distPath, { recursive: true, force: true }); } catch {}

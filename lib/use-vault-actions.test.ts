@@ -47,7 +47,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  delete (window as unknown as { threadboard?: unknown }).threadboard;
+  delete (window as unknown as { weft?: unknown }).weft;
 });
 
 describe("useVaultActions", () => {
@@ -200,7 +200,7 @@ describe("useVaultActions", () => {
   it("menu: pops the menu and runs the picked action", async () => {
     const popupMenu = vi.fn();
     popupMenu.mockResolvedValue("reveal");
-    (window as unknown as { threadboard: unknown }).threadboard = { popupMenu };
+    (window as unknown as { weft: unknown }).weft = { popupMenu };
     const b = bridge();
     const { result } = renderHook(() => useVaultActions(b, { vaults: [vault()] }, vi.fn(), vi.fn()));
     const evt = { preventDefault: vi.fn() } as unknown as React.MouseEvent;
@@ -286,7 +286,7 @@ describe("useVaultActions edge cases", () => {
     expect(prevent).not.toHaveBeenCalled();
 
     const popupMenu = vi.fn().mockResolvedValue(null);
-    (window as unknown as { threadboard: unknown }).threadboard = { popupMenu };
+    (window as unknown as { weft: unknown }).weft = { popupMenu };
     await act(async () => { await result.current.menu(vault(), secret, evt()); });
     expect(popupMenu).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(popupMenu.mock.calls[0])).toContain("copy-to:/dev/other");
@@ -294,7 +294,7 @@ describe("useVaultActions edge cases", () => {
   });
 
   it("menu's Remove asks which environments", async () => {
-    (window as unknown as { threadboard: unknown }).threadboard = { popupMenu: vi.fn().mockResolvedValue("remove") };
+    (window as unknown as { weft: unknown }).weft = { popupMenu: vi.fn().mockResolvedValue("remove") };
     const b = bridge();
     const { result } = renderHook(() => useVaultActions(b, null, vi.fn(), vi.fn()));
     await act(async () => { await result.current.menu(vault(), secret, evt()); });

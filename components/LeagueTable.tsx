@@ -40,7 +40,7 @@ export function Ladder({ tier, picked, onPick }: { tier: number | null; picked?:
 }
 
 function openProfile(url: string) {
-  if (window.threadboard?.openExternal) window.threadboard.openExternal(url);
+  if (window.weft?.openExternal) window.weft.openExternal(url);
   else window.open(url, "_blank", "noreferrer");
 }
 

@@ -5,15 +5,15 @@ const nextConfig: NextConfig = {
   // NEXT_PUBLIC_SITE_URL is where @aimhuge/teams points invite links (its siteOrigin()); it's inlined at build.
   env: { NEXT_PUBLIC_APP_VERSION: pkg.version, NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || "https://weft.zip" },
   // `pnpm app` builds into its own folder so it never collides with a running dev server.
-  distDir: process.env.THREADBOARD_DIST || ".next",
+  distDir: process.env.WEFT_DIST || ".next",
   // `pnpm dist` builds a self-contained server that the packaged Weft.app runs.
-  output: process.env.THREADBOARD_STANDALONE ? "standalone" : undefined,
+  output: process.env.WEFT_STANDALONE ? "standalone" : undefined,
   // Local threads run AI in the desktop server. Include the SDK and native CLI in its standalone
   // package, but don't ship that runtime with Vercel's server, which relays work to desktop.
   outputFileTracingIncludes: {
     // app/faq/page.tsx reads the FAQ from disk.
     "/faq": ["./docs/FAQ.md"],
-    ...(process.env.THREADBOARD_STANDALONE
+    ...(process.env.WEFT_STANDALONE
       ? {
           // The SDK finds its native Claude Code binary with a runtime require.resolve that tracing can't
           // see, so pull in the platform package explicitly for the packaged desktop server.

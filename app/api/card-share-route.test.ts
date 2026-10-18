@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-// /api/cards/[id]/share: GET and PUT behind the localhost guard (PUT also needs x-threadboard), handing the
+// /api/cards/[id]/share: GET and PUT behind the localhost guard (PUT also needs x-weft-token), handing the
 // card and the update to lib/card-share and turning its refusals into their status.
 
 vi.mock("next/server", () => ({ connection: async () => {} }));
@@ -25,7 +25,7 @@ const route = await import("./cards/[id]/share/route");
 
 const URL = "http://localhost:3457/api/cards/c1/share";
 const READ = { host: "localhost:3457" };
-const WRITE = { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { host: "localhost:3457", "x-weft-token": "1", "content-type": "application/json" };
 const params = { params: Promise.resolve({ id: "c1" }) };
 const put = (body: string, headers: Record<string, string> = WRITE) => route.PUT(new Request(URL, { method: "PUT", headers, body }), params);
 

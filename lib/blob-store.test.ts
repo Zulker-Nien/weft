@@ -50,9 +50,9 @@ const store = (m: ReturnType<typeof makeClient>) => createBlobStore({ client: m.
 
 beforeEach(() => {
   envHome = process.env.HOME ?? "";
-  envData = process.env.THREADBOARD_DATA ?? "";
+  envData = process.env.WEFT_DATA ?? "";
   process.env.HOME = HOME;
-  process.env.THREADBOARD_DATA = DATA;
+  process.env.WEFT_DATA = DATA;
   fs.rmSync(DATA, { recursive: true, force: true });
   fs.rmSync(HOME, { recursive: true, force: true });
   fs.mkdirSync(HOME, { recursive: true });
@@ -60,7 +60,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   process.env.HOME = envHome;
-  process.env.THREADBOARD_DATA = envData;
+  process.env.WEFT_DATA = envData;
 });
 
 // The path rules themselves (isLocalUploadPath, resolvePage) are tested in lib/blob-paths.test.ts.

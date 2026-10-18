@@ -11,6 +11,11 @@ afterEach(() => {
 });
 
 describe("cliEnv", () => {
+  it("asks for a 1-hour prompt cache", () => {
+    vi.stubEnv("CLAUDE_CODE_PROMPT_CACHE_TTL", "5m");
+    expect(cliEnv().CLAUDE_CODE_PROMPT_CACHE_TTL).toBe("1h");
+  });
+
   it("strips a parent Claude Code session's variables and marks the CLI as an SDK session", () => {
     vi.stubEnv("CLAUDECODE", "1");
     vi.stubEnv("CLAUDE_CODE_SSE_PORT", "1234");
@@ -30,15 +35,15 @@ describe("cliEnv", () => {
   });
 
   it("strips Weft's own keys, like the browser pane's control-server token", () => {
-    vi.stubEnv("THREADBOARD_SHELL_URL", "http://127.0.0.1:5000");
-    vi.stubEnv("THREADBOARD_SHELL_TOKEN", "secret");
-    vi.stubEnv("THREADBOARD_DATA", "/tmp/weft");
+    vi.stubEnv("WEFT_SHELL_URL", "http://127.0.0.1:5000");
+    vi.stubEnv("WEFT_SHELL_TOKEN", "secret");
+    vi.stubEnv("WEFT_DATA", "/tmp/weft");
 
     const env = cliEnv();
 
-    expect(env).not.toHaveProperty("THREADBOARD_SHELL_URL");
-    expect(env).not.toHaveProperty("THREADBOARD_SHELL_TOKEN");
-    expect(env.THREADBOARD_DATA).toBe("/tmp/weft");
+    expect(env).not.toHaveProperty("WEFT_SHELL_URL");
+    expect(env).not.toHaveProperty("WEFT_SHELL_TOKEN");
+    expect(env.WEFT_DATA).toBe("/tmp/weft");
   });
 
   it("strips what Weft's own next dev set, so a thread's next build runs in production mode", () => {
@@ -117,9 +122,9 @@ describe("cliEnv", () => {
 
 describe("guardedCli", () => {
   it("starts a thread with the stripped env, the secret guard, the restart guard, the git guard, the check guard, the route import guard, the import guard, the folder gate and symbol claims", () => {
-    vi.stubEnv("THREADBOARD_SHELL_TOKEN", "secret");
+    vi.stubEnv("WEFT_SHELL_TOKEN", "secret");
     const opts = guardedCli(() => 0, () => undefined);
-    expect(opts.env).not.toHaveProperty("THREADBOARD_SHELL_TOKEN");
+    expect(opts.env).not.toHaveProperty("WEFT_SHELL_TOKEN");
     const post = opts.hooks?.PostToolUse ?? [];
     expect(post[0]).toBe(IMPORT_GUARD_MATCHER);
     expect(post[1]?.matcher).toBe("Edit|MultiEdit|Write|NotebookEdit");

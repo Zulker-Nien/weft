@@ -30,8 +30,8 @@ function setup() {
 beforeEach(() => {
   vi.clearAllMocks();
   // The pane path and the system-browser path both stub the shell bridge; specific tests
-  // overwrite `window.threadboard` to exercise each branch.
-  window.threadboard = { openExternal, browser: { open: browserOpen } } as unknown as typeof window.threadboard;
+  // overwrite `window.weft` to exercise each branch.
+  window.weft = { openExternal, browser: { open: browserOpen } } as unknown as typeof window.weft;
 });
 
 describe("AccountButton", () => {
@@ -125,7 +125,7 @@ describe("AccountButton", () => {
 
   it("falls back to the system browser when the pane is missing (older shells)", async () => {
     api.account.mockResolvedValue({ configured: true, user: ada });
-    (window as unknown as { threadboard: unknown }).threadboard = { openExternal };
+    (window as unknown as { weft: unknown }).weft = { openExternal };
     setup();
     await userEvent.click(await screen.findByRole("button", { name: "Signed in as Ada" }));
     await userEvent.click(await screen.findByRole("menuitem", { name: /Your team/ }));
@@ -135,7 +135,7 @@ describe("AccountButton", () => {
 
   it("doesn't open the team page in the pane when the desktop isn't running at all", async () => {
     api.account.mockResolvedValue({ configured: true, user: ada });
-    delete (window as unknown as { threadboard?: unknown }).threadboard;
+    delete (window as unknown as { weft?: unknown }).weft;
     setup();
     await userEvent.click(await screen.findByRole("button", { name: "Signed in as Ada" }));
     // Outside the desktop, the helper's pane branch is unavailable; window.open takes over.

@@ -19,7 +19,7 @@ export default function AppsRail({ current, onOpen, notify }: { current?: string
   const active = appFor(apps, current);
 
   async function menu(app: MiniApp) {
-    const shell = window.threadboard;
+    const shell = window.weft;
     if (!shell?.popupMenu) return;
     const picked = (await shell.popupMenu(appMenu(apps, app.id))) as AppAction | null;
     const at = apps.findIndex((a) => a.id === app.id);

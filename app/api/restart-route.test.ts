@@ -19,7 +19,7 @@ const route = await import("./restart/route");
 
 const status: RestartStatus = { armed: true, then: "relaunch", waiting: [{ id: "c1", title: "Fix it" }] };
 const READ = { host: "localhost:3457" };
-const WRITE = { ...READ, "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { ...READ, "x-weft-token": "1", "content-type": "application/json" };
 const req = (method: string, headers: Record<string, string>, body?: string) => new Request("http://localhost:3457/api/restart", { method, headers, body });
 
 beforeEach(() => {
@@ -30,7 +30,7 @@ beforeEach(() => {
 });
 
 describe("GET /api/restart", () => {
-  it("returns the status, with no x-threadboard header needed", async () => {
+  it("returns the status, with no x-weft-token header needed", async () => {
     const res = await route.GET(req("GET", READ));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(status);
@@ -66,10 +66,10 @@ describe("POST /api/restart", () => {
     expect(await res.json()).toEqual({ error: "Restarting Weft needs the desktop app." });
   });
 
-  it("rejects a write without x-threadboard", async () => {
+  it("rejects a write without x-weft-token", async () => {
     const res = await route.POST(req("POST", READ));
     expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({ error: "Missing x-threadboard header" });
+    expect(await res.json()).toEqual({ error: "Missing x-weft-token header" });
     expect(restart.armRestart).not.toHaveBeenCalled();
   });
 });
@@ -85,7 +85,7 @@ describe("DELETE /api/restart", () => {
     expect(order).toEqual(["cancel", "send"]);
   });
 
-  it("rejects a write without x-threadboard", () => {
+  it("rejects a write without x-weft-token", () => {
     expect(route.DELETE(req("DELETE", READ)).status).toBe(403);
     expect(restart.cancelRestart).not.toHaveBeenCalled();
     expect(sendDueMessages).not.toHaveBeenCalled();

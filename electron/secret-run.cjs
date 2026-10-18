@@ -16,7 +16,7 @@ const KILL_GRACE_MS = 3000;
 // How long a dev server's grant waits to be claimed.
 const GRANT_MS = 60_000;
 // Weft's own variables don't go to the commands it runs.
-const INTERNAL = /^(THREADBOARD_SHELL_|ELECTRON_RUN_AS_NODE$)/;
+const INTERNAL = /^(WEFT_SHELL_|ELECTRON_RUN_AS_NODE$)/;
 
 function baseEnv(env) {
   return Object.fromEntries(Object.entries(env).filter(([k]) => !INTERNAL.test(k)));

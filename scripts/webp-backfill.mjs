@@ -15,7 +15,7 @@ import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
 
-const DATA = process.env.THREADBOARD_DATA ?? path.join(os.homedir(), ".weft");
+const DATA = process.env.WEFT_DATA ?? path.join(os.homedir(), ".weft");
 const DIR = path.join(DATA, "attachments");
 const RASTER = /^(.+)\.(png|jpe?g|gif)$/i;
 const mode = process.argv.includes("--rewrite") ? "rewrite" : process.argv.includes("--convert") ? "convert" : "plan";
@@ -74,8 +74,8 @@ async function convert() {
 }
 
 function rewrite() {
-  // Only the live folder is Weft's; a copy (THREADBOARD_DATA) can be rewritten any time.
-  if (!process.env.THREADBOARD_DATA && weftRunning()) {
+  // Only the live folder is Weft's; a copy (WEFT_DATA) can be rewritten any time.
+  if (!process.env.WEFT_DATA && weftRunning()) {
     console.error("Weft is running. Quit it first: it keeps the board and threads in memory and would write the old names back.");
     process.exit(1);
   }

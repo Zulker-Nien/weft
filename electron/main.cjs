@@ -43,7 +43,7 @@ const TAGLINE = "Engineering the future, one thread at a time";
 const ASSETS = path.join(__dirname, "assets");
 const PRELOAD = path.join(__dirname, "preload.cjs");
 const TOKEN = crypto.randomBytes(24).toString("hex");
-const PREFERRED_PORT = Number(process.env.THREADBOARD_PORT) || 1024;
+const PREFERRED_PORT = Number(process.env.WEFT_PORT) || 1024;
 const COPILOT_SHORTCUT = "Control+Alt+Space";
 const PROTOCOL = "weft";
 const mac = process.platform === "darwin";
@@ -61,7 +61,7 @@ let quitting = false;
 const pendingLinks = [];
 const timer = createStartupTimer({
   version: app.getVersion(),
-  mode: app.isPackaged ? "packaged" : process.env.THREADBOARD_PROD ? "prod" : "dev",
+  mode: app.isPackaged ? "packaged" : process.env.WEFT_PROD ? "prod" : "dev",
 });
 
 // The secrets vault, set up further down; the pane types its values in for threads (fillSecret).
@@ -137,7 +137,7 @@ async function followThemeChoice() {
 }
 
 function dataDir() {
-  return process.env.THREADBOARD_DATA || path.join(os.homedir(), ".weft");
+  return process.env.WEFT_DATA || path.join(os.homedir(), ".weft");
 }
 
 function sendMenu(action, payload) {
@@ -169,7 +169,7 @@ async function boot() {
     server = await startServer({
       preferredPort: PREFERRED_PORT,
       // The token goes in a file, not the env, where any process of yours could read it (electron/shell-token.cjs).
-      env: { THREADBOARD_SHELL_URL: controlUrl, THREADBOARD_APP_PID: String(process.pid) },
+      env: { WEFT_SHELL_URL: controlUrl, WEFT_APP_PID: String(process.pid) },
       onFatal: (message) => startup.fail(message),
       onMark: timer.mark,
     });

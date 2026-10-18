@@ -8,7 +8,7 @@ import type { Card } from "./types";
 // the Settings → General helpers. store.listCards is mocked so the board doesn't have to be real.
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-welcome-"));
-process.env.THREADBOARD_DATA = dir;
+process.env.WEFT_DATA = dir;
 const WELCOME_FILE = path.join(dir, "welcome.json");
 
 let listCardsReturn: Card[] = [];

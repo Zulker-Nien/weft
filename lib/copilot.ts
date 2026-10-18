@@ -90,13 +90,13 @@ function weftFolders() {
   return [...new Set([...listProjects().map((p) => p.path), ...listCards().map((c) => c.cwd)].filter(Boolean))];
 }
 
-const g = globalThis as unknown as { __threadboardPrewarmed?: boolean };
+const g = globalThis as unknown as { __weftPrewarmed?: boolean };
 
 // Once per server start: open the copilot's CLI and a spare in the most recent project, so the
 // first message to either doesn't wait for a CLI to start.
 export function prewarm() {
-  if (g.__threadboardPrewarmed) return;
-  g.__threadboardPrewarmed = true;
+  if (g.__weftPrewarmed) return;
+  g.__weftPrewarmed = true;
   // End the thread CLIs a server that died without cleaning up left orphaned (lib/cli-reaper.ts).
   reapStrayClis(weftFolders()).catch((err: unknown) => console.error("[weft] stray CLI check failed:", err));
   // And, every few minutes, the vitest workers a killed test run left under PID 1 (lib/worker-reaper.ts).

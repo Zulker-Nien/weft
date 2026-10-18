@@ -3,11 +3,11 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Real files throughout: THREADBOARD_DATA and HOME point at a fresh temp dir and the module is
+// Real files throughout: WEFT_DATA and HOME point at a fresh temp dir and the module is
 // re-imported, with its "already copied" cache (kept on globalThis) cleared.
 const PNG64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 const PNG = Buffer.from(PNG64, "base64");
-const g = globalThis as unknown as { __threadboardCopied?: unknown };
+const g = globalThis as unknown as { __weftCopied?: unknown };
 
 let dir: string;
 let attachments: string;
@@ -15,19 +15,19 @@ const realHome = process.env.HOME;
 
 async function load() {
   vi.resetModules();
-  delete g.__threadboardCopied;
+  delete g.__weftCopied;
   return import("./thread-media");
 }
 
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-media-"));
-  process.env.THREADBOARD_DATA = path.join(dir, "data");
+  process.env.WEFT_DATA = path.join(dir, "data");
   attachments = path.join(dir, "data", "attachments");
 });
 afterEach(() => {
   process.env.HOME = realHome;
   vi.restoreAllMocks();
-  delete g.__threadboardCopied;
+  delete g.__weftCopied;
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

@@ -5,7 +5,7 @@ import { fail, guard } from "@/lib/guard";
 import { stopTask } from "@/lib/task-stop";
 
 // Every dev server Weft knows about (the Services drawer reads /api/services), and the actions to stop or
-// restart one. Reads need no x-threadboard header; writes do (guard()). Kept as the dev-server-only
+// restart one. Reads need no x-weft-token header; writes do (guard()). Kept as the dev-server-only
 // surface for a future web board.
 export async function GET(req: Request) {
   const denied = guard(req, { write: false });

@@ -52,7 +52,7 @@ function client() {
       auth: {
         flowType: "pkce",
         // In the desktop app Electron main keeps the session sealed in the Keychain (electron/account-store.cjs).
-        storage: process.env.THREADBOARD_SHELL_URL ? shellStorage(process.env.THREADBOARD_SHELL_URL, shellToken()) : fileStorage,
+        storage: process.env.WEFT_SHELL_URL ? shellStorage(process.env.WEFT_SHELL_URL, shellToken()) : fileStorage,
         storageKey: "weft-auth",
         persistSession: true,
         autoRefreshToken: true,
@@ -94,7 +94,7 @@ export { ACCOUNT_CALLBACK_HOST, WEEFT_PROTOCOL, weftCallbackUrl } from "./accoun
 // Where Supabase sends the browser back to. The packaged desktop app uses the weft:// scheme so
 // the URL doesn't depend on the dev port; plain `next dev` uses the loopback HTTP origin instead.
 export function redirectUrl(origin: string): string {
-  if (process.env.THREADBOARD_SHELL_URL) return weftCallbackUrl();
+  if (process.env.WEFT_SHELL_URL) return weftCallbackUrl();
   return `${origin.replace(/\/+$/, "")}${CALLBACK_PATH}`;
 }
 

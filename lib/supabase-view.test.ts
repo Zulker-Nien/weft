@@ -28,10 +28,10 @@ afterEach(() => {
 describe("supabase-view", () => {
   it("finds the bridge only in the desktop shell", () => {
     expect(supabaseBridge()).toBeNull();
-    (globalThis as { window?: unknown }).window = { threadboard: {} };
+    (globalThis as { window?: unknown }).window = { weft: {} };
     expect(supabaseBridge()).toBeNull();
     const bridge = {} as SupabaseBridge;
-    (globalThis as { window?: unknown }).window = { threadboard: { supabase: bridge } };
+    (globalThis as { window?: unknown }).window = { weft: { supabase: bridge } };
     expect(supabaseBridge()).toBe(bridge);
   });
 

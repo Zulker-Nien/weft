@@ -112,7 +112,7 @@ blank waiting for one) and never replaces a value.
   `vercel.envSet` / `vercel.envValue`, `vault.sendValue` and `vault.setValue`, and `envRoutes` for threads and the server.
 - `lib/vercel-relay.ts` + `app/api/vercel/webhook/route.ts`: the relay on the deployed Weft. `lib/vercel-hooks.ts` +
   `app/api/vercel/hooks/route.ts`: the switch and the Realtime listener (started from `prewarm()`).
-- `electron/preload.cjs`: `window.threadboard.vercel`.
+- `electron/preload.cjs`: `window.weft.vercel`.
 - `lib/vercel-view.ts`: types, the bridge, matching, labels, name rules. `lib/use-vercel.ts`: loading, over `lib/use-linked-status.ts` (the cache).
 - `components/VercelDrawer.tsx` (token form, linked folders), `components/VercelEnv.tsx` (the 🔐 env rows), `components/VercelPicker.tsx` (Link…),
   `components/VercelCreate.tsx` (+ New project).

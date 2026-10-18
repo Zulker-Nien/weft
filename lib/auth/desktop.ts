@@ -31,7 +31,7 @@ export interface DesktopAuth {
 /**
  * The redirect target for a sign-in round trip.
  *
- * Packaged desktop app (`THREADBOARD_SHELL_URL` set, Electron main running): the
+ * Packaged desktop app (`WEFT_SHELL_URL` set, Electron main running): the
  * `weft://` URL is stable across dev-server port changes (the port is picked at
  * random on every Weft restart). Electron main's `electron/account-link.cjs` parses
  * the link, POSTs the query string to `/api/auth/weft-callback`, and the route
@@ -43,7 +43,7 @@ export interface DesktopAuth {
  * needs `http://127.0.0.1:1000/**` to accept it.
  */
 export function authRedirectTo(next: string, origin?: string): string {
-  if (process.env.THREADBOARD_SHELL_URL) {
+  if (process.env.WEFT_SHELL_URL) {
     const u = new URL(weftCallbackUrl());
     u.searchParams.set("next", next);
     return u.toString();
@@ -68,7 +68,7 @@ export function openExternal(url: string): void {
   if (typeof window === "undefined") return;
   // Electron main exposes a token-guarded `openExternal` on the board's window.
   // The same IPC is reused for the account flow (electron/preload.cjs).
-  const tb = (window as unknown as { threadboard?: { openExternal?: (u: string) => void } }).threadboard;
+  const tb = (window as unknown as { weft?: { openExternal?: (u: string) => void } }).weft;
   if (tb?.openExternal) {
     tb.openExternal(url);
     return;
@@ -79,7 +79,7 @@ export function openExternal(url: string): void {
 /** True inside the shell (Electron). Read at click time, never during render. */
 export function isDesktop(): boolean {
   if (typeof window === "undefined") return false;
-  return Boolean((window as unknown as { threadboard?: unknown }).threadboard);
+  return Boolean((window as unknown as { weft?: unknown }).weft);
 }
 
 /** The single DesktopAuth the auth hook uses. */

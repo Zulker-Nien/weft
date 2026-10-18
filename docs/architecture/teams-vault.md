@@ -594,7 +594,7 @@ of the file).
   `registerDevice({ accountClient, name, platform })` that calls
   `accountClient.from(sealedSession).from('devices').upsert(...)`. The function is idempotent
   (`onConflict: 'user_id,public_key'`, only `last_seen_at` changes on conflict).
-- `electron/preload.cjs` — add `threadboard.account.devices` (list, register, fingerprint) so the board
+- `electron/preload.cjs` — add `weft.account.devices` (list, register, fingerprint) so the board
   can read its own devices.
 
 **Test**: `electron/device-fingerprint.test.ts` covers the grouping. `electron/device-key.cjs` is

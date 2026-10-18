@@ -22,7 +22,7 @@ const webhook = await import("./vercel/webhook/route");
 
 const URL = "http://localhost:3457/api/vercel/hooks";
 const READ = { host: "localhost:3457" };
-const WRITE = { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { host: "localhost:3457", "x-weft-token": "1", "content-type": "application/json" };
 const FOLDER = os.tmpdir();
 
 const send = (method: string, body: unknown, headers: Record<string, string> = WRITE) => new Request(URL, { method, headers, body: JSON.stringify(body) });
@@ -36,7 +36,7 @@ describe("GET /api/vercel/hooks", () => {
   });
 
   it("refuses other hosts and reports a failure", async () => {
-    // A read needs no x-threadboard header, only localhost.
+    // A read needs no x-weft-token header, only localhost.
     expect((await hookRoute.GET(new Request(URL, { headers: READ }))).status).toBe(200);
     expect((await hookRoute.GET(new Request("http://evil.test/api/vercel/hooks", { headers: { host: "evil.test" } }))).status).toBe(403);
     vi.mocked(hooks.hookedTeams).mockRejectedValueOnce(new Error("offline"));

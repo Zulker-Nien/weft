@@ -11,7 +11,7 @@ const script = (name: string, body: string) => {
   fs.writeFileSync(path.join(dir, name), body);
   return [process.execPath, path.join(dir, name)];
 };
-const PRINT = script("print.js", "console.log('url=' + process.env.DATABASE_URL); console.error('b64=' + Buffer.from(process.env.DATABASE_URL).toString('base64')); console.log('token=' + (process.env.THREADBOARD_SHELL_TOKEN || 'none') + ' mode=' + process.env.MODE); process.exit(3);");
+const PRINT = script("print.js", "console.log('url=' + process.env.DATABASE_URL); console.error('b64=' + Buffer.from(process.env.DATABASE_URL).toString('base64')); console.log('token=' + (process.env.WEFT_SHELL_TOKEN || 'none') + ' mode=' + process.env.MODE); process.exit(3);");
 const SLEEP = script("sleep.js", "process.on('SIGTERM', () => {}); console.log('started'); setInterval(() => {}, 1000);");
 const BIG = script("big.js", `process.stdout.write('first-line\\n' + 'x'.repeat(${REPLY_CHARS + 50}) + '\\nlast');`);
 
@@ -25,7 +25,7 @@ function make({ values = { DATABASE_URL: URL }, missing = [], allows = false, ch
   const rules = { allows: vi.fn(() => allows), remember: vi.fn() };
   const ask = vi.fn(() => Promise.resolve(choice));
   let t = 1000;
-  const runner = createSecretRun({ vault, rules, ask, spawn, env: { ...process.env, THREADBOARD_SHELL_TOKEN: "tok" }, now: () => (t += 100), randomId: () => "grant-1", node: "/Electron", runner: "/app/secret-env.cjs" });
+  const runner = createSecretRun({ vault, rules, ask, spawn, env: { ...process.env, WEFT_SHELL_TOKEN: "tok" }, now: () => (t += 100), randomId: () => "grant-1", node: "/Electron", runner: "/app/secret-env.cjs" });
   return { runner, vault, rules, ask };
 }
 
@@ -135,7 +135,7 @@ describe("createSecretRun dev grants", () => {
 
 describe("helpers", () => {
   it("drops Weft's own variables from a command's env", () => {
-    expect(baseEnv({ PATH: "/bin", THREADBOARD_SHELL_TOKEN: "t", THREADBOARD_SHELL_URL: "u", ELECTRON_RUN_AS_NODE: "1" })).toEqual({ PATH: "/bin" });
+    expect(baseEnv({ PATH: "/bin", WEFT_SHELL_TOKEN: "t", WEFT_SHELL_URL: "u", ELECTRON_RUN_AS_NODE: "1" })).toEqual({ PATH: "/bin" });
   });
 
   it("describes the request for the approval", () => {

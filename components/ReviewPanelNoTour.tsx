@@ -8,7 +8,7 @@ import { lastLocalUrl } from "@/lib/review-tour";
 export function ReviewPanelNoTour({ cardId, items, onSend }: { cardId: string; items: ThreadItem[]; onSend: (text: string) => Promise<void> }) {
   const url = lastLocalUrl(items);
   useEffect(() => {
-    if (url) window.threadboard?.browser.open(url, cardId).catch(() => {});
+    if (url) window.weft?.browser.open(url, cardId).catch(() => {});
   }, [url, cardId]);
 
   return (

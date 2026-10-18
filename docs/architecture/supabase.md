@@ -55,7 +55,7 @@ Restart Weft (`needsRestart`).
 
 - `electron/supabase.cjs`: `createSupabase` (status, token, projects, orgs, create, link, unlink, restore), the folder's side
   (`readLink`, `writeLink`, `localMigrations`) and `registerSupabase`, whose IPC handlers answer the board window only.
-- `electron/preload.cjs`: `window.threadboard.supabase`.
+- `electron/preload.cjs`: `window.weft.supabase`.
 - `lib/supabase-view.ts`: types, the bridge, matching, labels, links. `lib/use-supabase.ts`: loading, over `lib/use-linked-status.ts` (the cache).
 - `components/SupabaseDrawer.tsx` (token form, linked folders), `components/SupabaseLinked.tsx` (a linked project), `components/SupabasePicker.tsx` (Link…),
   `components/SupabaseNewProject.tsx` (its New project form), `components/supabase-ui.ts` (shared button style),

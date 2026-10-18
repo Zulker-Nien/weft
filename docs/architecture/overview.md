@@ -28,7 +28,7 @@ Electron shell (electron/*.cjs)
   modes, restarts on crash, writes to `~/Library/Logs/Weft/server.log`.
 - `electron/browser-pane.cjs` — native `WebContentsView` pane + a token-protected HTTP
   control server on `127.0.0.1` that `lib/browser-tools.ts` calls.
-- `electron/preload.cjs` — the `window.threadboard` bridge (typed in `lib/client.ts`).
+- `electron/preload.cjs` — the `window.weft` bridge (typed in `lib/client.ts`).
 - `lib/runner.ts` (+ `runner-state`, `runner-session`, `runner-turn`, `runner-ask`) — one CLI process per card,
   the `Inbox` of `SDKUserMessage`s, warm sessions, spares, permission routing, BOARD STATUS handling, auto-login.
 - `lib/store.ts` — board + thread persistence; legacy `~/.threadboard` is moved to
@@ -36,7 +36,7 @@ Electron shell (electron/*.cjs)
 - `lib/settings.ts` — `DEFAULT_THREAD_PROMPT`, `keepAliveMinutes`, project list,
   `dismissedSessions`.
 - `lib/guard.ts` — `Host` must be `127.0.0.1 | localhost | [::1]`; writes also need
-  `x-threadboard: 1`.
+  `x-weft-token: 1`.
 - `lib/bus.ts` — single `EventEmitter` on `globalThis` (survives dev-mode HMR); consumed
   by the SSE route.
 - `lib/types.ts` — `Card`, `ThreadItem`, `Question`, `Backend`, `BoardEvent` union.
@@ -48,7 +48,7 @@ Electron shell (electron/*.cjs)
 ## Data flow
 
 1. The shell starts the Next server (`electron/server.cjs`), passes
-   `THREADBOARD_SHELL_URL` and `THREADBOARD_SHELL_TOKEN` so threads can reach the browser
+   `WEFT_SHELL_URL` and `WEFT_SHELL_TOKEN` so threads can reach the browser
    pane, and loads the board URL into a `WebContentsView` (`appView`).
 2. `GET /api/cards` triggers `prewarm()` (`lib/copilot.ts`): it ensures the copilot
    card, opens its CLI, starts a spare in the most recent project, and kicks off
@@ -82,12 +82,12 @@ Electron shell (electron/*.cjs)
   `ensureSpare` keeps up to three project-folder spares so a new card adopts one
   instantly instead of waiting 12–50s for a cold CLI start.
 - **Guard at the edge.** Every API route begins with `guard(req)`, which checks the `Host`
-  header. Writes also need `x-threadboard: 1`; reads (GET routes and the SSE stream) skip that
+  header. Writes also need `x-weft-token: 1`; reads (GET routes and the SSE stream) skip that
   with `guard(req, { write: false })`, since `EventSource` can't set custom headers.
 - **SDK session marking.** `lib/env.ts` strips `CLAUDECODE` / `CLAUDE_CODE_*` /
   `CLAUDE_AGENT_SDK_*` / `CLAUDE_PID` / `CLAUDE_EFFORT` / `CLAUDE_PREVIEW_*` and sets
   `CLAUDE_CODE_ENTRYPOINT=sdk-ts`, so threads Weft starts don't appear in the Claude
   app's session list or pick up another session's socket.
-- **Data folder override.** The `THREADBOARD_DATA` env var (read in `lib/store.ts`, which
+- **Data folder override.** The `WEFT_DATA` env var (read in `lib/store.ts`, which
   `lib/settings.ts` follows, and in `electron/main.cjs` for the Help menu's "Open Data
   Folder") redirects everything; otherwise `~/.weft` is used.

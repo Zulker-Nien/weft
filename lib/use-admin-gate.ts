@@ -10,7 +10,7 @@ export function useSuperAdminGate(): boolean {
   useEffect(() => {
     let cancelled = false;
     const load = () =>
-      fetch("/api/admin/gate", { headers: { "x-threadboard": "1" } })
+      fetch("/api/admin/gate", { headers: { "x-weft-token": "1" } })
         .then((r) => (r.ok ? r.json() : { admin: false }))
         .then((data: { admin: unknown }) => {
           if (!cancelled) setAdmin(data.admin === true);

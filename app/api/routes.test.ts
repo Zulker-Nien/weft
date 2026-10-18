@@ -147,7 +147,7 @@ const cloneRoute = await import("./repos/clone/route");
 const tagStore = await import("@/lib/tag-store");
 const tagsRoute = await import("./tags/route");
 
-const WRITE = { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { host: "localhost:3457", "x-weft-token": "1", "content-type": "application/json" };
 
 function req(url: string, { method = "GET", body, headers = WRITE }: { method?: string; body?: unknown; headers?: Record<string, string> } = {}) {
   return new Request(`http://localhost:3457/api${url}`, {
@@ -187,7 +187,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-// Every write route: a foreign Host and a missing x-threadboard header both get 403 and touch nothing.
+// Every write route: a foreign Host and a missing x-weft-token header both get 403 and touch nothing.
 const writes: [string, (r: Request) => Promise<Response>][] = [
   ["POST /cards", (r) => cardsRoute.POST(r)],
   ["PATCH /cards/:id", (r) => cardRoute.PATCH(r, ctx("x"))],
@@ -213,15 +213,15 @@ const writes: [string, (r: Request) => Promise<Response>][] = [
 
 describe("guard on write routes", () => {
   it.each(writes)("%s rejects a foreign host", async (_name, call) => {
-    const res = await call(req("/x", { method: "POST", body: {}, headers: { host: "evil.com", "x-threadboard": "1" } }));
+    const res = await call(req("/x", { method: "POST", body: {}, headers: { host: "evil.com", "x-weft-token": "1" } }));
     expect(res.status).toBe(403);
     expect(await body(res)).toEqual({ error: "Forbidden host" });
   });
 
-  it.each(writes)("%s rejects a write without x-threadboard", async (_name, call) => {
+  it.each(writes)("%s rejects a write without x-weft-token", async (_name, call) => {
     const res = await call(req("/x", { method: "POST", body: {}, headers: { host: "localhost:3457" } }));
     expect(res.status).toBe(403);
-    expect(await body(res)).toEqual({ error: "Missing x-threadboard header" });
+    expect(await body(res)).toEqual({ error: "Missing x-weft-token header" });
   });
 
   it("calls nothing when denied", async () => {
@@ -282,7 +282,7 @@ describe("guard on read routes", () => {
     expect((await call(req("/x", { headers: { host: "attacker.test" } }))).status).toBe(403);
   });
 
-  it.each(reads)("%s needs no x-threadboard header", async (_name, call) => {
+  it.each(reads)("%s needs no x-weft-token header", async (_name, call) => {
     addCard({ id: "x" });
     expect((await call(req("/x", { headers: { host: "localhost:3457" } }))).status).toBe(200);
   });

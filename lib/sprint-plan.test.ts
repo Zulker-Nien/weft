@@ -61,7 +61,7 @@ describe("sprintPrompt", () => {
     expect(prompt).toContain('- "Card n" (card n, needs_you): b.ts\n');
     expect(prompt).toContain(`${SHOW_DIR}/sprint-app/index.html`);
     expect(prompt).toContain("weft://reply?text=<url-encoded message>");
-    expect(prompt).toContain(`curl -s -X PATCH http://localhost:3000/api/cards/<card id> -H 'x-threadboard: 1' -H 'content-type: application/json' -d '{"column":"running"}'`);
+    expect(prompt).toContain(`curl -s -X PATCH http://localhost:3000/api/cards/<card id> -H 'x-weft-token: 1' -H 'content-type: application/json' -d '{"column":"running"}'`);
     expect(prompt).toContain(`"cwd":"/dev/app"`);
     expect(prompt).toContain(`-d '{"archived":true}'`);
   });

@@ -19,12 +19,12 @@ function overview(missing: boolean): VaultOverview {
 
 function shell(missing = true) {
   const vault = { overview: vi.fn(() => Promise.resolve(overview(missing))), set: vi.fn(() => Promise.resolve({ saved: true })) };
-  (window as unknown as { threadboard: unknown }).threadboard = { vault };
+  (window as unknown as { weft: unknown }).weft = { vault };
   return vault;
 }
 
 afterEach(() => {
-  delete (window as unknown as { threadboard?: unknown }).threadboard;
+  delete (window as unknown as { weft?: unknown }).weft;
 });
 
 describe("SecretAskInput", () => {

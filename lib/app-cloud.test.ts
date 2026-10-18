@@ -9,10 +9,10 @@ import {
 } from "./app-cloud.harness";
 import type { MiniApp } from "./mini-apps";
 
-// Set THREADBOARD_DATA before the first import of lib/store.ts so DATA_DIR (captured at module import)
+// Set WEFT_DATA before the first import of lib/store.ts so DATA_DIR (captured at module import)
 // points at our test dir for the whole run.
 const DATA = fs.mkdtempSync(path.join(os.tmpdir(), "weft-app-cloud-"));
-process.env.THREADBOARD_DATA = DATA;
+process.env.WEFT_DATA = DATA;
 process.env.HOME = DATA;
 
 vi.mock("./account", () => accountMock());
@@ -26,16 +26,16 @@ let envData = "";
 let envHome = "";
 
 beforeEach(() => {
-  envData = process.env.THREADBOARD_DATA ?? "";
+  envData = process.env.WEFT_DATA ?? "";
   envHome = process.env.HOME ?? "";
-  process.env.THREADBOARD_DATA = DATA;
+  process.env.WEFT_DATA = DATA;
   process.env.HOME = DATA;
   fs.rmSync(DATA, { recursive: true, force: true });
   fs.mkdirSync(DATA, { recursive: true });
   resetDb();
 });
 afterEach(() => {
-  process.env.THREADBOARD_DATA = envData;
+  process.env.WEFT_DATA = envData;
   process.env.HOME = envHome;
   fs.rmSync(DATA, { recursive: true, force: true });
 });

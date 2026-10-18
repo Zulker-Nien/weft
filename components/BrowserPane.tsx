@@ -44,7 +44,7 @@ export default function BrowserPane({
   const zoom = state.zoom ?? 100;
 
   useEffect(() => {
-    const bridge = window.threadboard;
+    const bridge = window.weft;
     const el = holder.current;
     if (!bridge || !el) return;
     const report = () => {
@@ -68,7 +68,7 @@ export default function BrowserPane({
 
   function go(raw: string) {
     const url = raw.trim();
-    if (url) void window.threadboard?.browser.open(url);
+    if (url) void window.weft?.browser.open(url);
   }
 
   // The native view swallows pointer events, so it's hidden while dragging the divider.
@@ -103,13 +103,13 @@ export default function BrowserPane({
         />
       )}
       <div className="flex items-center gap-1 border-b border-line px-2 py-1.5">
-        <button className={nav} disabled={!state.canGoBack} onClick={() => window.threadboard?.browser.back()} aria-label="Back">
+        <button className={nav} disabled={!state.canGoBack} onClick={() => window.weft?.browser.back()} aria-label="Back">
           <Icon name="back" size={15} />
         </button>
-        <button className={nav} disabled={!state.canGoForward} onClick={() => window.threadboard?.browser.forward()} aria-label="Forward">
+        <button className={nav} disabled={!state.canGoForward} onClick={() => window.weft?.browser.forward()} aria-label="Forward">
           <Icon name="forward" size={15} />
         </button>
-        <button className={nav} disabled={!state.url} onClick={() => window.threadboard?.browser.reload()} aria-label="Reload">
+        <button className={nav} disabled={!state.url} onClick={() => window.weft?.browser.reload()} aria-label="Reload">
           {state.loading ? <Spinner size={13} /> : <Icon name="reload" size={15} />}
         </button>
         <input

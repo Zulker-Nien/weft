@@ -6,28 +6,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { authRedirectTo, isDesktop, openExternal } from "./desktop";
 
 describe("authRedirectTo", () => {
-  const originalShell = process.env.THREADBOARD_SHELL_URL;
+  const originalShell = process.env.WEFT_SHELL_URL;
 
   afterEach(() => {
-    if (originalShell === undefined) delete process.env.THREADBOARD_SHELL_URL;
-    else process.env.THREADBOARD_SHELL_URL = originalShell;
+    if (originalShell === undefined) delete process.env.WEFT_SHELL_URL;
+    else process.env.WEFT_SHELL_URL = originalShell;
   });
 
   it("returns the weft:// URL when the Electron shell is running", () => {
-    process.env.THREADBOARD_SHELL_URL = "http://127.0.0.1:7373";
+    process.env.WEFT_SHELL_URL = "http://127.0.0.1:7373";
     const url = authRedirectTo("/app");
     expect(url.startsWith("weft://account-callback?next=")).toBe(true);
     expect(url).toContain(encodeURIComponent("/app"));
   });
 
   it("falls back to the loopback origin in plain `next dev`", () => {
-    delete process.env.THREADBOARD_SHELL_URL;
+    delete process.env.WEFT_SHELL_URL;
     const url = authRedirectTo("/app", "http://127.0.0.1:1000");
     expect(url).toBe("http://127.0.0.1:1000/api/auth/callback?next=%2Fapp");
   });
 
   it("trims trailing slashes on the loopback origin", () => {
-    delete process.env.THREADBOARD_SHELL_URL;
+    delete process.env.WEFT_SHELL_URL;
     expect(authRedirectTo("/app", "http://127.0.0.1:1000///")).toBe(
       "http://127.0.0.1:1000/api/auth/callback?next=%2Fapp",
     );
@@ -36,15 +36,15 @@ describe("authRedirectTo", () => {
 
 describe("isDesktop", () => {
   beforeEach(() => {
-    delete (window as unknown as { threadboard?: unknown }).threadboard;
+    delete (window as unknown as { weft?: unknown }).weft;
   });
 
   it("is false in a normal browser tab", () => {
     expect(isDesktop()).toBe(false);
   });
 
-  it("is true when window.threadboard is set (Electron preload ran)", () => {
-    (window as unknown as { threadboard: object }).threadboard = {};
+  it("is true when window.weft is set (Electron preload ran)", () => {
+    (window as unknown as { weft: object }).weft = {};
     expect(isDesktop()).toBe(true);
   });
 });
@@ -57,7 +57,7 @@ describe("openExternal", () => {
   let savedOpen: ((...args: Parameters<typeof window.open>) => ReturnType<typeof window.open>) | undefined;
 
   beforeEach(() => {
-    delete (window as unknown as { threadboard?: { openExternal?: (u: string) => void } }).threadboard;
+    delete (window as unknown as { weft?: { openExternal?: (u: string) => void } }).weft;
     open = vi.fn();
     savedOpen = (window as unknown as Record<typeof OPEN, typeof savedOpen>)[OPEN];
     Object.defineProperty(window, OPEN, { configurable: true, value: open });
@@ -68,7 +68,7 @@ describe("openExternal", () => {
   });
 
   it("uses the shell's openExternal when present", () => {
-    (window as unknown as { threadboard: { openExternal: (u: string) => void } }).threadboard = {
+    (window as unknown as { weft: { openExternal: (u: string) => void } }).weft = {
       openExternal: open as unknown as (u: string) => void,
     };
     openExternal("https://github.com/login/oauth/authorize?...");

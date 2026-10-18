@@ -28,7 +28,7 @@ async function flush() {
 beforeEach(() => {
   vi.clearAllMocks();
   api.account.mockResolvedValue(signedOut);
-  window.threadboard = { openExternal } as unknown as typeof window.threadboard;
+  window.weft = { openExternal } as unknown as typeof window.weft;
 });
 
 afterEach(() => {
@@ -82,7 +82,7 @@ describe("useAccount", () => {
   });
 
   it("falls back to window.open outside the desktop app", async () => {
-    window.threadboard = undefined;
+    window.weft = undefined;
     const open = vi.spyOn(window, "open").mockReturnValue(null);
     const { result } = renderHook(() => useAccount());
     await act(() => result.current.signIn("google"));

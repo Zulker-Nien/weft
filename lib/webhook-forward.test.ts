@@ -4,14 +4,14 @@ import type { StoredDelivery } from "./webhook-forward";
 
 // The local half of the webhook relay: relay rows on your Weft account, the Realtime channel on webhook_deliveries,
 // and the forward to a webhook's target. The account's Supabase client and fetch are fakes; the registry
-// (lib/webhooks.ts) is real, in a temp THREADBOARD_DATA.
+// (lib/webhooks.ts) is real, in a temp WEFT_DATA.
 
 type Row = Record<string, unknown>;
 
 const fake = await vi.hoisted(async () => {
   const f = (await import("./webhook-forward.harness")).fakeAccount();
   const dir = `${process.env.TMPDIR ?? "/tmp"}/weft-webhook-forward-${process.pid}-a`;
-  process.env.THREADBOARD_DATA = dir;
+  process.env.WEFT_DATA = dir;
   return { ...f, dir };
 });
 

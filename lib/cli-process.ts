@@ -13,7 +13,7 @@ export const KILL_GRACE_MS = 2_000;
 const STDERR_TAIL = 2_000;
 
 // The process groups of every CLI this server started that may still have a live process.
-export const groups = globalSingleton("__threadboardCliGroups", () => new Set<number>());
+export const groups = globalSingleton("__weftCliGroups", () => new Set<number>());
 
 // Signals the whole group; false once nothing in it is left.
 export function killGroup(pgid: number, signal: NodeJS.Signals): boolean {
@@ -49,7 +49,7 @@ export function killAllGroups() {
   groups.clear();
 }
 
-globalSingleton("__threadboardCliExitHook", () => process.on("exit", killAllGroups));
+globalSingleton("__weftCliExitHook", () => process.on("exit", killAllGroups));
 
 // The SDK's exit and error listeners, passed through to the child as they are.
 type Listener = (...args: never[]) => void;

@@ -27,7 +27,7 @@ function createNewThreadLink({ getServer, getWin, sendMenu, dialog = electron.di
       const folder = await resolveFolder(url, getServer());
       const res = await fetch(`${getServer().url}/api/cards`, {
         method: "POST",
-        headers: { "content-type": "application/json", "x-threadboard": "1" },
+        headers: { "content-type": "application/json", "x-weft-token": "1" },
         body: JSON.stringify({
           prompt,
           title: url.searchParams.get("title") ?? undefined,

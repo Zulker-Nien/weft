@@ -40,13 +40,13 @@ function makeToggles(over: Partial<{
 beforeEach(() => {
   setCopilotLaneOpen.mockReset();
   setCopilotLanePeek.mockReset();
-  delete (window as { threadboard?: unknown }).threadboard;
+  delete (window as { weft?: unknown }).weft;
 });
 
 describe("useBoardToggles", () => {
   it("toggleBrowser calls the desktop bridge when present", () => {
     const setVisible = vi.fn();
-    (window as { threadboard?: unknown }).threadboard = { browser: { setVisible } };
+    (window as { weft?: unknown }).weft = { browser: { setVisible } };
     const { result, setWebBrowserOpen } = makeToggles({ browserVisible: true });
     act(() => result.current.toggleBrowser());
     expect(setVisible).toHaveBeenCalledWith(false);
@@ -61,7 +61,7 @@ describe("useBoardToggles", () => {
 
   it("toggleBrowser is a no-op when a card is selected", () => {
     const setVisible = vi.fn();
-    (window as { threadboard?: unknown }).threadboard = { browser: { setVisible } };
+    (window as { weft?: unknown }).weft = { browser: { setVisible } };
     const { result } = makeToggles({ browserVisible: false, selectedRef: { current: "c1" } });
     act(() => result.current.toggleBrowser());
     expect(setVisible).not.toHaveBeenCalled();

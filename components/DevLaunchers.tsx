@@ -88,7 +88,7 @@ export default function DevLaunchers({ launchers, launch, stop, onOpenCard, onOp
 
 // Weft's own address goes to the system browser: the pane won't show Weft inside itself.
 function openOutside(url: string) {
-  if (window.threadboard) window.threadboard.openExternal(url);
+  if (window.weft) window.weft.openExternal(url);
   else window.open(url, "_blank", "noopener");
 }
 

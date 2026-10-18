@@ -76,7 +76,7 @@ describe("held for after the turn", () => {
     runner.sendUserMessage("c1", "one more");
     lastQuery().emit(success("ok"));
     // Its CLI and folder are gone by the time the held message goes, so a new CLI can't start.
-    (g.__threadboardSessions as Map<string, unknown>).delete("c1");
+    (g.__weftSessions as Map<string, unknown>).delete("c1");
     h.cards.set("c1", { ...card("c1"), cwd: path.join(cwd, "gone") });
     await flush();
     expect(card("c1").error).toMatch(/^A message that waited for the turn couldn't go: .*doesn't exist anymore/);

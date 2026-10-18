@@ -103,7 +103,7 @@ function listCardsTool() {
 
 // What every board thread gets: look at the board and hand work off, nothing that touches other cards.
 // The card is read when the tool runs, since a spare CLI only gets its card later.
-export function threadBoardMcpServer(
+export function weftMcpServer(
   getCardId: () => string | undefined,
   actions: Pick<BoardActions, "start">,
 ) {

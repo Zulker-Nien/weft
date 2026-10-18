@@ -16,7 +16,7 @@ vi.mock("@/lib/account", () => ({
 const account = await import("@/lib/account");
 const route = await import("./account/route");
 
-const WRITE = { host: "127.0.0.1:3457", "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { host: "127.0.0.1:3457", "x-weft-token": "1", "content-type": "application/json" };
 
 function post(body: unknown, headers: Record<string, string> = WRITE) {
   return route.POST(new Request("http://127.0.0.1:3457/api/account", { method: "POST", headers, body: JSON.stringify(body) }));

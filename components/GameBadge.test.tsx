@@ -134,7 +134,7 @@ describe("GameBadge", () => {
 
   it("shows your league with each builder's week and opens their profile", async () => {
     const open = vi.fn();
-    (window as unknown as { threadboard: unknown }).threadboard = { openExternal: open };
+    (window as unknown as { weft: unknown }).weft = { openExternal: open };
     league = {
       state: "ready", week: "2026-10-12", tier: 0, league: "Cotton", up: 1, down: 0,
       rows: [
@@ -151,6 +151,6 @@ describe("GameBadge", () => {
     expect(screen.getByText("Adnan Sabbir")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /Alex/ }));
     expect(open).toHaveBeenCalledWith("https://weft.zip/@fotoflo");
-    delete (window as unknown as { threadboard?: unknown }).threadboard;
+    delete (window as unknown as { weft?: unknown }).weft;
   });
 });

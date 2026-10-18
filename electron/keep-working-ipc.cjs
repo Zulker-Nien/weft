@@ -1,4 +1,4 @@
-// Keep Working IPC: bridges electron/keep-working.cjs to the renderer's window.threadboard.keepWorking
+// Keep Working IPC: bridges electron/keep-working.cjs to the renderer's window.weft.keepWorking
 // (electron/preload.cjs). The board's Settings → General → Laptop mode card is the only consumer; main
 // pushes "keep-working:changed" on every state change so the card's deadline can tick without polling.
 //

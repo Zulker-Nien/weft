@@ -70,7 +70,7 @@ export interface NewSupabaseProject {
   region: string;
 }
 
-// window.threadboard.supabase, from electron/preload.cjs.
+// window.weft.supabase, from electron/preload.cjs.
 export interface SupabaseBridge {
   status(folders: string[]): Promise<SupabaseStatus>;
   setToken(token: string): Promise<{ orgs: string[] }>;
@@ -127,7 +127,7 @@ export function defaultProjectName(folder: Pick<SupabaseFolder, "folder" | "repo
 }
 
 export function supabaseBridge(): SupabaseBridge | null {
-  return (typeof window !== "undefined" && window.threadboard?.supabase) || null;
+  return (typeof window !== "undefined" && window.weft?.supabase) || null;
 }
 
 // The desktop shell started before Supabase was added: its preload has no bridge, or its main no handlers.

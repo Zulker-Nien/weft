@@ -7,9 +7,9 @@ const COFFEE_URL = "https://buymeacoffee.com/alexmiller";
 
 // The desktop shell opens links in the default browser; the web build uses the link as is.
 function openLink(e: React.MouseEvent, url: string) {
-  if (!window.threadboard) return;
+  if (!window.weft) return;
   e.preventDefault();
-  window.threadboard.openExternal(url);
+  window.weft.openExternal(url);
 }
 
 // The board's footer: the open card's (or the board's) stats, the shortcuts sheet, and the credits.

@@ -14,7 +14,7 @@ const req = (method = "POST", body?: string, headers: Record<string, string> = {
 
 describe("keptHeaders", () => {
   it("never passes the local API's write header from a stranger", () => {
-    expect(keptHeaders(new Headers({ "x-threadboard": "1", "content-type": "text/plain" }))).toEqual({ "content-type": "text/plain" });
+    expect(keptHeaders(new Headers({ "x-weft-token": "1", "content-type": "text/plain" }))).toEqual({ "content-type": "text/plain" });
   });
 
   it("lowercases and drops hop-by-hop and Vercel's own headers", () => {

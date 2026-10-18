@@ -8,7 +8,7 @@ import { useEffect } from "react";
 // change resizes the page's viewport, so `resize` is when to read it again.
 export function useTitleBarZoom() {
   useEffect(() => {
-    const bridge = window.threadboard;
+    const bridge = window.weft;
     if (!bridge?.zoomFactor) return;
     const apply = () => document.documentElement.style.setProperty("--zoom", String(bridge.zoomFactor?.() || 1));
     apply();

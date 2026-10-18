@@ -43,7 +43,7 @@ export default function ShowRail({ card, hidden, items, pageUrl }: { card: Card 
   const reopened = useRef<string>(undefined);
   const reopen = (url: string) => {
     reopened.current = url;
-    void window.threadboard?.browser.open(url);
+    void window.weft?.browser.open(url);
   };
   const minis = card && !hidden ? showMinis(items, { live: isLive(card), now, visits: cardVisits }) : [];
   const follow = usePaneFollow(minis, pageUrl, reopen);

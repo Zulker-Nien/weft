@@ -18,7 +18,7 @@
 // Exit 3: the build failed. It prints the url and the tail of the build log, for the wrap-up to fix and
 //         push again; Vercel never promotes a failed build, so production stays on the last good deploy.
 // It takes as long as the build (Weft's is ~15 min), so run it in the background.
-// Env: THREADBOARD_DATA (Weft's data dir), DEPLOY_WAIT_MS (for HEAD's deployment to appear once nothing
+// Env: WEFT_DATA (Weft's data dir), DEPLOY_WAIT_MS (for HEAD's deployment to appear once nothing
 //      else runs; default 90000), DEPLOY_BUILD_WAIT_MS (the whole wait; default 1800000), DEPLOY_POLL_MS
 //      (default 10000), VERCEL_BIN / GH_BIN (the CLIs, for tests).
 import { execFileSync, spawnSync } from "node:child_process";
@@ -59,7 +59,7 @@ function json(text) {
 }
 const readJson = (file) => (fs.existsSync(file) ? json(fs.readFileSync(file, "utf8")) : null);
 
-const settings = path.join(process.env.THREADBOARD_DATA || path.join(os.homedir(), ".weft"), "settings.json");
+const settings = path.join(process.env.WEFT_DATA || path.join(os.homedir(), ".weft"), "settings.json");
 if (readJson(settings)?.pushOnDone === false) done(0, "Push on Done is off in Weft's Settings: nothing pushed, nothing deployed.");
 
 const link = readJson(".vercel/project.json");

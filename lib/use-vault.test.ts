@@ -7,13 +7,13 @@ const overview = { vaults: [], unlocked: false };
 
 function shell(overviewFn: (folders: string[]) => Promise<unknown>) {
   const bridge = { overview: vi.fn(overviewFn) };
-  (window as unknown as { threadboard: unknown }).threadboard = { vault: bridge };
+  (window as unknown as { weft: unknown }).weft = { vault: bridge };
   return bridge;
 }
 
 afterEach(() => {
   cleanup();
-  delete (window as unknown as { threadboard?: unknown }).threadboard;
+  delete (window as unknown as { weft?: unknown }).weft;
   vi.useRealTimers();
 });
 

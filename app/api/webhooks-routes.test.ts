@@ -26,7 +26,7 @@ const relay = await import("./webhooks/[id]/relay/route");
 
 const URL = "http://localhost:3457/api/webhooks";
 const READ = { host: "localhost:3457" };
-const WRITE = { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { host: "localhost:3457", "x-weft-token": "1", "content-type": "application/json" };
 const FOLDER = os.tmpdir();
 const ctx = { params: Promise.resolve({ id: "h1" }) };
 const send = (method: string, body?: unknown, headers: Record<string, string> = WRITE) => new Request(URL, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });

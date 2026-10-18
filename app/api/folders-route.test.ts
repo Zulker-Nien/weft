@@ -9,7 +9,7 @@ const settings = vi.hoisted(() => ({ allowFolder: vi.fn() }));
 vi.mock("@/lib/settings", () => settings);
 
 const route = await import("./folders/route");
-const WRITE = { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { host: "localhost:3457", "x-weft-token": "1", "content-type": "application/json" };
 const post = (body: unknown, headers: Record<string, string> = WRITE) =>
   route.POST(new Request("http://localhost:3457/api/folders", { method: "POST", headers, body: JSON.stringify(body) }));
 

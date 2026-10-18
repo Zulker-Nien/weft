@@ -21,7 +21,7 @@ function get(query = "", headers: Record<string, string> = { host: "127.0.0.1:34
   return route.GET(new Request(`http://127.0.0.1:3457/api/account/team${query}`, { method: "GET", headers }));
 }
 
-function post(body: unknown, headers: Record<string, string> = { host: "127.0.0.1:3457", "x-threadboard": "1" }) {
+function post(body: unknown, headers: Record<string, string> = { host: "127.0.0.1:3457", "x-weft-token": "1" }) {
   return route.POST(
     new Request("http://127.0.0.1:3457/api/account/team", { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(body) }),
   );
@@ -39,7 +39,7 @@ describe("GET /api/account/team", () => {
     expect(forwardTeam).not.toHaveBeenCalled();
   });
 
-  it("doesn't need x-threadboard on a read", async () => {
+  it("doesn't need x-weft-token on a read", async () => {
     forwardTeam.mockResolvedValueOnce({ status: 200, json: { ok: true } });
     const res = await get();
     expect(res.status).toBe(200);
@@ -74,9 +74,9 @@ describe("GET /api/account/team", () => {
 });
 
 describe("POST /api/account/team", () => {
-  it("refuses other hosts and writes without x-threadboard", async () => {
+  it("refuses other hosts and writes without x-weft-token", async () => {
     const foreign = await route.POST(
-      new Request("http://evil.com/api/account/team", { method: "POST", headers: { "x-threadboard": "1" }, body: "{}" }),
+      new Request("http://evil.com/api/account/team", { method: "POST", headers: { "x-weft-token": "1" }, body: "{}" }),
     );
     expect(foreign.status).toBe(403);
     const noHeader = await post({}, { host: "127.0.0.1:3457" });
@@ -101,7 +101,7 @@ describe("POST /api/account/team", () => {
 
   it("is 400 with the message when the body isn't JSON or the upstream throws", async () => {
     const bad = await route.POST(
-      new Request("http://127.0.0.1:3457/api/account/team", { method: "POST", headers: { host: "127.0.0.1:3457", "x-threadboard": "1" }, body: "{" }),
+      new Request("http://127.0.0.1:3457/api/account/team", { method: "POST", headers: { host: "127.0.0.1:3457", "x-weft-token": "1" }, body: "{" }),
     );
     expect(bad.status).toBe(400);
     accountClient.mockReturnValueOnce({ auth: { getSession: () => Promise.reject(new Error("offline")) } });

@@ -12,7 +12,7 @@ A mini app is a page from the browser pane, saved so it is one click away on the
   It saves the page under its title (`appNameFrom`: title, else host, else the file's name). On a page that already is an
   app it is lit and removes it. It is disabled for anything `cleanAppUrl` refuses (about:, data:, weft:).
 - **Tile.** The name's first grapheme on a steady hue (`tagHue`), or the emoji the name starts with (`appGlyph`).
-- **Right-click** (`appMenu`, popped through `window.threadboard.popupMenu`): Open, Rename… (in place, Enter keeps it,
+- **Right-click** (`appMenu`, popped through `window.weft.popupMenu`): Open, Rename… (in place, Enter keeps it,
   Escape drops it), Share…, Move up, Move down, Copy address, Remove app.
 - **My mini apps.** `components/LoomApps.tsx` is a section on the Loom dialog's You tab (`components/LoomDialog.tsx`), under
   your wefter card: one row per app (its tile, name, and where it lives, or how it's shared), a click opens it in the board's

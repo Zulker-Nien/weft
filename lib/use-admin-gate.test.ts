@@ -75,7 +75,7 @@ describe("useSuperAdminGate", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("sends the x-threadboard header with the request", async () => {
+  it("sends the x-weft-token header with the request", async () => {
     const fetchMock = mockFetchOnce({ admin: true });
     vi.stubGlobal("fetch", fetchMock);
     renderHook(() => useSuperAdminGate());
@@ -83,7 +83,7 @@ describe("useSuperAdminGate", () => {
     const call = fetchMock.mock.calls[0];
     if (!call) throw new Error("fetch was not called");
     const [, init] = call as unknown as [string, RequestInit];
-    expect(init.headers).toMatchObject({ "x-threadboard": "1" });
+    expect(init.headers).toMatchObject({ "x-weft-token": "1" });
   });
 
   it("removes its weft:account listener on unmount", async () => {

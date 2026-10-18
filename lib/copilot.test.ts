@@ -53,7 +53,7 @@ const { startIssueSync } = await import("./github-issues");
 const { lastSeen } = await import("./copilot-digest");
 const { ensureCopilot, sendToCopilot, resetCopilot, setCopilotPersona, prewarm } = await import("./copilot");
 
-const g = globalThis as unknown as { __threadboardPrewarmed?: boolean; __weftCopilotSeen?: unknown };
+const g = globalThis as unknown as { __weftPrewarmed?: boolean; __weftCopilotSeen?: unknown };
 const card = (id: string, over: Partial<Card> = {}) => {
   const c: Card = { id, title: id, prompt: "", cwd: `/dev/${id}`, backend: "claude", permissionMode: "default", column: "running", createdAt: 0, updatedAt: 0, ...over };
   db.cards.set(id, c);
@@ -64,7 +64,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   db.cards.clear();
   db.projects = [];
-  delete g.__threadboardPrewarmed;
+  delete g.__weftPrewarmed;
   delete g.__weftCopilotSeen;
 });
 

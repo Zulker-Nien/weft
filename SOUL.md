@@ -101,8 +101,10 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   one input (own answer or a note, sent as `annotations`); option previews open in the card's browser pane; text typed on the
   Submit tab goes with the answers as a note on all of them (`buildReply`'s `general`).
 - `lib/reply-mode.ts` + `components/ReplyButtons.tsx` + `components/ReplyModeChip.tsx`: the reply box is in one mode at a time
-  (Send, Queue, Answer, Run, Replace, New card when the cache is cold, Send at the reset when the 5-hour window is used up), named on a
-  chip in the box and on its primary, with the rest in a ▾ menu and ■ Stop in its own slot (docs/architecture/composer.md).
+  (Send, Queue, Answer, Run, Replace, Send fresh when the cache is cold, Send at the reset when the 5-hour window is used up), named on a
+  chip in the box and on its primary, with the rest in a ▾ menu, a Done button while idle and ■ Stop in its own slot (docs/architecture/composer.md).
+  `lib/splice.ts` + `lib/splice-brief.ts` + `lib/splice-diff.ts`: Send fresh, a new CLI session in the same card started from a brief
+  (Haiku summary pre-baked on the scheduler's tick, what's open, the diff of the thread's own edits) instead of re-sending a cold history.
 - `components/SettingsDialog.tsx` + `lib/settings-nav.ts`: Settings, full window over a scene, six pages down the left (General, Models,
   Threads, Automations, Shortcuts, Accounts); Models holds every model pick, new threads' through `components/NewThreadDefaults.tsx`;
   the four rows (NewThreadDefaults, SubagentPicker, CopilotPicker, DonePicker) share `components/Pickers.tsx`
@@ -261,7 +263,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   synced folder, its workspace), makes the card through the same `createCardFromBody` as `POST /api/cards`, starts it and reports back; the card syncs up like any other. `card_id` is set only by the receiver after `createCardFromBody` accepts the request. A `reply` goes to the card through `sendUserMessage`, as if typed on the Mac; an `answer` through `answerPermission` (by `pendingId`), a `stop` through `stop()`.
   `lib/share-types.ts` + `lib/card-share.ts` + `components/ShareCardDialog.tsx` + `components/ShareBoardDialog.tsx` + `components/web-board/WebShareBoard.tsx` over one `components/BoardSharePanel.tsx` (the board's link, `weft.zip/<slug>/board`, and invites: `lib/use-team.ts` on the desktop, `boardShareTeam` in `lib/team-actions.ts` on the web) + `app/s/[id]` + `app/api/s/[id]/*` + `lib/share-*.ts` + `components/share-view/*`: **Share…** on a card gives `weft.zip/s/<id>`,
   its thread and its pane side by side, live (polled), private / public / email / password from `@aimhuge/share`; reads the synced rows (docs/architecture/sharing.md).
-- `app/api/*` + `lib/guard.ts`: localhost-only Host check, writes need `x-threadboard: 1`.
+- `app/api/*` + `lib/guard.ts`: localhost-only Host check, writes need `x-weft-token: 1`.
 - `lib/restart-guard.ts`: turns away Bash that would kill or restart Weft itself (its server pid, port, `next dev`, the app)
   while other cards' turns run, since a restart cuts them all off; in every thread via `guardedCli()`.
 - `lib/restart-when-idle.ts` + `app/api/restart` + `lib/restart-tool.ts` + `electron/restart-when-idle.cjs` + `components/RestartChip.tsx`: restart when idle

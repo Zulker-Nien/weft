@@ -190,7 +190,7 @@ describe("GET /cards/:id/thread/tool/:toolId", () => {
     expect(res.status).toBe(403);
   });
 
-  it("doesn't require the x-threadboard header on read", async () => {
+  it("doesn't require the x-weft-token header on read", async () => {
     const card = addCard();
     db.threads.set(card.id, [{ kind: "tool", id: "t1", name: "Bash", summary: "ls", result: "ok", at: 1 }]);
     const res = await toolRoute.GET(req(`/cards/${card.id}/thread/tool/t1`), toolCtx(card.id, "t1"));

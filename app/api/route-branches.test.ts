@@ -48,7 +48,7 @@ const loginRoute = await import("./login/route");
 const cloneRoute = await import("./repos/clone/route");
 const settingsRoute = await import("./settings/route");
 
-const WRITE = { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { host: "localhost:3457", "x-weft-token": "1", "content-type": "application/json" };
 const post = (url: string, body?: unknown, method = "POST") =>
   new Request(`http://localhost:3457/api${url}`, {
     method,

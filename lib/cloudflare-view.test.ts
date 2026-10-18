@@ -20,10 +20,10 @@ import {
 
 const folder = (path: string, over: Partial<CloudflareFolder> = {}): CloudflareFolder => ({ folder: path, repo: null, wrangler: null, link: null, error: null, ...over });
 const project = (name: string, over: Partial<CloudflareProject> = {}): CloudflareProject => ({ kind: "worker", name, accountId: "a", account: "Acme", git: null, updatedAt: 0, ...over });
-const shell = (value: unknown) => ((window as unknown as { threadboard?: unknown }).threadboard = value);
+const shell = (value: unknown) => ((window as unknown as { weft?: unknown }).weft = value);
 
 afterEach(() => {
-  delete (window as unknown as { threadboard?: unknown }).threadboard;
+  delete (window as unknown as { weft?: unknown }).weft;
 });
 
 describe("cloudflare-view", () => {

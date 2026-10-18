@@ -7,7 +7,7 @@ vi.mock("next/server", () => ({ connection: async () => {} }));
 
 const { GET } = await import("./route");
 
-const bus = (globalThis as unknown as { __threadboardBus: EventEmitter }).__threadboardBus;
+const bus = (globalThis as unknown as { __weftBus: EventEmitter }).__weftBus;
 const listeners = () => bus.listenerCount("event");
 const decoder = new TextDecoder();
 

@@ -65,7 +65,7 @@ secret get a conflict instead of one silently overwriting the other.
 - **Electron main process** holds the device private key, unwraps vault keys and decrypts. The board talks
   to it over IPC (`electron/preload.cjs`). Plaintext never goes through a Next API route.
 - **The Next server's environment reaches every agent**: `cliEnv()` (`lib/env.ts`) copies `process.env`
-  into each CLI, minus Weft's own `THREADBOARD_SHELL_*` keys, anything named like a secret (`*_KEY`, `*_TOKEN`,
+  into each CLI, minus Weft's own `WEFT_SHELL_*` keys, anything named like a secret (`*_KEY`, `*_TOKEN`,
   `*_SECRET`, `PASSWORD`, `*_DSN`, `DATABASE_URL`…) and any value shaped like a key (`lib/secret-detect.ts`).
   `ANTHROPIC_*` and `PUKU_*` stay, since the CLIs sign in with them. A command that needs a value gets it
   from the vault through `mcp__secrets__run`.
@@ -187,7 +187,7 @@ denied). A file watcher notices hand edits and offers "Import changes", so editi
     *Always allow* is a rule in the data folder's `vault/run-rules.json` (`electron/run-rules.cjs`), sealed with
     safeStorage so a thread can't write one. It pins the vault, environment, folder, exact command and a hash of the
     script, and covers those names or fewer, so a thread editing the script makes it ask again.
-  - Main spawns argv detached with no shell, its own env minus `THREADBOARD_SHELL_*`, plus the values; a timeout
+  - Main spawns argv detached with no shell, its own env minus `WEFT_SHELL_*`, plus the values; a timeout
     (default 2 minutes, at most 10) sends SIGTERM to the process group, then SIGKILL. Output is redacted
     (`electron/secret-redact.cjs`), then cut to the last 20,000 characters, and comes back with the exit code.
 - Redaction (`electron/secret-redact.cjs`, built): each value and the forms programs print it in, swapped for
@@ -266,7 +266,7 @@ that opens the file itself (`~/.weft/shell-token` included). This is a strong de
   (vault to vault, in main), reveal and copy behind `createUnlock` (Touch ID, open for 3
   minutes from the last use), and `registerVault`, whose IPC handlers refuse any sender but the board's
   webContents.
-- The board: `window.threadboard.vault` (`electron/preload.cjs`), `lib/vault-view.ts` (what the drawer shows),
+- The board: `window.weft.vault` (`electron/preload.cjs`), `lib/vault-view.ts` (what the drawer shows),
   `lib/use-vault.ts` (loads on folder change and window focus; `useIdle` locks after 3 idle minutes), and
   `components/VaultDrawer.tsx` (its row, form, filter and import preview in `components/VaultParts.tsx`)
   inside the library drawer's shell in `components/LibraryRail.tsx`.

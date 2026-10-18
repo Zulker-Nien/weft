@@ -7,7 +7,8 @@ import { shellToken } from "./shell-token";
 // board window's own requests (electron/api-token.cjs); a process that only reaches the port can't read them.
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
-function hasToken(req: Request): boolean {
+function hasToken(req: Request, requireOne = false): boolean {
+  if (requireOne && !shellToken()) return false;
   const want = shellToken();
   if (!want) return true; // not the desktop app (dev in a browser, tests): no token exists
   const got = req.headers.get("x-weft-token") ?? "";
@@ -17,8 +18,10 @@ function hasToken(req: Request): boolean {
 export function guard(req: Request, { write = true, sensitive = false } = {}): Response | null {
   const host = (req.headers.get("host") ?? "").replace(/:\d+$/, "");
   if (!LOCAL_HOSTS.has(host)) return Response.json({ error: "Forbidden host" }, { status: 403 });
-  if (write && req.headers.get("x-threadboard") !== "1") {
-    return Response.json({ error: "Missing x-threadboard header" }, { status: 403 });
+  // The desktop app swaps the board window's x-weft-token for the launch token, so a write carries "1" or that token.
+  const sent = req.headers.get("x-weft-token");
+  if (write && sent !== "1" && !(sent && hasToken(req, true))) {
+    return Response.json({ error: "Missing x-weft-token header" }, { status: 403 });
   }
   if (sensitive && !hasToken(req)) return Response.json({ error: "Missing token" }, { status: 403 });
   return null;

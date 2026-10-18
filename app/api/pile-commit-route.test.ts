@@ -16,7 +16,7 @@ vi.mock("@/lib/pile-commit", async (importOriginal) => ({
 const pileCommit = await import("@/lib/pile-commit");
 const route = await import("./cards/[id]/commit/route");
 
-function post(id: string, body: unknown, headers: Record<string, string> = { "x-threadboard": "1" }) {
+function post(id: string, body: unknown, headers: Record<string, string> = { "x-weft-token": "1" }) {
   const req = new Request(`http://localhost:3457/api/cards/${id}/commit`, {
     method: "POST",
     headers: { host: "localhost:3457", "content-type": "application/json", ...headers },

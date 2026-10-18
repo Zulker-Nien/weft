@@ -45,7 +45,7 @@ const body = (...chunks: (string | Uint8Array)[]) =>
 
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-attach-"));
-  process.env.THREADBOARD_DATA = dir;
+  process.env.WEFT_DATA = dir;
   sips.preview = null;
   vi.clearAllMocks();
 });

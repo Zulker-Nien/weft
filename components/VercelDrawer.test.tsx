@@ -48,13 +48,13 @@ function setup(status: VercelStatus | null, project: string | null = null, error
   const notify = vi.fn();
   const onOpenUrl = vi.fn();
   const openExternal = vi.fn();
-  (window as unknown as { threadboard: unknown }).threadboard = { openExternal };
+  (window as unknown as { weft: unknown }).weft = { openExternal };
   render(<VercelDrawer bridge={b as unknown as VercelBridge} status={status} error={error} reload={reload} project={project} onOpenUrl={onOpenUrl} notify={notify} />);
   return { b, reload, notify, onOpenUrl, openExternal };
 }
 
 afterEach(() => {
-  delete (window as unknown as { threadboard?: unknown }).threadboard;
+  delete (window as unknown as { weft?: unknown }).weft;
 });
 
 describe("VercelDrawer", () => {

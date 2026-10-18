@@ -42,7 +42,7 @@ async function send(id: string) {
 
 beforeEach(async () => {
   cwd = resetHarness(h);
-  vi.stubEnv("THREADBOARD_SHELL_URL", "http://127.0.0.1:4567");
+  vi.stubEnv("WEFT_SHELL_URL", "http://127.0.0.1:4567");
   vi.stubGlobal("fetch", fetchMock);
   fetchMock.mockClear();
   delete (globalThis as Record<string, unknown>).__weftSecretsInUse;

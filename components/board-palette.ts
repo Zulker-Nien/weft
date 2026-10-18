@@ -85,7 +85,7 @@ export function openTeamPage() {
 export function openWeftPage(url: string) {
   if (typeof window === "undefined") return;
   // Partial: a shell from before the pane has no browser bridge, so this falls back to the system browser.
-  const pane: Partial<ShellBridge["browser"]> | undefined = window.threadboard?.browser;
+  const pane: Partial<ShellBridge["browser"]> | undefined = window.weft?.browser;
   if (pane?.open) {
     void pane.open(url, "board").catch(() => openExternal(url));
     return;

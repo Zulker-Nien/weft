@@ -816,7 +816,7 @@ Settings → Accounts shows your plan and meter; **Manage billing** opens the wo
 ### Where does Weft keep my data?
 
 In `~/.weft` on your Mac: `board.json` (cards), `threads/` (thread views), `attachments/`, `activity.jsonl`, the vault,
-pages and settings. The CLIs keep their own transcripts as usual. Set `THREADBOARD_DATA` to use another folder.
+pages and settings. The CLIs keep their own transcripts as usual. Set `WEFT_DATA` to use another folder.
 
 ### What leaves my Mac?
 

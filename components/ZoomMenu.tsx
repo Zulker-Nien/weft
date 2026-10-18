@@ -33,7 +33,7 @@ export default function ZoomMenu({ zoom, disabled }: { zoom: number; disabled: b
   }, [open]);
 
   function pick(action: ZoomAction) {
-    window.threadboard?.browser.zoom(action);
+    window.weft?.browser.zoom(action);
     setOpen(false);
   }
 

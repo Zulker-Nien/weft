@@ -62,7 +62,7 @@ export default function ModifierHint() {
   }, [mac]);
 
   const rows = useMemo(() => {
-    const desktop = typeof window !== "undefined" && Boolean(window.threadboard);
+    const desktop = typeof window !== "undefined" && Boolean(window.weft);
     // Keys that only work while typing can't apply here: the card hides as soon as a field has focus.
     const all = shortcutSections(registered, { desktop })
       .filter((s) => s.group !== "Writing")

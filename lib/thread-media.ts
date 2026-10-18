@@ -23,7 +23,7 @@ interface Block {
 const MAX_COPY_BYTES = 200 * 1024 ** 2;
 
 // Files already copied, by "path|size|mtime", so a transcript read doesn't hash them again.
-const copied = globalSingleton("__threadboardCopied", () => new Map<string, string>());
+const copied = globalSingleton("__weftCopied", () => new Map<string, string>());
 
 // An image block's bytes and media type, or undefined if it isn't one.
 function imageBytes(block: Block) {

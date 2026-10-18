@@ -81,12 +81,12 @@ export function sprintPrompt({ root, map, origin, now }: SprintPromptInput) {
     "   - Buttons are links to `weft://reply?text=<url-encoded message>`: Weft sends that text to this thread as my reply (it only works from a local page in this card's own pane). Name the card or sprint in every message, like `Start sprint 1.` or `Merge \"Dark mode\" into \"Theme settings\".` Per sprint: \"Start this sprint\". Per card: \"Move to sprint…\" (one link per other sprint), and where it applies \"Merge\", \"Split\", \"Archive (already done)\". Add a one-line text box with Send for \"Tell me what to change\" (on submit, set location.href to the weft://reply link with the typed words). After a click, grey out that control and show \"Sent, working on it…\" until you rewrite the page.",
     "4. Wait for my answers. Change the plan when I ask and rewrite the page.",
     "5. When I say start a sprint, start each of its cards with",
-    `   curl -s -X PATCH ${api}/<card id> -H 'x-threadboard: 1' -H 'content-type: application/json' -d '{"column":"running"}'`,
+    `   curl -s -X PATCH ${api}/<card id> -H 'x-weft-token: 1' -H 'content-type: application/json' -d '{"column":"running"}'`,
     "   then mark that sprint Started on the page. Don't start the next sprint until I ask: its cards may need this one's work committed first (the +N/-N counter beside Backlog walks through that).",
     "6. On my OK only: merge or split cards by adding the new ones to Backlog with",
-    `   curl -s -X POST ${api} -H 'x-threadboard: 1' -H 'content-type: application/json' -d '{"title":"…","prompt":"<a self-contained brief>","cwd":"${root}"}'`,
+    `   curl -s -X POST ${api} -H 'x-weft-token: 1' -H 'content-type: application/json' -d '{"title":"…","prompt":"<a self-contained brief>","cwd":"${root}"}'`,
     "   and archive the cards they replace (or ones already done) with",
-    `   curl -s -X PATCH ${api}/<card id> -H 'x-threadboard: 1' -H 'content-type: application/json' -d '{"archived":true}'`,
+    `   curl -s -X PATCH ${api}/<card id> -H 'x-weft-token: 1' -H 'content-type: application/json' -d '{"archived":true}'`,
   );
   return out.join("\n");
 }

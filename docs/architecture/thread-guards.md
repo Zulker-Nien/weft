@@ -18,7 +18,7 @@ runs, in every permission mode (bypass included), and the denial's reason goes b
 
 ## The local API's own gate
 
-`lib/guard.ts` guards `app/api/*`: Host must be local, writes need `x-threadboard: 1`, and `sensitive` reads (account,
+`lib/guard.ts` guards `app/api/*`: Host must be local, writes need `x-weft-token: 1`, and `sensitive` reads (account,
 account/team, account/billing, settings, services) also need the launch token in `x-weft-token`. The desktop app adds it
 to the board window's requests only (`electron/api-token.cjs`, a `webRequest` hook on the default session; the browser
 pane is another partition), and it is the control server's token, which threads can't read. With no token (dev in a

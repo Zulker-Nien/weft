@@ -28,7 +28,7 @@ function defaultDataDir() {
   return dir;
 }
 
-export const DATA_DIR = process.env.THREADBOARD_DATA || defaultDataDir();
+export const DATA_DIR = process.env.WEFT_DATA || defaultDataDir();
 const BOARD_FILE = path.join(DATA_DIR, "board.json");
 const THREADS_DIR = path.join(DATA_DIR, "threads");
 
@@ -38,7 +38,7 @@ interface State {
 }
 
 function state(): State {
-  return globalSingleton("__threadboardState", loadState);
+  return globalSingleton("__weftState", loadState);
 }
 
 function loadState(): State {
