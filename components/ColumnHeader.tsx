@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { Column } from "@/lib/types";
 import BacklogActions, { type BacklogLane } from "./BacklogActions";
 import Icon from "./Icon";
@@ -53,31 +53,34 @@ export default function ColumnHeader({
     <div className="relative flex items-center justify-between px-3 pb-1.5 pt-2.5">
       <ColumnTitle label={column.label} needsYou={needsYou} backlog={backlog} />
       <span className="flex shrink-0 items-center gap-2 text-[11.5px] text-faint">
-        {/* A column narrowed beside the open copilot lane keeps only its count and Archive all. */}
-        <span className="flex items-center gap-2 @max-[230px]:hidden">
+        {/* A narrow column (five columns on a small screen) keeps its actions as icons; one squeezed beside the
+            open copilot lane keeps only its count and Archive all. */}
+        <span className="flex items-center gap-2 @max-[150px]:hidden">
           {onSwitchAll && count ? <SwitchAllButton onClick={() => void onSwitchAll()} /> : null}
           {onReviewAll && count ? (
             <Tip text="Walk through the Review cards one at a time: what each changed, its checks, then commit it" className="inline-flex">
               <button
                 onClick={() => void reviewAll()}
                 disabled={reviewing}
+                aria-label={reviewing ? "Starting…" : "Review all"}
                 className="flex items-center gap-1 font-medium text-accent hover:opacity-80 disabled:opacity-50"
               >
                 <Icon name="check" size={11} />
-                {reviewing ? "Starting…" : "Review all"}
+                <Label>{reviewing ? "Starting…" : "Review all"}</Label>
               </button>
             </Tip>
           ) : null}
           {resumeAll && (
             <Tip text={`Carry on the ${resumeAll.count} turn${resumeAll.count > 1 ? "s" : ""} here that a restart cut off or that failed`} className="inline-flex">
-              <button onClick={resumeAll.run} className="flex items-center gap-1 font-medium text-accent hover:opacity-80">
+              <button onClick={resumeAll.run} aria-label={`Resume ${resumeAll.count}`} className="flex items-center gap-1 font-medium text-accent hover:opacity-80">
                 <Icon name="play" size={10} />
-                Resume {resumeAll.count}
+                <Label>Resume</Label>
+                {resumeAll.count}
               </button>
             </Tip>
           )}
           {done && archivedCount > 0 && (
-            <button onClick={onToggleArchived} className="hover:text-ink" aria-pressed={showArchived}>
+            <button onClick={onToggleArchived} className="hover:text-ink @max-[230px]:hidden" aria-pressed={showArchived}>
               {showArchived ? "Hide" : "Show"} {archivedCount} archived
             </button>
           )}
@@ -94,6 +97,11 @@ export default function ColumnHeader({
       </span>
     </div>
   );
+}
+
+// A header button's words, dropped on a narrow column so its icon (and count) still fit.
+function Label({ children }: { children: ReactNode }) {
+  return <span className="@max-[230px]:hidden">{children}</span>;
 }
 
 // The column's name; Backlog's is a button that drops its saved sprints.

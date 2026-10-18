@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type SubmitEvent } from "react";
+import posthog from "posthog-js";
 import type { TeamClientActions, TeamRole, TeamSnapshot } from "@/lib/team-types";
 import type { TeamHookState } from "@/lib/use-team";
 import { Spinner } from "./Icon";
@@ -118,7 +119,12 @@ function InviteBox({ role, actions }: { role: TeamRole; actions: TeamClientActio
     const answer = await actions.invite(address, role);
     setBusy(false);
     setResult(answer);
-    if (answer.ok) setEmail("");
+    if (answer.ok) {
+      if (process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN && process.env.NEXT_PUBLIC_POSTHOG_HOST) {
+        posthog.capture("team_invite_sent", { role });
+      }
+      setEmail("");
+    }
   }
 
   return (
