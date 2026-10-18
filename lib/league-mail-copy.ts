@@ -59,7 +59,7 @@ function standing(kind: "midweek" | "final", f: StandingFacts): MailCopy {
     const lead = f.lead > 0 ? ` You're ${f.lead} XP ahead of the first builder outside it.` : "";
     return {
       ...base,
-      subject: `${prefix}you're ${ordinal(f.rank)} in ${f.league}, in the move-up zone`,
+      subject: `${prefix}${last ? "you" : "You"}'re ${ordinal(f.rank)} in ${f.league}, in the move-up zone`,
       preheader: `Hold a top-${f.up} spot ${when} and you move up on Monday.`,
       heading: `${ordinal(f.rank)} of ${f.size}: you're moving up`,
       paragraphs: [`Hi ${f.name}, you have ${f.xp} XP this week, a top-${f.up} spot in ${f.league}.${lead}`, `Keep it ${when} and Monday moves you up a league.`],

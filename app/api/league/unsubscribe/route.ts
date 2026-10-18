@@ -21,7 +21,7 @@ function check(req: Request): { userId: string } | Response {
   const url = new URL(req.url);
   const userId = url.searchParams.get("u") ?? "";
   const token = url.searchParams.get("t") ?? "";
-  if (!userId || !verifyUnsubscribe(userId, token, secret)) return page("Link not valid", "<p>This unsubscribe link isn't valid. Use the one in your latest league email.</p>", 400);
+  if (!userId || !token || !verifyUnsubscribe(userId, token, secret)) return page("Link not valid", "<p>This unsubscribe link isn't valid. Use the one in your latest league email.</p>", 400);
   return { userId };
 }
 
