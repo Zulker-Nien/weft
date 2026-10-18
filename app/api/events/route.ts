@@ -2,6 +2,7 @@ import { connection } from "next/server";
 import { trackActivity } from "@/lib/activity";
 import { subscribe } from "@/lib/bus";
 import { guard } from "@/lib/guard";
+import { startLimitPoll } from "@/lib/limit-poll";
 
 // Server-sent events: every card change and thread update, as it happens. The board opens this first,
 // so it also starts the activity log (lib/activity.ts) following the board.
@@ -11,6 +12,7 @@ export async function GET(req: Request) {
   await connection();
   try {
     trackActivity();
+    startLimitPoll();
   } catch (err) {
     console.warn("Couldn't start the activity log", err);
   }

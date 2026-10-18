@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { readActivity, record, trackActivity } from "./activity";
 import { craftHabits, scanCraft } from "./craft";
+import { startLimitPoll } from "./limit-poll";
 import {
   activeDays, cloth, dayKey, LEAGUES, levelFor, records, streakOf, tallyDays, weekShipped, weekXp,
   type DayTally, type Level, type Records, type Stitch, type Streak,
@@ -126,6 +127,9 @@ export function rootsToMeasure(cards: { cwd: string; createdAt: number }[], inVi
 
 export function gameState({ cwd, full, now = Date.now() }: { cwd?: string | null; full?: boolean; now?: number }): GameState {
   trackActivity();
+  // The limits chart needs samples between thread turns, so a 15-minute background poll runs
+  // alongside the activity log (lib/limit-poll.ts).
+  startLimitPoll();
   // With history opted out (lib/welcome.ts), what happened before the welcome doesn't count.
   const w = welcome();
   const events = readActivity().filter((e) => countsAt(w, e.at));
