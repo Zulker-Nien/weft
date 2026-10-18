@@ -22,10 +22,12 @@ describe("resolveFolder", () => {
     expect(() => resolveFolder("~app")).toThrow(`${path.resolve("~app")} isn't a folder.`);
   });
 
-  it("treats empty, null and undefined as the home folder", () => {
-    expect(resolveFolder("")).toBe(os.homedir());
-    expect(resolveFolder(null)).toBe(os.homedir());
-    expect(resolveFolder(undefined)).toBe(os.homedir());
+  it("treats empty, null and undefined as a missing folder", () => {
+    // Routes should fail the same way for "no folder at all" as for "named a missing path",
+    // so a POST that forgot the field doesn't silently use the user's home dir.
+    expect(() => resolveFolder("")).toThrow("A folder is required.");
+    expect(() => resolveFolder(null)).toThrow("A folder is required.");
+    expect(() => resolveFolder(undefined)).toThrow("A folder is required.");
   });
 
   it("resolves a relative path against the working directory", () => {

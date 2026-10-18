@@ -77,7 +77,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@vitest/coverage-v8": "^3.2.7",
+    "@vitest/coverage-v8": "^4.1.11",
     "electron": "^44.7.0",
     "electron-builder": "^26.15.3",
     "eslint": "^9",
@@ -86,7 +86,7 @@
     "jsdom": "^29.1.1",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^3.2.7"
+    "vitest": "^4.1.11"
   },
   "build": {
     "appId": "app.weft.desktop",
@@ -183,6 +183,11 @@
       "esbuild",
       "node-pty",
       "unrs-resolver"
-    ]
+    ],
+    "overrides": {
+      "tinypool": "^2.1.2",
+      "braces": "^3.0.3",
+      "sprintf-js": "^1.1.3"
+    }
   }
 }
