@@ -111,7 +111,7 @@ export default function StatusStrip({
           </Tip>
         )}
         {limits && (
-          <Tip text={<LimitBurndown backend={backend} stats={stats} />} width={444} className="inline-flex gap-x-3">
+          <Tip text={<LimitBurndown backend={backend} stats={stats} />} width={664} className="inline-flex gap-x-3">
             <Limit label="5hr" window={stats.fiveHour} />
             <Limit label="7d" window={stats.sevenDay} />
           </Tip>

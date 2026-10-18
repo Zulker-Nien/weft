@@ -56,7 +56,7 @@ afterEach(() => vi.unstubAllGlobals());
 function setup() {
   const onStart = vi.fn();
   const onToast = vi.fn();
-  const view = render(<GameBadge cwd="/dev/app" refresh={1} onStart={onStart} onToast={onToast} />);
+  const view = render(<GameBadge cwd="/dev/app" refresh={1} onStart={onStart} />);
   return { onStart, onToast, view };
 }
 

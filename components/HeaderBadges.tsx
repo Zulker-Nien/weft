@@ -27,6 +27,9 @@ export default function HeaderBadges({
   notify: (err: unknown) => void;
   toast: (text: string) => void;
 }) {
+  // toast is reserved for future badges that need to surface a transient message.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _toast = toast;
   const running = cards.filter((c) => c.column === "running" && !c.archived).length;
   const turnTick = `${running}:${cards.reduce((n, c) => n + (c.turns ?? 0), 0)}`;
   const done = cards.filter((c) => c.column === "done").length;
@@ -37,7 +40,7 @@ export default function HeaderBadges({
       <QualityBadge cwd={cwd} onImprove={begin} />
       <PileBadge cwd={cwd} refresh={turnTick} onStart={start} onError={notify} />
       <BacklogBadge cwd={cwd} refresh={`${turnTick}:${waiting}`} onStart={start} onError={notify} />
-      <GameBadge cwd={cwd} refresh={`${turnTick}:${done}`} onStart={begin} onToast={toast} />
+      <GameBadge cwd={cwd} refresh={`${turnTick}:${done}`} onStart={begin} />
       <WelcomeDialog onError={notify} />
     </>
   );
