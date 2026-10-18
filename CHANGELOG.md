@@ -9,6 +9,11 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 ## [Unreleased]
 
 ### Added
+
+- **Icon-only header buttons.** Copilot, Browser and New thread in the top bar are icons now (names and shortcuts stay in the tooltip), saving width on a 13" screen (`components/BoardHeader.tsx`, `components/CopilotButton.tsx`).
+- **Three intro screens in the welcome.** Before the Wefter Profile and the projects, the first-launch welcome shows an open card with the browser pane explaining threads and the copilot, an empty board with each swimlane explained (Review as a walkthrough, Done as commit, refactor and docs), and the left bar. Drawn as mockups with the app's colors; **Next** / **Back**, five dots (`components/WelcomeIntro.tsx`).
+
+- Settings → General → The welcome → **Test it**: runs the real first-launch welcome again, even on a board that was adopted with cards, and saves your answers.
 - Continue is back in the reply box beside Done, whenever the thread is idle, and ⌘⇧↵ sends it (it was ⌘. before).
 - Renamed the last "threadboard" names to Weft: the write header is `x-weft-token` (the launch token is accepted in its place), the env vars are `WEFT_*`, and the desktop bridge is `window.weft`. Old `~/.threadboard` data is still moved to `~/.weft`.
 
