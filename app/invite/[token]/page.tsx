@@ -21,6 +21,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
+import { connection } from "next/server";
 import Link from "next/link";
 import { lookupInviteByToken } from "@aimhuge/teams";
 import { isDeployed } from "@/lib/home";
@@ -86,7 +87,26 @@ function ExpiredCard() {
   );
 }
 
+// The signed-in, valid-token shape: the Join button inside the same card as the other three, so it
+// picks up the .wz-app palette (bare, it rendered unstyled on the page's dark background).
+function JoinCard({ token, orgName }: { token: string; orgName: string }) {
+  return (
+    <div className="wz-app wz-auth">
+      <main className="wz-authCard">
+        <h1 className="wz-authTitle">Join {orgName} on Weft</h1>
+        <p className="wz-authSub">You&apos;ve been invited to this workspace. Join to see its board and team.</p>
+        <JoinForm token={token} orgName={orgName} action={joinWorkspace} />
+      </main>
+    </div>
+  );
+}
+
 async function InviteBody({ token }: { token: string }) {
+  // Request-bound before anything else: building the Supabase client reads Date.now(), which
+  // cacheComponents refuses during prerender ("unstable value Date.now()"), and on a cold start that
+  // error left the visitor on the "Checking your invite…" fallback.
+  await connection();
+
   // serviceClient() is null on a deployment without SUPABASE_SECRET_KEY —
   // same "invites aren't available" condition the action uses. notFound()
   // here is the right shape: the URL exists, the deployment just doesn't
@@ -104,7 +124,7 @@ async function InviteBody({ token }: { token: string }) {
   const lookup = await lookupInviteByToken(service, token).catch(() => null);
   if (!lookup) return <ExpiredCard />;
 
-  return <JoinForm token={token} orgName={lookup.org.name} action={joinWorkspace} />;
+  return <JoinCard token={token} orgName={lookup.org.name} />;
 }
 
 function InviteFallback() {
