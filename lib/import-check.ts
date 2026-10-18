@@ -9,12 +9,14 @@ import { aliasBases } from "./ts-paths";
 // over the whole board: one thread removes an export (or a whole module) another file still imports,
 // or adds an import of a name that isn't there. A React error boundary can't catch these: the module
 // never compiles, so nothing runs. Plain text matching, no type-checker, so it takes milliseconds.
-// Only node: imports (erased type imports, and ./dropped-imports, which keeps to the same rule) here:
+// Only node: imports (erased type imports, and ./dropped-imports and ./ts-paths, which keep to the same rule) here:
 // scripts/import-check-hook.mjs loads this file with
 // Node's type stripping, for Claude Code sessions outside Weft.
 
 const SOURCE = /\.(ts|tsx|js|jsx|mjs)$/;
 const EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", "/index.ts", "/index.tsx", "/index.js"];
+// TypeScript ESM (NodeNext, verbatimModuleSyntax) imports "./axes.js" for a file that's axes.ts on disk.
+const TS_FOR_JS: Record<string, string[]> = { ".js": [".ts", ".tsx"], ".jsx": [".tsx"], ".mjs": [".mts"], ".cjs": [".cts"] };
 // How many files that might import an edited module get read; past that it's a hub nobody edits blind.
 const MAX_IMPORTERS = 200;
 
@@ -64,8 +66,8 @@ function braceNames(list: string, side: "local" | "exported"): string[] {
     });
 }
 
-// Where a local import could be, before extensions: a relative path, or an alias under the project's
-// tsconfig `paths` ("@/x" is src/x in DeckCP, x in Weft). Null for a package.
+// The paths a local import could be, best first, or null for a package. Aliases ("@/x") come from the
+// project's tsconfig paths (lib/ts-paths.ts).
 export function specBases(root: string, fromFile: string, spec: string): string[] | null {
   return spec.startsWith(".") ? [path.resolve(path.dirname(fromFile), spec)] : aliasBases(root, spec);
 }
@@ -75,10 +77,18 @@ export function resolveSpec(root: string, fromFile: string, spec: string): strin
   const bases = specBases(root, fromFile, spec);
   if (!bases) return null;
   for (const base of bases) {
-    const found = isFile(base) ? base : EXTENSIONS.map((ext) => base + ext).find(isFile);
+    const found = resolveBase(base);
     if (found) return found;
   }
   return "";
+}
+
+function resolveBase(base: string): string {
+  if (isFile(base)) return base;
+  const ext = path.extname(base);
+  const stem = base.slice(0, base.length - ext.length);
+  const tsTwins = (TS_FOR_JS[ext] ?? []).map((ts) => stem + ts);
+  return [...tsTwins, ...EXTENSIONS.map((e) => base + e)].find(isFile) ?? "";
 }
 
 function isFile(p: string) {
@@ -89,7 +99,7 @@ function isFile(p: string) {
   }
 }
 
-// The nearest folder above a file holding a tsconfig.json or package.json: where "@/" points.
+// The nearest folder above a file holding a tsconfig.json or package.json: whose tsconfig says where "@/" points.
 export function projectRoot(file: string): string | null {
   let dir = path.dirname(file);
   while (!isFile(path.join(dir, "tsconfig.json")) && !isFile(path.join(dir, "package.json"))) {

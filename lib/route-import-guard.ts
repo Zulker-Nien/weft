@@ -71,7 +71,8 @@ function packageInstalled(file: string, name: string): boolean {
   return !sawModules;
 }
 
-// Where a missing local import should be written: its path with the importer's extension when it has none.
+// Where a missing local import should be written: its first candidate path (the alias's tsconfig target)
+// with the importer's extension when it has none.
 function suggestedFile(root: string, file: string, spec: string): string {
   const base = (specBases(root, file, spec) as string[])[0] as string; // only asked for a spec that resolved to ""
   return path.relative(root, path.extname(base) ? base : base + path.extname(file));

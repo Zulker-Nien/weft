@@ -81,6 +81,29 @@ describe("resolveSpec and projectRoot", () => {
     expect(resolveSpec(root, from, "react")).toBeNull();
   });
 
+  it("finds the TypeScript file behind an ESM .js, .jsx, .mjs or .cjs specifier", () => {
+    write({ "src/axes.ts": "", "src/View.tsx": "", "src/tool.mts": "", "src/cfg.cts": "", "src/Page.tsx": "", "src/plain.js": "" });
+    const from = path.join(root, "src/lib/index.ts");
+    expect(resolveSpec(root, from, "../axes.js")).toBe(path.join(root, "src/axes.ts"));
+    expect(resolveSpec(root, from, "../View.js")).toBe(path.join(root, "src/View.tsx"));
+    expect(resolveSpec(root, from, "../Page.jsx")).toBe(path.join(root, "src/Page.tsx"));
+    expect(resolveSpec(root, from, "../tool.mjs")).toBe(path.join(root, "src/tool.mts"));
+    expect(resolveSpec(root, from, "../cfg.cjs")).toBe(path.join(root, "src/cfg.cts"));
+    expect(resolveSpec(root, from, "../plain.js")).toBe(path.join(root, "src/plain.js"));
+    expect(resolveSpec(root, from, "../gone.js")).toBe("");
+  });
+
+  it("follows the tsconfig's @/* → ./src/* when checking an edited file's imports", () => {
+    write({ "tsconfig.json": '{ "compilerOptions": { "paths": { "@/*": ["./src/*"] } } }', "src/lib/a.ts": "export const a = 1;\n", "src/app/page.tsx": 'import { a } from "@/lib/a";\nimport { b } from "@/lib/b";\n' });
+    expect(resolveSpec(root, path.join(root, "src/app/page.tsx"), "@/lib/a")).toBe(path.join(root, "src/lib/a.ts"));
+    expect(brokenImports(path.join(root, "src/app/page.tsx"))).toEqual(['src/app/page.tsx:2 imports "@/lib/b", which doesn\'t exist.']);
+  });
+
+  it("checks names through a .js specifier and still reports a missing one", () => {
+    write({ "src/axes.ts": "export function toAxes() {}\n", "src/use.ts": 'import { toAxes } from "./axes.js";\nimport { x } from "./gone.js";\n' });
+    expect(brokenImports(path.join(root, "src/use.ts"))).toEqual(['src/use.ts:2 imports "./gone.js", which doesn\'t exist.']);
+  });
+
   it("finds the folder with the project's config, or none", () => {
     write({ "lib/deep/a.ts": "" });
     expect(projectRoot(path.join(root, "lib/deep/a.ts"))).toBe(root);
