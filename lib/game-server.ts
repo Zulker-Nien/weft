@@ -17,6 +17,7 @@ import { sessionFiles } from "./import";
 import { checkProject, detectStack } from "./project-checks";
 import { projectRoot } from "./quality";
 import { listCards } from "./store";
+import { countsAt, welcome } from "./welcome";
 import { distinctHits, usageDays, type LimitHit, type UsageDay } from "./usage";
 import { scanUsage, transcriptUsage } from "./usage-scan";
 
@@ -30,6 +31,8 @@ export interface GameState {
   level: Level;
   weekXp: number;
   weekShipped: number;
+  // Every card started and taken to Done, for the public builder card (lib/profile-card.ts).
+  totals: { started: number; shipped: number };
   streak: Streak;
   today: DayTally;
   cloth: Stitch[];
@@ -123,8 +126,10 @@ export function rootsToMeasure(cards: { cwd: string; createdAt: number }[], inVi
 
 export function gameState({ cwd, full, now = Date.now() }: { cwd?: string | null; full?: boolean; now?: number }): GameState {
   trackActivity();
-  const events = readActivity();
-  const cards = listCards().filter((c) => c.role !== "copilot");
+  // With history opted out (lib/welcome.ts), what happened before the welcome doesn't count.
+  const w = welcome();
+  const events = readActivity().filter((e) => countsAt(w, e.at));
+  const cards = listCards().filter((c) => c.role !== "copilot" && countsAt(w, c.createdAt));
   // Craft reads what the last scan found; the scan catches up in the background.
   void scanCraft(cards, sessionFiles()).catch(() => {});
   // So does usage: every transcript's tokens and limit hits, plus the hits Weft's threads logged live.
@@ -163,6 +168,10 @@ export function gameState({ cwd, full, now = Date.now() }: { cwd?: string | null
     level: levelFor(xp),
     weekXp: weekXp(days, today),
     weekShipped: weekShipped(days, today),
+    totals: {
+      started: new Set(events.filter((e) => e.kind === "created").map((e) => e.card)).size,
+      shipped: new Set(events.filter((e) => e.kind === "done").map((e) => e.card)).size,
+    },
     streak,
     today: days.get(today) ?? { cards: 0, turns: 0, done: 0, xp: 0 },
     cloth: cloth(days, streak.frozen, today),

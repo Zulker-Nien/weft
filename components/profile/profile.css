@@ -11,12 +11,15 @@
 .wz-profileMain {
   position: relative;
   z-index: 1;
-  max-width: 720px;
+  max-width: 920px;
   margin: 0 auto;
   padding: 0 24px;
 }
 
 .wz-profileTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding-top: 22px;
 }
 
@@ -49,8 +52,8 @@
 
 .wz-profileAvatar {
   flex-shrink: 0;
-  width: 96px;
-  height: 96px;
+  width: 112px;
+  height: 112px;
   border-radius: 50%;
   border: 2px solid var(--line-2);
   object-fit: cover;
@@ -73,7 +76,7 @@
   margin: 0;
   font-family: var(--display);
   font-weight: 500;
-  font-size: 32px;
+  font-size: 40px;
   line-height: 1.12;
   letter-spacing: -0.025em;
   overflow-wrap: anywhere;
@@ -104,10 +107,6 @@
 .wz-profileFacts a:hover {
   color: var(--clay-2);
   text-decoration: underline;
-}
-
-.wz-profileThreads {
-  margin-top: 36px;
 }
 
 .wz-profileSection {

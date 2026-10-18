@@ -27,7 +27,19 @@ vi.mock("./activity", () => ({
   readActivity: () => log,
   record: vi.fn((e: Omit<ActivityEvent, "id">) => log.push({ ...e, id: `r${log.length}` })),
 }));
-vi.mock("./store", () => ({ listCards: () => board.cards }));
+vi.mock("./store", () => ({ DATA_DIR: "/tmp/weft-game-test-data", listCards: () => board.cards }));
+// The first-launch welcome (lib/welcome.ts) gates the activity log: with it unset everything
+// counts; with countHistory false, only events and cards after the welcome's at count. The default
+// mock models a board that opted in, so the existing tests pass.
+const welcomeMock = vi.hoisted(() => ({
+  welcome: vi.fn(() => ({ at: 0, countHistory: true, fresh: false, skip: [] })),
+  countsAt: vi.fn<(w: unknown, at: number) => boolean>(() => true),
+  welcomeOrAdopt: vi.fn(() => ({ at: 0, countHistory: true, fresh: false, skip: [] })),
+  importsSession: vi.fn(() => true),
+  isScratch: vi.fn(() => false),
+  WELCOME_FILE: "",
+}));
+vi.mock("./welcome", () => welcomeMock);
 vi.mock("./usage-scan", () => ({
   scanUsage: vi.fn(() => Promise.reject(new Error("unreadable"))),
   transcriptUsage: () => ({
@@ -137,5 +149,23 @@ describe("gameState", () => {
     delete (globalThis as Record<string, unknown>).__weftGame;
     gitName.value = "";
     expect(gameState({ now: NOW }).name).toBe(os.userInfo().username);
+  });
+
+  it("with countHistory off, drops events and cards dated before welcome.at", () => {
+    delete (globalThis as Record<string, unknown>).__weftGame;
+    const at = NOW - 12 * 60 * 60_000;
+    welcomeMock.welcome.mockReturnValue({ at, countHistory: false, fresh: false, skip: [] });
+    welcomeMock.countsAt.mockImplementation((w: unknown, t: number) => t >= (w as { at: number }).at);
+    const before = { id: "old1", kind: "created" as const, at: NOW - 2 * DAY, card: "x", cwd: A };
+    const after = { id: "new1", kind: "created" as const, at: NOW - 60 * 60_000, card: "y", cwd: A };
+    log.push(before, after);
+    board.cards.push(card("old", A, { createdAt: NOW - 2 * DAY, column: "review" as const }));
+    const game = gameState({ now: NOW });
+    // Only the after event is in the log; the before card never makes it in because listCards
+    // already filtered it out via the same countsAt rule.
+    expect(game.records.biggestDay).toEqual({ day: "2026-10-11", cards: 1 });
+    // Restore the default for any test that follows.
+    welcomeMock.welcome.mockReturnValue({ at: 0, countHistory: true, fresh: false, skip: [] });
+    welcomeMock.countsAt.mockReturnValue(true);
   });
 });

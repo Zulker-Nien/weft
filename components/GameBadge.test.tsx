@@ -16,6 +16,7 @@ function game(over: Partial<GameState> = {}): GameState {
     level: { level: 2, title: "Thread", floor: 40, next: 160 },
     weekXp: 30,
     weekShipped: 1,
+    totals: { started: 0, shipped: 0 },
     streak: { current: 4, best: 9, freezes: 1, frozen: [], atRisk: false, reached: {} },
     today: { cards: 2, turns: 3, done: 1, xp: 17 },
     cloth: [{ day: "2026-10-11", xp: 17, tone: 4 }],
@@ -62,7 +63,7 @@ function setup() {
 describe("GameBadge", () => {
   it("shows the streak and level, and stays quiet the first time", async () => {
     const { onToast } = setup();
-    expect(await screen.findByRole("button", { name: "Your loom: 4-day streak, level 2" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Wefter Profile: 4-day streak, level 2" })).toBeInTheDocument();
     await waitFor(() => expect(JSON.parse(localStorage.getItem("weft-game-announced") ?? "{}")).toEqual({ badges: ["first-card"], level: 2 }));
     expect(onToast).not.toHaveBeenCalled();
   });
@@ -77,12 +78,12 @@ describe("GameBadge", () => {
     document.cookie = "weft-show-progress=0; path=/";
     setup();
     await new Promise((r) => setTimeout(r, 20));
-    expect(screen.queryByRole("button", { name: /Your loom/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Wefter Profile/ })).toBeNull();
   });
 
   it("opens the loom, walks its tabs and starts a card from Set it up", async () => {
     const { onStart } = setup();
-    await userEvent.click(await screen.findByRole("button", { name: /Your loom/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /Wefter Profile/ }));
     expect(await screen.findByText("Finisher")).toBeInTheDocument();
     expect(screen.getByText("5 min")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: /Tokens per day/ })).toBeInTheDocument();
@@ -98,7 +99,7 @@ describe("GameBadge", () => {
 
   it("shows each project's tree and the locked league ladder", async () => {
     setup();
-    await userEvent.click(await screen.findByRole("button", { name: /Your loom/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /Wefter Profile/ }));
     await userEvent.click(await screen.findByRole("button", { name: "Projects" }));
     expect(screen.getByText("README")).toBeInTheDocument();
     expect(screen.getByText(/50% lines covered/)).toBeInTheDocument();
@@ -119,7 +120,7 @@ describe("GameBadge", () => {
       ],
     };
     setup();
-    await userEvent.click(await screen.findByRole("button", { name: /Your loom/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /Wefter Profile/ }));
     await userEvent.click(screen.getByRole("button", { name: "League" }));
     expect(await screen.findByText("Cotton League")).toBeInTheDocument();
     expect(screen.getByText("6,588")).toBeInTheDocument();
