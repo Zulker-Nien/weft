@@ -1,13 +1,20 @@
 // @vitest-environment jsdom
 import { act, renderHook } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import type { VaultBridge, VaultSecret, VaultSummary } from "./vault-view";
 import { useVaultActions } from "./use-vault-actions";
 
 const secret: VaultSecret = { name: "API_KEY", environment: "development", missing: false, tail: "1111", updatedAt: "" };
 
-function bridge(over: Partial<VaultBridge> = {}): { [K in keyof Required<VaultBridge>]: ReturnType<typeof vi.fn> } {
-  const b: { [K in keyof Required<VaultBridge>]: ReturnType<typeof vi.fn> } = {
+// vitest 4 narrows `vi.fn()` to `Mock<Procedure | Constructable>`, which no longer matches a typed
+// bridge member like `(folders: string[]) => Promise<VaultOverview>`. The runtime mock is fine;
+// a permissive `Mock<any[], any>` is what the tests need — each test only asserts on the return
+// value, the call arguments, or the spy side-effects. Lint would flag the looser shape, so the
+// alias silences the rule (the type alias is the one place we mean it).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type MockFn = Mock<(...args: any[]) => any>;
+function bridge(over: Partial<VaultBridge> = {}): { [K in keyof Required<VaultBridge>]: MockFn } {
+  const b: { [K in keyof Required<VaultBridge>]: MockFn } = {
     overview: vi.fn(),
     scan: vi.fn(),
     import: vi.fn(),
@@ -18,8 +25,8 @@ function bridge(over: Partial<VaultBridge> = {}): { [K in keyof Required<VaultBr
     copyTo: vi.fn(),
     remove: vi.fn(),
     lock: vi.fn(),
-    ...(over as { [K in keyof Required<VaultBridge>]?: ReturnType<typeof vi.fn> }),
-  } as { [K in keyof Required<VaultBridge>]: ReturnType<typeof vi.fn> };
+    ...(over as { [K in keyof Required<VaultBridge>]?: MockFn }),
+  } as { [K in keyof Required<VaultBridge>]: MockFn };
   b.import.mockResolvedValue({ imported: 1 });
   b.reveal.mockResolvedValue({ value: "sk-live-1111" });
   b.copy.mockResolvedValue({ copied: true });

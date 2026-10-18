@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
 import type { CloudflareBridge, CloudflareFolder, CloudflareStatus } from "@/lib/cloudflare-view";
 import "./test-utils";
 import CloudflareDrawer from "./CloudflareDrawer";
@@ -24,7 +24,13 @@ const PAGES = folder("/dev/site", {
   },
 });
 
-function bridge(): { [K in keyof CloudflareBridge]: ReturnType<typeof vi.fn> } {
+// vitest 4 narrows `vi.fn()` to `Mock<Procedure | Constructable>`, which no longer matches a typed
+// CloudflareBridge method like `(folders: string[]) => Promise<CloudflareStatus>`. A permissive
+// `Mock<any[], any>` keeps the runtime mock and the type-check passing. The alias is the one
+// place we mean `any`.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type MockFn = Mock<(...args: any[]) => any>;
+function bridge(): { [K in keyof CloudflareBridge]: MockFn } {
   return {
     status: vi.fn(),
     setToken: vi.fn(() => Promise.resolve({ name: "Acme" })),

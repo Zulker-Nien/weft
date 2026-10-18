@@ -69,7 +69,7 @@ describe("openExternal", () => {
 
   it("uses the shell's openExternal when present", () => {
     (window as unknown as { threadboard: { openExternal: (u: string) => void } }).threadboard = {
-      openExternal: open,
+      openExternal: open as unknown as (u: string) => void,
     };
     openExternal("https://github.com/login/oauth/authorize?...");
     expect(open).toHaveBeenCalledWith("https://github.com/login/oauth/authorize?...");

@@ -28,10 +28,10 @@ function makeToggles(over: Partial<{
     useBoardToggles({
       selectedRef,
       browserVisible: over.browserVisible ?? false,
-      setWebBrowserOpen,
-      setTerminalOpen,
+      setWebBrowserOpen: setWebBrowserOpen as unknown as (open: boolean) => void,
+      setTerminalOpen: setTerminalOpen as unknown as (open: boolean | ((prev: boolean) => boolean)) => void,
       laneState: over.laneState ?? "hidden",
-      select,
+      select: select as unknown as (id: string | null) => void,
     }),
   );
   return { result, setWebBrowserOpen, setTerminalOpen, select, selectedRef };

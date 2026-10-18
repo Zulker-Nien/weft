@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { proxy, type PlanMeter } from "./puku-proxy";
 import { config, fetchMock, memoryStore, ok, request, sse } from "./puku-proxy.harness";
 
@@ -15,9 +15,14 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// Each test keeps the meter's check/record in their own const so the `unbound-method` rule doesn't fire when
-// the test asserts on them, and drops `async` from the body where there's no `await` (`require-await`).
-type Plan = { check: ReturnType<typeof vi.fn>; record: ReturnType<typeof vi.fn> };
+// vitest 4 narrows `vi.fn()` to `Mock<Procedure | Constructable>`, which no longer matches a typed
+// PlanMeter method. The runtime mock is fine; a permissive `Mock<any[], any>` is what the tests
+// need. Each test keeps the meter's check/record in their own const so the `unbound-method` rule
+// doesn't fire when the test asserts on them, and drops `async` from the body where there's no
+// `await` (`require-await`). The alias is the one place we mean `any`.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type MockFn = Mock<(...args: any[]) => any>;
+type Plan = { check: MockFn; record: MockFn };
 
 function approvedPlan(remaining = 1000): Plan {
   const check = vi.fn<(userId: string) => Promise<{ orgId: string; remaining: number }>>(() => Promise.resolve({ orgId: "org-1", remaining }));
