@@ -1,0 +1,457 @@
+/* The builder card parts of weft.zip/@username (components/profile/ProfileHero.tsx, ProfileSections.tsx,
+   ProfileCharts.tsx), on team.css's tokens. The page's frame and thread list are profile.css. */
+
+.wz-pfCta {
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  font-size: 13px;
+  color: var(--thread-2);
+  text-decoration: none;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.wz-pfCta:hover {
+  border-color: var(--clay);
+  color: var(--clay-2);
+}
+
+/* Hero */
+.wz-pfHero {
+  position: relative;
+  overflow: hidden;
+  gap: 30px;
+  padding: 32px 34px;
+}
+
+.wz-pfHero::before {
+  content: "";
+  position: absolute;
+  inset: -40% -10% auto auto;
+  width: 420px;
+  height: 420px;
+  background: radial-gradient(circle, rgb(218 122 76 / 0.16), transparent 65%);
+  pointer-events: none;
+}
+
+.wz-pfHero > * {
+  position: relative;
+}
+
+.wz-pfRing {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.wz-pfRing > svg {
+  position: absolute;
+  inset: 0;
+}
+
+.wz-pfRingInner {
+  position: absolute;
+  inset: 12px;
+  display: grid;
+  place-items: center;
+}
+
+.wz-pfRingInner .wz-profileAvatar {
+  border: none;
+}
+
+.wz-pfLevelChip {
+  position: absolute;
+  bottom: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f2c36b, #da7a4c);
+  color: #1a1408;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px -4px rgb(218 122 76 / 0.6);
+}
+
+.wz-pfClass {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--warn);
+}
+
+.wz-pfBio {
+  max-width: 560px;
+  margin: 12px 0 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--thread);
+}
+
+.wz-pfLeague {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 5px 12px 5px 5px;
+  border-radius: 999px;
+  background: rgb(236 229 216 / 0.05);
+  border: 1px solid var(--line-2);
+  font-size: 13px;
+  color: var(--thread-2);
+}
+
+.wz-pfLeagueTier {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--clay-soft);
+  color: var(--clay-2);
+  font-weight: 600;
+}
+
+/* Big numbers and the XP bar */
+.wz-pfNumbers {
+  margin-top: 18px;
+}
+
+.wz-pfXp {
+  padding: 0 4px;
+}
+
+.wz-pfXpRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--thread-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.wz-pfXpTrack {
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: rgb(236 229 216 / 0.07);
+  overflow: hidden;
+}
+
+.wz-pfXpFill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f2c36b, #da7a4c);
+}
+
+.wz-pfBigs,
+.wz-pfRecords {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.wz-pfBig,
+.wz-pfRecord {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: rgb(23 29 49 / 0.7);
+  border: 1px solid var(--line);
+}
+
+.wz-pfBigValue {
+  font-family: var(--display);
+  font-size: 34px;
+  line-height: 1.1;
+  color: var(--thread);
+  font-variant-numeric: tabular-nums;
+}
+
+.wz-pfRecordValue {
+  font-family: var(--display);
+  font-size: 26px;
+  color: var(--thread);
+  font-variant-numeric: tabular-nums;
+}
+
+.wz-pfBigLabel {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--thread-3);
+}
+
+.wz-pfBig .wz-pfBigLabel {
+  order: 2;
+  margin-top: 4px;
+}
+
+.wz-pfBig .wz-pfBigSub {
+  order: 3;
+}
+
+.wz-pfBigSub {
+  font-size: 12.5px;
+  color: var(--thread-3);
+}
+
+/* Sections */
+.wz-pfSection {
+  margin-top: 40px;
+}
+
+.wz-pfSectionHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wz-pfAside {
+  font-size: 13px;
+  color: var(--thread-3);
+}
+
+.wz-pfPanel {
+  padding: 20px 22px;
+  border-radius: 18px;
+  background: rgb(23 29 49 / 0.7);
+  border: 1px solid var(--line);
+}
+
+.wz-pfBuilder {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.wz-pfRadar {
+  flex-shrink: 0;
+}
+
+.wz-pfAttrs {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.wz-pfAttr {
+  display: grid;
+  grid-template-columns: 20px 112px 90px 28px 1fr;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+}
+
+.wz-pfAttrLabel {
+  color: var(--thread);
+}
+
+.wz-pfAttrTrack {
+  height: 6px;
+  border-radius: 999px;
+  background: rgb(236 229 216 / 0.07);
+  overflow: hidden;
+}
+
+.wz-pfAttrFill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f2c36b, #f0995f);
+}
+
+.wz-pfAttrValue {
+  text-align: right;
+  color: var(--thread-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.wz-pfAttrHint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--thread-3);
+}
+
+.wz-pfSkills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.wz-pfSkill {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  font-size: 12.5px;
+  color: var(--thread-2);
+}
+
+.wz-pfSkill b {
+  font-weight: 600;
+  color: var(--warn);
+}
+
+.wz-pfLegend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 20px;
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: var(--thread-3);
+}
+
+.wz-pfLegendScale {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.wz-pfLegendScale i,
+.wz-pfDot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.wz-pfDot {
+  margin-right: 4px;
+  border-radius: 50%;
+  vertical-align: -1px;
+}
+
+/* Badge wall */
+.wz-pfBadges {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wz-pfBadge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 16px 10px 14px;
+  border-radius: 16px;
+  text-align: center;
+  background: linear-gradient(180deg, rgb(242 195 107 / 0.07), rgb(23 29 49 / 0.7));
+  border: 1px solid var(--line);
+  transition: transform 0.15s, border-color 0.15s;
+}
+
+.wz-pfBadge:hover {
+  transform: translateY(-2px);
+  border-color: rgb(242 195 107 / 0.4);
+}
+
+.wz-pfBadgeIcon {
+  font-size: 30px;
+  line-height: 1.2;
+}
+
+.wz-pfBadgeName {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--thread);
+}
+
+.wz-pfBadgeMeta {
+  font-size: 11.5px;
+  color: var(--thread-3);
+}
+
+/* Mini apps */
+.wz-pfApps {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wz-pfApp {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgb(23 29 49 / 0.7);
+  border: 1px solid var(--line);
+  color: var(--thread);
+  text-decoration: none;
+}
+
+.wz-pfApp:hover {
+  border-color: var(--clay);
+}
+
+.wz-pfAppIcon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--clay-soft);
+  color: var(--clay-2);
+}
+
+.wz-pfPending {
+  margin: 24px 0 0;
+  padding: 18px 20px;
+  border-radius: 16px;
+  border: 1px dashed var(--line-2);
+  color: var(--thread-2);
+}
+
+.wz-pfSynced {
+  margin: 40px 0 0;
+  font-size: 12.5px;
+  color: var(--thread-3);
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .wz-pfBigs,
+  .wz-pfRecords {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .wz-pfBuilder {
+    flex-direction: column;
+  }
+
+  .wz-pfAttrs {
+    width: 100%;
+  }
+
+  .wz-pfAttr {
+    grid-template-columns: 20px 1fr 80px 28px;
+  }
+
+  .wz-pfAttrHint {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .wz-pfHero {
+    padding: 26px 22px;
+  }
+}

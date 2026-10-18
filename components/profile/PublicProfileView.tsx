@@ -1,65 +1,56 @@
-// The body of weft.zip/@username (app/u/[username]/page.tsx): the account's picture, name and handle, its
-// GitHub link, when it joined, and the threads it shared publicly, each a link to its /s/<id> viewer.
+// The body of weft.zip/@username (app/u/[username]/page.tsx): everything the Loom's Wefter Profile shows that
+// may be public. The hero (picture in its level ring, class, bio, GitHub facts, league), the big numbers,
+// the builder card, the activity cloth, badges, tokens and records come from the card the account's Mac last
+// posted (lib/profile-card.ts); mini apps and threads are its public share links. Never projects or folders.
 // A server component: nothing on it moves, so it ships no JS.
 import Link from "next/link";
 import type { PublicProfile } from "@/lib/public-profile";
+import { ProfileHero, ProfileNumbers } from "./ProfileHero";
+import { AppsSection, BadgeSection, BuilderSection, ClothSection, RecordsSection, ThreadsSection, UsageSection } from "./ProfileSections";
 import "@/components/team/team.css";
 import "./profile.css";
+import "./profile-card.css";
 
-const monthYear = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
-const day = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
-
-function Avatar({ profile }: { profile: PublicProfile }) {
-  if (profile.avatarUrl) return <img className="wz-profileAvatar" src={profile.avatarUrl} alt="" width={96} height={96} />;
-  const initial = (profile.name ?? profile.username).slice(0, 1).toUpperCase();
-  return (
-    <div className="wz-profileAvatar wz-profileInitial" aria-hidden>
-      {initial}
-    </div>
-  );
+function ago(iso: string, now = Date.now()) {
+  const min = Math.max(0, Math.round((now - new Date(iso).getTime()) / 60_000));
+  if (min < 2) return "just now";
+  if (min < 60) return `${min} min ago`;
+  const h = Math.round(min / 60);
+  if (h < 48) return `${h} h ago`;
+  return `${Math.round(h / 24)} days ago`;
 }
 
 export function PublicProfileView({ profile }: { profile: PublicProfile }) {
+  const card = profile.card;
   return (
     <div className="wz-app wz-profile">
       <header className="wz-profileTop">
         <Link className="wz-profileHome" href="/">
           Weft
         </Link>
+        <Link className="wz-pfCta" href="/">
+          Build with Weft →
+        </Link>
       </header>
       <main className="wz-profileMain">
-        <section className="wz-profileCard">
-          <Avatar profile={profile} />
-          <div className="wz-profileWho">
-            <h1 className="wz-profileName">{profile.name ?? profile.username}</h1>
-            <div className="wz-profileHandle">@{profile.username}</div>
-            <div className="wz-profileFacts">
-              <span>Wefter since {monthYear(profile.memberSince)}</span>
-              {profile.githubUrl && (
-                <a href={profile.githubUrl} rel="noopener noreferrer me">
-                  GitHub
-                </a>
-              )}
-            </div>
-          </div>
-        </section>
-        <section className="wz-profileThreads">
-          <h2 className="wz-profileSection">Public threads</h2>
-          {profile.threads.length === 0 ? (
-            <p className="wz-profileEmpty">No public threads yet.</p>
-          ) : (
-            <ul className="wz-profileList">
-              {profile.threads.map((t) => (
-                <li key={t.id}>
-                  <a className="wz-profileThread" href={`/s/${t.id}`}>
-                    <span className="wz-profileThreadTitle">{t.title}</span>
-                    <span className="wz-profileThreadDate">{day(t.updatedAt)}</span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+        <ProfileHero profile={profile} />
+        {card ? (
+          <>
+            <ProfileNumbers card={card} />
+            <BuilderSection card={card} />
+            <ClothSection card={card} />
+            <BadgeSection card={card} />
+            <UsageSection card={card} />
+            <RecordsSection card={card} />
+          </>
+        ) : (
+          <p className="wz-pfPending">
+            The builder card (level, streak, badges, the cloth) shows up here once @{profile.username} opens Weft on their Mac while signed in.
+          </p>
+        )}
+        <AppsSection apps={profile.apps} />
+        <ThreadsSection threads={profile.threads} />
+        {profile.cardAt && <p className="wz-pfSynced">Synced from Weft {ago(profile.cardAt)}.</p>}
       </main>
     </div>
   );

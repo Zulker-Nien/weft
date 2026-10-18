@@ -1,7 +1,10 @@
 // lib/public-profile.ts: a Weft account's public profile (docs/architecture/profiles.md).
 // parseUsername, profilePath, toThread, and loadPublicProfile over a fake service client.
+// The new builder-card / league / apps tests live in lib/public-profile-card.test.ts; the
+// shared fake service helper is in lib/public-profile.harness.ts.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fromTable, profileRow, serviceWith, shareRow } from "./public-profile.harness";
 
 const { serviceClient: serviceClientMock } = vi.hoisted(() => ({
   serviceClient: vi.fn(),
@@ -23,57 +26,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
 });
-
-function profileRow(over: Partial<{ id: string; username: string; name: string | null; avatar_url: string | null; created_at: string }> = {}) {
-  return { id: "u1", username: "alex", name: "Alex", avatar_url: "https://x/a.png", created_at: "2026-01-01T00:00:00.000Z", ...over };
-}
-
-function shareRow(over: Partial<{ id: string; updated_at: string; cloud_cards: { card: unknown; deleted: boolean } | null }> = {}) {
-  return { id: "s1", updated_at: "2026-10-01T00:00:00.000Z", cloud_cards: { card: { id: "c1", title: "T" }, deleted: false }, ...over };
-}
-
-// A query builder bound to a single table; each `from` returns a fresh chain that resolves to whatever
-// the test set for that table on `fromTable`. `eq/order/limit` return the same chain; `maybeSingle`
-// resolves the profile read; non-maybeSingle calls resolve the threads read.
-function fromTable(
-  table: string,
-  rows: { profile?: unknown; share?: unknown[]; sharesError?: { message: string } | null; profileError?: { message: string } | null },
-  options: { eqCalls?: { column: string; value: unknown }[]; orderCall?: { column: string; ascending: boolean }; limitCall?: number } = {},
-) {
-  const make = (): Record<string, unknown> => {
-    const builder: Record<string, unknown> = {};
-    const chainMethods = ["select", "eq", "order", "limit"];
-    for (const m of chainMethods) {
-      builder[m] = vi.fn((arg?: unknown) => {
-        if (m === "limit" && typeof arg === "number") options.limitCall = arg;
-        return make();
-      });
-    }
-    if (table === "profiles") {
-      builder.maybeSingle = vi.fn(() => Promise.resolve({ data: rows.profile ?? null, error: rows.profileError ?? null }));
-    }
-    if (table === "cloud_shares") {
-      // The threads read resolves when the chain is awaited (no terminal method).
-      Object.defineProperty(builder, "then", {
-        get() {
-          return (resolve: (v: unknown) => void) =>
-            resolve({ data: rows.share ?? null, error: rows.sharesError ?? null });
-        },
-      });
-    }
-    return builder;
-  };
-  return make();
-}
-
-// A service client that records `from` calls and the chainable methods per table.
-function serviceWith(
-  tables: Record<string, ReturnType<typeof fromTable>>,
-): SupabaseClient {
-  return {
-    from: (table: string) => tables[table] ?? fromTable(table, {}),
-  } as unknown as SupabaseClient;
-}
 
 describe("parseUsername", () => {
   it("lowercases a leading @ handle", async () => {
@@ -209,6 +161,10 @@ describe("loadPublicProfile", () => {
         { id: "s1", title: "Hello", updatedAt: "2026-10-01T00:00:00.000Z" },
         { id: "s2", title: "World", updatedAt: "2026-10-01T00:00:00.000Z" },
       ],
+      apps: [],
+      card: null,
+      cardAt: null,
+      league: null,
     });
   });
 
@@ -225,7 +181,7 @@ describe("loadPublicProfile", () => {
   it("returns threads: [] when the shares data is null", async () => {
     const { loadPublicProfile } = await load();
     const profiles = fromTable("profiles", { profile: profileRow() });
-    const shares = fromTable("cloud_shares", { share: null as never });
+    const shares = fromTable("cloud_shares", { share: null });
     const admin = { getUserById: vi.fn().mockResolvedValue({ data: { user: { user_metadata: { user_name: "alex" } } }, error: null }) };
     const service = { from: (t: string) => (t === "profiles" ? profiles : t === "cloud_shares" ? shares : null), auth: { admin } } as unknown as SupabaseClient;
     const result = await loadPublicProfile("alex", service);
