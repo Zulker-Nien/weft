@@ -2,23 +2,25 @@
 
 import { useEffect, useState } from "react";
 import { formatReset } from "@/lib/format";
-import { burndown, type Burndown, type LimitSample, type Mark, type Point } from "@/lib/limit-chart";
+import { limitsChart, type DaySlot, type LimitSample, type LimitsChart, type Mark, type Slot } from "@/lib/limit-chart";
 import type { Backend, CardStats, LimitWindow } from "@/lib/types";
 import { useNow } from "@/lib/use-now";
 
-// The burndown of the plan limits across the week, in the status strip's hover over 5hr / 7d: the
-// weekly limit left in red, the 5-hour one in green; red lines where either ran out, green lines at the
-// 5-hour resets (light), the next one (strong) and the weekly reset (strongest). History from /api/limits.
+// The plan limits across the week, in the status strip's hover over 5hr / 7d. One plot, two axes: the
+// 5-hour limit left on the left axis as 168 green hour bars, the weekly limit left on the right axis as 7
+// see-through red day bars in front, each topped by its burn-down edge. Red lines where a limit ran out,
+// green lines at the 5-hour resets (light), the next one (strong) and the weekly reset (strongest).
 
-const W = 420;
-const H = 132;
-const PAD = { left: 26, right: 6, top: 6, bottom: 16 };
+export const CHART_WIDTH = 640;
+const H = 196;
+const PAD = { left: 34, right: 34, top: 16, bottom: 18 };
+const BOTTOM = H - PAD.bottom;
 
 const MARK_STYLE: Record<Mark["kind"], { stroke: string; width: number; opacity: number }> = {
-  light: { stroke: "var(--ok)", width: 1, opacity: 0.22 },
-  next: { stroke: "var(--ok)", width: 1.5, opacity: 0.8 },
-  week: { stroke: "var(--ok)", width: 3, opacity: 1 },
-  hit: { stroke: "var(--danger)", width: 1.5, opacity: 0.9 },
+  light: { stroke: "var(--ok)", width: 1, opacity: 0.3 },
+  next: { stroke: "var(--ok)", width: 2.5, opacity: 0.9 },
+  week: { stroke: "var(--ok)", width: 5, opacity: 1 },
+  hit: { stroke: "var(--danger)", width: 2.5, opacity: 1 },
 };
 
 function useSamples(backend: Backend) {
@@ -36,64 +38,99 @@ function useSamples(backend: Backend) {
   return samples;
 }
 
-// Local midnights inside the chart, for the day labels.
-function midnights(start: number, end: number): number[] {
-  const d = new Date(start);
-  d.setHours(24, 0, 0, 0);
-  const out: number[] = [];
-  for (; d.getTime() < end; d.setDate(d.getDate() + 1)) out.push(d.getTime());
-  return out;
+type Scale = { x: (t: number) => number; y: (left: number) => number };
+
+function Axes({ y }: Pick<Scale, "y">) {
+  return [100, 75, 50, 25, 0].map((p) => (
+    <g key={p}>
+      <line x1={PAD.left} x2={CHART_WIDTH - PAD.right} y1={y(p)} y2={y(p)} stroke="var(--line)" />
+      <text x={PAD.left - 4} y={y(p) + 3.5} textAnchor="end" fontSize={9} fill="var(--ok)">{p}%</text>
+      <text x={CHART_WIDTH - PAD.right + 4} y={y(p) + 3.5} fontSize={9} fill="var(--danger)">{p}%</text>
+    </g>
+  ));
 }
 
-function Chart({ chart }: { chart: Burndown }) {
-  const x = (t: number) => PAD.left + ((t - chart.start) / (chart.end - chart.start)) * (W - PAD.left - PAD.right);
-  const y = (left: number) => PAD.top + ((100 - left) / 100) * (H - PAD.top - PAD.bottom);
-  const line = (points: Point[]) => points.map(([t, l]) => `${x(t).toFixed(1)},${y(l).toFixed(1)}`).join(" ");
-  const bottom = H - PAD.bottom;
+// The 5-hour lane: one bar per hour; an hour with an open window and no reading is hatched.
+function HourBars({ hours, x, y }: Scale & { hours: Slot[] }) {
+  return hours.map((s) => {
+    const w = Math.max(0.5, x(s.to) - x(s.from) - 0.6);
+    if (s.left === null) return null;
+    if (s.left === "unknown") return <rect key={s.from} x={x(s.from) + 0.3} y={PAD.top} width={w} height={BOTTOM - PAD.top} fill="url(#limits-hatch)" />;
+    return <rect key={s.from} x={x(s.from) + 0.3} y={y(s.left)} width={w} height={Math.max(1, BOTTOM - y(s.left))} fill="var(--ok)" opacity={0.85} />;
+  });
+}
+
+// A day's weekly bar: see-through red up to its burn-down edge, the edge drawn thick, its end % on top.
+function DayBar({ day, x, y }: Scale & { day: DaySlot }) {
+  const x1 = x(day.from) + 2;
+  const x2 = x(day.to) - 2;
+  if (day.left === null) return <rect x={x1} y={PAD.top} width={x2 - x1} height={BOTTOM - PAD.top} fill="var(--danger)" opacity={0.04} />;
+  const first = day.edge.at(0);
+  const end = day.edge.at(-1);
+  if (day.left === "unknown" || !first || !end) {
+    return <text x={(x1 + x2) / 2} y={(PAD.top + BOTTOM) / 2} textAnchor="middle" fontSize={10} fill="var(--faint)">no log yet</text>;
+  }
+  const clamp = (t: number) => Math.min(x2, Math.max(x1, x(t)));
+  const top = day.edge.map(([t, l]) => `${clamp(t).toFixed(1)},${y(l).toFixed(1)}`);
+  const firstX = clamp(first[0]);
+  const lastX = clamp(end[0]);
+  return (
+    <g>
+      <polygon points={[`${firstX},${BOTTOM}`, ...top, `${lastX},${BOTTOM}`].join(" ")} fill="var(--danger)" opacity={0.45} />
+      <polyline points={top.join(" ")} fill="none" stroke="var(--danger)" strokeWidth={4} strokeLinejoin="round" strokeLinecap="round" />
+      <text x={lastX} y={y(end[1]) - 7} textAnchor={lastX > x2 - 12 ? "end" : "middle"} fontSize={11} fontWeight={700} fill="var(--danger)"
+        stroke="var(--panel)" strokeWidth={3} paintOrder="stroke">{end[1]}%</text>
+    </g>
+  );
+}
+
+function Chart({ chart }: { chart: LimitsChart }) {
+  const x = (t: number) => PAD.left + ((t - chart.start) / (chart.end - chart.start)) * (CHART_WIDTH - PAD.left - PAD.right);
+  const y = (left: number) => PAD.top + ((100 - left) / 100) * (BOTTOM - PAD.top);
   const nowX = x(chart.now);
   return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="block" role="img" aria-label="Plan limits burndown">
-      <rect x={nowX} y={PAD.top} width={Math.max(0, W - PAD.right - nowX)} height={bottom - PAD.top} fill="var(--ink)" opacity={0.04} />
-      {[100, 50, 0].map((l) => (
-        <g key={l}>
-          <line x1={PAD.left} x2={W - PAD.right} y1={y(l)} y2={y(l)} stroke="var(--line)" />
-          <text x={PAD.left - 4} y={y(l) + 3} textAnchor="end" fontSize={9} fill="var(--faint)">{l}%</text>
-        </g>
-      ))}
-      {midnights(chart.start, chart.end).map((t) => (
-        <text key={t} x={x(t) + 2} y={H - 4} fontSize={9} fill="var(--faint)">
-          {new Date(t).toLocaleDateString("en-US", { weekday: "short" })}
-        </text>
-      ))}
+    <svg width={CHART_WIDTH} height={H} viewBox={`0 0 ${CHART_WIDTH} ${H}`} className="block max-w-full" role="img" aria-label="Plan limits this week">
+      <defs>
+        <pattern id="limits-hatch" width={4} height={4} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <line x1={0} y1={0} x2={0} y2={4} stroke="var(--ok)" strokeOpacity={0.35} />
+        </pattern>
+      </defs>
+      <Axes y={y} />
+      <text x={2} y={PAD.top - 5} fontSize={10.5} fontWeight={600} fill="var(--ok)">5-hour</text>
+      <text x={CHART_WIDTH - 2} y={PAD.top - 5} textAnchor="end" fontSize={10.5} fontWeight={600} fill="var(--danger)">Weekly</text>
+      <HourBars hours={chart.hours} x={x} y={y} />
+      {chart.days.map((d) => <DayBar key={d.from} day={d} x={x} y={y} />)}
       {chart.marks.map((m) => (
-        <line key={`${m.kind}${m.at}`} x1={x(m.at)} x2={x(m.at)} y1={PAD.top} y2={bottom} stroke={MARK_STYLE[m.kind].stroke}
+        <line key={`${m.kind}${m.at}`} x1={x(m.at)} x2={x(m.at)} y1={PAD.top} y2={BOTTOM} stroke={MARK_STYLE[m.kind].stroke}
           strokeWidth={MARK_STYLE[m.kind].width} opacity={MARK_STYLE[m.kind].opacity} />
       ))}
-      <polyline points={line(chart.pace)} fill="none" stroke="var(--danger)" strokeDasharray="2 3" opacity={0.35} />
-      <polyline points={line(chart.weeklyGuess)} fill="none" stroke="var(--danger)" strokeWidth={2} opacity={0.4} />
-      <polyline points={line(chart.fiveHour)} fill="none" stroke="var(--ok)" strokeWidth={1.5} strokeLinejoin="round" />
-      <polyline points={line(chart.weekly)} fill="none" stroke="var(--danger)" strokeWidth={2} strokeLinejoin="round" />
-      <line x1={nowX} x2={nowX} y1={PAD.top} y2={bottom} stroke="var(--muted)" strokeDasharray="1 2" />
+      <line x1={nowX} x2={nowX} y1={PAD.top} y2={BOTTOM} stroke="var(--muted)" strokeDasharray="2 3" />
+      <text x={nowX} y={PAD.top - 5} textAnchor="middle" fontSize={9} fill="var(--muted)">now</text>
+      {chart.days.map((d) => (
+        <text key={d.from} x={(x(d.from) + x(d.to)) / 2} y={H - 5} textAnchor="middle" fontSize={9.5} fill="var(--faint)">
+          {new Date(d.from).toLocaleDateString("en-US", { weekday: "short" })}
+        </text>
+      ))}
     </svg>
   );
 }
 
 function Summary({ name, window, tone, now }: { name: string; window?: LimitWindow; tone: string; now: number }) {
   if (!window) return null;
+  // A reading taken before its window reset is stale: the window is full again.
+  const passed = window.resetsAt !== undefined && window.resetsAt * 1000 <= now;
   return (
     <div>
-      <span className={`font-semibold ${tone}`}>{name}</span> {Math.max(0, 100 - window.used)}% left
+      <span className={`font-semibold ${tone}`}>{name}</span> {passed ? 100 : Math.max(0, 100 - window.used)}% left
       {window.resetsAt && <span className="text-muted"> · resets {formatReset(window.resetsAt, now)}</span>}
     </div>
   );
 }
 
-function Key({ color, width = 1, opacity = 1, dash, label }: { color: string; width?: number; opacity?: number; dash?: string; label: string }) {
+function Key({ color, width = 2, height = 10, opacity = 1, label }: { color: string; width?: number; height?: number; opacity?: number; label: string }) {
   return (
     <span className="inline-flex items-center gap-1">
-      <svg width={10} height={10}>
-        <line x1={5} x2={5} y1={0} y2={10} stroke={color} strokeWidth={width} opacity={opacity} strokeDasharray={dash} />
-      </svg>
+      <span className="inline-block" style={{ width, height, background: color, opacity }} />
       {label}
     </span>
   );
@@ -103,21 +140,21 @@ export default function LimitBurndown({ backend = "claude", stats }: { backend?:
   const samples = useSamples(backend);
   const now = useNow();
   if (!now) return null;
-  const chart = burndown(samples, stats, now);
+  const chart = limitsChart(samples, stats, now);
   return (
     <div className="flex flex-col gap-1.5 font-sans">
       <div className="flex justify-between gap-3 text-[11.5px]">
-        <Summary name="Weekly" window={stats.sevenDay} tone="text-danger" now={now} />
         <Summary name="5-hour" window={stats.fiveHour} tone="text-ok" now={now} />
+        <Summary name="Weekly" window={stats.sevenDay} tone="text-danger" now={now} />
       </div>
       <Chart chart={chart} />
       <div className="flex flex-wrap gap-x-3 text-[10.5px] text-muted">
-        <Key color="var(--danger)" width={1.5} label="limit hit" />
-        <Key color="var(--ok)" opacity={0.35} label="5-hour reset" />
-        <Key color="var(--ok)" width={1.5} label="next" />
-        <Key color="var(--ok)" width={3} label="weekly reset" />
-        <Key color="var(--danger)" dash="2 2" opacity={0.6} label="even pace" />
-        <Key color="var(--danger)" width={2} opacity={0.4} label="assumed" />
+        <Key color="var(--ok)" width={9} label="5-hour left, by hour" />
+        <Key color="var(--danger)" width={9} opacity={0.6} label="weekly left, by day" />
+        <Key color="var(--danger)" label="limit hit" />
+        <Key color="var(--ok)" width={1} opacity={0.4} label="5-hour reset" />
+        <Key color="var(--ok)" width={2.5} label="next" />
+        <Key color="var(--ok)" width={5} label="weekly reset" />
       </div>
     </div>
   );
