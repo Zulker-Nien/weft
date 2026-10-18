@@ -122,6 +122,21 @@ export interface DevServerStatus {
   log: string;
 }
 
+// One dev server (the Services drawer and mcp__devservers__status): a Weft-started run (lib/devserver.ts) or a background
+// shell task threads started the old way (lib/tasks.ts isDevServerTask). Newest first.
+export interface DevServerEntry {
+  cardId: string;
+  title?: string;
+  cwd: string;
+  command: string;
+  url?: string;
+  state: DevServerStatus["state"];
+  startedAt: number;
+  source: "weft" | "thread";
+  // Set when source is "thread", so the drawer can stop the right one.
+  taskId?: string;
+}
+
 export interface Project {
   path: string;
   lastUsedAt: number;

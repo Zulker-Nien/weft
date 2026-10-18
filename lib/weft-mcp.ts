@@ -1,6 +1,7 @@
 import { boardMcpServer, threadBoardMcpServer } from "./board-tools";
 import { boardViewMcpServer } from "./board-view-tools";
 import { browserMcpServer } from "./browser-tools";
+import { devserversMcpServer } from "./devserver-tools";
 import { hooks, type Spec } from "./runner-state";
 import { secretsMcpServer } from "./secret-tools";
 import { getCard } from "./store";
@@ -14,7 +15,7 @@ export function weftMcpServers(spec: Spec, cardId: () => string | undefined) {
   return {
     browser: browserMcpServer(cardId),
     // Threads only: the copilot runs the board, not a project.
-    ...(spec.copilot ? {} : { secrets: secretsMcpServer(cardId, () => spec.cwd, () => getCard(cardId() ?? "")?.title), webhooks: webhooksMcpServer(() => spec.cwd), board_view: boardViewMcpServer() }),
+    ...(spec.copilot ? {} : { secrets: secretsMcpServer(cardId, () => spec.cwd, () => getCard(cardId() ?? "")?.title), webhooks: webhooksMcpServer(() => spec.cwd), devservers: devserversMcpServer(cardId, () => spec.cwd), board_view: boardViewMcpServer() }),
     board: spec.copilot ? boardMcpServer(hooks.boardActions) : threadBoardMcpServer(cardId, hooks.boardActions),
   };
 }

@@ -18,15 +18,18 @@ import type {
   Card,
   CliStatus,
   Column,
+  DevLauncher,
   DevServerStatus,
   Effort,
   GithubRepo,
   LocalRepo,
   LoginView,
+  MachineInfo,
   PermissionMode,
   Project,
   QuestionReply,
   RestartStatus,
+  ServiceEntry,
   SettingsView,
   SkillInfo,
   ThreadItem,
@@ -202,6 +205,11 @@ export const api = {
   devStatus: (id: string) => call<{ status: DevServerStatus }>("GET", `/api/cards/${id}/dev`),
   devAction: (id: string, action: "start" | "restart" | "stop") =>
     call<{ status: DevServerStatus }>("POST", `/api/cards/${id}/dev`, { action }),
+  // The rail's Services drawer: every process Weft spawned (thread CLIs, dev servers, terminals), with CPU and memory.
+  services: () => call<{ services: ServiceEntry[]; launchers?: DevLauncher[]; machine?: MachineInfo }>("GET", "/api/services"),
+  launchDev: (cwd: string, command: string) => call<{ ok: true; result: "started" | "restarted"; id: string }>("POST", "/api/services", { action: "launch", cwd, command }),
+  serviceAction: (body: { action: "kill"; id?: string; pid?: number } | { action: "restart"; id: string }) =>
+    call<{ ok: true }>("POST", "/api/services", body),
   copilot: () => call<{ card: Card }>("GET", "/api/copilot"),
   resetCopilot: () => call<{ card: Card }>("POST", "/api/copilot/reset"),
   // Switching persona starts a new chat (lib/copilot.ts setCopilotPersona).

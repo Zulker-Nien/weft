@@ -35,6 +35,7 @@ vi.mock("@/lib/use-supabase", () => ({ useSupabase: vi.fn(noopDataHook) }));
 vi.mock("@/lib/use-blastcp", () => ({ useBlastcp: vi.fn(noopDataHook) }));
 vi.mock("@/lib/use-cloudflare", () => ({ useCloudflare: vi.fn(noopDataHook) }));
 vi.mock("@/lib/use-github", () => ({ useGithub: vi.fn(noopDataHook) }));
+vi.mock("@/lib/use-services", () => ({ useServices: () => ({ services: [], loaded: true, error: null, reload: vi.fn(), kill: vi.fn(), restart: vi.fn(), refreshMs: 2000 }) }));
 
 // Drawers' bodies are stubs — they're gated behind their own open state and
 // the test only checks the rail's nav buttons.
@@ -45,6 +46,7 @@ vi.mock("./SupabaseDrawer", () => ({ default: () => null }));
 vi.mock("./CloudflareDrawer", () => ({ default: () => null }));
 vi.mock("./BlastcpDrawer", () => ({ default: () => null }));
 vi.mock("./GithubDrawer", () => ({ default: () => null }));
+vi.mock("./ServicesDrawer", () => ({ default: () => null }));
 vi.mock("./TagsDrawer", () => ({ default: () => null }));
 
 import SideRail from "./LibraryRail";
