@@ -6,9 +6,11 @@ import { showPage } from "@/lib/board-helpers";
 import { setupPrompt, type CheckDef, type ProjectReport } from "@/lib/project-badges";
 import LoomApps from "./LoomApps";
 import CrashGuard from "./CrashGuard";
+import LeagueTab from "./LeagueTab";
 import { BadgesTab, ProjectsTab } from "./LoomBadges";
 import { Bar, Cloth, Radar } from "./LoomCharts";
 import LoomProfile from "./LoomProfile";
+import UsageChart from "./LoomUsage";
 import Modal from "./Modal";
 
 type Tab = "you" | "badges" | "projects" | "league";
@@ -80,35 +82,13 @@ function YouTab({ game, onOpenApp }: { game: GameState; onOpenApp: (url: string)
         </div>
       )}
       <Cloth stitches={game.cloth} />
+      <UsageChart days={game.usage} hits={game.limitHits} />
       <div className="grid grid-cols-4 gap-2">
         <Stat label="Biggest day" value={r.biggestDay?.cards ?? 0} sub={r.biggestDay ? `cards on ${r.biggestDay.day}` : "cards started"} />
         <Stat label="Most shipped" value={r.mostShipped?.done ?? 0} sub={r.mostShipped ? `on ${r.mostShipped.day}` : "in a day"} />
         <Stat label="Fastest ship" value={r.fastest ? duration(r.fastest) : "–"} sub="idea to Done" />
         <Stat label="Most at once" value={r.maxRunning} sub="cards running" />
       </div>
-    </div>
-  );
-}
-
-function LeagueTab({ game }: { game: GameState }) {
-  return (
-    <div className="flex flex-col gap-4">
-      <p className="text-[12.5px] text-muted">
-        Leagues arrive with Weft accounts: about 30 builders a league, ranked by the XP they earn Monday to Sunday. The top 7 move up and the
-        bottom 5 move down. Only your XP and display name are shared, never prompts or code.
-      </p>
-      <div className="flex items-end gap-1.5">
-        {game.leagues.map((name, i) => (
-          <div
-            key={name}
-            className="flex flex-1 items-end justify-center rounded-t-md border border-b-0 border-dashed border-line bg-sunken pb-1.5 text-[11.5px] text-muted"
-            style={{ height: 34 + i * 12 }}
-          >
-            🔒 {name}
-          </div>
-        ))}
-      </div>
-      <Stat label="This week" value={`${game.weekXp.toLocaleString()} XP`} sub="What a league would rank you by" />
     </div>
   );
 }
@@ -178,7 +158,7 @@ export default function LoomDialog({
         )}
         {tab === "badges" && <BadgesTab badges={game.badges} project={inView} onSetup={setup} />}
         {tab === "projects" && <ProjectsTab projects={game.projects} inView={game.inView} onSetup={setup} />}
-        {tab === "league" && <LeagueTab game={game} />}
+        {tab === "league" && <LeagueTab weekXp={game.weekXp} />}
       </div>
     </Modal>
   );

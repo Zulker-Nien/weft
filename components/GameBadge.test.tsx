@@ -40,12 +40,15 @@ function game(over: Partial<GameState> = {}): GameState {
 }
 
 let state = game();
+let league: unknown = { state: "signed-out" };
 beforeEach(() => {
   state = game();
   localStorage.clear();
   document.cookie = "weft-show-progress=; path=/; max-age=0";
-  // The You tab's My mini apps asks /api/apps; everything else here is the game.
-  vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve(new Response(JSON.stringify(url.startsWith("/api/apps") ? { apps: [] } : { game: state })))));
+  league = { state: "signed-out" };
+  // The You tab asks /api/apps for My mini apps and /api/league for the league; everything else is the game.
+  const body = (url: string) => (url.startsWith("/api/apps") ? { apps: [] } : url.startsWith("/api/league") ? { league } : { game: state });
+  vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve(new Response(JSON.stringify(body(url))))));
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -82,6 +85,10 @@ describe("GameBadge", () => {
     await userEvent.click(await screen.findByRole("button", { name: /Your loom/ }));
     expect(await screen.findByText("Finisher")).toBeInTheDocument();
     expect(screen.getByText("5 min")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Tokens per day/ })).toBeInTheDocument();
+    expect(screen.getByText("(3 all time)")).toBeInTheDocument();
+    await userEvent.hover(screen.getByRole("img", { name: /Tokens per day/ }).querySelectorAll("g")[1] as Element);
+    expect(screen.getByText(/2026-10-11: 1\.5M tokens \(1\.2M in · 300K out\) · ⏳ 1 5-hour hit · 🗓️ 1 weekly hit/)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /Badges/ }));
     expect(screen.getByText("First thread")).toBeInTheDocument();
@@ -96,7 +103,30 @@ describe("GameBadge", () => {
     expect(screen.getByText("README")).toBeInTheDocument();
     expect(screen.getByText(/50% lines covered/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "League" }));
+    expect(await screen.findByText(/Sign in to Weft/)).toBeInTheDocument();
     expect(screen.getByText("🔒 Linen")).toBeInTheDocument();
-    expect(screen.getByText("30 XP")).toBeInTheDocument();
+    expect(screen.getByText("This week: 30 XP")).toBeInTheDocument();
+  });
+
+  it("shows your league with each builder's week and opens their profile", async () => {
+    const open = vi.fn();
+    (window as unknown as { threadboard: unknown }).threadboard = { openExternal: open };
+    league = {
+      state: "ready", week: "2026-10-12", tier: 0, league: "Cotton", up: 1, down: 0,
+      rows: [
+        { rank: 1, userId: "u1", name: "Alex", avatar: "https://a/1.png", username: "fotoflo", xp: 6588, shipped: 36, streak: 31, level: 20, badges: [{ icon: "🔥", name: "Month streak" }], isMe: true },
+        { rank: 2, userId: "u2", name: "Adnan Sabbir", avatar: null, username: null, xp: 0, shipped: 0, streak: 0, level: 1, badges: [], isMe: false },
+      ],
+    };
+    setup();
+    await userEvent.click(await screen.findByRole("button", { name: /Your loom/ }));
+    await userEvent.click(screen.getByRole("button", { name: "League" }));
+    expect(await screen.findByText("Cotton League")).toBeInTheDocument();
+    expect(screen.getByText("6,588")).toBeInTheDocument();
+    expect(screen.getByText("top 1 move up")).toBeInTheDocument();
+    expect(screen.getByText("Adnan Sabbir")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Alex/ }));
+    expect(open).toHaveBeenCalledWith("https://weft.zip/@fotoflo");
+    delete (window as unknown as { threadboard?: unknown }).threadboard;
   });
 });

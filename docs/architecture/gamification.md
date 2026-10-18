@@ -1,8 +1,7 @@
 # Progress: streaks, XP, badges and the builder card
 
 The header's 🔥 chip and its "Your loom" dialog turn your work in Weft into a streak, a level, badges,
-a builder card and each project's production-ready tree. It's built so leagues can arrive with accounts
-without a rewrite.
+a builder card and each project's production-ready tree, and, when you're signed in to Weft, a weekly league.
 
 ## Data flow
 
@@ -69,7 +68,29 @@ The chip keeps the badges and level it has announced in `localStorage` (`weft-ga
 load announces nothing, so history doesn't arrive as a burst. Settings > Show progress (`weft-show-progress`
 cookie) hides the chip and its toasts.
 
-## Leagues (next)
+## Leagues
 
-Leagues need accounts. The plan: sync weekly XP totals (from `weekXp`, Monday to Sunday) and a display name,
-never prompts or code; the server ranks leagues of ~30, top 7 up, bottom 5 down, Cotton to Gold Thread.
+```
+gameState() ── lib/league.ts leagueEntry() ──> { week, xp, shipped, streak, level, badges }
+  └─ lib/league-sync.ts: every 10 min (startLeagueSync, from prewarm) and on opening the tab
+       └─ rpc league_submit ──> public.league_weeks (one row per account per week)
+/api/league ── rpc league_standings(week) ──> the caller's league ──> components/LeagueTab.tsx
+```
+
+- **What goes up.** This week's XP (`weekXp`), cards shipped (`weekShipped`), the current streak, your level and the
+  badges unlocked since Monday (`weekBadges`, icon and name only, at most 12). Never prompts, code, project names or folders.
+  Your name, picture and username come from `profiles`, which sign-in already filled.
+- **The week** is the Mac's own Monday (`weekOf`), so it may sit a day off UTC's; `league_submit` takes a Monday from
+  8 days back to 1 day ahead and clamps every number.
+- **Tiers settle lazily.** There's no Monday job: your first row of a week calls `private.league_tier_for`, which ranks
+  your last row in its league and moves you up (top `min(7, ceil(n·7/30))`, only with XP and only when you weren't alone) or down
+  (bottom `min(5, floor(n·5/30))`). `private.league_join` then seats you in the first league of that tier with fewer than 30,
+  under an advisory lock so two joins can't take the 30th seat. `lib/league.ts` `leagueMoves`/`zoneOf` mirror those rules to
+  colour the up and down zones.
+- **Signing up joins.** A trigger on `profiles` enrolls a new account in the current UTC week, so a friend shows up in your league
+  (at 0 XP) the day they sign up, before their Mac ever posts. It swallows its own errors: a league never fails a sign-up.
+- **Access.** `league_weeks` has RLS on and no policies; both RPCs are security definer and act only as `auth.uid()`.
+  `league_standings` returns only your league's rows, with `profiles.username` (else the GitHub login) for the
+  `weft.zip/@username` link (docs/architecture/profiles.md).
+- **Small leagues.** With few accounts each tier holds one league, so a winner who moves up can find themselves alone; a lone
+  builder doesn't move up again until someone joins.
