@@ -1,17 +1,22 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { currentArea, fitWidth, placeAbove } from "@/lib/float-place";
 
+// How long an interactive bubble stays after the mouse leaves its trigger: enough to cross the 6px gap.
+const CLOSE_DELAY = 250;
+
 // A hover bubble above its child, kept inside the window and out from under the browser pane. Native title tooltips don't show in the
-// desktop app, so this draws its own, in a portal so no panel or dialog can clip it.
+// desktop app, so this draws its own, in a portal so no panel or dialog can clip it. An `interactive` bubble holds a button
+// of its own: it takes clicks, and stays open while the mouse crosses the gap into it.
 export default function Tip({
   text,
   children,
   className = "",
   off = false,
   width = 260,
+  interactive = false,
 }: {
   text: React.ReactNode;
   children: React.ReactNode;
@@ -19,11 +24,31 @@ export default function Tip({
   off?: boolean;
   // The bubble's widest, for a tip that holds more than a sentence (a chart).
   width?: number;
+  interactive?: boolean;
 }) {
   const trigger = useRef<HTMLSpanElement>(null);
   const bubble = useRef<HTMLSpanElement>(null);
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const closing = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function show() {
+    if (closing.current) clearTimeout(closing.current);
+    closing.current = null;
+    setOpen(true);
+  }
+  // A plain tip closes at once; an interactive one waits long enough for the mouse to reach it.
+  function hide() {
+    if (!interactive) {
+      setOpen(false);
+      return;
+    }
+    if (closing.current) clearTimeout(closing.current);
+    closing.current = setTimeout(() => setOpen(false), CLOSE_DELAY);
+  }
+  useEffect(() => () => {
+    if (closing.current) clearTimeout(closing.current);
+  }, []);
 
   useLayoutEffect(() => {
     if (!open || !trigger.current || !bubble.current) {
@@ -38,8 +63,8 @@ export default function Tip({
     <span
       ref={trigger}
       className={`cursor-default ${className}`}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
+      onMouseEnter={show}
+      onMouseLeave={hide}
     >
       {children}
       {open &&
@@ -48,13 +73,15 @@ export default function Tip({
           <span
             ref={bubble}
             role="tooltip"
+            onMouseEnter={interactive ? show : undefined}
+            onMouseLeave={interactive ? hide : undefined}
             style={{
               left: pos?.left ?? 0,
               top: pos?.top ?? 0,
               maxWidth: fitWidth(currentArea(), width),
               visibility: pos ? "visible" : "hidden",
             }}
-            className="pointer-events-none fixed z-[100] w-max rounded-md border border-line-strong bg-panel px-2.5 py-1.5 font-sans text-[11.5px] leading-snug text-ink shadow-lg"
+            className={`${interactive ? "" : "pointer-events-none "}fixed z-[100] w-max rounded-md border border-line-strong bg-panel px-2.5 py-1.5 font-sans text-[11.5px] leading-snug text-ink shadow-lg`}
           >
             {text}
           </span>,
