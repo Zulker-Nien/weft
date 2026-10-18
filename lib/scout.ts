@@ -1,8 +1,9 @@
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { query } from "@anthropic-ai/claude-agent-sdk";
+import { captureAiGeneration } from "./ai-observability";
 import { projectRoot } from "./quality";
 import { MAX_FINDINGS, parseFindings, type ScoutReport, type ScoutState } from "./scout-view";
 import { SECRET_GUARD_HOOKS } from "./secret-guard";
@@ -62,8 +63,11 @@ severity is high, medium or low; fix is one short sentence, under 120 characters
 
 async function scout(root: string) {
   let text = "";
+  const prompt = scoutPrompt();
+  const traceId = randomUUID();
+  const startedAt = Date.now();
   for await (const msg of query({
-    prompt: scoutPrompt(),
+    prompt,
     options: {
       model: "sonnet",
       cwd: root,
@@ -77,10 +81,25 @@ async function scout(root: string) {
       maxTurns: MAX_TURNS,
     },
   })) {
-    if (msg.type === "result") {
-      if (msg.subtype !== "success") throw new Error(`The scout stopped: ${msg.subtype}`);
-      text = msg.result;
-    }
+    if (msg.type !== "result") continue;
+    await captureAiGeneration({
+      sessionId: null,
+      traceId,
+      spanName: "refactor_scout",
+      model: "sonnet",
+      input: prompt,
+      output: msg.subtype === "success" ? msg.result : undefined,
+      inputTokens: msg.usage.input_tokens,
+      outputTokens: msg.usage.output_tokens,
+      cacheReadInputTokens: msg.usage.cache_read_input_tokens,
+      cacheCreationInputTokens: msg.usage.cache_creation_input_tokens,
+      latencyMs: Date.now() - startedAt,
+      isError: msg.subtype !== "success",
+      error: msg.subtype !== "success" ? msg.subtype : undefined,
+      stream: true,
+    });
+    if (msg.subtype !== "success") throw new Error(`The scout stopped: ${msg.subtype}`);
+    text = msg.result;
   }
   const findings = parseFindings(text);
   if (!findings.length) throw new Error("The scout returned no findings");
