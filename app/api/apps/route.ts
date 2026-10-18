@@ -1,14 +1,20 @@
+import { after } from "next/server";
+import { dropCloudApp, pushApp, syncAppsSoon } from "@/lib/app-cloud";
 import { dropAppShare } from "@/lib/app-share";
 import { fail, guard } from "@/lib/guard";
 import { listApps, removeApp, saveApp, updateApp } from "@/lib/mini-app-store";
 
 // The apps sidebar's mini apps (lib/mini-app-store.ts): pages from the browser pane saved as apps.
+// Saves, renames, moves and removes also push to prod (lib/app-cloud.ts); the push runs after the
+// response, so it can never block the local save.
 
 type Body = { id?: unknown; url?: unknown; name?: unknown; to?: unknown };
 
 export function GET(req: Request) {
   const denied = guard(req, { write: false });
   if (denied) return denied;
+  // A throttled background pull so a Mac that lacks an app saved elsewhere eventually gets it.
+  syncAppsSoon();
   return Response.json({ apps: listApps() });
 }
 
@@ -18,7 +24,9 @@ export async function POST(req: Request) {
   if (denied) return denied;
   try {
     const body = (await req.json()) as Body;
-    return Response.json({ app: saveApp(body.url, body.name) });
+    const app = saveApp(body.url, body.name);
+    after(() => pushApp(app));
+    return Response.json({ app });
   } catch (err) {
     return fail(err);
   }
@@ -30,7 +38,9 @@ export async function PATCH(req: Request) {
   if (denied) return denied;
   try {
     const body = (await req.json()) as Body;
-    return Response.json({ app: updateApp(body.id, { name: body.name, to: body.to }) });
+    const app = updateApp(body.id, { name: body.name, to: body.to });
+    after(() => pushApp(app));
+    return Response.json({ app });
   } catch (err) {
     return fail(err);
   }
@@ -45,6 +55,7 @@ export async function DELETE(req: Request) {
     removeApp(body.id);
     // Its share link goes with it; the app is gone either way.
     await dropAppShare(app).catch(() => {});
+    after(() => dropCloudApp(String(body.id)));
     return Response.json({ ok: true });
   } catch (err) {
     return fail(err);

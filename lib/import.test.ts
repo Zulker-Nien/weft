@@ -1,20 +1,22 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Card } from "./types";
 
 // import.ts reads Claude Code's config folder at load time, so point it at a temp one first.
-const config = fs.mkdtempSync(path.join(os.tmpdir(), "weft-import-"));
-process.env.CLAUDE_CONFIG_DIR = config;
+// Shared mocks and helpers live in lib/import.harness.ts (the welcome gate tests do too).
+const h = await vi.hoisted(async () => (await import("./import.harness")).harnessState());
+const mocks = await vi.hoisted(async () => (await import("./import.harness")).installMocks(h));
 
-vi.mock("@anthropic-ai/claude-agent-sdk", () => ({ getSessionMessages: vi.fn(), listSessions: vi.fn() }));
-vi.mock("./store", () => ({ addCards: vi.fn(), getThread: vi.fn(), listCards: vi.fn(() => []), replaceThread: vi.fn(), updateCard: vi.fn() }));
-vi.mock("./transcript", () => ({ transcriptToThread: vi.fn() }));
-vi.mock("./settings", () => ({ dismissedSessions: vi.fn(() => []) }));
+vi.mock("node:child_process", () => mocks.childProcess);
+vi.mock("@anthropic-ai/claude-agent-sdk", () => mocks.sdk);
+vi.mock("./store", () => mocks.store);
+vi.mock("./transcript", () => mocks.transcript);
+vi.mock("./settings", () => mocks.settings);
+vi.mock("./welcome", () => mocks.welcome);
 
+const { config, line, projectDir } = await import("./import.harness");
 const { lastPermissionMode, sessionMode } = await import("./import");
-
-const line = (record: Record<string, unknown>) => JSON.stringify(record);
 
 function sessionFile(lines: string[]) {
   const file = path.join(config, `${Math.random().toString(36).slice(2)}.jsonl`);
@@ -62,101 +64,36 @@ describe("sessionMode", () => {
   });
 });
 
-// Picking up sessions: the sync, live detection, and transcripts. ps is faked; session files are
-// real .jsonl files under the temp config folder's projects/.
+// Picking up sessions: the sync, live detection, and transcripts. ps is faked; session files
+// are real .jsonl files under the temp config folder's projects/. The welcome gate tests
+// (lib/import-welcome.test.ts) share this harness too.
 import { randomUUID } from "node:crypto";
 import { afterEach } from "vitest";
-import type { Card } from "./types";
-
-vi.mock("node:child_process", () => ({ execFile: vi.fn(), execFileSync: vi.fn() }));
+import os from "node:os";
+import { ago, answered, boardCard, DAY, flush, info, MIN, onDisk, patchFor, psMock, resetPickup, runningEntry, said, addedCards, addedFor } from "./import.harness";
 
 const { execFile, execFileSync } = await import("node:child_process");
 const sdk = await import("@anthropic-ai/claude-agent-sdk");
 const store = await import("./store");
-const { dismissedSessions } = await import("./settings");
+const settings = await import("./settings");
 const { transcriptToThread } = await import("./transcript");
 const { isOpenElsewhere, loadTranscript, parseTitle, releaseSession, sessionFiles, startSessionSync, syncSessions } = await import("./import");
-
-const MIN = 60_000;
-const DAY = 24 * 60 * MIN;
-const projectDir = path.join(config, "projects", "-Users-me-app");
-const runningDir = path.join(config, "sessions");
-const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
-const said = (text: unknown, at: string, extra: Record<string, unknown> = {}) =>
-  line({ type: "user", timestamp: at, message: { role: "user", content: text }, ...extra });
-const answered = (content: unknown, at: string, stop_reason: string | null = "end_turn", extra: Record<string, unknown> = {}) =>
-  line({ type: "assistant", timestamp: at, message: { role: "assistant", stop_reason, content: typeof content === "string" ? [{ type: "text", text: content }] : content }, ...extra });
-
-// A session file in the projects folder; returns its session id.
-function onDisk(lines: string[], id: string = randomUUID()) {
-  fs.mkdirSync(projectDir, { recursive: true });
-  fs.writeFileSync(path.join(projectDir, `${id}.jsonl`), lines.join("\n") + "\n");
-  return id;
-}
-
-// What listSessions reports for a session.
-const info = (sessionId: string, over: Record<string, unknown> = {}) => ({
-  sessionId,
-  cwd: "/Users/me/app",
-  summary: "",
-  lastModified: Date.now() - 20 * DAY,
-  createdAt: Date.now() - 20 * DAY,
-  ...over,
-});
-
-const boardCard = (sessionId: string, over: Partial<Card> = {}): Card => ({
-  id: randomUUID(),
-  title: "Old title",
-  prompt: "",
-  cwd: "/Users/me/app",
-  backend: "claude",
-  permissionMode: "default",
-  column: "review",
-  sessionId,
-  source: "claude-code",
-  lastActivity: Date.now() - 20 * DAY,
-  createdAt: 0,
-  updatedAt: 0,
-  ...over,
-});
-
-let board: Card[] = [];
+const { dismissedSessions } = settings;
 
 async function sync(sessions: ReturnType<typeof info>[], cards: Card[] = []) {
-  board = cards;
+  h.board = cards;
   vi.mocked(sdk.listSessions).mockResolvedValue(sessions);
+  vi.mocked(store.listCards).mockImplementation(() => h.board);
   return syncSessions();
 }
 
-const addedCards = () => vi.mocked(store.addCards).mock.calls.flatMap((c) => c[0]);
-const addedFor = (sessionId: string) => addedCards().find((c) => c.sessionId === sessionId);
-const patchFor = (card: Card) =>
-  vi.mocked(store.updateCard).mock.calls.filter(([id]) => id === card.id).reduce<Partial<Card>>((all, [, patch]) => ({ ...all, ...patch }), {});
+// What /bin/ps prints: "pid ppid command" per line. resetPickup wants the inner vi.fn()s of the
+// mocked child_process, store, and settings modules so it can re-wire listCards / dismissedSessions
+// per-test; the destructuring is identical at every call site, so capture it once.
+const ps = (out = "") => psMock({ execFile, execFileSync }, out);
+const reset = () => resetPickup(h, { execFile, execFileSync }, store, settings);
 
-// What /bin/ps prints: "pid ppid command" per line.
-function ps(out = "") {
-  vi.mocked(execFile).mockImplementation(((...args: unknown[]) => {
-    (args[3] as (err: Error | null, stdout: string) => void)(null, out);
-  }) as never);
-  vi.mocked(execFileSync).mockReturnValue(out);
-}
-
-function runningEntry(name: string, entry: unknown) {
-  fs.mkdirSync(runningDir, { recursive: true });
-  fs.writeFileSync(path.join(runningDir, name), typeof entry === "string" ? entry : JSON.stringify(entry));
-}
-
-const flush = () => new Promise((resolve) => setImmediate(resolve));
-
-function resetPickup() {
-  vi.clearAllMocks();
-  board = [];
-  vi.mocked(store.listCards).mockImplementation(() => board);
-  vi.mocked(dismissedSessions).mockReturnValue([]);
-  fs.rmSync(path.join(config, "projects"), { recursive: true, force: true });
-  fs.rmSync(runningDir, { recursive: true, force: true });
-  ps();
-}
+beforeEach(() => ps());
 
 describe("parseTitle", () => {
   it("splits a status word off the session's title", () => {
@@ -173,7 +110,7 @@ describe("parseTitle", () => {
 });
 
 describe("sessionFiles", () => {
-  beforeEach(resetPickup);
+  beforeEach(reset);
 
   it("is empty when there's no projects folder", () => {
     expect(sessionFiles().size).toBe(0);
@@ -196,7 +133,7 @@ describe("sessionFiles", () => {
 });
 
 describe("syncSessions: new sessions", () => {
-  beforeEach(resetPickup);
+  beforeEach(reset);
 
   it("adds a card per session, titled and placed from its title and last activity", async () => {
     const deeper = onDisk([said("build it", ago(10 * DAY)), answered("Built.", ago(10 * DAY))]);
@@ -212,12 +149,12 @@ describe("syncSessions: new sessions", () => {
     ]);
     expect(result).toEqual({ sessions: 4, added: 4, updated: 0 });
     expect(store.addCards).toHaveBeenCalledTimes(1);
-    expect(addedFor(deeper)).toMatchObject({ title: "Weft desktop app", stage: "Going deeper", column: "review", prompt: "build it", lastLine: "build it" });
-    expect(addedFor(done)).toMatchObject({ title: "release", stage: "Done", column: "done" });
-    expect(addedFor(old)).toMatchObject({ title: "Fix the login bug\nplease", column: "done", lastLine: "Fix the login bug" });
-    expect(addedFor(recent)).toMatchObject({ title: "Rename things", column: "review", prompt: "" });
-    expect(addedFor(recent)?.lastLine).toBeUndefined();
-    const card = addedFor(old)!;
+    expect(addedFor(store, deeper)).toMatchObject({ title: "Weft desktop app", stage: "Going deeper", column: "review", prompt: "build it", lastLine: "build it" });
+    expect(addedFor(store, done)).toMatchObject({ title: "release", stage: "Done", column: "done" });
+    expect(addedFor(store, old)).toMatchObject({ title: "Fix the login bug\nplease", column: "done", lastLine: "Fix the login bug" });
+    expect(addedFor(store, recent)).toMatchObject({ title: "Rename things", column: "review", prompt: "" });
+    expect(addedFor(store, recent)?.lastLine).toBeUndefined();
+    const card = addedFor(store, old)!;
     expect(card).toMatchObject({ backend: "claude", source: "claude-code", cwd: "/Users/me/app", openElsewhere: false, permissionMode: "default" });
     expect(card.lastActivity).toBe(Date.parse(oldAt));
     expect(card.updatedAt).toBe(card.lastActivity);
@@ -227,8 +164,8 @@ describe("syncSessions: new sessions", () => {
     const id = randomUUID();
     const createdAt = Date.now() - 5 * MIN;
     await sync([info(id, { cwd: undefined, createdAt, lastModified: createdAt + 1 }), info(randomUUID(), { createdAt: undefined, lastModified: 123 })]);
-    expect(addedFor(id)).toMatchObject({ title: "Untitled thread", cwd: os.homedir(), lastActivity: createdAt, createdAt, column: "review" });
-    const [, second] = addedCards();
+    expect(addedFor(store, id)).toMatchObject({ title: "Untitled thread", cwd: os.homedir(), lastActivity: createdAt, createdAt, column: "review" });
+    const [, second] = addedCards(store);
     expect(second).toMatchObject({ lastActivity: 123, createdAt: 123, column: "done" });
   });
 
@@ -238,8 +175,8 @@ describe("syncSessions: new sessions", () => {
     const unreadable = randomUUID();
     fs.mkdirSync(path.join(projectDir, `${unreadable}.jsonl`), { recursive: true });
     await sync([info(noStamps, { createdAt }), info(unreadable, { createdAt })]);
-    expect(addedFor(noStamps)?.lastActivity).toBe(createdAt);
-    expect(addedFor(unreadable)?.lastActivity).toBe(createdAt);
+    expect(addedFor(store, noStamps)?.lastActivity).toBe(createdAt);
+    expect(addedFor(store, unreadable)?.lastActivity).toBe(createdAt);
   });
 
   it("continues a session in the mode it last ran in", async () => {
@@ -251,8 +188,8 @@ describe("syncSessions: new sessions", () => {
       answered("done", ago(DAY)),
     ]);
     await sync([info(fromTail), info(fromStart)]);
-    expect(addedFor(fromTail)?.permissionMode).toBe("bypassPermissions");
-    expect(addedFor(fromStart)?.permissionMode).toBe("acceptEdits");
+    expect(addedFor(store, fromTail)?.permissionMode).toBe("bypassPermissions");
+    expect(addedFor(store, fromStart)?.permissionMode).toBe("acceptEdits");
   });
 
   it("skips dismissed sessions and tooling runs in temp folders", async () => {
@@ -270,7 +207,7 @@ describe("syncSessions: new sessions", () => {
   it("puts a session with a turn running right now in Running", async () => {
     const id = onDisk([answered("Done before.", ago(3 * MIN)), said("now do this", ago(30_000))]);
     await sync([info(id, { firstPrompt: "first" })]);
-    expect(addedFor(id)).toMatchObject({ column: "running", lastLine: "Working in another app" });
+    expect(addedFor(store, id)).toMatchObject({ column: "running", lastLine: "Working in another app" });
   });
 
   it.each([
@@ -284,7 +221,7 @@ describe("syncSessions: new sessions", () => {
   ])("reads the turn as in progress or not when the session ends with %s", async (_name, last, column) => {
     const id = onDisk([said("start", ago(MIN)), answered("Sure.", ago(MIN)), last(ago(20_000))]);
     await sync([info(id)]);
-    expect(addedFor(id)?.column).toBe(column);
+    expect(addedFor(store, id)?.column).toBe(column);
   });
 
   it("looks past meta, sidechain, and unreadable records for the turn's last real message", async () => {
@@ -297,7 +234,7 @@ describe("syncSessions: new sessions", () => {
       '{"type":"user", truncated',
     ]);
     await sync([info(id)]);
-    expect(addedFor(id)?.column).toBe("review");
+    expect(addedFor(store, id)?.column).toBe("review");
   });
 
   it("doesn't count an unfinished turn from long ago as running, unless the session is open", async () => {
@@ -305,8 +242,8 @@ describe("syncSessions: new sessions", () => {
     const open = onDisk([said("go", ago(10 * MIN))]);
     ps(`  4242 1 claude --resume ${open}\n  4243 ${process.pid} claude --resume ${quiet}\nnot a ps line`);
     await sync([info(quiet), info(open)]);
-    expect(addedFor(quiet)).toMatchObject({ column: "review", openElsewhere: false });
-    expect(addedFor(open)).toMatchObject({ column: "running", openElsewhere: true });
+    expect(addedFor(store, quiet)).toMatchObject({ column: "review", openElsewhere: false });
+    expect(addedFor(store, open)).toMatchObject({ column: "running", openElsewhere: true });
   });
 
   it("trusts Claude Code's own report of a session's status", async () => {
@@ -318,9 +255,9 @@ describe("syncSessions: new sessions", () => {
     runningEntry("102.json", { pid: 102, sessionId: busy, status: "busy" });
     runningEntry("103.json", { pid: 103, sessionId: idle, status: "idle" });
     await sync([info(waiting), info(busy), info(idle)]);
-    expect(addedFor(waiting)).toMatchObject({ column: "needs_you", lastLine: "Waiting for you in another app", openElsewhere: true });
-    expect(addedFor(busy)).toMatchObject({ column: "running", lastLine: "Working in another app" });
-    expect(addedFor(idle)).toMatchObject({ column: "review", openElsewhere: true });
+    expect(addedFor(store, waiting)).toMatchObject({ column: "needs_you", lastLine: "Waiting for you in another app", openElsewhere: true });
+    expect(addedFor(store, busy)).toMatchObject({ column: "running", lastLine: "Working in another app" });
+    expect(addedFor(store, idle)).toMatchObject({ column: "review", openElsewhere: true });
   });
 
   it("ignores running-session entries that are stale, Weft's own, or malformed", async () => {
@@ -335,16 +272,16 @@ describe("syncSessions: new sessions", () => {
     runningEntry("204.json", "{ not json");
     runningEntry("notes.txt", "x");
     await sync([info(stale), info(own), info(odd)]);
-    expect(addedFor(stale)).toMatchObject({ column: "done", openElsewhere: false });
-    expect(addedFor(own)).toMatchObject({ column: "done", openElsewhere: false });
-    expect(addedFor(odd)).toMatchObject({ column: "done", openElsewhere: true });
+    expect(addedFor(store, stale)).toMatchObject({ column: "done", openElsewhere: false });
+    expect(addedFor(store, own)).toMatchObject({ column: "done", openElsewhere: false });
+    expect(addedFor(store, odd)).toMatchObject({ column: "done", openElsewhere: true });
   });
 
   it("treats every session as closed when ps fails", async () => {
     const id = onDisk([said("go", ago(10 * MIN))]);
     vi.mocked(execFile).mockImplementation(((...args: unknown[]) => (args[3] as (err: Error) => void)(new Error("no ps"))) as never);
     await sync([info(id)]);
-    expect(addedFor(id)).toMatchObject({ column: "review", openElsewhere: false });
+    expect(addedFor(store, id)).toMatchObject({ column: "review", openElsewhere: false });
   });
 
   it("shares one sync between callers while it runs", async () => {
@@ -360,7 +297,7 @@ describe("syncSessions: new sessions", () => {
 });
 
 describe("syncSessions: cards already on the board", () => {
-  beforeEach(resetPickup);
+  beforeEach(reset);
 
   it("follows new messages from outside Weft: title, stage, activity, column, and the last reply", async () => {
     const last = ago(DAY);
@@ -376,19 +313,19 @@ describe("syncSessions: cards already on the board", () => {
     const card = boardCard(id, { column: "done" });
     const result = await sync([info(id, { customTitle: "POLISHING - New title" })], [card]);
     expect(result).toEqual({ sessions: 1, added: 0, updated: 1 });
-    expect(patchFor(card)).toEqual({ column: "review", lastLine: "All green now.", title: "New title", stage: "Polishing", lastActivity: Date.parse(last) });
+    expect(patchFor(store, card)).toEqual({ column: "review", lastLine: "All green now.", title: "New title", stage: "Polishing", lastActivity: Date.parse(last) });
   });
 
   it("keeps a title you or Weft's retitle chose, while the stage still follows Claude Code", async () => {
     const id = onDisk([said("go", ago(2 * DAY)), answered("Done.", ago(DAY))]);
     const card = boardCard(id, { title: "🐞 Compile Error", titleBy: "auto", column: "done" });
     await sync([info(id, { customTitle: "POLISHING - Image attachment" })], [card]);
-    expect(patchFor(card)).not.toHaveProperty("title");
-    expect(patchFor(card)).toMatchObject({ stage: "Polishing" });
+    expect(patchFor(store, card)).not.toHaveProperty("title");
+    expect(patchFor(store, card)).toMatchObject({ stage: "Polishing" });
 
     const quiet = boardCard(id, { title: "Mine", titleBy: "user", lastActivity: Date.now() });
     await sync([info(id, { customTitle: "Something else" })], [quiet]);
-    expect(patchFor(quiet)).not.toHaveProperty("title");
+    expect(patchFor(store, quiet)).not.toHaveProperty("title");
   });
 
   it("takes the reply from an earlier message when the last ones have no text", async () => {
@@ -402,7 +339,7 @@ describe("syncSessions: cards already on the board", () => {
     ]);
     const card = boardCard(id, { title: "t", lastLine: "old" });
     await sync([info(id, { summary: "t" })], [card]);
-    expect(patchFor(card).lastLine).toBe("The real answer");
+    expect(patchFor(store, card).lastLine).toBe("The real answer");
   });
 
   it("only renames a card when nothing new happened", async () => {
@@ -411,7 +348,7 @@ describe("syncSessions: cards already on the board", () => {
     const at = Date.parse(stamp);
     const card = boardCard(id, { lastActivity: at, column: "backlog" });
     await sync([info(id, { customTitle: "CLEANING UP - Renamed" })], [card]);
-    expect(patchFor(card)).toEqual({ title: "Renamed", stage: "Cleaning up" });
+    expect(patchFor(store, card)).toEqual({ title: "Renamed", stage: "Cleaning up" });
   });
 
   it("leaves a card alone when nothing changed", async () => {
@@ -428,14 +365,14 @@ describe("syncSessions: cards already on the board", () => {
     ps(`300 1 claude --session-id=${id}`);
     const warm = boardCard(id, { warm: true, column: "backlog" });
     await sync([info(id, { customTitle: "Different" })], [warm]);
-    expect(patchFor(warm)).toEqual({ openElsewhere: true });
+    expect(patchFor(store, warm)).toEqual({ openElsewhere: true });
   });
 
   it("doesn't move a card waiting on a permission answer, but still renames it", async () => {
     const id = onDisk([said("go", ago(20_000))]);
     const card = boardCard(id, { column: "needs_you", pending: { id: "p" } as Card["pending"] });
     await sync([info(id, { customTitle: "Renamed" })], [card]);
-    expect(patchFor(card)).toEqual({ title: "Renamed", stage: undefined, lastActivity: expect.any(Number) as unknown });
+    expect(patchFor(store, card)).toEqual({ title: "Renamed", stage: undefined, lastActivity: expect.any(Number) as unknown });
   });
 
   it("leaves Weft's own cards and cards that continued a session as a copy alone", async () => {
@@ -452,20 +389,20 @@ describe("syncSessions: cards already on the board", () => {
     const id = onDisk([answered("ok", ago(DAY)), said("go", ago(20_000))]);
     const card = boardCard(id, { column: "review", lastActivity: Date.now() });
     await sync([info(id)], [card]);
-    expect(patchFor(card)).toMatchObject({ column: "running", lastLine: "Working in another app" });
+    expect(patchFor(store, card)).toMatchObject({ column: "running", lastLine: "Working in another app" });
 
-    Object.assign(card, patchFor(card));
+    Object.assign(card, patchFor(store, card));
     vi.mocked(store.updateCard).mockClear();
     fs.appendFileSync(path.join(projectDir, `${id}.jsonl`), answered("Finished it.", ago(10_000)) + "\n");
     fs.utimesSync(path.join(projectDir, `${id}.jsonl`), new Date(), new Date(Date.now() + 5000));
     card.lastActivity = Date.now();
     await sync([info(id)], [card]);
-    expect(patchFor(card)).toEqual({ column: "review", lastLine: "Finished it." });
+    expect(patchFor(store, card)).toEqual({ column: "review", lastLine: "Finished it." });
   });
 });
 
 describe("isOpenElsewhere", () => {
-  beforeEach(resetPickup);
+  beforeEach(reset);
 
   it("finds a session resumed in a terminal, or listed as running by Claude Code", () => {
     const resumed = randomUUID();
@@ -492,7 +429,7 @@ describe("isOpenElsewhere", () => {
 });
 
 describe("releaseSession", () => {
-  beforeEach(resetPickup);
+  beforeEach(reset);
 
   it("stops the CLIs outside Weft holding the session and counts them", () => {
     const id = randomUUID();
@@ -533,7 +470,7 @@ describe("startSessionSync", () => {
   const g = globalThis as unknown as { __weftSyncTimer?: ReturnType<typeof setInterval>; __weftCheckTimer?: ReturnType<typeof setInterval>; __weftSync?: Promise<unknown> };
 
   beforeEach(() => {
-    resetPickup();
+    reset();
     vi.mocked(sdk.listSessions).mockResolvedValue([]);
     vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
   });
@@ -583,12 +520,13 @@ describe("startSessionSync", () => {
     ];
     startSessionSync();
     await flush();
-    board = [liveCard, quietCard, warmCard, ...skipped];
+    h.board = [liveCard, quietCard, warmCard, ...skipped];
+    vi.mocked(store.listCards).mockImplementation(() => h.board);
     vi.advanceTimersByTime(5_000);
     await flush();
-    expect(patchFor(liveCard)).toMatchObject({ column: "running", lastLine: "Working in another app", lastActivity: expect.any(Number) as unknown });
-    expect(patchFor(quietCard)).toEqual({ openElsewhere: true });
-    expect(patchFor(warmCard)).toEqual({});
+    expect(patchFor(store, liveCard)).toMatchObject({ column: "running", lastLine: "Working in another app", lastActivity: expect.any(Number) as unknown });
+    expect(patchFor(store, quietCard)).toEqual({ openElsewhere: true });
+    expect(patchFor(store, warmCard)).toEqual({});
     expect(vi.mocked(store.updateCard).mock.calls.map(([id]) => id).sort()).toEqual([liveCard.id, quietCard.id].sort());
   });
 
@@ -596,7 +534,8 @@ describe("startSessionSync", () => {
     startSessionSync();
     await flush();
     const id = onDisk([said("go", ago(10_000))]);
-    board = [boardCard(id, { lastActivity: 0 })];
+    h.board = [boardCard(id, { lastActivity: 0 })];
+    vi.mocked(store.listCards).mockImplementation(() => h.board);
     g.__weftSync = new Promise(() => {});
     vi.advanceTimersByTime(5_000);
     await flush();
@@ -607,7 +546,7 @@ describe("startSessionSync", () => {
 
 describe("loadTranscript", () => {
   beforeEach(() => {
-    resetPickup();
+    reset();
     vi.mocked(sdk.getSessionMessages).mockResolvedValue([{ type: "user" }] as never);
     vi.mocked(transcriptToThread).mockReturnValue([{ kind: "user", text: "hi", at: 1 }]);
     vi.mocked(store.getThread).mockReturnValue([]);

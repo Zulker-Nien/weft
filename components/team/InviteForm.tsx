@@ -17,6 +17,7 @@
 // after its <form action>, which would throw away the picked role along
 // with the email.
 import { useState, useTransition, type SubmitEvent } from "react";
+import posthog from "posthog-js";
 import type { RoleOption as RoleOptionBase, TeamClientActions, TeamRole } from "@/lib/team-types";
 
 export type RoleOption = RoleOptionBase;
@@ -44,7 +45,12 @@ export function InviteForm({
     startTransition(async () => {
       const result = await actions.invite(trimmed, role);
       setMessage({ ok: result.ok, message: result.message });
-      if (result.ok) setEmail("");
+      if (result.ok) {
+        if (process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN && process.env.NEXT_PUBLIC_POSTHOG_HOST) {
+          posthog.capture("team_invite_sent", { role });
+        }
+        setEmail("");
+      }
     });
   }
 
