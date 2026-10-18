@@ -21,7 +21,7 @@ export async function GET(req: Request) {
     }
   }
 
-  const denied = guard(req, { write: false });
+  const denied = guard(req, { write: false, sensitive: true });
   if (denied) return denied;
   await connection();
   try {

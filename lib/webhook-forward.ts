@@ -88,7 +88,9 @@ export function targetUrl(target: string, extra: string): string {
   const q = extra.indexOf("?");
   const sub = q < 0 ? extra : extra.slice(0, q);
   const query = q < 0 ? "" : extra.slice(q + 1);
-  if (sub.startsWith("/")) url.pathname = `${url.pathname.replace(/\/$/, "")}${sub}`;
+  // A dot segment (even percent-encoded) would climb out of the target's path to any other route on this server.
+  const climbs = sub.split("/").some((seg) => /^(\.|%2e){1,2}$/i.test(seg));
+  if (sub.startsWith("/") && !climbs) url.pathname = `${url.pathname.replace(/\/$/, "")}${sub}`;
   if (query) url.search = url.search ? `${url.search}&${query}` : `?${query}`;
   return url.toString();
 }

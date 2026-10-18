@@ -8,8 +8,15 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ## [Unreleased]
 
+### Security
+
+- A webhook relay delivery can no longer climb out of its target's path (`..`, `%2e%2e`) to another local route, and the relay drops `x-threadboard` from a stranger's request. Account, settings and services reads need a per-launch token the board window adds itself (`electron/api-token.cjs`). `weft://` links only act from a page under `~/.weft`, not any `file:` page.
+
 ### Added
 
+- Threads ask the CLI for a 1-hour prompt cache (CLAUDE_CODE_PROMPT_CACHE_TTL), so a short break no longer re-sends the whole thread. When it does go cold, the reply box names the cost (threads over 30k tokens only), keeps Send as the primary and moves the new-card hand-off into the ▾ menu; an idle reply box also has a Done button that sends /weft:done here.
+
+- Stop is faster: it SIGTERMs the commands a thread is running at once, and ends the CLI after 1.5s (was 5s) if the interrupt is ignored.
 - **Errors and Restart errors filters on the Review column.** Two chips in its header, each on its own: Errors keeps cards whose last line is a thread or build error, Restart errors keeps cards that hit the 5-hour session limit. An active chip shows its count; both off after a reload (`components/ReviewFilterChips.tsx`, `lib/board-view.ts`).
 - **The reply box's button says what Enter does.** One mode at a time, named on a chip in the box and on the primary: Send, Queue (while a turn runs), Answer, Run (a `!` command, in green with the folder), Replace (after ↑, in amber with the file edits that stay) or Send copy. Send now, Send later and Continue here moved into a ▾ beside it; ■ Stop keeps its own slot. The default follows the thread: **New card** when the prompt cache is cold (the stale-cache row above the box is gone; **Send here** is in the ▾), **Send at <reset>** when the 5-hour window is used up, and **Continue** only after a turn that stopped short (`lib/reply-mode.ts`, `components/ReplyButtons.tsx`, `components/ReplyModeChip.tsx`).
 
@@ -79,7 +86,7 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Changed
 
-- **No Delete before the first full turn.** The trash button in a thread's header stays hidden until the card has finished a turn (or is an idle saved session), so a thread that is still starting can't be deleted by a stray click (`hasFinishedTurn` in `components/CardActions.tsx`).
+- **Delete only before the first full turn.** A thread's header shows the trash button only until the card finishes its first turn: deleting a wrong start stops its CLI and saves the tokens. After that the header offers only Archive (`hasFinishedTurn` in `components/CardActions.tsx`).
 - **No delete before the first turn.** The thread header's trash button stays hidden until the card has finished a full turn (or holds an idle saved session, like an imported one), so a stray click can't delete a thread that's still starting (`hasFinishedTurn` in `components/CardActions.tsx`).
 - **Rail drawers slide out from under the board.** Clicking 🏷, 🔐, 🪝, ▲, Supabase, Cloudflare, BlastCP, GitHub or 🖥 Services now pulls its drawer out from beneath the board, which moves over and lies on it as a sheet with a rounded, shadowed left edge; closing slides the drawer back under. Pin now means Esc leaves it out (`lib/use-slide-out.ts`, `.board-sheet` in `app/globals.css`).
 

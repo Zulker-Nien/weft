@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // The /api/account JSON surface (GET view, POST start-signin / email / signout).
 // The OAuth callback moved to /api/auth/callback (see app/api/auth/callback/route.test.ts).
 
-vi.mock("next/server", () => ({ connection: async () => {} }));
+// No launch token on a test run, even on a Mac where Weft is running and wrote one.
+vi.mock("@/lib/shell-token", () => ({ shellToken: () => "" }));
+vi.mock("next/server", () => ({ connection: async () => {}, after: (task: () => unknown) => void task() }));
 vi.mock("@/lib/account", () => ({
   accountView: vi.fn(() => Promise.resolve({ configured: true, user: null })),
   startSignIn: vi.fn(() => Promise.resolve("https://github.com/login")),

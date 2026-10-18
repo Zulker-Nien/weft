@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fail, guard } from "./guard";
+
+const token = vi.hoisted(() => ({ value: "" }));
+vi.mock("./shell-token", () => ({ shellToken: () => token.value }));
+beforeEach(() => {
+  token.value = "";
+});
 
 const req = (headers: Record<string, string>) => new Request("http://x/api", { headers });
 
@@ -54,5 +60,27 @@ describe("guard without a Host header", () => {
     const res = guard(new Request("http://x/api"), { write: false });
     expect(res?.status).toBe(403);
     expect(await res!.json()).toEqual({ error: "Forbidden host" });
+  });
+});
+
+describe("guard sensitive reads", () => {
+  const read = (headers: Record<string, string>) => guard(req({ host: "localhost:3456", ...headers }), { write: false, sensitive: true });
+
+  it("needs the launch token when the desktop app has one", async () => {
+    token.value = "secret-token";
+    expect(read({})?.status).toBe(403);
+    expect(read({ "x-weft-token": "wrong-token!" })?.status).toBe(403);
+    expect(read({ "x-weft-token": "short" })?.status).toBe(403);
+    expect(((await read({})!.json()) as { error: string }).error).toBe("Missing token");
+    expect(read({ "x-weft-token": "secret-token" })).toBeNull();
+  });
+
+  it("asks nothing where there is no token (a browser, tests)", () => {
+    expect(read({})).toBeNull();
+  });
+
+  it("still checks the host first", () => {
+    token.value = "t";
+    expect(guard(req({ host: "evil.com", "x-weft-token": "t" }), { write: false, sensitive: true })?.status).toBe(403);
   });
 });

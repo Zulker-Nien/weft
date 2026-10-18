@@ -49,13 +49,14 @@ provider ─▶ /api/hooks/<id>[/…] on Vercel ─▶ webhook_deliveries row �
 1. **Create.** `lib/webhook-forward.ts` `createRelay` inserts a `webhook_relays` row on your account (RLS: yours
    only) and keeps its id and URL on the webhook.
 2. **Receive.** `app/api/hooks/[id]/…` on the deployment (no localhost guard: the unguessable id is the address)
-   runs `lib/webhook-relay.ts`: any method, at most 1 MB, headers minus hop-by-hop and Vercel's own, the body as
+   runs `lib/webhook-relay.ts`: any method, at most 1 MB, headers minus hop-by-hop, Vercel's own and `x-threadboard` (the local API's write header, which a stranger must never supply), the body as
    base64 so a provider's signature still checks, saved with the Supabase secret key. Rows older than a day go.
 3. **Forward.** Your Weft listens for its `webhook_deliveries` inserts (Realtime, like the GitHub relay), reads each
    row, sends it to `target` with the same method, headers and body, records the delivery, and deletes the row, so
    payloads don't wait on Weft's Supabase. Deliveries that came while Weft was closed (under a day old) are
    forwarded when it starts. The provider gets 200 from the relay either way: your route's own answer shows in the
-   drawer, not to the provider.
+   drawer, not to the provider. The path after the relay id is appended to the target (`targetUrl`) unless it holds a
+   `.` or `..` segment (even `%2e%2e`), which would climb to another local route; then the delivery goes to the target as is.
 
 ## The drawer
 

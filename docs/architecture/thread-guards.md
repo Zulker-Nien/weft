@@ -16,6 +16,15 @@ runs, in every permission mode (bypass included), and the denial's reason goes b
 | Symbol claims | `lib/claim-guard.ts` | asks (doesn't deny) before an edit to a symbol another busy card is editing |
 | Folder gate | `lib/folder-guard.ts` | asks (doesn't deny) before a file tool or Bash command reaches a folder outside the card's project |
 
+## The local API's own gate
+
+`lib/guard.ts` guards `app/api/*`: Host must be local, writes need `x-threadboard: 1`, and `sensitive` reads (account,
+account/team, account/billing, settings, services) also need the launch token in `x-weft-token`. The desktop app adds it
+to the board window's requests only (`electron/api-token.cjs`, a `webRequest` hook on the default session; the browser
+pane is another partition), and it is the control server's token, which threads can't read. With no token (dev in a
+browser, tests) the check is off. `weft://reply|commit` links act only from a real file under `~/.weft` (`ownPage`,
+`electron/page-links.cjs`).
+
 ## Folder gate
 
 A thread works in its card's project folder. `lib/folder-guard.ts` is a PreToolUse hook (Read, Edit, MultiEdit,
