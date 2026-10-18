@@ -167,11 +167,19 @@ export interface Announced {
   level: number;
 }
 
+// What's new since the chip last looked: the badges just earned and the level reached, if it went up.
+export interface Announcement {
+  next: Announced;
+  text: string | null;
+  fresh: Badge[];
+  levelUp: number | null;
+}
+
 // The badges and level-up to announce since last time. The first load announces nothing, so the
-// badges your history already earned don't arrive as a burst of toasts.
-export function toAnnounce(prev: Announced | null, list: Badge[], level: number): { next: Announced; text: string | null } {
+// badges your history already earned don't arrive as a burst of popups.
+export function toAnnounce(prev: Announced | null, list: Badge[], level: number): Announcement {
   const ids = list.filter((b) => b.unlocked).map((b) => b.id);
-  if (!prev) return { next: { badges: ids, level }, text: null };
+  if (!prev) return { next: { badges: ids, level }, text: null, fresh: [], levelUp: null };
   const fresh = list.filter((b) => b.unlocked && !prev.badges.includes(b.id));
   const next = { badges: [...new Set([...prev.badges, ...ids])], level: Math.max(prev.level, level) };
   const parts: string[] = [];
@@ -181,5 +189,5 @@ export function toAnnounce(prev: Announced | null, list: Badge[], level: number)
     const names = fresh.slice(0, 3).map((b) => `${b.icon} ${b.name}`).join(", ");
     parts.push(`🏅 ${fresh.length} badges unlocked: ${names}${fresh.length > 3 ? "…" : ""}`);
   }
-  return { next, text: parts.length ? parts.join(" · ") : null };
+  return { next, text: parts.length ? parts.join(" · ") : null, fresh, levelUp: level > prev.level ? level : null };
 }

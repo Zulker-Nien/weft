@@ -13,8 +13,8 @@ import LoomProfile from "./LoomProfile";
 import UsageChart from "./LoomUsage";
 import Modal from "./Modal";
 
-type Tab = "you" | "badges" | "projects" | "league";
-const TABS: { id: Tab; label: string }[] = [
+export type LoomTab = "you" | "badges" | "projects" | "league";
+const TABS: { id: LoomTab; label: string }[] = [
   { id: "you", label: "You" },
   { id: "badges", label: "Badges" },
   { id: "projects", label: "Projects" },
@@ -93,22 +93,25 @@ function YouTab({ game, onOpenApp }: { game: GameState; onOpenApp: (url: string)
   );
 }
 
-// "Your loom": your wefter card (with your GitHub profile and your mini apps), badges, each project's production-ready tree and the league ladder.
+// "Wefter Profile": your wefter card (with your GitHub profile and your mini apps), badges, each project's production-ready tree and the league ladder.
 // Opens with the header chip's light state and measures your projects in the background.
 export default function LoomDialog({
   cwd,
   initial,
+  startTab = "you",
   onClose,
   onStart,
 }: {
   cwd: string | null;
   initial: GameState;
+  // The tab it opens on: the achievement popup opens it on Badges.
+  startTab?: LoomTab;
   onClose: () => void;
   onStart: (cwd: string, prompt: string, title: string) => void;
 }) {
   const [game, setGame] = useState(initial);
   const [measuring, setMeasuring] = useState(true);
-  const [tab, setTab] = useState<Tab>("you");
+  const [tab, setTab] = useState<LoomTab>(startTab);
 
   useEffect(() => {
     let live = true;
@@ -132,7 +135,7 @@ export default function LoomDialog({
   const unlocked = game.badges.filter((b) => b.unlocked).length;
 
   return (
-    <Modal title="Your loom" onClose={onClose} className="max-h-[86vh] w-full max-w-[760px]">
+    <Modal title="Wefter Profile" onClose={onClose} className="max-h-[86vh] w-full max-w-[760px]">
       <div className="flex shrink-0 items-center gap-1 border-b border-line px-4 py-2">
         {TABS.map((t) => (
           <button

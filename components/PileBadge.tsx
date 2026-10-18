@@ -6,8 +6,8 @@ import Tip from "./Tip";
 
 type PileSummary = { root: string; files: number; added: number; removed: number; cards: number };
 
-// One line of numbers, one line of pitch, and the click as a button (the bubble can't take clicks; the badge does).
-function PileTip({ pile }: { pile: PileSummary }) {
+// One line of numbers, one line of pitch, and the click as a button (the bubble is interactive, so it takes it).
+function PileTip({ pile, busy, onStart }: { pile: PileSummary; busy: boolean; onStart: () => void }) {
   const { added, removed, cards } = pile;
   return (
     <span className="flex flex-col gap-1.5">
@@ -15,9 +15,13 @@ function PileTip({ pile }: { pile: PileSummary }) {
         Uncommitted: <span className="text-ok">{added}</span> new lines of code, <span className="text-danger">-{removed}</span> removed
       </span>
       <span className="text-muted">Review your cards and push to production faster with Weft.</span>
-      <span className="self-start rounded bg-accent px-2 py-0.5 font-medium text-on-accent">
-        {cards ? `Review ${cards} card${cards === 1 ? "" : "s"}` : "Commit them"}
-      </span>
+      <button
+        onClick={onStart}
+        disabled={busy}
+        className="self-start rounded bg-accent px-2 py-0.5 font-medium text-on-accent hover:opacity-90 disabled:opacity-60"
+      >
+        {busy ? "Starting…" : cards ? `Review ${cards} card${cards === 1 ? "" : "s"}` : "Commit them"}
+      </button>
     </span>
   );
 }
@@ -72,10 +76,12 @@ export default function PileBadge({
     }
   }
 
+  const click = () => void start().catch(onError);
+
   return (
-    <Tip text={<PileTip pile={p} />}>
+    <Tip text={<PileTip pile={p} busy={busy} onStart={click} />} interactive>
       <button
-        onClick={() => void start().catch(onError)}
+        onClick={click}
         disabled={busy}
         className="rounded-md px-1 py-0.5 font-mono text-[11.5px] text-muted hover:bg-hover disabled:opacity-60"
       >
