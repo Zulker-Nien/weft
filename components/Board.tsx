@@ -807,7 +807,12 @@ export default function Board() {
                     }
                     await api.send(selected.id, text);
                   }}
-                  onAnswer={(allow, answers) => void api.answer(selected.id, allow, answers, selected.pending?.id).catch(notify)}
+                  onAnswer={(allow, answers, reply) =>
+                    api.answer(selected.id, allow, answers, selected.pending?.id, reply).catch((err: unknown) => {
+                      notify(err);
+                      throw err;
+                    })
+                  }
                   onRelease={() => void api.release(selected.id).catch(notify)}
                   onArchive={() => toggleArchive(selected)}
                   onDelete={() => {

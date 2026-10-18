@@ -46,7 +46,7 @@ export default function ThreadPanel({
   items: ThreadItem[];
   streaming: string;
   onSend: (text: string) => Promise<void>;
-  onAnswer: (allow: boolean, answers?: Record<string, string>, reply?: QuestionReply) => void;
+  onAnswer: (allow: boolean, answers?: Record<string, string>, reply?: QuestionReply) => unknown;
   onRelease: () => void;
   onArchive: () => void;
   // The ☆: star or unstar the card.

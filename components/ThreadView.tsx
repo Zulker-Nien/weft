@@ -22,7 +22,7 @@ import { ThreadEntries, groupThread } from "./ThreadItems";
 const ReplyBox = guarded(() => import("./ReplyBox"), { what: "reply box", className: "mx-4 my-2" });
 
 // A pending question, for the reply box, whose composer is where you type your own answer or a note.
-function questionFor(card: Card, onAnswer: (allow: boolean, answers?: Record<string, string>, reply?: QuestionReply) => void) {
+function questionFor(card: Card, onAnswer: (allow: boolean, answers?: Record<string, string>, reply?: QuestionReply) => unknown) {
   const pending = card.pending;
   if (!pending?.questions) return undefined;
   return {
@@ -30,9 +30,9 @@ function questionFor(card: Card, onAnswer: (allow: boolean, answers?: Record<str
     questions: pending.questions,
     readScope: pending.readScope,
     previewUrl: pending.previewUrl,
-    onAnswer: (answers: Record<string, string>, annotations: NonNullable<QuestionReply["annotations"]>) => {
-      onAnswer(true, answers, Object.keys(annotations).length ? { annotations } : undefined);
-    },
+    onAnswer: (answers: Record<string, string>, annotations: NonNullable<QuestionReply["annotations"]>) =>
+      onAnswer(true, answers, Object.keys(annotations).length ? { annotations } : undefined),
+    onDecline: (chat: string) => onAnswer(false, undefined, chat.trim() ? { chat } : undefined),
     // Persist the read scope and queue the /add-dir slash command; the form answers the question itself.
     onReadScope: (path: string) => void api.setReadScope(card.id, path).catch(() => {}),
   };
@@ -58,8 +58,8 @@ export default function ThreadView({
   items: ThreadItem[];
   streaming: string;
   onSend: (text: string) => Promise<void>;
-  // reply: a question's notes.
-  onAnswer: (allow: boolean, answers?: Record<string, string>, reply?: QuestionReply) => void;
+  // reply: a question's notes, or what to talk over instead. A rejected promise lets the user answer again.
+  onAnswer: (allow: boolean, answers?: Record<string, string>, reply?: QuestionReply) => unknown;
   empty?: ReactNode;
   placeholder?: string;
   // Shown above the reply box, or in its place with replaceReply.
@@ -139,7 +139,8 @@ export default function ThreadView({
   }, []);
 
   // The show rail (components/ShowRail.tsx): a clicked mini scrolls here, and a scroll of our own
-  // tells the rail which turn is now on top, at most once per 80 ms. A rail-driven scroll doesn't echo back.
+  // tells the rail which turn is now on top (and whether we're at the end), at most once per 80 ms; the pane
+  // follows it to that turn's page. A rail-driven scroll doesn't echo back.
   const railScroll = useRef(0);
   const reportTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const lastTop = useRef<string>(undefined);
@@ -165,9 +166,11 @@ export default function ThreadView({
     reportTimer.current = setTimeout(() => {
       if (Date.now() < railScroll.current) return;
       const id = topmostTurn(el);
-      if (!id || id === lastTop.current) return;
-      lastTop.current = id;
-      reportTopTurn(id);
+      const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+      const key = `${id}${bottom ? "↓" : ""}`;
+      if (!id || key === lastTop.current) return;
+      lastTop.current = key;
+      reportTopTurn(id, bottom);
     }, 80);
   }
 
@@ -194,7 +197,7 @@ export default function ThreadView({
   function answer(allow: boolean) {
     if (!card.pending || answered) return;
     setAnsweredId(card.pending.id);
-    onAnswer(allow);
+    void Promise.resolve(onAnswer(allow)).catch(() => setAnsweredId(null));
   }
 
   // "This card" / "Always" on an outside-folder prompt: grant the folder, then allow the call (lib/folder-guard.ts).

@@ -1,7 +1,7 @@
 "use client";
 
 import { isAnswered, summary, type AnswerState } from "@/lib/question-answers";
-import type { Question } from "@/lib/types";
+import type { PendingPermission, Question } from "@/lib/types";
 import Icon from "./Icon";
 
 // The pieces components/QuestionForm.tsx draws: the tabs, the options and the Submit tab's review.
@@ -145,5 +145,45 @@ export function Review({ questions, state, onTab }: { questions: Question[]; sta
         </button>
       ))}
     </div>
+  );
+}
+
+// Under the options: why a send didn't go (an error, or a send held as the question appeared), the keys,
+// and the two ways out, Chat about this (the box's text instead of answers) and Skip.
+export function FormFooter({ error, held, hint, onDecline }: { error: string | null; held: boolean; hint: string; onDecline?: (chat: boolean) => void }) {
+  return (
+    <>
+      {error && <p className="mt-1.5 shrink-0 text-[12px] text-danger">{error}</p>}
+      {held && !error && (
+        <p className="mt-1.5 shrink-0 text-[12px] text-warn">This question just came in, so that send was held. Your text is still in the box.</p>
+      )}
+      <div className="mt-2 flex shrink-0 items-center gap-2 text-[11px]">
+        <p className="min-w-0 flex-1 truncate text-faint">{hint}</p>
+        {onDecline && (
+          <>
+            <button onClick={() => onDecline(true)} className="shrink-0 text-muted hover:text-ink">
+              Chat about this
+            </button>
+            <button onClick={() => onDecline(false)} className="shrink-0 text-muted hover:text-ink">
+              Skip
+            </button>
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+// A folder outside the project that the question names: one click grants it as the answer (until it's sent).
+export function ReadFrom({ readScope, sent, onClick }: { readScope?: PendingPermission["readScope"]; sent: boolean; onClick: () => void }) {
+  if (!readScope || sent) return null;
+  return (
+    <button
+      onClick={onClick}
+      className="mt-2 shrink-0 rounded-md border border-accent bg-accent-soft px-3 py-1.5 text-left text-[12.5px] text-ink hover:bg-accent/30"
+    >
+      <span className="font-medium">Read from {readScope.token}</span>
+      <span className="block text-[11.5px] text-muted">Grant this thread read access — no need to paste the file.</span>
+    </button>
   );
 }

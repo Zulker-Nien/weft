@@ -9,6 +9,7 @@ import { editedPath, touchFile } from "./overlap";
 import { hitRateLimit } from "./rate-limit";
 import { extractReview } from "./review";
 import { archiveAfter, hooks, queued, safeUpdate, scheduleIdle, type Session } from "./runner-state";
+import { handleTaskEvent } from "./runner-tasks";
 import { restoreDoneOverride } from "./runner";
 import { withRedacted } from "./secret-run";
 import { secretAskOf } from "./vault-view";
@@ -31,7 +32,7 @@ export function handle(id: string, session: Session, msg: SDKMessage): void | Pr
         const ran = card && runsOn(msg.model, card);
         if (ran) updateStats(id, { runsOn: ran });
         void refreshLimits(id, session);
-      }
+      } else handleTaskEvent(id, session, msg);
       break;
 
     case "rate_limit_event":

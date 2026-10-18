@@ -66,6 +66,7 @@ describe("readThreadText", () => {
       { kind: "result", text: "boom", isError: true },
       { kind: "shell", command: "ls", exitCode: 0 },
       { kind: "shell", command: "false", exitCode: 1 },
+      { kind: "notification", status: "completed", summary: "Background command \"tests\" completed" },
       { kind: "user", text: "u" },
     ] as ThreadItem[];
     const text = readThreadText("c1");
@@ -80,6 +81,7 @@ describe("readThreadText", () => {
     expect(text).toContain("PERMISSION wait: waiting");
     expect(text).toContain("TURN FINISHED");
     expect(text).toContain("TURN ENDED: boom");
+    expect(text).toContain("TASK NOTIFICATION: Background command \"tests\" completed");
   });
 
   it("says when the thread is empty", () => {

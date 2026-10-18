@@ -201,8 +201,23 @@ export const ThreadMessage = memo(function ThreadMessage({ item, cardId }: { ite
       return <EditedFold items={item.items} cardId={cardId} />;
     case "shell":
       return <ShellLine item={item} />;
+    case "notification":
+      return <NotificationLine item={item} />;
   }
 });
+
+// A background task the CLI told the agent had ended, as the <task-notification> it sent: often what
+// started the turn below it.
+function NotificationLine({ item }: { item: Extract<ThreadItem, { kind: "notification" }> }) {
+  const color = item.status === "failed" ? "text-danger" : item.status === "stopped" ? "text-warn" : "text-muted";
+  return (
+    <div className="flex items-start gap-2 rounded-lg border border-line bg-sunken px-2.5 py-1.5 text-[12px]">
+      <Icon name="clock" size={12} className="mt-0.5 shrink-0 text-faint" />
+      <code className="shrink-0 font-mono text-[11.5px] text-faint">&lt;task-notification&gt;</code>
+      <span className={`min-w-0 flex-1 ${color}`}>{item.summary}</span>
+    </div>
+  );
+}
 
 // A "!" command you ran from the reply box (lib/shell.ts): the command, what it printed, and whether
 // Claude has read it yet.

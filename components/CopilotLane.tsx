@@ -164,7 +164,12 @@ export default function CopilotLane(props: {
               items={items}
               streaming={streaming}
               onSend={send}
-              onAnswer={(allow, answers) => void api.answer(COPILOT_ID, allow, answers, card.pending?.id).catch(fail)}
+              onAnswer={(allow, answers, reply) =>
+                api.answer(COPILOT_ID, allow, answers, card.pending?.id, reply).catch((err: unknown) => {
+                  fail(err);
+                  throw err;
+                })
+              }
               placeholder="Ask about your threads, or tell me what to start"
               empty={<CopilotEmpty project={props.project} onAsk={(text) => void send(text).catch(fail)} />}
             />

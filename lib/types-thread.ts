@@ -52,6 +52,9 @@ export type ThreadItem =
       at: number;
     }
   | { kind: "result"; text: string; costUsd?: number; isError: boolean; at: number }
+  // A background task the CLI told the agent had ended (its <task-notification>), which can start a turn
+  // of its own (lib/runner-tasks.ts).
+  | { kind: "notification"; status: "completed" | "failed" | "stopped"; summary: string; at: number }
   // A message you edited with ↑, and the turn it started, folded away when the edit went out.
   | { kind: "edited"; items: ThreadItem[]; at: number }
   // A "!" command you ran from the reply box (lib/shell.ts). ms is set once it ends; sent once its

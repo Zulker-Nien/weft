@@ -102,6 +102,8 @@ export interface Session {
   // Parallel tool calls can ask at once; the card shows the oldest.
   pending: Pending[];
   toolIndex: Map<string, number>;
+  // Ids of this CLI's tasks that ran in the background, whose end gets a row in the thread (lib/runner-tasks.ts).
+  backgrounded?: Set<string>;
   idle?: ReturnType<typeof setTimeout>;
   // What this CLI process's cumulative cost totals are added to (see the result handler).
   costBase?: number;

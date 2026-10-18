@@ -4,10 +4,11 @@ import { createRef, type KeyboardEvent } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Question } from "@/lib/types";
 import type { ComposerHandle } from "./Composer";
-import QuestionForm, { type QuestionFormHandle } from "./QuestionForm";
+import QuestionForm, { ARM_MS, type QuestionFormHandle } from "./QuestionForm";
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   delete (window as { threadboard?: unknown }).threadboard;
 });
 
@@ -42,11 +43,18 @@ function fakeComposer(initial = "") {
   return { handle, focus, get text() { return text; }, set text(t: string) { text = t; } };
 }
 
-function setup(questions: Question[], opts: { box?: string; readScope?: { directory: string; token: string }; previewUrl?: string } = {}) {
+// The clock the form reads: shown at 1000 ms; unless `fresh`, the hold (ARM_MS) is already over.
+function setup(
+  questions: Question[],
+  opts: { box?: string; readScope?: { directory: string; token: string }; previewUrl?: string; fresh?: boolean; answer?: () => unknown } = {},
+) {
+  let now = 1000;
+  vi.spyOn(Date, "now").mockImplementation(() => now);
   const box = fakeComposer(opts.box);
   const composer = { current: box.handle };
   const form = createRef<QuestionFormHandle>();
-  const onAnswer = vi.fn();
+  const onAnswer = vi.fn(opts.answer);
+  const onDecline = vi.fn();
   const onReadScope = vi.fn();
   render(
     <QuestionForm
@@ -57,9 +65,12 @@ function setup(questions: Question[], opts: { box?: string; readScope?: { direct
       readScope={opts.readScope}
       previewUrl={opts.previewUrl}
       onAnswer={onAnswer}
+      onDecline={onDecline}
       onReadScope={onReadScope}
     />,
   );
+  const wait = (ms: number) => (now += ms);
+  if (!opts.fresh) wait(ARM_MS);
   const key = (k: string, mods: Partial<KeyboardEvent> = {}) => {
     let used = false;
     act(() => {
@@ -68,7 +79,7 @@ function setup(questions: Question[], opts: { box?: string; readScope?: { direct
     return used;
   };
   const enter = () => act(() => form.current!.enter());
-  return { box, onAnswer, onReadScope, key, enter };
+  return { box, onAnswer, onDecline, onReadScope, key, enter, wait };
 }
 
 const highlighted = () => screen.getAllByRole("option").findIndex((o) => o.querySelector(".text-accent")?.textContent === "❯");
@@ -167,9 +178,8 @@ describe("QuestionForm", () => {
     expect(screen.getByText("Which sign-in methods?")).toBeTruthy();
   });
 
-  it("has no Chat about this: text typed on the Submit tab goes with the answers as a note", () => {
-    const { key, enter, onAnswer, box } = setup(TWO);
-    expect(screen.queryByRole("button", { name: "Chat about this" })).toBeNull();
+  it("text typed on the Submit tab goes with the answers as a note, not as Chat about this", () => {
+    const { key, enter, onAnswer, onDecline, box } = setup(TWO);
     expect(key("1")).toBe(true);
     enter();
     expect(key("1")).toBe(true);
@@ -180,7 +190,7 @@ describe("QuestionForm", () => {
       { "Which sign-in methods?": "GitHub", "Required?": "Optional" },
       { "Which sign-in methods?": { notes: "On all answers: Ship it behind a flag" } },
     );
-    expect(box.text).toBe("");
+    expect(box.text).toBe("");    expect(onDecline).not.toHaveBeenCalled();
   });
 
   it("reads the box as typed while an upload keeps it from reading as Markdown", () => {
@@ -225,5 +235,55 @@ describe("QuestionForm", () => {
     delete (window as { threadboard?: unknown }).threadboard;
     setup(ONE);
     expect(screen.getByText("| Nav | Content |")).toBeTruthy();
+  });
+
+  it("holds a send, a pick or a click that lands as the question appears, and keeps the box's text", () => {
+    const { box, onAnswer, key, enter, wait } = setup(ONE, { box: "and also rename the file", fresh: true });
+    enter();
+    expect(onAnswer).not.toHaveBeenCalled();
+    expect(box.text).toBe("and also rename the file");
+    expect(screen.getByText(/that send was held/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("option", { name: /Top bar/ }));
+    box.text = "";
+    expect(key("1")).toBe(true); // swallowed, not picked
+    expect(onAnswer).not.toHaveBeenCalled();
+    expect(key("ArrowDown")).toBe(true); // moving is harmless
+    expect(highlighted()).toBe(1);
+    wait(ARM_MS);
+    enter();
+    expect(onAnswer).toHaveBeenCalledWith({ "Which layout?": "Top bar" }, { "Which layout?": { preview: "[ Nav ]\n Content" } });
+  });
+
+  it("comes back with the box's text and an error when the answer doesn't reach the agent", async () => {
+    let fail = true;
+    const { box, onAnswer, enter } = setup(ONE, { box: "my own layout", answer: () => (fail ? Promise.reject(new Error("offline")) : undefined) });
+    enter();
+    expect(box.text).toBe("");
+    await act(async () => {});
+    expect(screen.getByText(/Couldn't send that: offline/)).toBeTruthy();
+    expect(box.text).toBe("my own layout");
+    fail = false;
+    enter();
+    expect(onAnswer).toHaveBeenCalledTimes(2);
+    expect(onAnswer).toHaveBeenLastCalledWith({ "Which layout?": "my own layout" }, expect.anything());
+  });
+
+  it("skips, or sends the box's text to talk it over instead", () => {
+    const first = setup(ONE);
+    fireEvent.click(screen.getByText("Chat about this"));
+    expect(first.onDecline).not.toHaveBeenCalled();
+    expect(screen.getByText(/Write what you'd like to say/)).toBeTruthy();
+    expect(first.box.focus).toHaveBeenCalled();
+    first.box.text = "why not both?";
+    fireEvent.click(screen.getByText("Chat about this"));
+    expect(first.onDecline).toHaveBeenCalledWith("why not both?");
+    expect(first.box.text).toBe("");
+    expect(screen.queryByText("Skip")).toBeNull(); // sent: no second decline
+    cleanup();
+    const second = setup(ONE, { box: "draft" });
+    fireEvent.click(screen.getByText("Skip"));
+    expect(second.onDecline).toHaveBeenCalledWith("");
+    expect(second.box.text).toBe("draft");
+    expect(second.onAnswer).not.toHaveBeenCalled();
   });
 });

@@ -128,13 +128,26 @@ whole `annotations` field if it ends up empty, so `updatedInput` carries
 nothing extra when the user just picked an option without a preview or note
 (`lib/runner-ask.ts:60-62`).
 
-The route still accepts a `chat` field on the body and produces a denial
-message from it (`lib/runner-ask.ts:64-70`); the form does not draw a
-"Chat about this" button and the old `Skip` button is gone. Text typed on
-the Submit tab is sent with the answers as a note on all of them
-(`components/QuestionForm.tsx:101-113`, `lib/question-answers.ts:106-110`).
-The denial protocol stays open so other clients (a future mobile app, a
-CLI) can still decline a question with their own message.
+The route also accepts a `chat` field on the body and produces a denial
+message from it (`lib/runner-ask.ts` `permissionResult`). The form's hint row
+ends in **Chat about this** (the box's text goes as `chat`; an empty box asks
+for text first) and **Skip** (a denial with no `chat`: "The user skipped the
+question."), both through `onDecline`, which `ThreadView` turns into
+`onAnswer(false, undefined, { chat })`. Text typed on the Submit tab is still
+sent with the answers as a note on all of them (`lib/question-answers.ts`
+`buildReply`'s `general`), never as `chat`.
+
+### The hold and the retry
+
+A send, a number key or a tick, or a click on an option in the first
+`ARM_MS` (800 ms) after the form mounts is held: nothing is sent, the box
+keeps its text and a warn line says why. The form is keyed by the request,
+so mount is the moment the question appeared; this stops Enter on a message
+you were finishing from answering a question you haven't read. Arrows still
+move the highlight. `onAnswer` and `onDecline` may return a promise; if it
+rejects, the form re-enables, restores the box's text and its picks, and
+shows the error. The desktop board and the copilot return `api.answer`'s
+promise (and pass the `reply`, which they used to drop) for that.
 
 ## The form's state
 
