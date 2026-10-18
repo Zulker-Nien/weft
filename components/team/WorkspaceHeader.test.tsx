@@ -108,10 +108,9 @@ describe("WorkspaceHeader", () => {
     expect(billing).toHaveAttribute("aria-current", "page");
   });
 
-  it("marks Board as current when the current prop is board", () => {
-    render(<WorkspaceHeader ctx={makeCtx()} current="board" />);
-    const board = screen.getByRole("link", { name: "Board" });
-    expect(board).toHaveAttribute("aria-current", "page");
+  it("steps aside on the board, which draws the desktop's own header and rail", () => {
+    const { container } = render(<WorkspaceHeader ctx={makeCtx()} current="board" />);
+    expect(container).toBeEmptyDOMElement();
   });
 
   it("shows the signed-in user name and email tooltip", () => {

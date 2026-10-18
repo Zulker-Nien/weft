@@ -1,12 +1,12 @@
 // lib/web-board.ts: the web board's pure logic — how cards group into columns, how Realtime
-// changes update the list, how a thread window is built, and how blob refs are rewritten to
-// signed URLs. We mock nothing; this file is pure and the tests stay small.
+// changes update the list, how a thread's items sort chronologically, and how blob refs are
+// collected and rewritten to signed URLs. We mock nothing; this file is pure and the tests stay
+// small.
 import { beforeEach, describe, expect, it } from "vitest";
-import { BLOB_REF_PREFIX, type CloudCardRow, type CloudThreadItemRow } from "./cloud-sync-types";
+import { BLOB_REF_PREFIX, type CloudCardRow } from "./cloud-sync-types";
 import {
   applyCardChange,
-  applyItemChange,
-  seqOf,
+  SEQ_FIELD,
   batchBlobRefs,
   blobPath,
   buildBlobUrlMap,
@@ -14,10 +14,7 @@ import {
   boardCounts,
   chronological,
   webCards,
-  windowFromItems,
   rewriteBlobRefs,
-  rewriteWindowBlobRefs,
-  _internals,
 } from "./web-board";
 import type { Card, ThreadItem } from "./types";
 
@@ -56,23 +53,6 @@ function makeRow(over: Partial<CloudCardRow> = {}): CloudCardRow {
 beforeEach(() => {
   // sanity: the BLOB_REF_PREFIX check below is what isBlobRef matches; assert it stays that way.
   expect(REF.startsWith(BLOB_REF_PREFIX)).toBe(true);
-});
-
-describe("_internals", () => {
-  it("compareThreadItems fills in the `?? 0` and returns the right sign for every branch", () => {
-    const a: ThreadItem = { kind: "user", text: "a", at: 5 };
-    const b: ThreadItem = { kind: "user", text: "b", at: 10 };
-    // A ThreadItem without an `at` (e.g. an old malformed row) gets a default of 0.
-    const stripped = { kind: "user" } as unknown as ThreadItem;
-    expect(_internals.compareThreadItems(a, b)).toBe(1);
-    expect(_internals.compareThreadItems(b, a)).toBe(-1);
-    expect(_internals.compareThreadItems(a, { ...a })).toBe(0);
-    expect(_internals.compareThreadItems(stripped, stripped)).toBe(0);
-    // a (5) > stripped.at (0)
-    expect(_internals.compareThreadItems(a, stripped)).toBe(-1);
-    // stripped.at (0) < b (10)
-    expect(_internals.compareThreadItems(stripped, b)).toBe(1);
-  });
 });
 
 describe("webCards", () => {
@@ -153,134 +133,17 @@ describe("applyCardChange", () => {
 });
 
 describe("chronological", () => {
-  it("puts the items oldest first by their seq, leaving the window alone", () => {
-    const win = windowFromItems("c1", [
-      { org_id: ORG, card_id: "c1", seq: 7, kind: "user", item: { kind: "user", text: "late", at: 2 }, at: "x" },
-      { org_id: ORG, card_id: "c1", seq: 3, kind: "user", item: { kind: "user", text: "early", at: 1 }, at: "x" },
-    ]);
-    expect(win.items.map((i) => (i as { text: string }).text)).toEqual(["late", "early"]);
-    expect(chronological(win.items).map((i) => (i as { text: string }).text)).toEqual(["early", "late"]);
+  it("puts the items oldest first by their seq carrier, leaving the input alone", () => {
+    const stamp = (item: ThreadItem, seq: number): ThreadItem =>
+      Object.assign({}, item, { [SEQ_FIELD]: seq });
+    const items = [
+      stamp({ kind: "user", text: "late", at: 2 }, 7),
+      stamp({ kind: "user", text: "early", at: 1 }, 3),
+    ];
+    expect(items.map((i) => (i as { text: string }).text)).toEqual(["late", "early"]);
+    expect(chronological(items).map((i) => (i as { text: string }).text)).toEqual(["early", "late"]);
     // An item with no seq (not from a row) sorts first.
     expect(chronological([{ kind: "user", text: "n" } as ThreadItem])).toHaveLength(1);
-  });
-});
-
-describe("windowFromItems", () => {
-  const userMsg: ThreadItem = { kind: "user", text: "Hello", at: 1000 };
-  const assistantMsg: ThreadItem = { kind: "assistant", text: "Hi back", at: 2000 };
-  const toolMsg: ThreadItem = { kind: "tool", id: "t1", name: "Bash", summary: "ls", at: 3000, result: "ok", images: [REF] };
-
-  it("orders items newest first and collects every blob ref", () => {
-    const rows: CloudThreadItemRow[] = [
-      { org_id: ORG, card_id: "c1", seq: 0, kind: "user", item: userMsg, at: "2026-10-15T10:00:00.000Z" },
-      { org_id: ORG, card_id: "c1", seq: 1, kind: "assistant", item: assistantMsg, at: "2026-10-15T10:00:01.000Z" },
-      { org_id: ORG, card_id: "c1", seq: 2, kind: "tool", item: toolMsg, at: "2026-10-15T10:00:02.000Z" },
-    ];
-    const w = windowFromItems("c1", rows);
-    expect(w.items.map((i) => i.kind)).toEqual(["tool", "assistant", "user"]);
-    expect(w.blobRefs).toEqual([REF]);
-    expect(w.hasOlder).toBe(false);
-  });
-
-  it("keeps stable order for two items at the same timestamp", () => {
-    // Three items, two at the same time: forces the comparator's `=== 0` branch.
-    const rows: CloudThreadItemRow[] = [
-      { org_id: ORG, card_id: "c1", seq: 0, kind: "user", item: { kind: "user", text: "a", at: 5 }, at: "2026-10-15T10:00:00.000Z" },
-      { org_id: ORG, card_id: "c1", seq: 1, kind: "user", item: { kind: "user", text: "b", at: 10 }, at: "2026-10-15T10:00:01.000Z" },
-      { org_id: ORG, card_id: "c1", seq: 2, kind: "user", item: { kind: "user", text: "c", at: 5 }, at: "2026-10-15T10:00:02.000Z" },
-    ];
-    const w = windowFromItems("c1", rows);
-    expect(w.items.map((i) => (i as Extract<ThreadItem, { kind: "user" }>).text)).toEqual(["b", "a", "c"]);
-  });
-
-  it("sets hasOlder when a full page came back, and not for a partial one", () => {
-    const row = (seq: number): CloudThreadItemRow => ({ org_id: ORG, card_id: "c1", seq, kind: "user", item: { kind: "user", text: "x", at: seq }, at: "2026-10-15T10:00:00.000Z" });
-    const full = Array.from({ length: 50 }, (_, i) => row(i));
-    expect(windowFromItems("c1", full).hasOlder).toBe(true);
-    // A partial page might be the end of the thread.
-    expect(windowFromItems("c1", [row(1)]).hasOlder).toBe(false);
-  });
-
-  it("drops rows that don't match the card or have a bad item", () => {
-    const rows: CloudThreadItemRow[] = [
-      { org_id: ORG, card_id: "c2", seq: 0, kind: "user", item: userMsg, at: "2026-10-15T10:00:00.000Z" },
-      { org_id: ORG, card_id: "c1", seq: 1, kind: "assistant", item: { not: "an item" } as unknown as ThreadItem, at: "2026-10-15T10:00:01.000Z" },
-      { org_id: ORG, card_id: "c1", seq: 2, kind: "assistant", item: assistantMsg, at: "2026-10-15T10:00:02.000Z" },
-    ];
-    const w = windowFromItems("c1", rows);
-    expect(w.items).toHaveLength(1);
-  });
-});
-
-describe("applyItemChange", () => {
-  const base = {
-    cardId: "c1",
-    items: [] as ThreadItem[],
-    hasOlder: false,
-    blobRefs: [] as string[],
-  };
-  const userMsg: ThreadItem = { kind: "user", text: "hi", at: 1 };
-
-  it("INSERTs a new item, unshifted to the top, and rewrites blob refs", () => {
-    const tool: ThreadItem = { kind: "tool", id: "t1", name: "Bash", summary: "ls", at: 2, result: "ok", images: [REF] };
-    const next = applyItemChange(base, {
-      eventType: "INSERT",
-      new: { org_id: ORG, card_id: "c1", seq: 1, kind: "tool", item: tool, at: "2026-10-15T10:00:00.000Z" },
-    });
-    expect(next.items).toHaveLength(1);
-    expect(next.blobRefs).toEqual([REF]);
-  });
-
-  const row = (seq: number, item: ThreadItem): CloudThreadItemRow => ({ org_id: ORG, card_id: "c1", seq, kind: item.kind, item, at: "2026-10-15T10:00:00.000Z" });
-
-  it("stamps each row's seq on its item, and seqOf reads it back", () => {
-    const win = windowFromItems("c1", [row(3, { kind: "user", text: "a", at: 1 }), row(4, { kind: "assistant", text: "b", at: 2 })]);
-    expect(win.items.map(seqOf)).toEqual([4, 3]);
-    expect(seqOf(userMsg)).toBeUndefined();
-  });
-
-  it("replaces the item at the same seq instead of adding a second one (a tool call getting its result)", () => {
-    const running: ThreadItem = { kind: "tool", id: "t1", name: "Bash", summary: "ls", at: 2 };
-    const finished: ThreadItem = { ...running, result: "done", resultBytes: 4 };
-    const win = windowFromItems("c1", [row(0, userMsg), row(1, running)]);
-    const next = applyItemChange(win, { eventType: "UPDATE", new: row(1, finished) });
-    expect(next.items).toHaveLength(2);
-    expect(next.items.find((i) => seqOf(i) === 1)).toMatchObject({ kind: "tool", result: "done" });
-  });
-
-  it("an INSERT carries its seq, so a later UPDATE of it replaces it", () => {
-    const first = applyItemChange(base, { eventType: "INSERT", new: row(7, { kind: "assistant", text: "draft", at: 5 }) });
-    expect(first.items.map(seqOf)).toEqual([7]);
-    const second = applyItemChange(first, { eventType: "UPDATE", new: row(7, { kind: "assistant", text: "final", at: 5 }) });
-    expect(second.items).toHaveLength(1);
-    expect(second.items[0]).toMatchObject({ text: "final" });
-  });
-
-  it("ignores events for other cards and DELETE without a seq", () => {
-    expect(
-      applyItemChange(base, {
-        eventType: "INSERT",
-        new: { org_id: ORG, card_id: "c2", seq: 1, kind: "user", item: userMsg, at: "2026-10-15T10:00:00.000Z" },
-      }),
-    ).toBe(base);
-    expect(
-      applyItemChange(base, {
-        eventType: "DELETE",
-        old: { card_id: "c1" },
-      }),
-    ).toBe(base);
-    expect(
-      applyItemChange(base, {
-        eventType: "DELETE",
-        old: { card_id: "c2", seq: 1 },
-      }),
-    ).toBe(base);
-  });
-
-  it("drops an item by seq on DELETE, for a window built from real rows", () => {
-    const win = windowFromItems("c1", [row(5, userMsg), row(6, { kind: "assistant", text: "b", at: 2 })]);
-    const next = applyItemChange(win, { eventType: "DELETE", old: { card_id: "c1", seq: 5 } });
-    expect(next.items.map(seqOf)).toEqual([6]);
   });
 });
 
@@ -326,24 +189,6 @@ describe("rewriteBlobRefs", () => {
     const tool = out[0] as Extract<ThreadItem, { kind: "tool" }>;
     const toolImages = tool.images ?? [];
     expect(toolImages[0]).toBe(REF);
-  });
-});
-
-describe("rewriteWindowBlobRefs", () => {
-  it("rewrites items inside a window and keeps cardId, hasOlder and blobRefs intact", () => {
-    const window = {
-      cardId: "c1",
-      items: [
-        { kind: "tool", id: "t", name: "Bash", summary: "x", at: 1, result: "ok", images: [REF] } as ThreadItem,
-      ],
-      hasOlder: true,
-      blobRefs: [REF],
-    };
-    const out = rewriteWindowBlobRefs(window, { [REF]: "https://signed/x" });
-    expect(out.cardId).toBe("c1");
-    expect(out.hasOlder).toBe(true);
-    expect(out.blobRefs).toEqual([REF]);
-    expect((out.items[0] as { images: string[] }).images[0]).toBe("https://signed/x");
   });
 });
 

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-// The weft.zip board's thread panel, through <WebBoard>: the open card's messages oldest first with tool
-// calls folded, paging, live items, signed pictures and trimmed tool results. The Supabase client is the
-// harness's (components/web-board/web-board-harness.ts).
+// The weft.zip board's thread panel, through <WebBoard>: the desktop's own ThreadPanel over the cloud transport, so
+// the open card's messages oldest first with tool calls folded, paging, live items, signed pictures and trimmed tool
+// results. The Supabase client is the harness's (components/web-board/web-board-harness.ts); Composer is the
+// components' textarea stand-in.
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CloudCommandRow } from "@/lib/cloud-commands";
@@ -11,12 +12,15 @@ import { cardRow, db, itemRow, mockState, resetHarness } from "./web-board-harne
 
 vi.mock("@supabase/ssr", async () => (await import("./web-board-harness")).supabaseSsrMock);
 vi.mock("@/lib/supabase-project", async () => (await import("./web-board-harness")).supabaseProjectMock);
+vi.mock("../Composer", () => import("../composer-mock"));
 
 async function loadBoard() {
   return import("./WebBoard");
 }
 
-const props = { orgId: "o1", orgSlug: "ada", userId: "u1", initialCommands: [] as CloudCommandRow[], openCardId: null, initialThread: [] as CloudThreadItemRow[], initialBlobUrls: {} };
+const user = { id: "u1", email: "ada@b.co", name: "Ada", avatar: null };
+const orgs = [{ id: "o1", slug: "ada", name: "Ada's team" }, { id: "o2", slug: "lab", name: "Lab" }];
+const props = { orgId: "o1", orgSlug: "ada", userId: "u1", user, orgs, initialCommands: [] as CloudCommandRow[], openCardId: null, initialThread: [] as CloudThreadItemRow[], initialBlobUrls: {} };
 
 afterEach(() => {
   resetHarness();
@@ -24,7 +28,8 @@ afterEach(() => {
 });
 
 describe("WebBoard thread panel", () => {
-  const open = (items: CloudThreadItemRow[], over: Partial<CloudCardRow["card"]> = {}) => ({
+  // The server's ?card= seed, and what the thread view then reads for itself.
+  const open = (items: CloudThreadItemRow[], over: Partial<CloudCardRow["card"]> = {}) => (db.items = items, {
     ...props,
     openCardId: "c1",
     initialThread: items,
@@ -47,14 +52,16 @@ describe("WebBoard thread panel", () => {
     expect(text.indexOf("please list files")).toBeLessThan(text.indexOf(run));
     expect(text.indexOf(run)).toBeLessThan(text.indexOf("All"));
     expect(within(dialog).getByText("done").tagName).toBe("STRONG");
-    // The reply box is wired in now (lib/cloud-commands); the test's card is u1's, so the textarea shows.
-    expect(within(dialog).getByRole("textbox", { name: "Reply" })).toBeInTheDocument();
+    expect(await within(dialog).findByRole("textbox", { name: "Message" })).toBeInTheDocument();
   });
 
-  it("says so when nothing has synced for the open card", async () => {
+  it("draws the desktop panel's header read-only: the CLI as a badge, no rename, no card actions", async () => {
     const { WebBoard } = await loadBoard();
-    render(<WebBoard {...open([])} />);
-    expect(screen.getByText(/Nothing in this thread has synced yet/)).toBeInTheDocument();
+    render(<WebBoard {...open([], { tags: ["bug"] })} />);
+    const dialog = screen.getByRole("dialog", { name: /Open me/i });
+    expect(within(dialog).queryByTitle("Click to rename")).toBeNull();
+    expect(within(dialog).queryByRole("button", { name: /Archive/i })).toBeNull();
+    expect(within(dialog).getByText("bug")).toBeInTheDocument();
   });
 
   it("opens a card on click: fetches its thread, writes ?card= and shows the messages", async () => {
@@ -69,12 +76,12 @@ describe("WebBoard thread panel", () => {
     expect(filters).toContainEqual(["card_id", "c1"]);
   });
 
-  it("an open that finds its thread unreadable shows an empty panel instead of crashing", async () => {
+  it("an open that finds nothing synced shows an empty thread with its reply box instead of crashing", async () => {
     const { WebBoard } = await loadBoard();
     db.items = [];
     render(<WebBoard {...props} initialCards={[cardRow({ card_id: "c1", title: "Click me", column: "review" })]} />);
     fireEvent.click(screen.getByText("Click me"));
-    expect(await screen.findByText(/Nothing in this thread has synced yet/)).toBeInTheDocument();
+    expect(await screen.findByRole("textbox", { name: "Message" })).toBeInTheDocument();
   });
 
   it("closes on the close button and on Escape, clearing ?card=", async () => {
@@ -93,7 +100,7 @@ describe("WebBoard thread panel", () => {
   it("closes when the backdrop is clicked", async () => {
     const { WebBoard } = await loadBoard();
     render(<WebBoard {...open([])} />);
-    const backdrop = document.querySelector(".absolute.inset-0.z-30") as HTMLElement;
+    const backdrop = document.querySelector("[data-backdrop]") as HTMLElement;
     fireEvent.click(backdrop);
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
@@ -108,17 +115,16 @@ describe("WebBoard thread panel", () => {
     await waitFor(() => expect(screen.queryByText("arrived live")).not.toBeInTheDocument());
   });
 
-  it("pages back with Load earlier messages from the oldest seq it holds", async () => {
+  it("pages back from the oldest seq it holds when scrolled to the top, as the desktop does", async () => {
     const { WebBoard } = await loadBoard();
     const page = Array.from({ length: 50 }, (_, i) => itemRow(100 - i, { kind: "assistant", text: `msg ${100 - i}`, at: 100 - i }));
-    db.items = [itemRow(50, { kind: "assistant", text: "an older message", at: 1 })];
     render(<WebBoard {...open(page)} />);
-    fireEvent.click(screen.getByRole("button", { name: /Load earlier messages/ }));
+    db.items = [...page, itemRow(50, { kind: "assistant", text: "an older message", at: 1 })];
+    const hint = await screen.findByText("Scroll up for earlier messages");
+    fireEvent.scroll(hint.parentElement as HTMLElement);
     expect(await screen.findByText("an older message")).toBeInTheDocument();
     const older = mockState.queries.filter((q) => q.table === "cloud_thread_items").at(-1)?.filters ?? [];
     expect(older).toContainEqual(["seq<", 51]);
-    // The older page was short, so there is nothing further back.
-    expect(screen.queryByRole("button", { name: /Load earlier messages/ })).not.toBeInTheDocument();
   });
 
   it("shows a screenshot a tool took through its signed URL", async () => {

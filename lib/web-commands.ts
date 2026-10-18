@@ -1,4 +1,4 @@
-// The weft.zip board's side of starting a card (lib/cloud-commands.ts is the row, lib/cloud-inbox.ts the Mac that
+// The weft.zip board's side of starting a card and of answering one (lib/cloud-commands.ts is the row, lib/cloud-inbox.ts the Mac that
 // runs it): where a new card can run, and how the commands this board sent are tracked as Realtime moves them.
 import { commandText, isOpenCommand, type CloudCommandRow } from "./cloud-commands";
 import type { CloudCardRow } from "./cloud-sync-types";
@@ -66,12 +66,15 @@ export function commandLine(command: CloudCommandRow): { title: string; note: st
   }
 }
 
-// The strip under the header follows new threads; a reply shows under the reply box of its card instead.
-export const boardCommands = (commands: CloudCommandRow[]) => commands.filter((c) => c.kind !== "reply");
+// A reply, an answer to a waiting request or a Stop: a command for one card's thread rather than a new card.
+export const isCardCommand = (c: Pick<CloudCommandRow, "kind">) => c.kind === "reply" || c.kind === "answer" || c.kind === "stop";
 
-// The replies sent to one card that haven't landed in its thread yet, or that failed.
+// The strip under the header follows new threads; a card's own commands show under its reply box instead.
+export const boardCommands = (commands: CloudCommandRow[]) => commands.filter((c) => !isCardCommand(c));
+
+// The commands sent to one card that haven't reached its thread yet, or that failed.
 export function cardReplies(commands: CloudCommandRow[], cardId: string): CloudCommandRow[] {
-  return commands.filter((c) => c.kind === "reply" && (c.payload as { cardId?: string }).cardId === cardId && (isOpenCommand(c) || c.status === "failed"));
+  return commands.filter((c) => isCardCommand(c) && (c.payload as { cardId?: string }).cardId === cardId && (isOpenCommand(c) || c.status === "failed"));
 }
 
 // Whether the web can reply to a card: only the Mac of the account that runs it obeys (lib/cloud-inbox.ts).

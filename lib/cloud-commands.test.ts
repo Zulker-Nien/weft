@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { commandText, isOpenCommand, newCardBody, newCardCommand, replyBody, replyCommand, type CloudCommandRow } from "./cloud-commands";
+import { answerBody, answerCommand, commandText, isOpenCommand, newCardBody, newCardCommand, replyBody, replyCommand, stopBody, stopCommand, type CloudCommandRow } from "./cloud-commands";
 import { CODEX_DEFAULT_MODEL } from "./new-thread";
 
 const target = { orgId: "o1", device: "mac-1", folder: "/dev/app" };
@@ -95,8 +95,118 @@ describe("replyBody", () => {
 
 describe("commandText", () => {
   it("is a new card's prompt or a reply's text", () => {
-    expect(commandText({ payload: { prompt: "Add dark mode" } })).toBe("Add dark mode");
-    expect(commandText({ payload: { cardId: "c1", text: "go" } })).toBe("go");
-    expect(commandText({ payload: {} as never })).toBe("");
+    expect(commandText({ kind: "new_card", payload: { prompt: "Add dark mode" } })).toBe("Add dark mode");
+    expect(commandText({ kind: "reply", payload: { cardId: "c1", text: "go" } })).toBe("go");
+    expect(commandText({ kind: "new_card", payload: {} as never })).toBe("");
+  });
+});
+
+describe("answerCommand", () => {
+  const to = { ...target, cardId: "c1" };
+
+  it("is nothing to send without a pendingId", () => {
+    expect(answerCommand(to, { pendingId: "", allow: true })).toBeNull();
+  });
+
+  it("addresses the card's Mac and folder, with the card, the request, the allow and the answers", () => {
+    expect(answerCommand(to, { pendingId: "p1", allow: true, answers: { q: "a" } })).toEqual({
+      org_id: "o1",
+      kind: "answer",
+      target_device: "mac-1",
+      folder: "/dev/app",
+      payload: { cardId: "c1", pendingId: "p1", allow: true, answers: { q: "a" } },
+    });
+  });
+
+  it("carries the question reply (notes, Chat about this) when given", () => {
+    expect(
+      answerCommand(to, { pendingId: "p1", allow: true, answers: { q: "a" }, reply: { annotations: { q: { notes: "n" } }, chat: "talk" } })?.payload,
+    ).toMatchObject({ allow: true, answers: { q: "a" }, reply: { annotations: { q: { notes: "n" } }, chat: "talk" } });
+  });
+});
+
+describe("answerBody", () => {
+  it("reads the card, pendingId, allow and answers back, normalizing anything but true to false", () => {
+    expect(answerBody({ payload: { cardId: "c1", pendingId: "p1", allow: true, answers: { q: "a" } } })).toEqual({
+      cardId: "c1",
+      pendingId: "p1",
+      allow: true,
+      answers: { q: "a" },
+    });
+    expect(answerBody({ payload: { cardId: "c1", pendingId: "p1", allow: "yes", answers: { q: "a" } } as never })).toMatchObject({ allow: false });
+  });
+
+  it("drops non-string answer values, drops empty answers, and threads a question reply through readQuestionReply", () => {
+    expect(answerBody({ payload: { cardId: "c1", pendingId: "p1", allow: true, answers: { q: "a", r: 7, s: null } } as never })).toEqual({
+      cardId: "c1",
+      pendingId: "p1",
+      allow: true,
+      answers: { q: "a" },
+    });
+    expect(answerBody({ payload: { cardId: "c1", pendingId: "p1", allow: true, answers: { q: 7 } } as never })).toEqual({
+      cardId: "c1",
+      pendingId: "p1",
+      allow: true,
+    });
+    expect(answerBody({ payload: { cardId: "c1", pendingId: "p1", allow: true, answers: "nope" } as never })).toEqual({
+      cardId: "c1",
+      pendingId: "p1",
+      allow: true,
+    });
+    expect(answerBody({ payload: { cardId: "c1", pendingId: "p1", allow: true, answers: [] } as never })).toEqual({
+      cardId: "c1",
+      pendingId: "p1",
+      allow: true,
+    });
+    expect(
+      answerBody({ payload: { cardId: "c1", pendingId: "p1", allow: true, answers: { q: "a" }, reply: { annotations: { q: { notes: "n", preview: "p" } }, chat: "talk" } } }),
+    ).toEqual({
+      cardId: "c1",
+      pendingId: "p1",
+      allow: true,
+      answers: { q: "a" },
+      reply: { annotations: { q: { notes: "n", preview: "p" } }, chat: "talk" },
+    });
+  });
+
+  it("is null when the card or the pendingId is missing or the wrong type, or the payload isn't an object", () => {
+    expect(answerBody({ payload: { pendingId: "p1", allow: true } as never })).toBeNull();
+    expect(answerBody({ payload: { cardId: "c1", allow: true } })).toBeNull();
+    expect(answerBody({ payload: { cardId: 4, pendingId: "p1", allow: true } as never })).toBeNull();
+    expect(answerBody({ payload: { cardId: "c1", pendingId: 4, allow: true } as never })).toBeNull();
+    expect(answerBody({ payload: null as never })).toBeNull();
+  });
+});
+
+describe("stopCommand", () => {
+  it("addresses the card's Mac and folder with just the card", () => {
+    expect(stopCommand({ ...target, cardId: "c1" })).toEqual({
+      org_id: "o1",
+      kind: "stop",
+      target_device: "mac-1",
+      folder: "/dev/app",
+      payload: { cardId: "c1" },
+    });
+  });
+});
+
+describe("stopBody", () => {
+  it("reads the card back", () => {
+    expect(stopBody({ payload: { cardId: "c1" } })).toEqual({ cardId: "c1" });
+  });
+
+  it("is null when the card is missing or the wrong type, or the payload isn't an object", () => {
+    expect(stopBody({ payload: {} as never })).toBeNull();
+    expect(stopBody({ payload: { cardId: 4 } as never })).toBeNull();
+    expect(stopBody({ payload: null as never })).toBeNull();
+  });
+});
+
+describe("commandText (answer + stop)", () => {
+  it("joins an answer's answers, or says Allowed/Denied when there are none, and says Stop for a stop", () => {
+    expect(commandText({ kind: "answer", payload: { cardId: "c1", pendingId: "p1", allow: true, answers: { q: "Yes", r: "No" } } })).toBe("Yes; No");
+    expect(commandText({ kind: "answer", payload: { cardId: "c1", pendingId: "p1", allow: true, answers: {} } })).toBe("Allowed");
+    expect(commandText({ kind: "answer", payload: { cardId: "c1", pendingId: "p1", allow: false } })).toBe("Denied");
+    expect(commandText({ kind: "stop", payload: { cardId: "c1" } })).toBe("Stop");
   });
 });

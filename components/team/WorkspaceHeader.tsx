@@ -21,24 +21,24 @@ import type { TeamContext } from "@/lib/teams";
 // What the header needs from the gate: everything but the service-role client, which must never reach the browser.
 export type HeaderContext = Omit<TeamContext, "service">;
 
-function userInitials(name: string | null, email: string | null): string {
+export function userInitials(name: string | null, email: string | null): string {
   const seed = (name?.trim() || email?.split("@")[0] || "?").trim();
   return (seed[0] ?? "?").toUpperCase();
 }
 
-function userDisplayName(name: string | null, email: string | null): string {
+export function userDisplayName(name: string | null, email: string | null): string {
   return name?.trim() || email || "Signed in";
 }
 
-function formatOrgLabel(org: TeamContext["orgs"][number]): string {
+export function formatOrgLabel(org: TeamContext["orgs"][number]): string {
   return org.name.trim() || org.slug;
 }
 
-function orgInitial(org: TeamContext["orgs"][number]): string {
+export function orgInitial(org: TeamContext["orgs"][number]): string {
   return (formatOrgLabel(org)[0] ?? "?").toUpperCase();
 }
 
-function useClickOutside(open: boolean, onClose: () => void, ref: React.RefObject<HTMLElement | null>) {
+export function useClickOutside(open: boolean, onClose: () => void, ref: React.RefObject<HTMLElement | null>) {
   useEffect(() => {
     if (!open) return;
     function handler(e: MouseEvent) {
@@ -180,6 +180,9 @@ function WeaveMark() {
 
 export function WorkspaceHeader({ ctx, current }: { ctx: HeaderContext; current?: Section }) {
   const pathname = usePathname();
+  const section = current ?? sectionOf(pathname);
+  // The board draws the desktop's own chrome (components/web-board/WebBoardHeader.tsx and WebRail.tsx) instead.
+  if (section === "board") return null;
   return (
     <aside className="wz-workspaceHeader">
       <Link className="wz-workspaceHome" href="/" aria-label="Weft home">
@@ -187,7 +190,7 @@ export function WorkspaceHeader({ ctx, current }: { ctx: HeaderContext; current?
         <span className="wz-workspaceWordmark">Weft</span>
       </Link>
       <WorkspaceSwitcher ctx={ctx} />
-      <WorkspaceNav orgSlug={ctx.org.slug} current={current ?? sectionOf(pathname)} />
+      <WorkspaceNav orgSlug={ctx.org.slug} current={section} />
       <div className="wz-workspaceFoot">
         <WorkspaceUser user={ctx.user} />
         {/* Plain POST form to /auth/sign-out: the route signs the visitor out

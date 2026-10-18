@@ -27,13 +27,24 @@ export const mockState = {
   deletes: [] as Array<{ table: string; filters: Array<[string, unknown]> }>,
 };
 
+// db.items as a page query reads them: the card's rows (card_id=), before a seq (seq<), newest first, up to the limit.
+function threadRows(filters: Array<[string, unknown]>, limit: number): CloudThreadItemRow[] {
+  const card = filters.find(([k]) => k === "card_id")?.[1];
+  const before = filters.find(([k]) => k === "seq<")?.[1] as number | undefined;
+  return db.items
+    .filter((r) => (card === undefined || r.card_id === card) && (before === undefined || r.seq < before))
+    .toSorted((a, b) => b.seq - a.seq)
+    .slice(0, limit);
+}
+
 // A chainable stand-in for the query builder: every filter returns it, and awaiting it answers.
 function query(table: string) {
   const filters: Array<[string, unknown]> = [];
   mockState.queries.push({ table, filters });
   let deleting = false;
   let inserted: Record<string, unknown> | null = null;
-  const answer = () => ({ data: table === "cloud_thread_items" ? db.items : [], error: deleting && db.deleteError ? { message: db.deleteError } : null });
+  let limit = Infinity;
+  const answer = () => ({ data: table === "cloud_thread_items" ? threadRows(filters, limit) : [], error: deleting && db.deleteError ? { message: db.deleteError } : null });
   const builder: Record<string, unknown> = {
     select: () => builder,
     in: (k: string, v: unknown) => (filters.push([`${k} in`, v]), builder),
@@ -56,7 +67,7 @@ function query(table: string) {
     eq: (k: string, v: unknown) => (filters.push([k, v]), builder),
     lt: (k: string, v: unknown) => (filters.push([`${k}<`, v]), builder),
     order: () => builder,
-    limit: () => builder,
+    limit: (n: number) => ((limit = n), builder),
     overrideTypes: () => builder,
     maybeSingle: () => Promise.resolve({ data: db.toolOutput === null ? null : { result: db.toolOutput }, error: null }),
     then: (resolve: (v: unknown) => unknown) => Promise.resolve(answer()).then(resolve),

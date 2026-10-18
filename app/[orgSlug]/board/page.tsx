@@ -17,13 +17,8 @@ import { isDeployed } from "@/lib/home";
 import { requireTeam } from "@/lib/teams";
 import { isOpenCommand, type CloudCommandRow } from "@/lib/cloud-commands";
 import { BLOB_BUCKET, BLOB_REF_PREFIX, THREAD_PAGE_SIZE, type CloudCardRow, type CloudThreadItemRow } from "@/lib/cloud-sync-types";
-import {
-  batchBlobRefs,
-  blobPath,
-  buildBlobUrlMap,
-  collectBlobRefs,
-  windowFromItems,
-} from "@/lib/web-board";
+import { pageFromRows } from "@/lib/cloud-thread-page";
+import { batchBlobRefs, blobPath, buildBlobUrlMap, collectBlobRefs } from "@/lib/web-board";
 import { cardThumbRefs } from "@/lib/web-board-thumbs";
 import { webClient } from "@/lib/web-session";
 import { WebBoard } from "@/components/web-board";
@@ -111,7 +106,7 @@ async function BoardPageBody({ orgSlug, searchParams }: { orgSlug: string; searc
   // Pre-resolve every blob ref the SSR shell needs. The client can keep the map for the
   // items it receives later through Realtime.
   const initialRefs = new Set<string>();
-  if (cardId) collectBlobRefs(windowFromItems(cardId, threadRows).items, initialRefs);
+  if (cardId) collectBlobRefs(pageFromRows(cardId, threadRows).items, initialRefs);
   for (const ref of cardThumbRefs(cardRows)) initialRefs.add(ref);
   const initialBlobUrls = await resolveBlobUrls(supabase, ctx.org.id, [...initialRefs]);
 
@@ -120,6 +115,8 @@ async function BoardPageBody({ orgSlug, searchParams }: { orgSlug: string; searc
       orgId={ctx.org.id}
       orgSlug={orgSlug}
       userId={ctx.user.id}
+      user={ctx.user}
+      orgs={ctx.orgs}
       initialCommands={commands}
       initialCards={cardRows}
       openCardId={cardId}

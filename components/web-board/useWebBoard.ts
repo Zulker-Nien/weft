@@ -1,27 +1,22 @@
 "use client";
 
-// The weft.zip board's data: the org's cards, the open card's thread window and its signed blob URLs,
-// kept live through Supabase Realtime. The browser client is the visitor's own cookie session
+// The weft.zip board's data: the org's cards, which one is open, the commands this board sent and the signed blob
+// URLs, kept live through Supabase Realtime. The open card's thread is the desktop's own ThreadView, fed by the cloud
+// transport this hands out (useCloudTransport.ts): its pages, its share of this channel's item changes, and Stop. The browser client is the visitor's own cookie session
 // (@supabase/ssr's createBrowserClient with the publishable key), so RLS gates both the reads and the
 // Realtime stream: the same SELECT policy that gates a read gates what postgres_changes sends.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
-import { newCardCommand, replyCommand, type CloudCommandRow, type NewCardForm, type NewCommand } from "@/lib/cloud-commands";
-import { BLOB_BUCKET, THREAD_PAGE_SIZE, type CloudCardRow, type CloudThreadItemRow } from "@/lib/cloud-sync-types";
+import { answerCommand, newCardCommand, replyCommand, stopCommand, type CloudCommandRow, type NewCardForm, type NewCommand } from "@/lib/cloud-commands";
+import { BLOB_BUCKET, type CloudCardRow, type CloudThreadItemRow } from "@/lib/cloud-sync-types";
+import type { CloudItemChange } from "@/lib/cloud-thread-page";
 import { SUPABASE_KEY, SUPABASE_URL } from "@/lib/supabase-project";
-import {
-  applyCardChange,
-  applyItemChange,
-  batchBlobRefs,
-  blobPath,
-  buildBlobUrlMap,
-  seqOf,
-  windowFromItems,
-  type WebBoardThread,
-} from "@/lib/web-board";
+import type { QuestionReply } from "@/lib/types";
+import { applyCardChange, batchBlobRefs, blobPath, buildBlobUrlMap } from "@/lib/web-board";
 import { cardThumbRefs, withThumbUrls } from "@/lib/web-board-thumbs";
-import { applyCommandChange, type CloudCommandChange, type WebTarget } from "@/lib/web-commands";
+import { applyCommandChange, isCardCommand, type CloudCommandChange, type WebTarget } from "@/lib/web-commands";
+import { useCloudTransport, type CloudBlobs, type ItemBus } from "./useCloudTransport";
 
 // The status of the Realtime channel; the dot beside the title reflects it.
 export type LiveStatus = "connecting" | "live" | "offline";
@@ -34,7 +29,6 @@ export interface WebBoardInput {
   initialCommands: CloudCommandRow[];
   initialCards: CloudCardRow[];
   openCardId: string | null;
-  initialThread: CloudThreadItemRow[];
   initialBlobUrls: Record<string, string>;
 }
 
@@ -66,20 +60,37 @@ async function signedUrls(client: SupabaseClient, orgId: string, refs: readonly 
   return out;
 }
 
-export function useWebBoard({ orgId, userId, initialCommands, initialCards, openCardId, initialThread, initialBlobUrls }: WebBoardInput) {
+// The open thread's share of the channel: its item changes and reconnects (useCloudTransport's useLive listens).
+function useItemBus() {
+  const [listeners] = useState(() => new Set<Parameters<ItemBus["subscribe"]>[0]>());
+  const bus = useMemo<ItemBus>(
+    () => ({
+      subscribe(listener) {
+        listeners.add(listener);
+        return () => void listeners.delete(listener);
+      },
+    }),
+    [listeners],
+  );
+  const emit = useCallback((change: CloudItemChange | "reconnect") => {
+    for (const l of listeners) {
+      if (change === "reconnect") l.reconnect();
+      else l.change(change);
+    }
+  }, [listeners]);
+  return { bus, emit };
+}
+
+export function useWebBoard({ orgId, userId, initialCommands, initialCards, openCardId, initialBlobUrls }: WebBoardInput) {
   const [cards, setCards] = useState<CloudCardRow[]>(initialCards);
   const [activeCardId, setActiveCardId] = useState<string | null>(openCardId);
-  // The open card's thread, newest first, with blob refs still as refs: the panel rewrites them from
-  // `blobUrls` as it draws, so an item that arrives live shows its picture once its URL lands.
-  const [thread, setThread] = useState<WebBoardThread | null>(openCardId ? windowFromItems(openCardId, initialThread) : null);
+  const { bus, emit } = useItemBus();
   const [blobUrls, setBlobUrls] = useState<Record<string, string>>(initialBlobUrls);
   const [commands, setCommands] = useState<CloudCommandRow[]>(initialCommands);
   const [live, setLive] = useState<LiveStatus>("connecting");
   const [client] = useState<SupabaseClient>(() => createBrowserClient(SUPABASE_URL, SUPABASE_KEY));
   // Refs already asked for, so one that never resolves isn't asked for again on every change.
   const asked = useRef(new Set(Object.keys(initialBlobUrls)));
-  // The card the latest open asked for; a slow earlier fetch must not replace it.
-  const latestOpen = useRef<string | null>(openCardId);
   // Commands this tab sent: only these open their card when done, not one sent from another tab.
   const sent = useRef(new Set<string>());
   // The card a command made, to open once its row has synced back (the command is "done" a moment before that).
@@ -87,6 +98,7 @@ export function useWebBoard({ orgId, userId, initialCommands, initialCards, open
 
   useEffect(() => {
     let cancelled = false;
+    let subscribed = false;
     const channel: RealtimeChannel = client
       .channel(`web-board-${orgId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "cloud_cards", filter: `org_id=eq.${orgId}` }, (payload: { eventType: string; new: unknown; old: unknown }) => {
@@ -96,8 +108,7 @@ export function useWebBoard({ orgId, userId, initialCommands, initialCards, open
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "cloud_thread_items", filter: `org_id=eq.${orgId}` }, (payload: { eventType: string; new: unknown; old: unknown }) => {
         const change = changeOf<CloudThreadItemRow>(payload);
-        if (cancelled || !change) return;
-        setThread((prev) => (prev ? applyItemChange(prev, { eventType: change.eventType, new: change.new ?? undefined, old: change.old ?? undefined }) : prev));
+        if (!cancelled && change) emit(change);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "cloud_commands", filter: `org_id=eq.${orgId}` }, (payload: { eventType: string; new: unknown; old: unknown }) => {
         const change = changeOf<CloudCommandRow>(payload);
@@ -106,11 +117,14 @@ export function useWebBoard({ orgId, userId, initialCommands, initialCards, open
         if (change.new && change.new.created_by !== userId) return;
         if (change.new?.status === "done" && change.new.card_id && sent.current.delete(change.new.id)) openWhenSeen.current = change.new.card_id;
         setCommands((prev) => applyCommandChange(prev, change as CloudCommandChange));
-        // A reply that went is in the thread now; its row has nothing left to say.
-        if (change.new?.kind === "reply" && change.new.status === "done") void client.from("cloud_commands").delete().eq("id", change.new.id);
+        // A reply, answer or stop that went shows in the thread now; its row has nothing left to say.
+        if (change.new && isCardCommand(change.new) && change.new.status === "done") void client.from("cloud_commands").delete().eq("id", change.new.id);
       })
       .subscribe((status: string) => {
         if (cancelled) return;
+        // Back after a drop: the open thread re-reads its newest page for what it missed.
+        if (status === "SUBSCRIBED" && subscribed) emit("reconnect");
+        if (status === "SUBSCRIBED") subscribed = true;
         if (status === "SUBSCRIBED") setLive("live");
         else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") setLive("offline");
       });
@@ -118,23 +132,23 @@ export function useWebBoard({ orgId, userId, initialCommands, initialCards, open
       cancelled = true;
       void client.removeChannel(channel);
     };
-  }, [client, orgId, userId]);
+  }, [client, orgId, userId, emit]);
 
-  // Whatever refs the window and the cards' thumbnails name that have no URL yet.
+  // Signs whatever refs have no URL yet: the cards' thumbnails here, the open thread's as it draws (CloudBlobContext).
+  const requestBlobs = useCallback(
+    (refs: string[]) => {
+      const missing = refs.filter((r) => !asked.current.has(r));
+      if (!missing.length) return;
+      for (const r of missing) asked.current.add(r);
+      void signedUrls(client, orgId, missing).then((map) => {
+        if (Object.keys(map).length) setBlobUrls((prev) => ({ ...prev, ...map }));
+      });
+    },
+    [client, orgId],
+  );
   const thumbRefs = useMemo(() => cardThumbRefs(cards), [cards]);
-  const refs = thread?.blobRefs;
-  useEffect(() => {
-    const missing = [...(refs ?? []), ...thumbRefs].filter((r) => !asked.current.has(r));
-    if (!missing.length) return;
-    for (const r of missing) asked.current.add(r);
-    let cancelled = false;
-    void signedUrls(client, orgId, missing).then((map) => {
-      if (!cancelled && Object.keys(map).length) setBlobUrls((prev) => ({ ...prev, ...map }));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [client, orgId, refs, thumbRefs]);
+  useEffect(() => requestBlobs(thumbRefs), [requestBlobs, thumbRefs]);
+  const blobs = useMemo<Omit<CloudBlobs, "onShown">>(() => ({ urls: blobUrls, request: requestBlobs }), [blobUrls, requestBlobs]);
 
   const setCardParam = useCallback((cardId: string | null) => {
     const url = new URL(window.location.href);
@@ -143,56 +157,20 @@ export function useWebBoard({ orgId, userId, initialCommands, initialCards, open
     window.history.replaceState(null, "", url.toString());
   }, []);
 
-  // Open a card: its newest page of thread, and the URL, so the panel is linkable and survives a refresh.
+  // Open a card, and put it in the URL so the panel is linkable and survives a refresh. Its thread view reads the
+  // thread itself, through the transport.
   const openCard = useCallback(
-    async (cardId: string) => {
-      latestOpen.current = cardId;
+    (cardId: string) => {
       setActiveCardId(cardId);
       setCardParam(cardId);
-      const { data, error } = await client
-        .from("cloud_thread_items")
-        .select("*")
-        .eq("org_id", orgId)
-        .eq("card_id", cardId)
-        .order("seq", { ascending: false })
-        .limit(THREAD_PAGE_SIZE)
-        .overrideTypes<CloudThreadItemRow[]>();
-      if (latestOpen.current !== cardId) return;
-      setThread(error ? { cardId, items: [], hasOlder: false, blobRefs: [] } : windowFromItems(cardId, data));
     },
-    [client, orgId, setCardParam],
+    [setCardParam],
   );
 
   const closeCard = useCallback(() => {
-    latestOpen.current = null;
     setActiveCardId(null);
-    setThread(null);
     setCardParam(null);
   }, [setCardParam]);
-
-  // Page back from the oldest item the window holds.
-  const loadOlder = useCallback(async () => {
-    if (!thread?.hasOlder) return;
-    const oldest = thread.items[thread.items.length - 1];
-    const before = oldest ? seqOf(oldest) : undefined;
-    if (before === undefined) return;
-    const { data, error } = await client
-      .from("cloud_thread_items")
-      .select("*")
-      .eq("org_id", orgId)
-      .eq("card_id", thread.cardId)
-      .lt("seq", before)
-      .order("seq", { ascending: false })
-      .limit(THREAD_PAGE_SIZE)
-      .overrideTypes<CloudThreadItemRow[]>();
-    if (error) return;
-    const older = windowFromItems(thread.cardId, data);
-    setThread((prev) =>
-      prev && prev.cardId === thread.cardId
-        ? { ...prev, hasOlder: older.hasOlder, items: [...prev.items, ...older.items], blobRefs: [...new Set([...prev.blobRefs, ...older.blobRefs])] }
-        : prev,
-    );
-  }, [client, orgId, thread]);
 
   // Puts a command in for a Mac (lib/cloud-inbox.ts runs it). Resolves to the row, or why it couldn't be sent.
   const sendCommand = useCallback(
@@ -231,6 +209,35 @@ export function useWebBoard({ orgId, userId, initialCommands, initialCards, open
     [orgId, sendCommand],
   );
 
+  // The cards as they are now, so Stop can address a card's Mac without the transport changing each time a card does.
+  const latest = useRef(cards);
+  useEffect(() => {
+    latest.current = cards;
+  });
+  const stopRow = useCallback(
+    (cardId: string): NewCommand | string => {
+      const row = latest.current.find((c) => c.card_id === cardId);
+      return row ? stopCommand({ orgId, device: row.owner_device, folder: row.folder, cardId }) : "That thread isn't on the board anymore.";
+    },
+    [orgId],
+  );
+  const send = useCallback(async (row: NewCommand) => {
+    const sentRow = await sendCommand(row);
+    return typeof sentRow === "string" ? sentRow : null;
+  }, [sendCommand]);
+  const transport = useCloudTransport({ client, orgId, bus, stopCommand: stopRow, sendCommand: send });
+
+  // Answers the card's waiting permission request or question on the Mac that runs it, as if clicked there. Resolves
+  // like startCard; how it went shows under the reply box.
+  const answer = useCallback(
+    async (row: CloudCardRow, allow: boolean, answers?: Record<string, string>, reply?: QuestionReply): Promise<string | null> => {
+      const pendingId = row.card.pending?.id;
+      const command = pendingId && answerCommand({ orgId, device: row.owner_device, folder: row.folder, cardId: row.card_id }, { pendingId, allow, answers, reply });
+      return command ? send(command) : "Nothing is waiting for an answer.";
+    },
+    [orgId, send],
+  );
+
   // Takes a command back before the Mac has run it, or clears one that failed. A delete the database refuses
   // leaves it where it is.
   const dropCommand = useCallback(
@@ -246,7 +253,7 @@ export function useWebBoard({ orgId, userId, initialCommands, initialCards, open
     const id = openWhenSeen.current;
     if (!id || !cards.some((c) => c.card_id === id)) return;
     openWhenSeen.current = null;
-    void openCard(id);
+    openCard(id);
   }, [cards, commands, openCard]);
 
   // The full result of a tool call whose result was cut out of its item (cloud_tool_outputs).
@@ -268,5 +275,5 @@ export function useWebBoard({ orgId, userId, initialCommands, initialCards, open
   // The cards as CardView draws them: a thumb ref becomes its signed URL once it has one.
   const shown = useMemo(() => withThumbUrls(cards, blobUrls), [cards, blobUrls]);
 
-  return { cards: shown, commands, activeCardId, thread, blobUrls, live, openCard, closeCard, loadOlder, toolOutput, startCard, sendReply, dropCommand };
+  return { cards: shown, commands, activeCardId, blobs, transport, live, openCard, closeCard, toolOutput, startCard, sendReply, answer, dropCommand };
 }

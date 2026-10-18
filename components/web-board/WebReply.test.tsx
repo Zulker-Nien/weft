@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
-// Replying to a thread from the weft.zip board, through <WebBoard>: the reply box sends a `reply` command for the
-// card's Mac, follows it under the box (not in the board's strip), drops it once it went, and stays read-only on a
-// teammate's card. The Supabase client is the harness's (components/web-board/web-board-harness.ts).
+// Replying to a thread from the weft.zip board, through <WebBoard>: the desktop's own reply box sends a `reply` command
+// for the card's Mac (a running card's Send now sends a `stop` first), an answer to a waiting request is an `answer`,
+// each is followed above the box (not in the board's strip) and dropped once it went, and a teammate's card is
+// read-only. The Supabase client is the harness's (components/web-board/web-board-harness.ts); Composer is the
+// components' textarea stand-in.
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CloudCommandRow } from "@/lib/cloud-commands";
@@ -11,6 +13,7 @@ import { cardRow, commandRow, db, mockState, resetHarness } from "./web-board-ha
 
 vi.mock("@supabase/ssr", async () => (await import("./web-board-harness")).supabaseSsrMock);
 vi.mock("@/lib/supabase-project", async () => (await import("./web-board-harness")).supabaseProjectMock);
+vi.mock("../Composer", () => import("../composer-mock"));
 
 const user = { id: "u1", email: "ada@b.co", name: "Ada", avatar: null };
 const orgs = [{ id: "o1", slug: "ada", name: "Ada's team" }];
@@ -22,17 +25,19 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function board(over: Partial<typeof base> & { owner?: string; scheduled?: { id: string; text: string; at: number; afterTurn?: boolean }[] } = {}) {
+type Over = Partial<typeof base> & { owner?: string; column?: "running" | "review"; card?: NonNullable<Parameters<typeof cardRow>[0]>["card"] };
+
+async function board(over: Over = {}) {
   const { WebBoard } = await import("./WebBoard");
-  const { owner = "u1", scheduled, ...props } = over;
-  render(<WebBoard {...base} {...props} initialCards={[cardRow({ card_id: "c1", title: "Open me", column: "running", owner_user: owner, card: { scheduled } })]} />);
+  const { owner = "u1", column = "review", card, ...props } = over;
+  render(<WebBoard {...base} {...props} initialCards={[cardRow({ card_id: "c1", title: "Open me", column, owner_user: owner, card })]} />);
   return screen.getByRole("dialog", { name: /Open me/i });
 }
 
 describe("the web reply box", () => {
   it("sends a reply command to the card's Mac and folder on Enter, then clears", async () => {
     const dialog = await board();
-    const box = within(dialog).getByRole("textbox", { name: "Reply" });
+    const box = (await within(dialog).findByRole("textbox", { name: "Message" }));
     fireEvent.change(box, { target: { value: "  ship it " } });
     fireEvent.keyDown(box, { key: "Enter" });
     await waitFor(() => expect(mockState.inserts).toHaveLength(1));
@@ -44,9 +49,29 @@ describe("the web reply box", () => {
     expect(within(dialog).getByText(/Waiting for your Mac/)).toBeInTheDocument();
   });
 
+  it("holds a reply while the card runs, as the desktop does, and Send now stops the turn first", async () => {
+    const dialog = await board({ column: "running" });
+    const box = await within(dialog).findByRole("textbox", { name: "Message" });
+    fireEvent.change(box, { target: { value: "and lint" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(await within(dialog).findByText("and lint")).toBeInTheDocument();
+    expect(mockState.inserts).toHaveLength(0);
+    // The queued row's own Send now.
+    fireEvent.click(within(dialog).getAllByRole("button", { name: /Send now/i })[0]!);
+    await waitFor(() => expect(mockState.inserts.map((i) => (i.row as { kind: string }).kind)).toEqual(["stop", "reply"]));
+  });
+
+  it("answers a waiting permission request through an answer command", async () => {
+    const pending = { id: "p1", tool: "Bash", toolName: "Bash", title: "Run ls", input: { command: "ls" } };
+    const dialog = await board({ column: "review", card: { pending } });
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Allow" }));
+    await waitFor(() => expect(mockState.inserts).toHaveLength(1));
+    expect(mockState.inserts[0]?.row).toMatchObject({ kind: "answer", payload: { cardId: "c1", pendingId: "p1", allow: true } });
+  });
+
   it("keeps a new line on Shift+Enter and sends nothing empty", async () => {
     const dialog = await board();
-    const box = within(dialog).getByRole("textbox", { name: "Reply" });
+    const box = (await within(dialog).findByRole("textbox", { name: "Message" }));
     fireEvent.keyDown(box, { key: "Enter" });
     fireEvent.change(box, { target: { value: "two" } });
     fireEvent.keyDown(box, { key: "Enter", shiftKey: true });
@@ -56,7 +81,7 @@ describe("the web reply box", () => {
   it("says why a send was refused and keeps the text", async () => {
     db.insertError = "new row violates row-level security policy";
     const dialog = await board();
-    const box = within(dialog).getByRole("textbox", { name: "Reply" });
+    const box = (await within(dialog).findByRole("textbox", { name: "Message" }));
     fireEvent.change(box, { target: { value: "hi" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Send" }));
     expect(await within(dialog).findByText(/row-level security/)).toBeInTheDocument();
@@ -75,7 +100,7 @@ describe("the web reply box", () => {
   });
 
   it("lets a failed reply be dismissed, and shows what waits for the turn's end", async () => {
-    const dialog = await board({ initialCommands: [reply({ status: "failed", error: "That thread isn't on this Mac anymore." })], scheduled: [{ id: "s1", text: "and then lint", at: 1, afterTurn: true }, { id: "s2", text: "later", at: 9 }] });
+    const dialog = await board({ initialCommands: [reply({ status: "failed", error: "That thread isn't on this Mac anymore." })], card: { scheduled: [{ id: "s1", text: "and then lint", at: 1, afterTurn: true }, { id: "s2", text: "later", at: 9 }] } });
     expect(within(dialog).getByText(/isn't on this Mac/)).toBeInTheDocument();
     expect(within(dialog).getByText("and then lint")).toBeInTheDocument();
     expect(within(dialog).queryByText("later")).toBeNull();
@@ -85,24 +110,7 @@ describe("the web reply box", () => {
 
   it("is read-only on a card a teammate's Mac runs", async () => {
     const dialog = await board({ owner: "u2" });
-    expect(within(dialog).queryByRole("textbox", { name: "Reply" })).toBeNull();
+    expect(within(dialog).queryByRole("textbox", { name: "Message" })).toBeNull();
     expect(within(dialog).getByText(/teammate's Mac/)).toBeInTheDocument();
-  });
-
-  describe("Continue", () => {
-    it("sends the word 'continue' through the same path, like the desktop's ▶", async () => {
-      const dialog = await board();
-      fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
-      await waitFor(() => expect(mockState.inserts).toHaveLength(1));
-      expect(mockState.inserts[0]).toEqual({
-        table: "cloud_commands",
-        row: { org_id: "o1", kind: "reply", target_device: "mac-1", folder: "/Users/me/dev/app", payload: { cardId: "c1", text: "continue" } },
-      });
-    });
-
-    it("is hidden on a card a teammate's Mac runs", async () => {
-      const dialog = await board({ owner: "u2" });
-      expect(within(dialog).queryByRole("button", { name: "Continue" })).toBeNull();
-    });
   });
 });

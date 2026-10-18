@@ -1,8 +1,11 @@
 // Commands the weft.zip board sends to a Mac (public.cloud_commands, supabase/migrations/*_card_commands.sql).
-// Two kinds: start a card in a synced folder (`newCardCommand` → `newCardBody`) and reply to a card's thread
-// (`replyCommand` → `replyBody`). The web builds the row, the Mac (lib/cloud-inbox.ts) reads the payload back;
-// both live here so the two sides can't drift.
+// Four kinds: start a card in a synced folder (`newCardCommand` → `newCardBody`), reply to a card's thread
+// (`replyCommand` → `replyBody`), answer a thread's pending permission or question (`answerCommand` → `answerBody`),
+// and stop a card's running turn (`stopCommand` → `stopBody`). The web builds the row, the Mac (lib/cloud-inbox.ts)
+// reads the payload back; all four live here so the two sides can't drift.
 import { backendFor, CODEX_DEFAULT_MODEL } from "./new-thread";
+import { readQuestionReply } from "./question-reply";
+import type { QuestionReply } from "./types-thread";
 import type { Backend, Effort } from "./types";
 
 export type CloudCommandStatus = "pending" | "claimed" | "done" | "failed";
@@ -24,7 +27,23 @@ export interface ReplyPayload {
   text: string;
 }
 
-export type CloudCommandKind = "new_card" | "reply";
+// An answer to a card's pending permission request or question: the pendingId ties the answer to the
+// request the user saw (otherwise the oldest is answered), allow vs. deny, the question's answers, and
+// the same reply (notes per question / "Chat about this") the permission route carries.
+export interface AnswerPayload {
+  cardId: string;
+  pendingId: string;
+  allow: boolean;
+  answers?: Record<string, string>;
+  reply?: QuestionReply;
+}
+
+// A request to stop a card's running turn.
+export interface StopPayload {
+  cardId: string;
+}
+
+export type CloudCommandKind = "new_card" | "reply" | "answer" | "stop";
 
 // public.cloud_commands.
 export interface CloudCommandRow {
@@ -35,7 +54,7 @@ export interface CloudCommandRow {
   // The Mac that runs it (cloud_cards.owner_device) and the folder it runs in (cloud_cards.folder).
   target_device: string;
   folder: string;
-  payload: NewCardPayload | ReplyPayload;
+  payload: NewCardPayload | ReplyPayload | AnswerPayload | StopPayload;
   status: CloudCommandStatus;
   card_id: string | null;
   error: string | null;
@@ -82,6 +101,24 @@ export function replyCommand(target: { orgId: string; device: string; folder: st
   return { org_id: target.orgId, kind: "reply", target_device: target.device, folder: target.folder, payload: { cardId: target.cardId, text: message } };
 }
 
+// The row the web inserts to answer a card's pending permission request or question, addressed to the Mac and
+// folder the card runs in; null when the request is missing the pendingId it has to carry.
+export function answerCommand(
+  target: { orgId: string; device: string; folder: string; cardId: string },
+  body: { pendingId: string; allow: boolean; answers?: Record<string, string>; reply?: QuestionReply },
+): NewCommand | null {
+  if (!body.pendingId) return null;
+  const payload: AnswerPayload = { cardId: target.cardId, pendingId: body.pendingId, allow: body.allow };
+  if (body.answers) payload.answers = body.answers;
+  if (body.reply) payload.reply = body.reply;
+  return { org_id: target.orgId, kind: "answer", target_device: target.device, folder: target.folder, payload };
+}
+
+// The row the web inserts to stop a card's running turn.
+export function stopCommand(target: { orgId: string; device: string; folder: string; cardId: string }): NewCommand {
+  return { org_id: target.orgId, kind: "stop", target_device: target.device, folder: target.folder, payload: { cardId: target.cardId } };
+}
+
 const text = (v: unknown) => (typeof v === "string" ? v : undefined);
 
 // The request body POST /api/cards takes (lib/new-card.ts), from a command as a Mac reads it. The payload came
@@ -110,8 +147,49 @@ export function replyBody(command: Pick<CloudCommandRow, "payload">): ReplyPaylo
   return cardId && message ? { cardId, text: message } : null;
 }
 
-// A command's prompt for the strip and the reply box: a new card's prompt or a reply's text.
-export const commandText = (command: Pick<CloudCommandRow, "payload">): string => {
-  const p = command.payload as Partial<NewCardPayload & ReplyPayload>;
-  return p.prompt ?? p.text ?? "";
+// An answer as a Mac reads it off the network: the card, the request, the allow/deny, the answers, and the
+// question reply. Returns null when any required field is missing or the wrong type, or when the answer
+// shape is invalid (only string values; the reply is sanitized the same way the permission route does it).
+export function answerBody(command: Pick<CloudCommandRow, "payload">): AnswerPayload | null {
+  const raw: unknown = command.payload;
+  const p: Partial<Record<keyof AnswerPayload, unknown>> = raw && typeof raw === "object" ? raw : {};
+  const cardId = text(p.cardId);
+  const pendingId = text(p.pendingId);
+  if (!cardId || !pendingId) return null;
+  const allow = p.allow === true;
+  const answers =
+    p.answers && typeof p.answers === "object" && !Array.isArray(p.answers)
+      ? (Object.fromEntries(Object.entries(p.answers as Record<string, unknown>).filter(([, v]) => typeof v === "string")) as Record<string, string>)
+      : undefined;
+  const reply = p.reply && typeof p.reply === "object" ? readQuestionReply(p.reply) : undefined;
+  const out: AnswerPayload = { cardId, pendingId, allow };
+  if (answers && Object.keys(answers).length) out.answers = answers;
+  if (reply) out.reply = reply;
+  return out;
+}
+
+// A stop as a Mac reads it off the network: the card the turn runs on, or null when missing.
+export function stopBody(command: Pick<CloudCommandRow, "payload">): StopPayload | null {
+  const raw: unknown = command.payload;
+  const p: Partial<Record<keyof StopPayload, unknown>> = raw && typeof raw === "object" ? raw : {};
+  const cardId = text(p.cardId);
+  return cardId ? { cardId } : null;
+}
+
+// A command's prompt for the strip and the reply box: a new card's prompt, a reply's text, an answer's
+// "Allowed" / "Denied" / answers, or "Stop".
+export const commandText = (command: Pick<CloudCommandRow, "payload" | "kind">): string => {
+  const kind = command.kind as string;
+  const p = command.payload as Partial<NewCardPayload & ReplyPayload & AnswerPayload & StopPayload>;
+  if (p.text) return p.text;
+  if (p.prompt) return p.prompt;
+  if (kind === "stop") return "Stop";
+  if (kind === "answer") {
+    if (p.answers) {
+      const joined = Object.values(p.answers).join("; ");
+      if (joined) return joined;
+    }
+    return p.allow ? "Allowed" : "Denied";
+  }
+  return "";
 };

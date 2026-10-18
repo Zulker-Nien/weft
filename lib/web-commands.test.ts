@@ -88,8 +88,11 @@ describe("commandLine", () => {
 describe("replies", () => {
   const reply = (over: Parameters<typeof commandRow>[0] = {}) => commandRow({ id: "r1", kind: "reply", payload: { cardId: "c1", text: "ship it" }, ...over });
 
-  it("stay out of the board's strip", () => {
-    expect(boardCommands([commandRow(), reply()]).map((c) => c.id)).toEqual(["cmd-1"]);
+  it("stay out of the board's strip, with answers and stops", () => {
+    const answer = reply({ id: "a1", kind: "answer", payload: { cardId: "c1", pendingId: "p1", allow: true } });
+    const stop = reply({ id: "s1", kind: "stop", payload: { cardId: "c1" } });
+    expect(boardCommands([commandRow(), reply(), answer, stop]).map((c) => c.id)).toEqual(["cmd-1"]);
+    expect(cardReplies([answer, stop], "c1").map((c) => c.id)).toEqual(["a1", "s1"]);
   });
 
   it("show under their own card while open or failed, not once done", () => {

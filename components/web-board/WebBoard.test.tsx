@@ -18,7 +18,9 @@ async function loadBoard() {
   return import("./WebBoard");
 }
 
-const props = { orgId: "o1", orgSlug: "ada", userId: "u1", initialCommands: [] as CloudCommandRow[], openCardId: null, initialThread: [] as CloudThreadItemRow[], initialBlobUrls: {} };
+const user = { id: "u1", email: "ada@b.co", name: "Ada", avatar: null };
+const orgs = [{ id: "o1", slug: "ada", name: "Ada's team" }, { id: "o2", slug: "lab", name: "Lab" }];
+const props = { orgId: "o1", orgSlug: "ada", userId: "u1", user, orgs, initialCommands: [] as CloudCommandRow[], openCardId: null, initialThread: [] as CloudThreadItemRow[], initialBlobUrls: {} };
 
 afterEach(() => {
   resetHarness();

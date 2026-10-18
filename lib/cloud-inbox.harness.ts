@@ -105,6 +105,11 @@ export const control = {
   // The cards on this Mac, for a reply to find its thread.
   cards: new Map<string, { id: string; cwd: string; role?: string }>(),
   sendUserMessage: vi.fn<(cardId: string, text: string) => void>(),
+  // Calls a reply routes through sendUserMessage; answer/stop go through their own.
+  answered: [] as { cardId: string; allow: boolean; answers?: Record<string, string>; pendingId?: string; reply?: unknown }[],
+  answerPermission: vi.fn<(cardId: string, allow: boolean, answers?: Record<string, string>, pendingId?: string, reply?: unknown) => void>(),
+  stopped: [] as string[],
+  stop: vi.fn<(cardId: string) => Promise<void>>(),
 };
 
 export const accountMock = { accountClient: () => control.account() };
@@ -116,7 +121,17 @@ export const newCardMock = {
   startCard: (card: unknown) => control.startCard(card),
 };
 
-export const runnerMock = { sendUserMessage: (cardId: string, text: string) => control.sendUserMessage(cardId, text) };
+export const runnerMock = {
+  sendUserMessage: (cardId: string, text: string) => control.sendUserMessage(cardId, text),
+  answerPermission: (cardId: string, allow: boolean, answers?: Record<string, string>, pendingId?: string, reply?: unknown) => {
+    control.answered.push({ cardId, allow, answers, pendingId, reply });
+    control.answerPermission(cardId, allow, answers, pendingId, reply);
+  },
+  stop: (cardId: string) => {
+    control.stopped.push(cardId);
+    return control.stop(cardId);
+  },
+};
 export const storeMock = { getCard: (id: string) => control.cards.get(id) };
 
 export const command = (over: Partial<CloudCommandRow> = {}): CloudCommandRow => ({
@@ -152,6 +167,8 @@ export function resetInbox() {
   control.folders = ["/dev/app"];
   control.org = "org1";
   control.account = () => client;
+  control.answered.length = 0;
+  control.stopped.length = 0;
   vi.clearAllMocks();
 }
 

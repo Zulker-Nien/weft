@@ -1,33 +1,44 @@
 "use client";
 
-// The weft.zip board at /[orgSlug]/board: the desktop board's own columns, cards and thread
-// components, drawn read-only from the opted-in cards the Macs sync (docs/architecture/cloud-sync.md).
-// Server hands it the org id, the initial rows and, with ?card=…, that card's first page of thread;
-// useWebBoard keeps both live over Supabase Realtime.
-import { useMemo, useState } from "react";
+// The weft.zip board at /[orgSlug]/board, laid out like the desktop window: its header (WebBoardHeader), the project
+// bar, the 38px rail beside the columns (WebRail), the desktop's own BoardColumn and CardView drawn read-only from the
+// opted-in cards the Macs sync (docs/architecture/cloud-sync.md), and a card opening framed with its browser pane
+// (WebThreadPanel), where the thread is the desktop's own ThreadPanel over the cloud transport (useCloudTransport.ts).
+// Server hands it the org id, the initial rows and, with ?card=…, that card's first page of thread; useWebBoard keeps
+// them live over Supabase Realtime.
+import { useEffect, useMemo, useState } from "react";
 import { groupByColumn, summarizeProjects, type SortKey } from "@/lib/board-view";
 import type { CloudCommandRow } from "@/lib/cloud-commands";
 import type { CloudCardRow, CloudThreadItemRow } from "@/lib/cloud-sync-types";
+import { pageFromRows } from "@/lib/cloud-thread-page";
+import { ThreadTransportContext } from "@/lib/thread-transport";
 import { useNow } from "@/lib/use-now";
 import { ToolResultSourceContext } from "@/lib/use-tool-result";
 import { busyHere } from "@/lib/overlap";
-import { COLUMNS, type Column } from "@/lib/types";
+import { COLUMNS, type Column, type ThreadItem } from "@/lib/types";
 import { boardCounts, webCards } from "@/lib/web-board";
-import { webTargets } from "@/lib/web-commands";
+import { boardCommands, canReply, cardReplies, webTargets } from "@/lib/web-commands";
+import BoardColumn, { COLUMN_LIMIT } from "../BoardColumn";
 import CardView from "../CardView";
-import ColumnHeader from "../ColumnHeader";
-import ColumnPlaceholder from "../ColumnPlaceholder";
-import { useWebBoard, type LiveStatus } from "./useWebBoard";
+import { WebAccountMenu, type WebOrg, type WebUser } from "./WebAccountMenu";
+import { WebBoardHeader } from "./WebBoardHeader";
+import { WebShareBoard } from "./WebShareBoard";
+import { useWebBoard } from "./useWebBoard";
 import { WebCommandStrip } from "./WebCommandStrip";
 import { WebNewCardDialog } from "./WebNewCardDialog";
 import { WebProjectBar } from "./WebProjectBar";
-import { WebShareBoard } from "./WebShareBoard";
+import { WebRail } from "./WebRail";
+import { WebReplyStatus } from "./WebReplyStatus";
+import { CloudBlobContext } from "./useCloudTransport";
 import { WebThreadPanel } from "./WebThreadPanel";
 
 export interface WebBoardProps {
   orgId: string;
   orgSlug: string;
   userId: string;
+  // The signed-in visitor and their workspaces, for the account menu.
+  user: WebUser;
+  orgs: readonly WebOrg[];
   initialCommands: CloudCommandRow[];
   initialCards: CloudCardRow[];
   openCardId: string | null;
@@ -35,24 +46,15 @@ export interface WebBoardProps {
   initialBlobUrls: Record<string, string>;
 }
 
-// How many cards a column draws before "Show N more", the desktop's own number.
-const COLUMN_LIMIT = 40;
-
 // A card's folder is its project; there is no worktree folding here, so a path stands for itself.
 const identity = (cwd: string) => cwd;
 
-function LiveDot({ status }: { status: LiveStatus }) {
-  const label = status === "live" ? "Live" : status === "connecting" ? "Connecting…" : "Offline";
-  return (
-    <span className="flex items-center gap-1.5 text-[12px] text-muted" aria-live="polite">
-      <span aria-hidden="true" className={`size-2 rounded-full ${status === "live" ? "bg-ok" : "bg-faint"}`} />
-      {label}
-    </span>
-  );
-}
-
-export function WebBoard({ orgId, orgSlug, userId, initialCommands, initialCards, openCardId, initialThread, initialBlobUrls }: WebBoardProps) {
-  const board = useWebBoard({ orgId, userId, initialCommands, initialCards, openCardId, initialThread, initialBlobUrls });
+export function WebBoard({ orgId, orgSlug, userId, user, orgs, initialCommands, initialCards, openCardId, initialThread, initialBlobUrls }: WebBoardProps) {
+  const board = useWebBoard({ orgId, userId, initialCommands, initialCards, openCardId, initialBlobUrls });
+  // What the open thread draws, for its pane; the ?card= card starts from the thread the server read.
+  const [seed] = useState(() => (openCardId ? pageFromRows(openCardId, initialThread).items : []));
+  const [shown, setShown] = useState<ThreadItem[]>(seed);
+  const blobs = useMemo(() => ({ ...board.blobs, onShown: setShown }), [board.blobs]);
   const now = useNow();
   const [project, setProject] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -60,34 +62,38 @@ export function WebBoard({ orgId, orgSlug, userId, initialCommands, initialCards
   const [showArchived, setShowArchived] = useState(false);
   const [expanded, setExpanded] = useState<Column[]>([]);
   const [composing, setComposing] = useState(false);
+  const [starredOnly, setStarredOnly] = useState(false);
 
   const cards = useMemo(() => webCards(board.cards), [board.cards]);
-  const byColumn = useMemo(() => groupByColumn(cards, { project, query, sort, showArchived }, identity), [cards, project, query, sort, showArchived]);
+  const starredCount = cards.filter((c) => c.starred).length;
+  const byColumn = useMemo(
+    () => groupByColumn(starredOnly ? cards.filter((c) => c.starred) : cards, { project, query, sort, showArchived }, identity),
+    [cards, starredOnly, project, query, sort, showArchived],
+  );
   const projects = useMemo(() => summarizeProjects([], cards, identity), [cards]);
   const { running, waiting } = boardCounts(cards);
   const targets = useMemo(() => webTargets(board.cards, userId), [board.cards, userId]);
   const archivedCount = cards.filter((c) => c.archived).length;
-  const filtering = project !== null || query.trim() !== "";
+  const filtering = project !== null || query.trim() !== "" || starredOnly;
 
   const active = board.activeCardId ? board.cards.find((r) => r.card_id === board.activeCardId) : undefined;
+  useNewThreadKey(!active && !composing, () => setComposing(true));
 
   return (
     <ToolResultSourceContext.Provider value={board.toolOutput}>
+      <ThreadTransportContext.Provider value={board.transport}>
+      <CloudBlobContext.Provider value={blobs}>
       <div className="wz-desk" data-theme="dark">
-        <header className="flex shrink-0 items-center gap-3 border-b border-line bg-panel px-4 py-2.5">
-          <h1 className="text-[15px] font-semibold tracking-tight text-ink">Board</h1>
-          <span className="text-[12px] text-muted">
-            {orgSlug} · {running} running
-            {waiting > 0 && <span className="text-warn"> · {waiting} need{waiting === 1 ? "s" : ""} you</span>}
-          </span>
-          <div className="flex-1" />
-          <LiveDot status={board.live} />
-          <WebShareBoard orgSlug={orgSlug} />
-          <button onClick={() => setComposing(true)} className="rounded-md bg-accent px-2.5 py-1 text-[12px] font-medium text-on-accent hover:opacity-90">
-            New thread
-          </button>
-        </header>
-        <WebCommandStrip commands={board.commands} onDrop={(id) => void board.dropCommand(id)} />
+        <WebBoardHeader
+          workspace={orgs.find((o) => o.id === orgId)?.name || orgSlug}
+          running={running}
+          waiting={waiting}
+          live={board.live}
+          onOpenNew={() => setComposing(true)}
+          share={<WebShareBoard orgSlug={orgSlug} />}
+          account={<WebAccountMenu user={user} orgs={orgs} orgSlug={orgSlug} />}
+        />
+        <WebCommandStrip commands={boardCommands(board.commands)} onDrop={(id) => void board.dropCommand(id)} />
 
         {cards.length === 0 ? (
           <p className="m-6 rounded-lg border border-line bg-sunken p-6 text-[13.5px] leading-relaxed text-muted">
@@ -96,59 +102,85 @@ export function WebBoard({ orgId, orgSlug, userId, initialCommands, initialCards
         ) : (
           <>
             <WebProjectBar projects={projects} total={cards.length} selected={project} onSelect={setProject} query={query} onQuery={setQuery} sort={sort} onSort={setSort} />
-            <main className="flex min-h-0 min-w-0 flex-1 gap-3 overflow-x-auto p-3">
-              {COLUMNS.map((column) => {
-                const list = byColumn.get(column.id) ?? [];
-                const shown = expanded.includes(column.id) ? list : list.slice(0, COLUMN_LIMIT);
-                return (
-                  <section key={column.id} data-column={column.id} style={{ minWidth: 170 }} className="@container flex w-[264px] shrink flex-col rounded-xl border border-transparent bg-sunken">
-                    <ColumnHeader
+            <div className="flex min-h-0 flex-1">
+              <WebRail orgSlug={orgSlug} starred={starredOnly} starredCount={starredCount} onStarred={() => setStarredOnly((v) => !v)} />
+              <main className="flex min-h-0 min-w-0 flex-1 gap-3 overflow-x-auto p-3">
+                {COLUMNS.map((column) => {
+                  const list = byColumn.get(column.id) ?? [];
+                  return (
+                    <BoardColumn
+                      key={column.id}
                       column={column}
+                      shown={expanded.includes(column.id) ? list : list.slice(0, COLUMN_LIMIT)}
                       count={list.length}
+                      loaded
+                      filtering={filtering}
+                      dragOver={false}
+                      laneState="hidden"
+                      onShowMore={() => setExpanded((cols) => [...cols, column.id])}
+                      renderCard={(card) => (
+                        <CardView key={card.id} readOnly card={card} now={now} selected={card.id === board.activeCardId} alsoHere={busyHere(cards, card)} onOpen={() => board.openCard(card.id)} />
+                      )}
+                      onDragOver={noop}
+                      onDragLeave={noop}
+                      onDrop={noop}
+                      onColumnContextMenu={noop}
                       needsYou={column.id === "needs_you" && list.length > 0}
                       archivedCount={archivedCount}
                       showArchived={showArchived}
                       onToggleArchived={() => setShowArchived((v) => !v)}
                       toArchive={0}
                       archiveTip=""
-                      onArchiveAll={() => {}}
+                      onArchiveAll={noop}
+                      onAddBacklog={() => setComposing(true)}
                     />
-                    <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
-                      {shown.map((card) => (
-                        <CardView key={card.id} readOnly card={card} now={now} selected={card.id === board.activeCardId} alsoHere={busyHere(cards, card)} onOpen={() => void board.openCard(card.id)} />
-                      ))}
-                      {shown.length < list.length && (
-                        <button onClick={() => setExpanded((cols) => [...cols, column.id])} className="rounded-lg px-2 py-1.5 text-center text-[12px] text-muted hover:bg-card hover:text-ink">
-                          Show {list.length - shown.length} more
-                        </button>
-                      )}
-                      <ColumnPlaceholder column={column.id} loaded empty={list.length === 0} filtering={filtering} />
-                    </div>
-                  </section>
-                );
-              })}
-            </main>
+                  );
+                })}
+              </main>
+            </div>
           </>
         )}
 
         {composing && <WebNewCardDialog targets={targets} defaultFolder={project} onSend={board.startCard} onClose={() => setComposing(false)} />}
 
-        {active && board.thread && (
+        {active && (
           <WebThreadPanel
+            orgId={orgId}
             card={active.card}
-            ownerDevice={active.owner_device}
-            cardRow={active}
-            window={board.thread}
-            blobUrls={board.blobUrls}
-            commands={board.commands}
-            userId={userId}
+            seed={active.card_id === openCardId ? seed : []}
+            shown={shown}
+            readOnly={!canReply(active, userId)}
+            footer={<WebReplyStatus card={active.card} canReply={canReply(active, userId)} replies={cardReplies(board.commands, active.card_id)} onDrop={(id) => void board.dropCommand(id)} />}
             onClose={board.closeCard}
-            onLoadOlder={() => void board.loadOlder()}
-            onSendReply={(text) => board.sendReply(active, text)}
-            onDropCommand={(id) => void board.dropCommand(id)}
+            onSend={async (text) => {
+              const failed = await board.sendReply(active, text);
+              if (failed) throw new Error(failed);
+            }}
+            onAnswer={(allow, answers, reply) => void board.answer(active, allow, answers, reply)}
           />
         )}
       </div>
+      </CloudBlobContext.Provider>
+      </ThreadTransportContext.Provider>
     </ToolResultSourceContext.Provider>
   );
+}
+
+const noop = () => {};
+
+// N opens New thread, as on the desktop, unless a field has the keys or a modifier is held.
+function useNewThreadKey(enabled: boolean, open: () => void) {
+  useEffect(() => {
+    if (!enabled) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "n" && e.key !== "N") return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      if (el?.closest("input, textarea, select, [contenteditable]")) return;
+      e.preventDefault();
+      open();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [enabled, open]);
 }
