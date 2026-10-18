@@ -27,15 +27,17 @@ afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 describe("recordLimits", () => {
   it("appends a sample per window that changed, and nothing for a repeat", async () => {
     const { recordLimits, readSamples } = await load();
-    recordLimits("claude", { fiveHour: { used: 10, resetsAt: 500 }, sevenDay: { used: 3 } }, 1000);
-    recordLimits("claude", { fiveHour: { used: 10, resetsAt: 500 } }, 2000);
-    recordLimits("claude", { fiveHour: { used: 12, resetsAt: 500 } }, 3000);
-    recordLimits("puku", { fiveHour: { used: 12, resetsAt: 500 } }, 4000);
+    recordLimits("claude", { fiveHour: { used: 10, resetsAt: 600 }, sevenDay: { used: 3 } }, 1000);
+    recordLimits("claude", { fiveHour: { used: 10, resetsAt: 600 } }, 2000);
+    recordLimits("claude", { fiveHour: { used: 12, resetsAt: 600 } }, 3000);
+    recordLimits("puku", { fiveHour: { used: 12, resetsAt: 600 } }, 4000);
+    recordLimits("puku", { fiveHour: { used: 12, resetsAt: 600.4 } }, 4500);
+    recordLimits("puku", { fiveHour: { used: 12, resetsAt: 599.7 } }, 4600);
     expect(lines()).toEqual([
-      { at: 1000, backend: "claude", kind: "five_hour", used: 10, resetsAt: 500 },
+      { at: 1000, backend: "claude", kind: "five_hour", used: 10, resetsAt: 600 },
       { at: 1000, backend: "claude", kind: "seven_day", used: 3 },
-      { at: 3000, backend: "claude", kind: "five_hour", used: 12, resetsAt: 500 },
-      { at: 4000, backend: "puku", kind: "five_hour", used: 12, resetsAt: 500 },
+      { at: 3000, backend: "claude", kind: "five_hour", used: 12, resetsAt: 600 },
+      { at: 4000, backend: "puku", kind: "five_hour", used: 12, resetsAt: 600 },
     ]);
     expect(readSamples(5000).map((s) => s.at)).toEqual([1000, 1000, 3000, 4000]);
   });

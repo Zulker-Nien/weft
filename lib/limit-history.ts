@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { globalSingleton } from "./global-singleton";
 import { DATA_DIR } from "./store";
-import type { LimitKind, LimitSample } from "./limit-chart";
+import { resetMs, type LimitKind, type LimitSample } from "./limit-chart";
 import type { Backend, CardStats } from "./types";
 
 // The plan limits over time, for the status strip's burndown chart (components/LimitBurndown.tsx): a
@@ -55,8 +55,10 @@ export function changedSamples(backend: Backend, patch: Partial<CardStats>, last
   for (const [kind, w] of windows) {
     if (!w) continue;
     const prev = last.get(key(backend, kind));
-    if (prev && prev.used === w.used && prev.resetsAt === w.resetsAt) continue;
-    out.push({ at: now, backend, kind, used: w.used, ...(w.resetsAt !== undefined && { resetsAt: w.resetsAt }) });
+    // The reset to the minute: the CLI reports one reset a few hundred ms apart from call to call.
+    const reset = resetMs(w.resetsAt);
+    if (prev && prev.used === w.used && resetMs(prev.resetsAt) === reset) continue;
+    out.push({ at: now, backend, kind, used: w.used, ...(reset !== undefined && { resetsAt: reset / 1000 }) });
   }
   return out;
 }

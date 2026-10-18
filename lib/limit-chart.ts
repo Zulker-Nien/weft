@@ -1,8 +1,9 @@
 import type { Backend, CardStats } from "./types";
 
-// The status strip's burndown chart (components/LimitBurndown.tsx), worked out from the limit history
-// (lib/limit-history.ts): what's left of the weekly and 5-hour limits across the current week, where
-// either was hit, and where the 5-hour windows and the week reset. Pure: times in unix ms, shares 0-100.
+// The status strip's limits chart (components/LimitBurndown.tsx), worked out from the limit history
+// (lib/limit-history.ts): the week from one weekly reset to the next as 168 hour slots of the 5-hour limit
+// left and 7 day slots of the weekly limit left, each day with its burn-down edge, plus where either limit
+// was hit and where the 5-hour windows and the week reset. Pure: times in unix ms, shares 0-100.
 
 export type LimitKind = "five_hour" | "seven_day";
 
@@ -17,12 +18,28 @@ export interface LimitSample {
 
 export const HOUR = 60 * 60 * 1000;
 export const FIVE_HOURS = 5 * HOUR;
-export const WEEK = 7 * 24 * HOUR;
+export const DAY = 24 * HOUR;
+export const WEEK = 7 * DAY;
+
+// A slot's share left: a number, "unknown" (a window was open but nothing was logged, or before the log
+// began), or null (the slot hasn't happened yet).
+export type Level = number | "unknown" | null;
+
+export interface Slot {
+  from: number;
+  to: number;
+  left: Level;
+}
 
 // [time, share left].
 export type Point = [number, number];
 
-// A vertical line: a 5-hour reset (light), the next one (strong), the weekly reset, or a hit.
+// A day, with the weekly level at each hour it has seen so far: the top of its bar.
+export interface DaySlot extends Slot {
+  edge: Point[];
+}
+
+// A vertical line: a 5-hour reset (light), the next one (next), the weekly reset (week), or a hit.
 export type MarkKind = "light" | "next" | "week" | "hit";
 
 export interface Mark {
@@ -30,63 +47,59 @@ export interface Mark {
   kind: MarkKind;
 }
 
-export interface Burndown {
+export interface LimitsChart {
   start: number;
   end: number;
   now: number;
-  weekly: Point[];
-  // From the week's start to the first reading: the week starts full, the readings start later.
-  weeklyGuess: Point[];
-  fiveHour: Point[];
-  // An even burn from full at the week's start to empty at its reset.
-  pace: Point[];
+  hours: Slot[];
+  days: DaySlot[];
   marks: Mark[];
 }
 
-const left = (used: number) => Math.max(0, Math.min(100, 100 - used));
-const ms = (resetsAt?: number) => (resetsAt === undefined ? undefined : resetsAt * 1000);
+// A reset in unix ms, to the minute: the CLI reports one reset a few hundred ms apart from call to call.
+export function resetMs(resetsAt?: number): number | undefined {
+  return resetsAt === undefined ? undefined : Math.round(resetsAt / 60) * 60_000;
+}
 
 // The weekly reset after now: the latest one known, rolled on a week at a time when it has passed.
-export function weekEnd(samples: LimitSample[], stats: CardStats, now: number): number | undefined {
-  let end = ms(stats.sevenDay?.resetsAt) ?? ms(samples.findLast((s) => s.kind === "seven_day" && s.resetsAt)?.resetsAt);
+export function weekEnd(rows: LimitSample[], stats: CardStats, now: number): number | undefined {
+  let end = resetMs(stats.sevenDay?.resetsAt) ?? resetMs(rows.findLast((s) => s.kind === "seven_day" && s.resetsAt)?.resetsAt);
   if (end === undefined) return undefined;
   while (end <= now) end += WEEK;
   return end;
 }
 
-// The readings of one window, with the card's current one last when it adds anything.
-function readings(samples: LimitSample[], kind: LimitKind, current: CardStats["fiveHour"], start: number, now: number) {
-  const out = samples.filter((s) => s.kind === kind && s.at >= start && s.at <= now);
-  const last = out.at(-1);
-  if (current && (!last || last.used !== current.used || last.resetsAt !== current.resetsAt)) {
-    out.push({ at: now, backend: last?.backend ?? "claude", kind, used: current.used, resetsAt: current.resetsAt });
-  }
-  return out;
+// The share left at time t: the last reading at or before it, back to full once its window has reset. A
+// 5-hour window that had opened by t (a later reading's reset minus 5 hours) with nothing logged is unknown.
+export function leftAt(rows: LimitSample[], kind: LimitKind, t: number): number | "unknown" {
+  const last = rows.findLast((r) => r.kind === kind && r.at <= t);
+  if (!last) return "unknown";
+  const reset = resetMs(last.resetsAt);
+  if (reset === undefined || reset > t) return Math.max(0, 100 - last.used);
+  const next = rows.find((r) => r.kind === kind && r.at > t && r.resetsAt !== undefined);
+  const opened = next && (resetMs(next.resetsAt) ?? 0) - FIVE_HOURS <= t;
+  return kind === "five_hour" && opened ? "unknown" : 100;
 }
 
-// The 5-hour line: each window's readings, back to full at its reset, flat until the next window starts.
-export function fiveHourLine(rows: LimitSample[], start: number, now: number): Point[] {
+// n equal slots from start; a slot reads its level at its end, or at now while it's running.
+function slots(rows: LimitSample[], kind: LimitKind, start: number, size: number, n: number, now: number): Slot[] {
+  return Array.from({ length: n }, (_, i) => {
+    const from = start + i * size;
+    const to = from + size;
+    return { from, to, left: from >= now ? null : leftAt(rows, kind, to > now ? now : to - 1) };
+  });
+}
+
+// The day's weekly level at each hour it has seen, and at its end or now: the burn-down top of its bar.
+function dayEdge(rows: LimitSample[], day: Slot, now: number): Point[] {
   const out: Point[] = [];
-  let reset: number | undefined;
-  let last = 100;
-  const resetTo = (r: number) => out.push([r, last], [r, 100]);
-  for (const s of rows) {
-    const r = ms(s.resetsAt);
-    const opened = r === undefined ? undefined : Math.max(start, r - FIVE_HOURS);
-    if (reset !== undefined && r !== reset && reset <= s.at) {
-      resetTo(reset);
-      if (opened !== undefined && opened > reset && opened < s.at) out.push([opened, 100]);
-    } else if (!out.length && opened !== undefined && opened < s.at) {
-      out.push([opened, 100]);
-    }
-    last = left(s.used);
-    out.push([s.at, last]);
-    reset = r ?? reset;
+  const last = Math.min(day.to - 1, now);
+  for (let t = day.from; t <= last; t += HOUR) {
+    const left = leftAt(rows, "seven_day", t);
+    if (left !== "unknown") out.push([t, left]);
   }
-  if (reset !== undefined && reset <= now) {
-    resetTo(reset);
-    out.push([now, 100]);
-  }
+  const end = leftAt(rows, "seven_day", last);
+  if (end !== "unknown") out.push([last, end]);
   return out;
 }
 
@@ -95,7 +108,7 @@ export function hitMarks(rows: LimitSample[]): Mark[] {
   const seen = new Set<string>();
   const out: Mark[] = [];
   for (const s of rows) {
-    const id = `${s.kind}:${s.resetsAt ?? ""}`;
+    const id = `${s.kind}:${resetMs(s.resetsAt) ?? ""}`;
     if (s.used < 100 || seen.has(id)) continue;
     seen.add(id);
     out.push({ at: s.at, kind: "hit" });
@@ -103,46 +116,63 @@ export function hitMarks(rows: LimitSample[]): Mark[] {
   return out;
 }
 
-// The green lines: every past 5-hour reset the history saw, the next one, every 5 hours after it to
-// the week's end, and the week's end itself.
-export function resetMarks(rows: LimitSample[], next: number | undefined, start: number, end: number, now: number, weekly: boolean): Mark[] {
+// The green lines: every past 5-hour reset the history saw, the next one, every 5 hours after it to the
+// week's end, and the week's end itself. A line within half an hour of one already drawn is dropped.
+export function resetMarks(rows: LimitSample[], next: number | undefined, start: number, end: number, now: number): Mark[] {
   const out: Mark[] = [];
   const add = (at: number, kind: MarkKind) => {
     if (at < start || at > end || out.some((m) => Math.abs(m.at - at) < 30 * 60 * 1000)) return;
     out.push({ at, kind });
   };
-  if (weekly) add(end, "week");
+  add(end, "week");
   if (next !== undefined && next > now) {
     add(next, "next");
     for (let at = next + FIVE_HOURS; at < end; at += FIVE_HOURS) add(at, "light");
   }
   for (const s of rows) {
-    const r = ms(s.resetsAt);
-    if (r !== undefined && r <= now) add(r, "light");
+    const r = resetMs(s.resetsAt);
+    if (s.kind === "five_hour" && r !== undefined && r <= now) add(r, "light");
   }
   return out.sort((a, b) => a.at - b.at);
 }
 
-// The whole chart for one CLI's history and its latest windows.
-export function burndown(samples: LimitSample[], stats: CardStats, now: number): Burndown {
-  const known = weekEnd(samples, stats, now);
-  const end = known ?? now + FIVE_HOURS;
-  const start = known === undefined ? now - 2 * 24 * HOUR : end - WEEK;
-  const week = readings(samples, "seven_day", stats.sevenDay, start, now);
-  const five = readings(samples, "five_hour", stats.fiveHour, start, now);
-  const weekly = week.map((s): Point => [s.at, left(s.used)]);
-  const first = weekly.at(0);
-  const weeklyGuess: Point[] = known !== undefined && first && first[0] > start ? [[start, 100], first] : [];
-  const next = ms(stats.fiveHour?.resetsAt) ?? ms(five.at(-1)?.resetsAt);
-  const marks = [...resetMarks(five, next, start, end, now, known !== undefined), ...hitMarks([...week, ...five])];
+// Whether a card's window adds to the history. A card's stats can be hours old: a window that has
+// already reset, or one older than the history's latest, is left out, and so is a repeat of the latest.
+function addsReading(w: CardStats["fiveHour"], last: LimitSample | undefined, now: number): w is NonNullable<CardStats["fiveHour"]> {
+  if (!w) return false;
+  const reset = resetMs(w.resetsAt);
+  const lastReset = resetMs(last?.resetsAt);
+  if (reset !== undefined && (reset <= now || (lastReset ?? 0) > reset)) return false;
+  return !last || last.used !== w.used || lastReset !== reset;
+}
+
+// The card's current windows as readings at now, when they add anything to the history.
+function withCurrent(rows: LimitSample[], stats: CardStats, now: number): LimitSample[] {
+  const out = rows.filter((s) => s.at <= now).sort((a, b) => a.at - b.at);
+  const windows: [LimitKind, CardStats["fiveHour"]][] = [["five_hour", stats.fiveHour], ["seven_day", stats.sevenDay]];
+  for (const [kind, w] of windows) {
+    const last = out.findLast((s) => s.kind === kind);
+    if (!addsReading(w, last, now)) continue;
+    out.push({ at: now, backend: last?.backend ?? "claude", kind, used: w.used, ...(w.resetsAt !== undefined && { resetsAt: w.resetsAt }) });
+  }
+  return out;
+}
+
+// The whole chart for one CLI's history and its latest windows. Without a known weekly reset, the
+// week is the 7 days ending a 5-hour window from now.
+export function limitsChart(samples: LimitSample[], stats: CardStats, now: number): LimitsChart {
+  const rows = withCurrent(samples, stats, now);
+  const end = weekEnd(rows, stats, now) ?? now + FIVE_HOURS;
+  const start = end - WEEK;
+  const days = slots(rows, "seven_day", start, DAY, 7, now).map((d): DaySlot => ({ ...d, edge: d.left === null ? [] : dayEdge(rows, d, now) }));
+  const next = resetMs(stats.fiveHour?.resetsAt) ?? resetMs(rows.findLast((s) => s.kind === "five_hour")?.resetsAt);
+  const inWeek = rows.filter((s) => s.at >= start);
   return {
     start,
     end,
     now,
-    weekly,
-    weeklyGuess,
-    fiveHour: fiveHourLine(five, start, now),
-    pace: known === undefined ? [] : [[start, 100], [end, 0]],
-    marks,
+    hours: slots(rows, "five_hour", start, HOUR, 168, now),
+    days,
+    marks: [...resetMarks(inWeek, next, start, end, now), ...hitMarks(inWeek)],
   };
 }

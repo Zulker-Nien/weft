@@ -1,12 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { burndown, FIVE_HOURS, fiveHourLine, hitMarks, HOUR, resetMarks, WEEK, weekEnd, type LimitSample } from "./limit-chart";
+import { DAY, FIVE_HOURS, hitMarks, HOUR, leftAt, limitsChart, resetMarks, resetMs, WEEK, weekEnd, type LimitSample } from "./limit-chart";
 
-// The status strip's burndown: the weekly and 5-hour lines, hits, and the reset lines.
+// The status strip's limits chart: 168 hour slots of the 5-hour limit, 7 day slots of the weekly one
+// with their burn-down edge, hits and reset lines.
 
-const T0 = 1_800_000_000_000;
+const T0 = 1_800_000_000_000; // a whole minute
 const sec = (ms: number) => ms / 1000;
 const five = (at: number, used: number, reset?: number): LimitSample => ({ at, backend: "claude", kind: "five_hour", used, ...(reset !== undefined && { resetsAt: sec(reset) }) });
 const week = (at: number, used: number, reset?: number): LimitSample => ({ at, backend: "claude", kind: "seven_day", used, ...(reset !== undefined && { resetsAt: sec(reset) }) });
+
+describe("resetMs", () => {
+  it("rounds a reset to the minute and passes none through", () => {
+    expect(resetMs(sec(T0) + 0.419)).toBe(T0);
+    expect(resetMs(sec(T0) - 0.332)).toBe(T0);
+    expect(resetMs(undefined)).toBeUndefined();
+  });
+});
 
 describe("weekEnd", () => {
   it("prefers the card's weekly reset, else the history's, rolled past now", () => {
@@ -16,63 +25,43 @@ describe("weekEnd", () => {
   });
 });
 
-describe("fiveHourLine", () => {
-  it("starts full when the window opened and climbs down through its readings", () => {
-    const reset = T0 + 3 * HOUR;
-    expect(fiveHourLine([five(T0, 20, reset), five(T0 + HOUR, 50, reset)], T0 - WEEK, T0 + 2 * HOUR)).toEqual([
-      [reset - FIVE_HOURS, 100],
-      [T0, 80],
-      [T0 + HOUR, 50],
-    ]);
+describe("leftAt", () => {
+  const reset = T0 + 3 * HOUR;
+  const rows = [five(T0, 20, reset), five(T0 + 9 * HOUR, 30, T0 + 12 * HOUR)];
+
+  it("is unknown before the first reading", () => {
+    expect(leftAt(rows, "five_hour", T0 - 1)).toBe("unknown");
   });
 
-  it("goes back to full at a reset and stays there until the next window opens", () => {
-    const r1 = T0 + HOUR;
-    const r2 = T0 + 8 * HOUR;
-    expect(fiveHourLine([five(T0, 90, r1), five(T0 + 4 * HOUR, 10, r2)], T0 - WEEK, T0 + 5 * HOUR)).toEqual([
-      [r1 - FIVE_HOURS, 100],
-      [T0, 10],
-      [r1, 10],
-      [r1, 100],
-      [r2 - FIVE_HOURS, 100],
-      [T0 + 4 * HOUR, 90],
-    ]);
+  it("holds the last reading while its window is open, then goes back to full", () => {
+    expect(leftAt(rows, "five_hour", T0 + HOUR)).toBe(80);
+    expect(leftAt(rows, "five_hour", T0 + 5 * HOUR)).toBe(100);
   });
 
-  it("ends full when the last window has already reset", () => {
-    const r = T0 + HOUR;
-    expect(fiveHourLine([five(T0, 40, r)], T0 - FIVE_HOURS + HOUR, T0 + 2 * HOUR)).toEqual([
-      [T0 - FIVE_HOURS + HOUR, 100],
-      [T0, 60],
-      [r, 60],
-      [r, 100],
-      [T0 + 2 * HOUR, 100],
-    ]);
+  it("is unknown inside a window that opened before its first reading", () => {
+    expect(leftAt(rows, "five_hour", T0 + 8 * HOUR)).toBe("unknown");
+    expect(leftAt(rows, "five_hour", T0 + 9 * HOUR)).toBe(70);
   });
 
-  it("joins readings with no reset, or one that moved earlier, as one line", () => {
-    expect(fiveHourLine([five(T0, 10), five(T0 + HOUR, 20)], 0, T0 + HOUR)).toEqual([[T0, 90], [T0 + HOUR, 80]]);
-    expect(fiveHourLine([five(T0, 10, T0 + 4 * HOUR), five(T0 + HOUR, 20, T0 + 2 * HOUR)], 0, T0 + HOUR)).toEqual([
-      [T0 - HOUR, 100],
-      [T0, 90],
-      [T0 + HOUR, 80],
-    ]);
+  it("holds a reading with no reset, and puts a passed weekly reset back to full", () => {
+    expect(leftAt([five(T0, 40)], "five_hour", T0 + DAY)).toBe(60);
+    expect(leftAt([week(T0, 40, T0 + HOUR), week(T0 + 2 * DAY, 10, T0 + WEEK)], "seven_day", T0 + 2 * HOUR)).toBe(100);
   });
 });
 
 describe("hitMarks", () => {
-  it("marks each window's first reading at 100%", () => {
-    const rows = [five(1, 99, T0), five(2, 100, T0), five(3, 100, T0), week(4, 100, T0), five(5, 100, T0 + FIVE_HOURS)];
+  it("marks each window's first reading at 100%, jitter in its reset aside", () => {
+    const rows = [five(1, 99, T0), five(2, 100, T0), five(3, 100, T0 + 300), week(4, 100, T0), five(5, 100, T0 + FIVE_HOURS)];
     expect(hitMarks(rows)).toEqual([{ at: 2, kind: "hit" }, { at: 4, kind: "hit" }, { at: 5, kind: "hit" }]);
   });
 });
 
 describe("resetMarks", () => {
-  it("draws the week's end, the next reset, every 5 hours after it, and past resets", () => {
+  it("draws the week's end, the next reset, every 5 hours after it, and past 5-hour resets", () => {
     const start = T0 - 10 * HOUR;
     const end = T0 + 12 * HOUR;
-    const marks = resetMarks([five(T0 - 6 * HOUR, 5, T0 - 3 * HOUR), five(T0 - 3 * HOUR, 5, end + HOUR)], T0 + HOUR, start, end, T0, true);
-    expect(marks).toEqual([
+    const rows = [five(T0 - 6 * HOUR, 5, T0 - 3 * HOUR), week(T0 - 6 * HOUR, 5, T0 - 2 * HOUR), five(T0 - 3 * HOUR, 5, end + HOUR)];
+    expect(resetMarks(rows, T0 + HOUR, start, end, T0)).toEqual([
       { at: T0 - 3 * HOUR, kind: "light" },
       { at: T0 + HOUR, kind: "next" },
       { at: T0 + 6 * HOUR, kind: "light" },
@@ -81,48 +70,70 @@ describe("resetMarks", () => {
     ]);
   });
 
-  it("drops a line within half an hour of one already drawn", () => {
+  it("drops a line within half an hour of one already drawn, and skips a passed next reset", () => {
     const end = T0 + 5 * HOUR + 10 * 60 * 1000;
-    expect(resetMarks([], T0 + 10 * 60 * 1000, T0 - HOUR, end, T0, true)).toEqual([
+    expect(resetMarks([], T0 + 10 * 60 * 1000, T0 - HOUR, end, T0)).toEqual([
       { at: T0 + 10 * 60 * 1000, kind: "next" },
       { at: end, kind: "week" },
     ]);
-  });
-
-  it("draws no next line when the 5-hour window already reset, and no week line when unknown", () => {
-    expect(resetMarks([], T0 - HOUR, T0 - WEEK, T0 + HOUR, T0, false)).toEqual([]);
-    expect(resetMarks([], undefined, T0 - WEEK, T0 + HOUR, T0, false)).toEqual([]);
+    expect(resetMarks([], T0 - HOUR, T0 - WEEK, T0 + HOUR, T0)).toEqual([{ at: T0 + HOUR, kind: "week" }]);
+    expect(resetMarks([], undefined, T0 - WEEK, T0 + 2 * HOUR, T0)).toEqual([{ at: T0 + 2 * HOUR, kind: "week" }]);
   });
 });
 
-describe("burndown", () => {
-  it("spans the current week, guesses a full start, and adds the card's latest readings", () => {
-    const end = T0 + 2 * 24 * HOUR;
-    const start = end - WEEK;
-    const samples = [week(start + 24 * HOUR, 10, end), five(T0 - HOUR, 30, T0 + HOUR), week(start - HOUR, 90, start)];
-    const chart = burndown(samples, { fiveHour: { used: 60, resetsAt: sec(T0 + HOUR) }, sevenDay: { used: 30, resetsAt: sec(end) } }, T0);
-    expect([chart.start, chart.end, chart.now]).toEqual([start, end, T0]);
-    expect(chart.weekly).toEqual([[start + 24 * HOUR, 90], [T0, 70]]);
-    expect(chart.weeklyGuess).toEqual([[start, 100], [start + 24 * HOUR, 90]]);
-    expect(chart.pace).toEqual([[start, 100], [end, 0]]);
-    expect(chart.fiveHour).toEqual([[T0 + HOUR - FIVE_HOURS, 100], [T0 - HOUR, 70], [T0, 40]]);
-    expect(chart.marks.filter((m) => m.kind === "next")).toEqual([{ at: T0 + HOUR, kind: "next" }]);
-    expect(chart.marks.filter((m) => m.kind === "week")).toEqual([{ at: end, kind: "week" }]);
+describe("limitsChart", () => {
+  const end = T0 + 2 * DAY + 3 * HOUR; // the weekly reset
+  const start = end - WEEK;
+  const now = start + 5 * DAY + 2.5 * HOUR; // day 6, inside hour 2 (slot 122)
+  const fiveReset = now + 2 * HOUR;
+
+  it("splits the week into 168 hours and 7 days, empty ahead of now", () => {
+    const chart = limitsChart([], { fiveHour: { used: 30, resetsAt: sec(fiveReset) }, sevenDay: { used: 60, resetsAt: sec(end) } }, now);
+    expect([chart.start, chart.end, chart.now]).toEqual([start, end, now]);
+    expect(chart.hours).toHaveLength(168);
+    expect(chart.days).toHaveLength(7);
+    expect(chart.hours[0]).toEqual({ from: start, to: start + HOUR, left: "unknown" });
+    // The window opened 3 hours before now; the hour that holds now reads the card's current 70%.
+    expect(chart.hours.at(121)?.left).toBe("unknown");
+    expect(chart.hours.at(122)?.left).toBe(70);
+    expect(chart.hours.at(123)?.left).toBeNull();
+    expect(chart.days.map((d) => d.left)).toEqual(["unknown", "unknown", "unknown", "unknown", "unknown", 40, null]);
+    expect(chart.days.at(5)?.edge).toEqual([[now, 40]]);
+    expect(chart.days.at(6)?.edge).toEqual([]);
+    expect(chart.marks).toContainEqual({ at: fiveReset, kind: "next" });
+    expect(chart.marks).toContainEqual({ at: end, kind: "week" });
   });
 
-  it("shows the last two days when the weekly reset is unknown, and marks a hit", () => {
-    const chart = burndown([five(T0 - HOUR, 100, T0 + HOUR)], { fiveHour: { used: 100, resetsAt: sec(T0 + HOUR) } }, T0);
-    expect([chart.start, chart.end]).toEqual([T0 - 48 * HOUR, T0 + FIVE_HOURS]);
-    expect(chart.weekly).toEqual([]);
-    expect(chart.weeklyGuess).toEqual([]);
-    expect(chart.pace).toEqual([]);
-    expect(chart.marks).toContainEqual({ at: T0 - HOUR, kind: "hit" });
+  it("burns each day's edge down hour by hour from the history", () => {
+    const rows = [week(start + HOUR, 10, end), week(start + 30 * HOUR, 20, end), week(start + 40 * HOUR, 35, end)];
+    const chart = limitsChart(rows, { sevenDay: { used: 35, resetsAt: sec(end) } }, now);
+    expect(chart.days.at(0)?.left).toBe(90);
+    expect(chart.days.at(0)?.edge[0]).toEqual([start + HOUR, 90]);
+    expect(chart.days.at(0)?.edge.at(-1)).toEqual([start + DAY - 1, 90]);
+    expect(chart.days.at(1)?.left).toBe(65);
+    expect(chart.days.at(1)?.edge.slice(0, 1)).toEqual([[start + DAY, 90]]);
+    expect(chart.days.at(1)?.edge.find(([t]) => t === start + 31 * HOUR)).toEqual([start + 31 * HOUR, 80]);
+    expect(chart.days.at(1)?.edge.at(-1)).toEqual([start + 2 * DAY - 1, 65]);
   });
 
-  it("needs no guess when the week's first reading is at its start", () => {
-    const end = T0 + HOUR;
-    const chart = burndown([week(end - WEEK, 0, end)], { sevenDay: { used: 0, resetsAt: sec(end) } }, T0);
-    expect(chart.weeklyGuess).toEqual([]);
-    expect(chart.weekly).toEqual([[end - WEEK, 100]]);
+  it("adds no reading when the card's windows match the history, and marks a hit", () => {
+    const rows = [five(now - HOUR, 100, fiveReset), week(now - HOUR, 50, end)];
+    const chart = limitsChart(rows, { fiveHour: { used: 100, resetsAt: sec(fiveReset) + 0.4 }, sevenDay: { used: 50, resetsAt: sec(end) } }, now);
+    expect(chart.marks).toContainEqual({ at: now - HOUR, kind: "hit" });
+    expect(chart.hours.at(122)?.left).toBe(0);
+  });
+
+  it("leaves out a card's window that has already reset or is older than the history", () => {
+    const sevenDay = { used: 0, resetsAt: sec(end) };
+    const stale = limitsChart([], { fiveHour: { used: 63, resetsAt: sec(now - HOUR) }, sevenDay }, now);
+    expect(stale.hours.at(122)?.left).toBe("unknown");
+    const older = limitsChart([five(now - HOUR, 10, now + 3 * HOUR)], { fiveHour: { used: 63, resetsAt: sec(now + HOUR) }, sevenDay }, now);
+    expect(older.hours.at(122)?.left).toBe(90);
+  });
+
+  it("ignores readings after now and spans 7 days ending 5 hours out without a weekly reset", () => {
+    const chart = limitsChart([five(T0 + HOUR, 10)], {}, T0);
+    expect([chart.start, chart.end]).toEqual([T0 + FIVE_HOURS - WEEK, T0 + FIVE_HOURS]);
+    expect(chart.hours.every((h) => h.left === null || h.left === "unknown")).toBe(true);
   });
 });
