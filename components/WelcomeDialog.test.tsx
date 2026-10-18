@@ -51,6 +51,11 @@ function setup() {
   api.changeWelcome.mockReset();
 }
 
+// Three explaining screens come first (Welcome, the board, the left bar); the Wefter Profile is screen 4.
+async function toProfile() {
+  for (let i = 0; i < 3; i++) await userEvent.click(await screen.findByRole("button", { name: /^Next/ }));
+}
+
 beforeEach(setup);
 afterEach(() => {
   vi.useRealTimers();
@@ -70,9 +75,23 @@ describe("WelcomeDialog", () => {
     await waitFor(() => expect(api.answerWelcome).toHaveBeenCalledWith({ countHistory: true, fresh: false, skip: [] }));
   });
 
+  it("opens on the explaining screens, which step with Next and Back", async () => {
+    api.loadWelcome.mockResolvedValue({ welcome: null, preview: preview([project("/repo/a")]) });
+    render(<WelcomeDialog />);
+    expect(await screen.findByText("Welcome to Weft", { selector: "h2" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /^Next/ }));
+    expect(await screen.findByText("How a card moves")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /^Next/ }));
+    expect(await screen.findByText("The left bar")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(await screen.findByText("How a card moves")).toBeInTheDocument();
+    expect(api.answerWelcome).not.toHaveBeenCalled();
+  });
+
   it("opens on screen 1 with the Wefter Profile when projects are available", async () => {
     api.loadWelcome.mockResolvedValue({ welcome: null, preview: preview([project("/repo/a")]) });
     render(<WelcomeDialog />);
+    await toProfile();
     expect(await screen.findByText("Here's your Wefter Profile")).toBeInTheDocument();
     expect(await screen.findByText(/Change it any time in Settings/)).toBeInTheDocument();
   });
@@ -80,6 +99,7 @@ describe("WelcomeDialog", () => {
   it("screen 1 OK moves to screen 2 with countHistory true", async () => {
     api.loadWelcome.mockResolvedValue({ welcome: null, preview: preview([project("/repo/a")]) });
     render(<WelcomeDialog />);
+    await toProfile();
     await userEvent.click(await screen.findByRole("button", { name: /OK/ }));
     expect(await screen.findByText("Bring in your projects")).toBeInTheDocument();
   });
@@ -87,6 +107,7 @@ describe("WelcomeDialog", () => {
   it("Opt out on screen 1 moves to screen 2 with countHistory false", async () => {
     api.loadWelcome.mockResolvedValue({ welcome: null, preview: preview([project("/repo/a")]) });
     render(<WelcomeDialog />);
+    await toProfile();
     await userEvent.click(await screen.findByRole("button", { name: "Opt out" }));
     await screen.findByText("Bring in your projects");
     await userEvent.click(screen.getByRole("button", { name: /^OK/ }));
@@ -96,6 +117,7 @@ describe("WelcomeDialog", () => {
   it("Start fresh sends fresh true and an empty skip list", async () => {
     api.loadWelcome.mockResolvedValue({ welcome: null, preview: preview([project("/repo/a")]) });
     render(<WelcomeDialog />);
+    await toProfile();
     await userEvent.click(await screen.findByRole("button", { name: /^OK/ }));
     await userEvent.click(await screen.findByRole("button", { name: "Start fresh" }));
     expect(api.answerWelcome).toHaveBeenLastCalledWith({ countHistory: true, fresh: true, skip: [] });
@@ -104,6 +126,7 @@ describe("WelcomeDialog", () => {
   it("OK on screen 2 with the default ticks sends an empty skip list", async () => {
     api.loadWelcome.mockResolvedValue({ welcome: null, preview: preview([project("/repo/a"), project("/repo/b")]) });
     render(<WelcomeDialog />);
+    await toProfile();
     // Screen 1 → Screen 2.
     await userEvent.click(await screen.findByRole("button", { name: /^OK/ }));
     // Screen 2: OK with both ticked by default.
@@ -114,6 +137,7 @@ describe("WelcomeDialog", () => {
   it("toggles a project off, then OK sends the unticked folder in skip", async () => {
     api.loadWelcome.mockResolvedValue({ welcome: null, preview: preview([project("/repo/a"), project("/repo/b")]) });
     render(<WelcomeDialog />);
+    await toProfile();
     await userEvent.click(await screen.findByRole("button", { name: /^OK/ }));
     // Now on screen 2; untick /repo/b then click OK to finish.
     await userEvent.click(await screen.findByRole("checkbox", { name: /\/repo\/b/ }));
@@ -124,6 +148,7 @@ describe("WelcomeDialog", () => {
   it("scratch projects are unticked and folded under a count", async () => {
     api.loadWelcome.mockResolvedValue({ welcome: null, preview: preview([project("/repo/real"), project("/tmp/wt", true), project("/tmp/wt2", true)]) });
     render(<WelcomeDialog />);
+    await toProfile();
     await userEvent.click(await screen.findByRole("button", { name: /^OK/ }));
     // The collapse button shows the count and is the only place the scratch names appear.
     const collapse = screen.getByRole("button", { name: /scratch/ });
@@ -138,6 +163,7 @@ describe("WelcomeDialog", () => {
   it("Enter on a checkbox presses OK", async () => {
     api.loadWelcome.mockResolvedValue({ welcome: null, preview: preview([project("/repo/a")]) });
     render(<WelcomeDialog />);
+    await toProfile();
     await userEvent.click(await screen.findByRole("button", { name: /^OK/ }));
     // On screen 2; focus a checkbox and press Enter.
     const checkbox = await screen.findByRole("checkbox");
@@ -149,6 +175,7 @@ describe("WelcomeDialog", () => {
   it("closes the dialog once the answer is saved", async () => {
     api.loadWelcome.mockResolvedValue({ welcome: null, preview: preview([project("/repo/a")]) });
     const { container } = render(<WelcomeDialog />);
+    await toProfile();
     await userEvent.click(await screen.findByRole("button", { name: /^OK/ }));
     await userEvent.click(await screen.findByRole("button", { name: /^OK/ }));
     await waitFor(() => expect(container.querySelector('[role="dialog"]')).toBeNull());
