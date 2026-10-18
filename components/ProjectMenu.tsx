@@ -1,5 +1,5 @@
 // The "More" dropdown menu in the project bar: every project (so the user can pick one outside the
-// recent six), an "Open folder" action, and a "New project" form. The desktop's native folder picker
+// recent six), an "Open folder" action, a "Clone from GitHub" form and a "New project" form. The desktop's native folder picker
 // bypasses the form; a browser tab falls back to a paste-in path field.
 import { useState } from "react";
 import { api } from "@/lib/client";
@@ -14,7 +14,7 @@ const MENU_ACTION =
 const SUBMIT =
   "shrink-0 rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-on-accent hover:opacity-90 disabled:opacity-50";
 
-type Form = "none" | "open" | "new";
+type Form = "none" | "open" | "new" | "clone";
 
 function errorText(err: unknown) {
   return err instanceof Error ? err.message : String(err);
@@ -50,7 +50,7 @@ export default function ProjectMenu({
       setForm("none");
       return;
     }
-    if (next === "open") setFolder("");
+    if (next === "open" || next === "clone") setFolder("");
     if (next === "new") {
       setName("");
       setParent(home ? `${home}/dev` : "~/dev");
@@ -94,6 +94,17 @@ export default function ProjectMenu({
       return;
     }
     void run(async () => (await api.addProject(path)).path);
+  }
+
+  // Accepts owner/name or a github.com URL; the clone lands in ~/dev and becomes a project.
+  function cloneFromGithub(e: React.SubmitEvent) {
+    e.preventDefault();
+    const slug = folder.trim().replace(/^(https?:\/\/)?(www\.)?github\.com\//, "").replace(/\.git$/, "").replace(/\/+$/, "");
+    if (!/^[\w.-]+\/[\w.-]+$/.test(slug)) {
+      setError("Use owner/name, like aimhuge/weft.");
+      return;
+    }
+    void run(async () => (await api.cloneRepo(slug)).path);
   }
 
   function createProject(e: React.SubmitEvent) {
@@ -168,6 +179,28 @@ export default function ProjectMenu({
             />
             <button type="submit" disabled={busy} className={SUBMIT}>
               Add
+            </button>
+          </form>
+        )}
+
+        <button onClick={() => showForm("clone")} disabled={busy} className={MENU_ACTION}>
+          <Icon name="download" size={14} className="text-muted" /> Clone from GitHub…
+        </button>
+        {form === "clone" && (
+          <form onSubmit={cloneFromGithub} className="flex gap-1.5 px-2.5 pb-2 pt-1">
+            <input
+              autoFocus
+              value={folder}
+              onChange={(e) => {
+                setFolder(e.target.value);
+                setError(null);
+              }}
+              placeholder="owner/name or github.com URL"
+              aria-label="GitHub repo"
+              className={`${FIELD} font-mono`}
+            />
+            <button type="submit" disabled={busy} className={SUBMIT}>
+              {busy ? "Cloning…" : "Clone"}
             </button>
           </form>
         )}
