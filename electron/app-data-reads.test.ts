@@ -4,7 +4,9 @@ import { exchangeToken, flattenGa4, runGa4, runSupabase, signServiceAccountJwt, 
 
 // A real RS256 keypair so the JWT sign/verify round-trip runs; the token endpoint is faked.
 const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
-const PRIVATE_KEY_PEM = privateKey.export({ type: "pkcs8", format: "pem" }) as string;
+const pem = privateKey.export({ type: "pkcs8", format: "pem" });
+if (typeof pem !== "string") throw new Error("expected PEM string");
+const PRIVATE_KEY_PEM = pem;
 const CLIENT_EMAIL = "sa@test.iam.gserviceaccount.com";
 const TOKEN_URI = "https://oauth2.googleapis.com/token";
 
