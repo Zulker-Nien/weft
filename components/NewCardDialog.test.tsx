@@ -27,7 +27,7 @@ vi.mock("./RepoPicker", () => ({
 }));
 
 function setup(props: { cards?: Card[]; defaultCwd?: string; restart?: RestartStatus } = {}) {
-  const onCreate = vi.fn<(input: NewCardInput) => Promise<void>>(() => Promise.resolve());
+  const onCreate = vi.fn<(input: NewCardInput, opts?: { stay?: boolean }) => Promise<void>>(() => Promise.resolve());
   const onClose = vi.fn();
   render(<NewCardDialog home="/home" defaultCwd="/repo/web" onCreate={onCreate} onClose={onClose} {...props} />);
   return { onCreate, onClose, box: screen.getByRole("textbox", { name: "Message" }) };

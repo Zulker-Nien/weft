@@ -24,7 +24,15 @@ export type TeamAccess = { kind: "ok"; ctx: TeamContext } | { kind: "signed-out"
 
 // What a page or server action needs to do its work: the signed-in user, the org they asked about, their
 // role in it, the rest of their workspaces, and the service client for the data work.
-export type TeamContext = { user: WebUser; org: Org; role: OrgRole; orgs: Org[]; service: SupabaseClient };
+export type TeamContext = {
+  user: WebUser;
+  org: Org;
+  role: OrgRole;
+  orgs: Org[];
+  // The viewer's role in each of `orgs`, by org id (the switcher shows it).
+  orgRoles?: Record<string, OrgRole>;
+  service: SupabaseClient;
+};
 
 // Same-origin sanitizer for a `?next=` value (the package's `safeNextPath` does the same job). The plain
 // `startsWith("/") && !startsWith("//")` check is the contract: anything more elaborate is a "use cache"
@@ -75,6 +83,7 @@ export async function teamAccessFor(user: WebUser | null, orgSlug: string): Prom
       org: { id: org.id, slug: org.slug, name: org.name },
       role: membership.role,
       orgs: memberships.map((m) => m.org),
+      orgRoles: Object.fromEntries(memberships.map((m) => [m.org.id, m.role])),
       service,
     },
   };

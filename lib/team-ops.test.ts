@@ -33,6 +33,13 @@ const teamsModMock = vi.hoisted(() => ({
 vi.mock("@aimhuge/teams", () => teamsMock);
 vi.mock("./teams", () => teamsModMock);
 
+const projectsMock = vi.hoisted(() => ({
+  listTeamProjects: vi.fn(),
+  runLinkProject: vi.fn(),
+  runUnlinkProject: vi.fn(),
+}));
+vi.mock("./team-projects", () => projectsMock);
+
 import { runInvite, runTeamOp, teamSnapshot } from "./team-ops";
 import { ORG, USER, actorAtLeast, makeService } from "./team-ops.harness";
 
@@ -53,6 +60,7 @@ beforeEach(() => {
   teamsMock.assignableRoles.mockImplementation((r: string) => (r === "owner" ? ["owner", "admin", "member"] : r === "admin" ? ["admin", "member"] : []));
   teamsMock.listOrgMembers.mockResolvedValue([]);
   teamsMock.listPendingInvites.mockResolvedValue([]);
+  projectsMock.listTeamProjects.mockResolvedValue([]);
   teamsModMock.createInvite.mockResolvedValue({ invitation: { id: "i1" }, alreadyPending: false });
 });
 
@@ -65,12 +73,26 @@ describe("teamSnapshot", () => {
     expect(snap.user).toEqual({ id: USER.id, email: USER.email, name: USER.name, avatar: USER.avatar });
     expect(snap.org).toEqual({ id: ORG.id, slug: ORG.slug, name: ORG.name });
     expect(snap.role).toBe("owner");
-    expect(snap.orgs).toEqual([{ id: ORG.id, slug: ORG.slug, name: ORG.name }]);
+    expect(snap.orgs).toEqual([{ id: ORG.id, slug: ORG.slug, name: ORG.name, role: "owner" }]);
     expect(snap.canManage).toBe(true);
     expect(snap.roleOptions.map((o) => o.role)).toEqual(["owner", "admin", "member"]);
     expect(snap.roleLabels).toEqual({ owner: "Owner", admin: "Admin", member: "Member" });
     expect(snap.members).toEqual([]);
     expect(snap.pending).toEqual([]);
+    expect(snap.projects).toEqual([]);
+  });
+
+  it("carries the viewer's role on each org and the team's projects", async () => {
+    const other = { id: "o2", slug: "beta", name: "Beta" };
+    const project = { repo: "acme/site", addedAt: "t", addedBy: null };
+    projectsMock.listTeamProjects.mockResolvedValue([project]);
+    const ctx = { ...CTX, orgs: [ORG, other], orgRoles: { o1: "owner" as const, o2: "member" as const }, service: {} as never };
+    const snap = await teamSnapshot(ctx);
+    expect(snap.orgs).toEqual([{ ...ORG, role: "owner" }, { ...other, role: "member" }]);
+    expect(snap.projects).toEqual([project]);
+    // Without orgRoles the current org falls back to ctx.role and the rest carry none.
+    const bare = await teamSnapshot({ ...CTX, orgs: [ORG, other] });
+    expect(bare.orgs).toEqual([{ ...ORG, role: "owner" }, other]);
   });
 
   it("maps listOrgMembers rows into TeamMember (userId/email/name/role/joinedAt)", async () => {
@@ -182,6 +204,17 @@ describe("runInvite", () => {
 });
 
 // ─── runTeamOp dispatch ──────────────────────────────────────────────────
+
+describe("runTeamOp projects", () => {
+  it("dispatches link-project and unlink-project", async () => {
+    projectsMock.runLinkProject.mockResolvedValue({ ok: true });
+    projectsMock.runUnlinkProject.mockResolvedValue({ ok: true, message: "x" });
+    expect(await runTeamOp(CTX, { org: "acme", action: "link-project", repo: "a/b" })).toEqual({ ok: true });
+    expect(projectsMock.runLinkProject).toHaveBeenCalledWith(CTX, "a/b");
+    expect(await runTeamOp(CTX, { org: "acme", action: "unlink-project", repo: "a/b" })).toEqual({ ok: true, message: "x" });
+    expect(projectsMock.runUnlinkProject).toHaveBeenCalledWith(CTX, "a/b");
+  });
+});
 
 describe("runTeamOp", () => {
   it("dispatches by action to the matching runner", async () => {

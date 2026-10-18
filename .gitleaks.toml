@@ -1,0 +1,9 @@
+# Mod+shift+Enter and other key-chord strings in code/comments fire the generic-api-key rule
+# by accident. They're not keys; treat them as allow-listed lines.
+[allowlist]
+  description = "Key chord strings (mod+shift+Enter, etc.) and similar identifiers"
+  regexes = [
+    '''mod\+shift\+Enter''',
+    '''mod\+Enter''',
+    '''alt\+Enter''',
+  ]

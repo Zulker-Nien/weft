@@ -19,11 +19,16 @@ const cacheMock = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
 }));
 
+const createMock = vi.hoisted(() => ({ runCreateTeam: vi.fn() }));
+const sessionMock = vi.hoisted(() => ({ webUser: vi.fn() }));
+
 vi.mock("./teams", () => teamsModMock);
+vi.mock("./team-create", () => createMock);
+vi.mock("./web-session", () => sessionMock);
 vi.mock("./team-ops", () => teamOpsMock);
 vi.mock("next/cache", () => cacheMock);
 
-import { boardShareTeam, changeMemberRole, inviteMember, removeMember, revokeInvite } from "./team-actions";
+import { addProject, boardShareTeam, changeMemberRole, createTeam, removeProject, inviteMember, removeMember, revokeInvite } from "./team-actions";
 import { ORG, USER } from "./team-actions.harness";
 
 const CTX = { user: USER, org: ORG, role: "owner" as const, orgs: [ORG], service: {} as never };
@@ -133,5 +138,46 @@ describe("boardShareTeam", () => {
     await expect(boardShareTeam("acme")).resolves.toEqual({ org: ORG });
     expect(teamsModMock.requireTeam).toHaveBeenCalledWith("acme", "/acme/team");
     expect(teamOpsMock.teamSnapshot).toHaveBeenCalledWith(CTX);
+  });
+});
+
+describe("addProject / removeProject", () => {
+  it("runs link-project through the gate and revalidates on success", async () => {
+    await addProject("acme", "  a/b ");
+    expect(teamOpsMock.runTeamOp).toHaveBeenCalledWith(CTX, { org: "acme", action: "link-project", repo: "a/b" });
+    expect(cacheMock.revalidatePath).toHaveBeenCalledWith("/acme/team");
+  });
+
+  it("runs unlink-project and skips revalidation on failure", async () => {
+    teamOpsMock.runTeamOp.mockResolvedValueOnce({ ok: false, message: "no" });
+    expect(await removeProject("acme", "a/b")).toEqual({ ok: false, message: "no" });
+    expect(teamOpsMock.runTeamOp).toHaveBeenCalledWith(CTX, { org: "acme", action: "unlink-project", repo: "a/b" });
+    expect(cacheMock.revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("revalidates after an unlink that worked", async () => {
+    await removeProject("acme", "a/b");
+    expect(cacheMock.revalidatePath).toHaveBeenCalledWith("/acme/team");
+  });
+
+  it("skips revalidation when a link fails", async () => {
+    teamOpsMock.runTeamOp.mockResolvedValueOnce({ ok: false });
+    await addProject("acme", "a/b");
+    expect(cacheMock.revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("createTeam", () => {
+  it("makes the team for the signed-in visitor", async () => {
+    sessionMock.webUser.mockResolvedValueOnce(USER);
+    createMock.runCreateTeam.mockResolvedValueOnce({ ok: true, slug: "new" });
+    expect(await createTeam("  New ")).toEqual({ ok: true, slug: "new" });
+    expect(createMock.runCreateTeam).toHaveBeenCalledWith(USER, "New");
+  });
+
+  it("refuses when signed out", async () => {
+    sessionMock.webUser.mockResolvedValueOnce(null);
+    expect(await createTeam("New")).toEqual({ ok: false, message: "Sign in first." });
+    expect(createMock.runCreateTeam).not.toHaveBeenCalled();
   });
 });

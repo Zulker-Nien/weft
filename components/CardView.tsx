@@ -205,7 +205,7 @@ function CardPrompts({ card, answered, onAnswer, onOpen, onResume }: { card: Car
         </button>
       )}
 
-      {card.pending && !card.pending.questions && <PermissionRow answered={answered} onAnswer={onAnswer} />}
+      {card.pending && !card.pending.questions && <PermissionRow card={card} answered={answered} onAnswer={onAnswer} />}
     </>
   );
 }
@@ -226,16 +226,32 @@ function CardActions({ card, readOnly, onResume, onStar, onArchive, onStop }: { 
 }
 
 // The Allow / Deny pair for a permission prompt. The card opens the thread on click; each button
-// stops the event so the click answers the prompt instead.
-function PermissionRow({ answered, onAnswer }: { answered: boolean; onAnswer: (allow: boolean) => void }) {
+// stops the event so the click answers the prompt instead. An edit another card is holding offers
+// Await resolution first (the default, as in the thread's prompt), with Go ahead beside it.
+function PermissionRow({ card, answered, onAnswer }: { card: Card; answered: boolean; onAnswer: (allow: boolean) => void }) {
   const stop = (allow: boolean) => (e: React.MouseEvent) => {
     e.stopPropagation();
     onAnswer(allow);
   };
+  const holder = card.pending?.why?.holder;
+  const wait = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (card.pending) void api.waitPermission(card.id, card.pending.id).catch(() => {});
+  };
+  const primary = "rounded-md bg-accent px-2.5 py-1 text-[12px] font-medium text-on-accent hover:opacity-90 disabled:opacity-50";
+  const secondary = "rounded-md border border-line-strong px-2.5 py-1 text-[12px] text-ink hover:bg-sunken disabled:opacity-50";
+  const waiting = holder && card.pending?.waiting;
   return (
     <div className="mt-2 flex gap-1.5">
-      <button onClick={stop(true)} disabled={answered} className="rounded-md bg-accent px-2.5 py-1 text-[12px] font-medium text-on-accent hover:opacity-90 disabled:opacity-50">Allow</button>
-      <button onClick={stop(false)} disabled={answered} className="rounded-md border border-line-strong px-2.5 py-1 text-[12px] text-ink hover:bg-sunken disabled:opacity-50">Deny</button>
+      {holder && !waiting && (
+        <button onClick={wait} disabled={answered} className={primary} title={`Hold this edit until ‘${holder.title}’ finishes or commits, then redo it on top`}>
+          Await resolution
+        </button>
+      )}
+      <button onClick={stop(true)} disabled={answered} className={holder ? secondary : primary}>
+        {holder ? "Go ahead" : "Allow"}
+      </button>
+      <button onClick={stop(false)} disabled={answered} className={secondary}>Deny</button>
     </div>
   );
 }

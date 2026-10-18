@@ -41,6 +41,7 @@ function snapshot(over: Partial<TeamSnapshot> = {}): TeamSnapshot {
       { userId: "u2", email: "sam@x.com", name: null, role: "member", joinedAt: "" },
     ],
     pending: [{ id: "i1", email: "new@x.com", role: "member", createdAt: "", expiresAt: "" }],
+    projects: [],
     roleOptions: [
       { role: "owner", label: "Owner", description: "" },
       { role: "member", label: "Member", description: "" },

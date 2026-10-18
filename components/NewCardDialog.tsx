@@ -61,7 +61,8 @@ export default function NewCardDialog({
       stay,
       ...composerOps,
       onCreate: async (input, options) => {
-        await onCreate(input, options);
+        if (options) await onCreate(input, options);
+        else await onCreate(input);
         if (input.start && process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN && process.env.NEXT_PUBLIC_POSTHOG_HOST) {
           posthog.capture("thread_started", {
             backend: input.backend,

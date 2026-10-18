@@ -291,15 +291,15 @@ out as a new message after the old one; the reply box says so before you send. R
 the session, so one that's open in another app is continued as a copy (`forkSession`), as a
 normal send does. An edited send can't use a warm spare, so it starts a cold CLI.
 
-### Continue (▶ Continue, ⌘.)
+### Continue (▶ Continue, ⌘⇧↵)
 
 The reply box offers Continue only when the last turn stopped short (`turnCutOff` in `lib/reply-mode.ts`: a
 stop, an error, a plan limit or the app closing): as the primary button of an empty box, and as "Continue here"
 in the send menu once you've typed. It sends the literal word `continue` through the same `onSend` path a
 typed message uses — the same call the card-level ▶ makes (`lib/resume-actions.ts`,
 `api.send(id, "continue")`), which is the same shape every other message takes. On the desktop,
-⌘. (or `mod+.`) does the same from the keyboard (`lib/use-reply-continue.ts`, registered in the
-**Thread** group). The weft.zip web board's reply box gets the same button (no ⌘. — the web has no
+⌘⇧↵ (or `mod+shift+Enter`) does the same from the keyboard (`lib/use-reply-continue.ts`, registered in the
+**Thread** group). The weft.zip web board's reply box gets the same button (no ⌘⇧↵ — the web has no
 global keymap); it's hidden on a card a teammate's Mac runs (`canReply(cardRow, userId)` in
 `lib/web-commands.ts`). The button and the shortcut share the same canContinue rule and both
 grey out under the same conditions: a turn running (Send queues), a question waiting (Send answers),

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { restartArmed } from "./restart-when-idle";
 import { isBusy, sendUserMessage } from "./runner";
 import { addScheduled, dueMessage } from "./schedule";
+import { prebakeBriefs } from "./splice";
 import { getCard, listCards, updateCard } from "./store";
 import { COPILOT_ID, type Card } from "./types";
 
@@ -47,6 +48,9 @@ export function sendDueMessages(now = Date.now()) {
 // Once per server process.
 export function startScheduler() {
   if (g.__weftScheduleTimer) return;
-  g.__weftScheduleTimer = setInterval(() => sendDueMessages(), CHECK_EVERY_MS);
+  g.__weftScheduleTimer = setInterval(() => {
+    sendDueMessages();
+    prebakeBriefs();
+  }, CHECK_EVERY_MS);
   sendDueMessages();
 }

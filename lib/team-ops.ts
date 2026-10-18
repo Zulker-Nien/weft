@@ -11,6 +11,7 @@ import "server-only";
 import { listOrgMembers, listPendingInvites, roleAtLeast, roleCan, roleLabel } from "@aimhuge/teams";
 import type { TeamContext } from "./teams";
 import { createInvite, inviteMailer, isPlausibleEmail, normalizeEmail, revokeInvite as revokeInviteRow, roleOptions } from "./teams";
+import { listTeamProjects, runLinkProject, runUnlinkProject } from "./team-projects";
 import type { TeamActionResult, TeamInvite, TeamMember, TeamOp, TeamOrg, TeamSnapshot, TeamUser } from "./team-types";
 
 // A two-line answer: both server actions and the API wrap a result in
@@ -35,7 +36,7 @@ function snapshotCore(ctx: TeamContext) {
     avatar: ctx.user.avatar,
   };
   const org: TeamOrg = { id: ctx.org.id, slug: ctx.org.slug, name: ctx.org.name };
-  const orgs: TeamOrg[] = ctx.orgs.map((o) => ({ id: o.id, slug: o.slug, name: o.name }));
+  const orgs: TeamOrg[] = ctx.orgs.map((o) => ({ id: o.id, slug: o.slug, name: o.name, role: ctx.orgRoles?.[o.id] ?? (o.id === ctx.org.id ? ctx.role : undefined) }));
   const canManage = roleCan(ctx.role, "members.manage");
   // roleOptions gives the assignable roles for THIS actor (an owner sees
   // all three, an admin sees admin+member, a member sees none); roleLabels
@@ -78,9 +79,10 @@ async function addExistingAccount(
 // client reads nothing here.
 export async function teamSnapshot(ctx: TeamContext): Promise<TeamSnapshot> {
   const core = snapshotCore(ctx);
-  const [members, pending] = await Promise.all([
+  const [members, pending, projects] = await Promise.all([
     listOrgMembers(ctx.service, ctx.org.id),
     core.canManage ? listPendingInvites(ctx.service, ctx.org.id) : Promise.resolve([]),
+    listTeamProjects(ctx),
   ]);
   const memberRows: TeamMember[] = members.map((m) => ({
     userId: m.user_id,
@@ -96,7 +98,7 @@ export async function teamSnapshot(ctx: TeamContext): Promise<TeamSnapshot> {
     createdAt: i.created_at,
     expiresAt: i.expires_at,
   }));
-  return { ...core, members: memberRows, pending: inviteRows };
+  return { ...core, members: memberRows, pending: inviteRows, projects };
 }
 
 // ─── invite ──────────────────────────────────────────────────────────────
@@ -271,6 +273,10 @@ export async function runTeamOp(ctx: TeamContext, op: TeamOp): Promise<TeamActio
       return runRemove(ctx, op.userId);
     case "revoke":
       return runRevokeInvite(ctx, op.inviteId);
+    case "link-project":
+      return runLinkProject(ctx, op.repo);
+    case "unlink-project":
+      return runUnlinkProject(ctx, op.repo);
     default: {
       // Unreachable as long as TeamOp's union covers every action the
       // route parses; if a new variant is added without a runner, this

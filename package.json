@@ -29,7 +29,8 @@
     "dist:release": "WEFT_DIST=.next-dist WEFT_STANDALONE=1 next build && node scripts/prepare-standalone.mjs .next-dist && node scripts/bundle-toolchain.mjs && electron-builder --mac --publish never",
     "coverage": "node scripts/run-tests.mjs --coverage",
     "postinstall": "chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null || true; node scripts/patch-next-hmr.mjs",
-    "resend": "node scripts/resend-domain.mjs"
+    "resend": "node scripts/resend-domain.mjs",
+    "league:test-mail": "jiti scripts/league-mail-test.ts"
   },
   "dependencies": {
     "@aimhuge/admin": "github:aimhuge/components#v0.7.0&path:/packages/admin",

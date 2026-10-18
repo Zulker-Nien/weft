@@ -5,12 +5,14 @@ const cards = new Map<string, Card>();
 const busy = new Set<string>();
 const sent: Array<[string, string]> = [];
 let restartArmed = false;
+const prebakeBriefs = vi.fn();
 
 vi.mock("./store", () => ({
   getCard: (id: string) => cards.get(id),
   listCards: () => [...cards.values()],
   updateCard: (id: string, patch: Partial<Card>) => Object.assign(cards.get(id)!, patch),
 }));
+vi.mock("./splice", () => ({ prebakeBriefs }));
 vi.mock("./restart-when-idle", () => ({ restartArmed: () => restartArmed }));
 vi.mock("./runner", () => ({
   isBusy: (id: string) => busy.has(id),
@@ -144,5 +146,7 @@ describe("startScheduler", () => {
     expect(sent).toEqual([["a", "overdue"]]);
     vi.advanceTimersByTime(15_000);
     expect(sent).toEqual([["a", "overdue"], ["a", "soon"]]);
+    // Each tick also writes the briefs of cards whose cache is about to lapse (lib/splice.ts).
+    expect(prebakeBriefs).toHaveBeenCalledTimes(1);
   });
 });

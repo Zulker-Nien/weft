@@ -66,7 +66,7 @@ function upload(file: Blob, name: string, onProgress?: (fraction: number) => voi
   return new Promise<UploadedAttachment>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/attachments");
-    xhr.setRequestHeader("x-threadboard", "1");
+    xhr.setRequestHeader("x-weft-token", "1");
     xhr.setRequestHeader("x-filename", encodeURIComponent(name));
     xhr.setRequestHeader("content-type", file.type || "application/octet-stream");
     xhr.upload.onprogress = (e) => {
@@ -122,7 +122,7 @@ async function readJson<T>(res: Response): Promise<T & { error?: string }> {
 async function transcribe(audio: Blob) {
   const res = await send("/api/transcribe", {
     method: "POST",
-    headers: { "x-threadboard": "1", "content-type": audio.type || "audio/webm" },
+    headers: { "x-weft-token": "1", "content-type": audio.type || "audio/webm" },
     body: audio,
   });
   const data = await readJson<{ text?: string }>(res);
@@ -133,7 +133,7 @@ async function transcribe(audio: Blob) {
 export async function call<T>(method: string, url: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const res = await send(url, {
     method,
-    headers: { "content-type": "application/json", "x-threadboard": "1" },
+    headers: { "content-type": "application/json", "x-weft-token": "1" },
     body: body === undefined ? undefined : JSON.stringify(body),
     ...(signal ? { signal } : {}),
   });
@@ -189,8 +189,8 @@ export const api = {
   stopTask: (id: string, taskId: string) => call<{ ok: true }>("POST", `/api/cards/${id}/tasks/${encodeURIComponent(taskId)}/stop`),
   // "!" in the reply box: runs a shell command in the card's folder (lib/shell.ts).
   shell: (id: string, command: string) => call<{ ok: true }>("POST", `/api/cards/${id}/shell`, { command }),
-  // "Continue in new card" on a cold-cache card: a summary, its touched files and `message` start a new card (lib/handoff.ts).
-  handoff: (id: string, message: string) => call<{ card: Card }>("POST", `/api/cards/${id}/handoff`, { message }),
+  // "Send fresh" on a cold-cache card: a new session in the same card, from a brief of the thread (lib/splice.ts).
+  fresh: (id: string, message: string) => call<{ ok: true }>("POST", `/api/cards/${id}/fresh`, { message }),
   // Stops the Claude CLI that has a picked-up session open in another app.
   release: (id: string) => call<{ stopped: number }>("POST", `/api/cards/${id}/release`),
   // Flips a card's CLI, or with model picks one of its models (same CLI: no new session). replay=true re-sends the last user message (the rate-limit escape hatch).

@@ -22,6 +22,7 @@ const team: TeamSnapshot = {
   canManage: true,
   members: [],
   pending: [],
+  projects: [],
   roleOptions: [],
   roleLabels: { owner: "Owner", admin: "Admin", member: "Member" },
 };
@@ -235,6 +236,44 @@ describe("useTeam", () => {
         "/api/account/team",
         expect.objectContaining({ body: JSON.stringify({ org: "acme", action: "revoke", inviteId: "i1" }) }),
       ]);
+    });
+
+    it("links and unlinks a project on the loaded workspace", async () => {
+      const { result } = renderHook(() => useTeam("acme"));
+      await waitFor(() => expect(result.current.state.kind).toBe("ok"));
+      fetchMock.mockImplementation((_url, init) =>
+        Promise.resolve(init?.method === "POST" ? jsonResponse(200, { ok: true }) : jsonResponse(200, team)),
+      );
+      await act(() => result.current.actions.addProject("aimhuge/weft"));
+      await act(() => result.current.actions.removeProject("aimhuge/weft"));
+      const bodies = fetchMock.mock.calls.filter(([, i]) => i?.method === "POST").map(([, i]) => i?.body);
+      expect(bodies).toEqual([
+        JSON.stringify({ org: "acme", action: "link-project", repo: "aimhuge/weft" }),
+        JSON.stringify({ org: "acme", action: "unlink-project", repo: "aimhuge/weft" }),
+      ]);
+    });
+
+    it("createTeam posts the name, returns the slug and forgets the cached teams", async () => {
+      const { result } = renderHook(() => useTeam("acme"));
+      await waitFor(() => expect(result.current.state.kind).toBe("ok"));
+      fetchMock.mockImplementation((_url, init) =>
+        Promise.resolve(init?.method === "POST" ? jsonResponse(200, { ok: true, slug: "new-co" }) : jsonResponse(200, team)),
+      );
+      const out = await act(() => result.current.actions.createTeam("New Co"));
+      expect(out).toEqual({ ok: true, message: undefined, slug: "new-co" });
+      const post = fetchMock.mock.calls.find(([, i]) => i?.method === "POST");
+      expect(post?.[1]?.body).toBe(JSON.stringify({ action: "create", name: "New Co" }));
+      const before = fetchMock.mock.calls.length;
+      renderHook(() => useTeam("acme-2"));
+      await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(before));
+    });
+
+    it("createTeam works with no team loaded and keeps the cache on failure", async () => {
+      fetchMock.mockResolvedValueOnce(jsonResponse(401, { error: "signed-out" }));
+      const { result } = renderHook(() => useTeam());
+      await waitFor(() => expect(result.current.state.kind).toBe("signed-out"));
+      fetchMock.mockResolvedValueOnce(jsonResponse(200, { ok: false, message: "Name taken." }));
+      expect(await act(() => result.current.actions.createTeam("X"))).toEqual({ ok: false, message: "Name taken." });
     });
 
     it("returns a friendly message and skips the network when no team is loaded", async () => {

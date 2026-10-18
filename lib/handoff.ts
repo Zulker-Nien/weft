@@ -1,11 +1,7 @@
-import { complete } from "./haiku";
-import { createCardFromBody, startCard } from "./new-card";
-import { getCard, getThread } from "./store";
 import type { Card, ThreadItem } from "./types";
 
-// "Continue in new card": a card whose prompt cache has gone cold re-sends its whole thread at full price
-// on the next message. This carries the work into a fresh card instead: a Haiku summary of the thread,
-// the files it touched (and the symbols and line counts of each edit), and the message you had typed.
+// What a cold card's brief is made of (lib/splice-brief.ts): the files its edits touched (with the symbols and
+// line counts of each edit) and the prompt Haiku summarizes the thread with.
 
 const EDIT_TOOLS = new Set(["Edit", "MultiEdit", "Write", "NotebookEdit"]);
 
@@ -55,52 +51,4 @@ export function summaryPrompt(card: Card, items: ThreadItem[]): string {
     "",
     transcript(items),
   ].join("\n");
-}
-
-function fileLine(f: TouchedFile): string {
-  const counts = f.added || f.removed ? ` (+${f.added}/-${f.removed})` : "";
-  const symbols = f.symbols.length ? `, ${f.symbols.join(", ")}` : "";
-  return `- ${f.file}${counts}${symbols}`;
-}
-
-// The new card's first message: where the old card left off, then what you wanted to say next.
-export function handoffPrompt(card: Card, summary: string, files: TouchedFile[], message: string): string {
-  const list = files.length ? files.map(fileLine).join("\n") : "- none edited yet";
-  return [
-    `Continuing from the card "${card.title}", whose prompt cache had gone cold. Its summary:`,
-    "",
-    summary.trim(),
-    "",
-    "Files it touched (read them before editing; they hold the work so far):",
-    list,
-    "",
-    message.trim() ? `Next:\n${message.trim()}` : "Pick up where it left off.",
-  ].join("\n");
-}
-
-// Summarizes the card and starts a new one in its folder with the same CLI, model and mode. If the
-// summarizer fails, the new card still starts, with the card's own last words instead of a summary.
-export async function continueInNewCard(id: string, message: string): Promise<Card> {
-  const card = getCard(id);
-  if (!card) throw new Error("No such card.");
-  const items = getThread(id);
-  let summary = "";
-  try {
-    summary = await complete(summaryPrompt(card, items));
-  } catch {
-    summary = "";
-  }
-  if (!summary.trim()) summary = card.lastLine ?? "(no summary available; read the files below)";
-  const next = createCardFromBody({
-    prompt: handoffPrompt(card, summary, touchedFiles(items), message),
-    title: `${card.title} (continued)`,
-    cwd: card.cwd,
-    backend: card.backend,
-    permissionMode: card.permissionMode,
-    model: card.model,
-    effort: card.effort,
-    tags: card.tags,
-  });
-  startCard(next);
-  return next;
 }

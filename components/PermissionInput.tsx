@@ -170,7 +170,7 @@ export function PermissionActions({
     <div className="mt-2 flex gap-2">
       {holder && onWait && (
         <button onClick={onWait} disabled={answered} className={PRIMARY} title={`Hold this edit until ‘${holder.title}’ finishes or commits, then redo it on top`}>
-          Wait
+          Await resolution
         </button>
       )}
       <button onClick={() => onAnswer(true)} disabled={answered} className={holder && onWait ? SECONDARY : PRIMARY}>

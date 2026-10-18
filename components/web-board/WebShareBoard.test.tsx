@@ -30,6 +30,7 @@ function team(over: Partial<TeamSnapshot> = {}): TeamSnapshot {
     canManage: true,
     members: [{ userId: "u1", email: "me@x.com", name: "Me", role: "owner", joinedAt: "" }],
     pending: [],
+    projects: [],
     roleOptions: [{ role: "member", label: "Member", description: "" }],
     roleLabels: { owner: "Owner", admin: "Admin", member: "Member" },
     ...over,

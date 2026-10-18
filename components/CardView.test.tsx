@@ -106,6 +106,13 @@ describe("CardView", () => {
     expect(onAnswer).toHaveBeenCalledOnce();
   });
 
+  it("an edit another card holds offers Await resolution first, then Go ahead", () => {
+    const why = { holder: { id: "c2", title: "Other", claim: "f.ts" } } as never;
+    renderCard({ column: "needs_you", pending: { ...pending, why } });
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(expect.arrayContaining(["Await resolution", "Go ahead", "Deny"]));
+    expect(screen.queryByRole("button", { name: "Allow" })).not.toBeInTheDocument();
+  });
+
   it("Deny answers false", async () => {
     const { onAnswer } = renderCard({ column: "needs_you", pending });
     await userEvent.click(screen.getByRole("button", { name: "Deny" }));

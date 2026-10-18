@@ -63,6 +63,8 @@ export type ThreadItem =
   // A background task the CLI told the agent had ended (its <task-notification>), which can start a turn
   // of its own (lib/runner-tasks.ts).
   | { kind: "notification"; status: "completed" | "failed" | "stopped"; summary: string; at: number }
+  // Where a cold card's fresh session begins (lib/splice.ts): the brief it started from and the tokens it didn't re-send.
+  | { kind: "spliced"; at: number; brief: string; tokens?: number }
   // A message you edited with ↑, and the turn it started, folded away when the edit went out.
   | { kind: "edited"; items: ThreadItem[]; at: number }
   // A "!" command you ran from the reply box (lib/shell.ts). ms is set once it ends; sent once its

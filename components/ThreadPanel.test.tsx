@@ -35,7 +35,7 @@ afterEach(cleanup);
 
 describe("ThreadPanel", () => {
   it("gives a board card its folder, tags, star, archive and delete", () => {
-    renderPanel({ turns: 1 });
+    renderPanel();
     // The fixture's folder is /Users/me/dev/app; folderName() shows "app" in the breadcrumb.
     expect(screen.getByTitle("/Users/me/dev/app")).toHaveTextContent("app");
     expect(screen.getByRole("button", { name: "Add a tag" })).toBeInTheDocument();

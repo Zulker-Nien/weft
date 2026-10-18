@@ -239,3 +239,36 @@ describe("importAll", () => {
     expect(welcome()).toEqual({ at: 100, countHistory: false, fresh: false, skip: [] });
   });
 });
+
+describe("testWelcome", () => {
+  it("shows the real welcome again over an adopted board, keeping the old answer in force", async () => {
+    listCardsReturn = [card({ createdAt: 7 })];
+    const { testWelcome, testingWelcome, welcome, welcomeOrAdopt } = await load();
+    saveWelcomeLegacy();
+    testWelcome();
+    expect(testingWelcome()).toBe(true);
+    expect(welcomeOrAdopt()).toBeNull();
+    expect(welcome()).toEqual({ at: 3, countHistory: true, fresh: false, skip: [], legacy: true, test: true });
+    expect((JSON.parse(fs.readFileSync(WELCOME_FILE, "utf8")) as { test?: boolean }).test).toBe(true);
+  });
+
+  it("starts from a new answer when nothing was saved and the board is empty", async () => {
+    const { testWelcome, testingWelcome } = await load();
+    testWelcome();
+    expect(testingWelcome()).toBe(true);
+  });
+
+  it("ends once a new answer is saved", async () => {
+    const { testWelcome, testingWelcome, saveWelcome, welcomeOrAdopt } = await load();
+    testWelcome();
+    saveWelcome({ at: 9, countHistory: false, fresh: true, skip: [] });
+    expect(testingWelcome()).toBe(false);
+    expect(welcomeOrAdopt()).toEqual({ at: 9, countHistory: false, fresh: true, skip: [] });
+  });
+});
+
+function saveWelcomeLegacy() {
+  fs.mkdirSync(path.dirname(WELCOME_FILE), { recursive: true });
+  fs.writeFileSync(WELCOME_FILE, JSON.stringify({ at: 3, legacy: true }));
+  delete (globalThis as Record<string, unknown>).__weftWelcome;
+}

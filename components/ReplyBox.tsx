@@ -26,9 +26,9 @@ type SendLater = { backend: Backend; resets: PlanResets; scheduled: ScheduledMes
 // turn; otherwise the edit goes out as a new message. fileEdits: what its turn changed on disk, which stays.
 type EditLast = { text: string; canRewind: boolean; fileEdits: number; onEdit: (text: string) => Promise<void> };
 
-// The prompt cache gone cold, and the way to carry the work into a new card (lib/handoff.ts): onContinue starts it
-// with what's typed in the box and resolves to its title.
-export type StaleProps = { cache: CacheState; onContinue: (message: string) => Promise<string> };
+// The prompt cache gone cold, and the way around re-sending the thread (lib/splice.ts): onFresh sends the message
+// in a new session of this card, started from a brief of the thread.
+export type StaleProps = { cache: CacheState; onFresh: (message: string) => Promise<void> };
 
 // A thread's reply box: the same composer as a new thread (Markdown, pasted images and videos,
 // dictation), sized for a reply. Enter sends; Shift+Enter starts a new line. A message starting with "!"
@@ -246,15 +246,23 @@ export default function ReplyBox({
     else void submit(now);
   }
 
-  // Continue in new card: a summary, the touched files and what's typed here go to a fresh card (lib/handoff.ts).
-  async function handOff() {
+  // Send fresh: the message (what's typed, or `text` from a button) goes to a new session of this card that starts
+  // from a brief of the thread (lib/splice.ts). A button's text leaves the draft alone.
+  async function sendFresh(text?: string) {
     if (!stale || sending) return;
+    const message = text ?? composer.current?.readText() ?? "";
+    if (!message.trim()) {
+      setError("Write a message first.");
+      return;
+    }
     setSending(true);
     try {
-      const title = await stale.onContinue(composer.current?.readText() ?? "");
-      composer.current?.clear();
-      saveDraft("", true);
-      setNote(`Started “${title}”`);
+      await stale.onFresh(message);
+      if (text === undefined) {
+        composer.current?.clear();
+        saveDraft("", true);
+      }
+      captureReply();
     } catch (err) {
       setErrorWrap(err);
     } finally {
@@ -314,20 +322,16 @@ export default function ReplyBox({
   // What the primary or a menu item does (lib/reply-mode.ts names them).
   function onAction(action: ReplyAction) {
     setNote(null);
-    if (action === "continue") sendContinue();
-    else if (action === "handoff") void handOff();
+    if (action === "done") {
+      // Cold, Done goes fresh too: a wrap-up needs the brief and the diff, not the whole thread.
+      if (view.primary.action === "fresh") void sendFresh("/weft:done");
+      else void onSend("/weft:done").then(captureReply, setErrorWrap);
+    } else if (action === "fresh") void sendFresh();
+    else if (action === "continue") sendContinue();
     else if (action === "later") setLaterOpen(true);
     else if (action === "schedule") {
       if (resetAt) void scheduleAt(resetAt);
     } else send(action === "sendNow");
-  }
-
-  // Enter does what the primary says, except start a new card from an empty box: that takes a click.
-  function onEnter() {
-    if (view.primary.action === "handoff" && empty) {
-      setNote(null);
-      setError("Write a message first, or click New card.");
-    } else onAction(view.primary.action);
   }
 
   return (
@@ -353,7 +357,7 @@ export default function ReplyBox({
         initial={initial}
         autoFocus={autoFocus}
         placeholder={replyPlaceholder(live, suggestion, placeholder, Boolean(question))}
-        onSubmit={onEnter}
+        onSubmit={() => onAction(view.primary.action)}
         onChange={saveDraft}
         sizeClass="min-h-[44px] max-h-[40vh]"
         className={modeBorder(view.tone)}

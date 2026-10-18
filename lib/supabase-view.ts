@@ -226,10 +226,17 @@ export function signedInLine(orgs: string[] | null) {
   return orgs.length > 2 ? `Signed in · ${orgs.slice(0, 2).join(", ")} +${orgs.length - 2}` : `Signed in · ${orgs.join(", ")}`;
 }
 
+// Migrations not yet applied across the shown folders: the red count on the rail's bolt.
+export function pendingCount(status: SupabaseStatus | null, project: string | null) {
+  if (!status?.signedIn) return 0;
+  return shownFolders(status.folders, project).reduce((n, f) => n + (f.link?.pending?.length ?? 0), 0);
+}
+
 // The rail icon's hover text.
 export function supabaseTitle(status: SupabaseStatus | null, project: string | null) {
   if (!status?.signedIn) return "Supabase: link this project";
   const linked = shownFolders(status.folders, project).filter((f) => f.link);
   if (!linked.length) return "Supabase: not linked yet";
-  return `Supabase: ${linked.map((f) => f.link?.name ?? f.link?.ref ?? folderName(f.folder)).join(", ")}`;
+  const pending = pendingCount(status, project);
+  return `Supabase: ${linked.map((f) => f.link?.name ?? f.link?.ref ?? folderName(f.folder)).join(", ")}${pending ? ` · ${pending} migration${pending === 1 ? "" : "s"} not applied` : ""}`;
 }

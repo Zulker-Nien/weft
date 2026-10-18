@@ -21,7 +21,9 @@ const supabaseKey = vi.hoisted(() => ({ value: "sb_test" }));
 
 vi.mock("@/lib/web-session", () => ({ bearerUser }));
 vi.mock("@/lib/teams", () => ({ currentWorkspaceFor, teamAccessFor }));
+const runCreateTeam = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/team-ops", () => ({ teamSnapshot, runTeamOp }));
+vi.mock("@/lib/team-create", () => ({ runCreateTeam }));
 vi.mock("@/lib/supabase-project", () => ({
   get SUPABASE_KEY() {
     return supabaseKey.value;
@@ -33,7 +35,7 @@ const route = await import("./route");
 const USER = { id: "u1", email: "jane@example.com", name: "Jane", avatar: null };
 const ORG = { id: "o1", slug: "acme", name: "Acme" };
 const CTX = { user: USER, org: ORG, role: "owner" as const, orgs: [ORG], service: {} as never };
-const SNAPSHOT = { user: USER, org: ORG, role: "owner", orgs: [ORG], canManage: true, members: [], pending: [], roleOptions: [], roleLabels: { owner: "Owner", admin: "Admin", member: "Member" } };
+const SNAPSHOT = { user: USER, org: ORG, role: "owner", orgs: [ORG], canManage: true, members: [], pending: [], projects: [], roleOptions: [], roleLabels: { owner: "Owner", admin: "Admin", member: "Member" } };
 
 function req({ method = "GET", org, body, auth = "Bearer jwt.tok.en" }: { method?: string; org?: string; body?: unknown; auth?: string | null } = {}) {
   const url = `https://weft.example/api/teams${org ? `?org=${org}` : ""}`;
@@ -177,5 +179,32 @@ describe("POST /api/teams", () => {
     const res = await route.POST(req({ method: "POST", body: op }));
     expect(res.status).toBe(503);
     expect(await res.json()).toEqual({ error: "unconfigured" });
+  });
+});
+describe("POST /api/teams project and create ops", () => {
+  it("runs link-project and unlink-project against the body's org", async () => {
+    for (const action of ["link-project", "unlink-project"]) {
+      const op = { org: "acme", action, repo: "a/b" };
+      const res = await route.POST(req({ method: "POST", body: op }));
+      expect(res.status).toBe(200);
+      expect(runTeamOp).toHaveBeenLastCalledWith(CTX, op);
+    }
+  });
+
+  it("creates a team with the bearer user alone, no org gate", async () => {
+    runCreateTeam.mockResolvedValue({ ok: true, message: "Created", slug: "new" });
+    const res = await route.POST(req({ method: "POST", body: { action: "create", name: "New" } }));
+    expect(await res.json()).toEqual({ ok: true, message: "Created", slug: "new" });
+    expect(runCreateTeam).toHaveBeenCalledWith(USER, "New");
+    expect(teamAccessFor).not.toHaveBeenCalled();
+  });
+
+  it("create is 401 when signed out, 503 unconfigured, 400 without a name", async () => {
+    bearerUser.mockResolvedValueOnce(null);
+    expect((await route.POST(req({ method: "POST", body: { action: "create", name: "N" } }))).status).toBe(401);
+    expect((await route.POST(req({ method: "POST", body: { action: "create" } }))).status).toBe(400);
+    supabaseKey.value = "";
+    expect((await route.POST(req({ method: "POST", body: { action: "create", name: "N" } }))).status).toBe(503);
+    expect(runCreateTeam).not.toHaveBeenCalled();
   });
 });

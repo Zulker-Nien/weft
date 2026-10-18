@@ -80,8 +80,8 @@ describe("PermissionActions", () => {
 
   it("offers Wait first when another card holds the code", async () => {
     const { onAnswer, onWait } = setup({ ...base, why: { category: "same-code", detail: "d", holder } });
-    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Wait", "Go ahead", "Deny"]);
-    await userEvent.click(screen.getByRole("button", { name: "Wait" }));
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Await resolution", "Go ahead", "Deny"]);
+    await userEvent.click(screen.getByRole("button", { name: "Await resolution" }));
     expect(onWait).toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Go ahead" }));
     expect(onAnswer).toHaveBeenLastCalledWith(true);

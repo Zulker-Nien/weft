@@ -19,6 +19,9 @@ export interface Welcome {
   skip: string[];
   // A board from before the welcome existed, adopted as it was (history counts, everything imports).
   legacy?: boolean;
+  // Settings → General's "Test it": show the real welcome again over this answer, which stays in force
+  // (profile, imports) until the welcome is answered anew.
+  test?: boolean;
 }
 
 export const WELCOME_FILE = path.join(DATA_DIR, "welcome.json");
@@ -35,6 +38,7 @@ function parse(text: string): Welcome | null {
       fresh: raw.fresh === true,
       skip: Array.isArray(raw.skip) ? raw.skip.filter((s): s is string => typeof s === "string") : [],
       ...(raw.legacy ? { legacy: true } : {}),
+      ...(raw.test ? { test: true } : {}),
     };
   } catch {
     return null;
@@ -61,7 +65,7 @@ export function saveWelcome(next: Welcome) {
 // the welcome. Null means a new install that hasn't answered yet.
 export function welcomeOrAdopt(): Welcome | null {
   const saved = welcome();
-  if (saved) return saved;
+  if (saved) return saved.test ? null : saved;
   const cards = listCards().filter((c) => c.role !== "copilot");
   if (!cards.length) return null;
   // History is what came before your first card in Weft itself; picked-up sessions don't count as that.
@@ -72,6 +76,16 @@ export function welcomeOrAdopt(): Welcome | null {
 }
 
 const inside = (folder: string, cwd: string) => cwd === folder || cwd.startsWith(folder.endsWith("/") ? folder : `${folder}/`);
+
+// Settings → General's "Test it": the real welcome shows again, past the adoption guard, on a board
+// that already has cards. Answering it saves a new answer without the flag.
+export function testWelcome() {
+  const w = welcomeOrAdopt() ?? { at: Date.now(), countHistory: true, fresh: false, skip: [] };
+  saveWelcome({ ...w, test: true });
+}
+
+// Whether the welcome is waiting because of "Test it".
+export const testingWelcome = () => welcome()?.test === true;
 
 // Whether a session not on the board yet should become a card: never while the welcome waits, and
 // not from a skipped folder or, after Start fresh, from before the welcome.

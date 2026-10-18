@@ -12,6 +12,7 @@ import {
   signedInLine,
   supabaseActions,
   supabaseBridge,
+  pendingCount,
   supabaseTitle,
   type SupabaseBridge,
   type SupabaseFolder,
@@ -125,5 +126,13 @@ describe("a new project's defaults", () => {
     expect(defaultRegion([proj("a", 1, { region: null }), proj("b", 2, { region: "mars-1" })])).toBe("us-east-1");
     expect(defaultRegion([proj("a", 1, { region: "eu-west-1" }), proj("b", 2, { region: "ap-southeast-1" })])).toBe("ap-southeast-1");
     expect(defaultRegion([proj("a", 3, { region: "ap-southeast-1" }), proj("b", 1, { region: "eu-west-1" }), proj("c", 2, { region: "eu-west-1" })])).toBe("eu-west-1");
+  });
+
+  it("counts pending migrations for the rail's red badge", () => {
+    expect(pendingCount(null, null)).toBe(0);
+    const status = { signedIn: true, orgs: [], error: null, folders: [folder("/dev/a", { link: { ref: "r", source: "cli" as const, name: "a", pending: ["x", "y"] } }), folder("/dev/b", { link: { ref: "q", source: "cli" as const, name: "b", pending: null } })] };
+    expect(pendingCount(status, null)).toBe(2);
+    expect(pendingCount(status, "/dev/b")).toBe(0);
+    expect(supabaseTitle(status, "/dev/a")).toBe("Supabase: a · 2 migrations not applied");
   });
 });

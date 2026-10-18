@@ -9,7 +9,7 @@ const api = vi.hoisted(() => ({ skills: vi.fn(() => Promise.resolve({ skills: []
 vi.mock("@/lib/client", () => ({ api }));
 
 function renderActions(over: Partial<Parameters<typeof CardActions>[0]> = {}) {
-  const props = { card: makeCard({ turns: 1 }), live: false, onSend: vi.fn(() => Promise.resolve()), onStar: vi.fn(), onArchive: vi.fn(), onDelete: vi.fn(), ...over };
+  const props = { card: makeCard(), live: false, onSend: vi.fn(() => Promise.resolve()), onStar: vi.fn(), onArchive: vi.fn(), onDelete: vi.fn(), ...over };
   render(<CardActions {...props} />);
   return props;
 }
@@ -56,19 +56,28 @@ describe("CardActions beside the browser pane", () => {
   });
 });
 
-describe("CardActions before the first full turn", () => {
-  it("hides delete on a card with no finished turn", () => {
+describe("CardActions and the first full turn", () => {
+  it("offers delete on a card that hasn't finished a turn", () => {
     renderActions({ card: makeCard({ turns: undefined, sessionId: undefined }) });
-    expect(screen.queryByRole("button", { name: "Delete card" })).toBeNull();
-  });
-
-  it("hides delete while the first turn runs, even with a session", () => {
-    renderActions({ card: makeCard({ turns: undefined, sessionId: "s1" }), live: true });
-    expect(screen.queryByRole("button", { name: "Delete card" })).toBeNull();
-  });
-
-  it("shows delete on an idle saved session (imported, Codex)", () => {
-    renderActions({ card: makeCard({ turns: undefined, sessionId: "s1" }) });
     expect(screen.getByRole("button", { name: "Delete card" })).toBeTruthy();
+  });
+
+  it("offers delete while the first turn runs, and says it stops the turn", async () => {
+    const props = renderActions({ card: makeCard({ turns: undefined, sessionId: "s1" }), live: true });
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(true);
+    await userEvent.click(screen.getByRole("button", { name: "Delete card" }));
+    expect(confirm.mock.calls[0]?.[0]).toContain("This stops its turn.");
+    expect(props.onDelete).toHaveBeenCalledOnce();
+  });
+
+  it("leaves only archive once a turn has finished", () => {
+    renderActions({ card: makeCard({ turns: 1 }) });
+    expect(screen.queryByRole("button", { name: "Delete card" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Archive card" })).toBeTruthy();
+  });
+
+  it("leaves only archive on an idle saved session (imported, Codex)", () => {
+    renderActions({ card: makeCard({ turns: undefined, sessionId: "s1" }) });
+    expect(screen.queryByRole("button", { name: "Delete card" })).toBeNull();
   });
 });

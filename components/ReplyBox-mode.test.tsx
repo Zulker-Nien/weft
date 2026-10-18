@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The reply box's primary picks the right default (lib/reply-mode.ts): a new card when the cache is cold, a send at
+// The reply box's primary picks the right default (lib/reply-mode.ts): a fresh session when the cache is cold, a send at
 // the reset when the 5-hour window is used up, and the mode chip that says so.
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -33,35 +33,45 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("cold cache", () => {
-  it("makes New card the primary; it carries the box's text and says which card started", async () => {
-    const onContinue = vi.fn(() => Promise.resolve("Fix the footer"));
-    const { onSend, box } = setup({ stale: { cache: coldCache, onContinue } });
+  it("sends fresh on Enter: the box's text goes to a new session and the box clears", async () => {
+    const onFresh = vi.fn(() => Promise.resolve());
+    const { onSend, box } = setup({ stale: { cache: coldCache, onFresh } });
     expect(screen.getByText(/^Cache cold · /)).toBeInTheDocument();
-    await userEvent.type(box, "and the header");
-    await userEvent.click(screen.getByRole("button", { name: "New card" }));
-    expect(onContinue).toHaveBeenCalledWith("and the header");
+    await userEvent.type(box, "and the header{Enter}");
+    expect(onFresh).toHaveBeenCalledWith("and the header");
     expect(onSend).not.toHaveBeenCalled();
-    expect(await screen.findByText("Started “Fix the footer”")).toBeInTheDocument();
-    expect(box).toHaveValue("");
+    await waitFor(() => expect(box).toHaveValue(""));
   });
 
-  it("won't start a new card from Enter in an empty box", async () => {
-    const onContinue = vi.fn(() => Promise.resolve("x"));
-    const { box } = setup({ stale: { cache: coldCache, onContinue } });
+  it("won't send fresh from an empty box, shows a failure, and still sends with the full history from the menu", async () => {
+    const onFresh = vi.fn(() => Promise.reject(new Error("no summary")));
+    const { onSend, box } = setup({ stale: { cache: coldCache, onFresh } });
     await userEvent.type(box, "{Enter}");
-    expect(onContinue).not.toHaveBeenCalled();
-    expect(screen.getByText("Write a message first, or click New card.")).toBeInTheDocument();
-  });
-
-  it("still sends here from the menu, and shows a failed hand-off", async () => {
-    const onContinue = vi.fn(() => Promise.reject(new Error("no summary")));
-    const { onSend, box } = setup({ stale: { cache: coldCache, onContinue } });
-    await userEvent.type(box, "go on");
-    await userEvent.click(screen.getByRole("button", { name: "New card" }));
+    expect(onFresh).not.toHaveBeenCalled();
+    expect(screen.getByText("Write a message first.")).toBeInTheDocument();
+    await userEvent.type(box, "go on{Enter}");
     expect(await screen.findByText("no summary")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "More ways to send" }));
-    await userEvent.click(screen.getByRole("menuitem", { name: /^Send here · re-sends/ }));
+    await userEvent.click(screen.getByRole("menuitem", { name: /full history/ }));
     expect(onSend).toHaveBeenCalledWith("go on");
+  });
+});
+
+describe("Done button", () => {
+  it("sends /weft:done in the thread while the cache is warm", async () => {
+    const { onSend } = setup();
+    await userEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(onSend).toHaveBeenCalledWith("/weft:done");
+  });
+
+  it("sends /weft:done fresh when the cache is cold, leaving the draft alone", async () => {
+    const onFresh = vi.fn(() => Promise.resolve());
+    const { onSend, box } = setup({ stale: { cache: coldCache, onFresh } });
+    await userEvent.type(box, "draft");
+    await userEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(onFresh).toHaveBeenCalledWith("/weft:done");
+    expect(onSend).not.toHaveBeenCalled();
+    expect(box).toHaveValue("draft");
   });
 });
 

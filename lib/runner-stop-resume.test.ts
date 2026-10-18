@@ -56,7 +56,7 @@ describe("a Stop before the CLI's init", () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     first.interrupt.mockImplementation(() => new Promise(() => {}));
     const stopping = runner.stop("c1");
-    await vi.advanceTimersByTimeAsync(5_000);
+    await vi.advanceTimersByTimeAsync(1_500);
     await stopping;
     vi.useRealTimers();
     await flush();
