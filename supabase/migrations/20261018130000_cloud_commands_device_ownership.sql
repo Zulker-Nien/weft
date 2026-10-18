@@ -51,7 +51,11 @@ grant insert (org_id, kind, target_device, folder, payload) on public.cloud_comm
 -- pointing at a card the caller owns. The card-ownership check goes through a security-definer
 -- helper so RLS on cloud_cards doesn't apply (the trigger function is the owner of the check,
 -- not the caller), and the caller's auth.uid() is what the helper filters on.
-create or replace function private.card_owned_by_caller(org uuid, card text)
+-- The parameter is named `p_card` (not `card`) because `cloud_cards` has a jsonb
+-- column also named `card`. With the bare name, the column reference would
+-- shadow the parameter inside the function body and the comparison would
+-- become `text = jsonb`, which Postgres refuses.
+create or replace function private.card_owned_by_caller(p_org uuid, p_card text)
 returns boolean
 language sql
 stable
@@ -60,7 +64,7 @@ set search_path = ''
 as $$
   select exists (
     select 1 from public.cloud_cards c
-    where c.org_id = org and c.card_id = card and c.owner_user = (select auth.uid())
+    where c.org_id = p_org and c.card_id = p_card and c.owner_user = (select auth.uid())
   );
 $$;
 
