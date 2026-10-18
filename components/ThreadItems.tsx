@@ -1,15 +1,15 @@
 "use client";
 
-import { memo, useRef, useState } from "react";
-import { describeToolRun, shortToolName, toolAction } from "@/lib/format";
+import { memo, useState } from "react";
 import { turnId } from "@/lib/show-rail";
-import { toolSizeLabel, useToolResult } from "@/lib/use-tool-result";
 import type { ThreadItem } from "@/lib/types";
 import CrashGuard from "./CrashGuard";
-import Icon, { Spinner } from "./Icon";
+import Icon from "./Icon";
 import Markdown from "./Markdown";
-import MediaView from "./MediaView";
 import SecretAskInput from "./SecretAskInput";
+import ShellLine from "./ShellLine";
+import ToolLine from "./ToolLine";
+import ToolRun from "./ToolRun";
 
 type ToolCall = Extract<ThreadItem, { kind: "tool" }>;
 type Permission = Extract<ThreadItem, { kind: "permission" }>;
@@ -46,96 +46,6 @@ function PermissionLine({ item }: { item: Permission }) {
       <span className={`${item.answer ? "pl-5" : "shrink-0"} ${decisionColor}`}>
         {item.answer ? `Answered: ${item.answer}` : item.decision === "allow" ? "Allowed" : item.decision === "deny" ? "Denied" : "Waiting for you"}
       </span>
-    </div>
-  );
-}
-
-function ToolLine({ item, live, cardId }: { item: ToolCall; live: boolean; cardId: string }) {
-  // The server trimmed a long result out of the item (lib/cloud-sync-types.ts TOOL_RESULT_INLINE_MAX);
-  // the hook fetches it from /api/cards/<id>/thread/tool/<toolId> the first time the row opens.
-  const trimmed = item.result === undefined && item.resultBytes !== undefined;
-  const detailsRef = useRef<HTMLDetailsElement>(null);
-  const { fetched, loading, errored } = useToolResult(cardId, item.id, trimmed, item.result, detailsRef);
-  // What we draw under the summary: the result, a loading line, an error, or a "click to load" hint.
-  let body: import("react").ReactNode = null;
-  if (fetched) body = <pre className="max-h-72 overflow-auto whitespace-pre-wrap border-t border-line px-2.5 py-2 font-mono text-[11.5px] leading-snug text-muted">{fetched}</pre>;
-  else if (loading) body = <div className="flex items-center gap-2 border-t border-line px-2.5 py-2 text-[11.5px] text-faint"><Spinner size={10} /> Loading result…</div>;
-  else if (errored) body = <div className="border-t border-line px-2.5 py-2 text-[11.5px] text-danger">Couldn&apos;t load the result.</div>;
-  else if (trimmed) body = <div className="border-t border-line px-2.5 py-2 text-[11.5px] text-faint">Click to load the result.</div>;
-  const indicator = fetched === undefined ? (live && !trimmed ? <span className="text-faint"><Spinner size={10} /></span> : null) : item.isError ? <span className="text-danger">failed</span> : null;
-  return (
-    <details ref={detailsRef} className="rounded-md border border-line bg-sunken">
-      <summary className="flex cursor-pointer list-none items-center gap-2 px-2.5 py-1.5 text-[12px]">
-        <Icon name="wrench" size={12} className="text-faint" />
-        <span className="shrink-0 font-mono font-medium text-ink">{shortToolName(item.name)}</span>
-        <span className="min-w-0 flex-1 truncate font-mono text-muted">{item.summary}</span>
-        {item.resultBytes !== undefined && <span className="shrink-0 text-faint">{toolSizeLabel(item.resultBytes)}</span>}
-        {indicator}
-      </summary>
-      {body}
-      {item.images && (
-        <div className="flex flex-wrap gap-2 border-t border-line p-2">
-          {item.images.map((src) => (
-            <MediaView key={src} src={src} alt="Screenshot" thumb={(item.images?.length ?? 0) > 1} />
-          ))}
-        </div>
-      )}
-    </details>
-  );
-}
-
-// A run of tool calls as one line, "Ran 3 commands, read 2 files, edited a file +1", that opens to
-// show each call. Screenshots the run took stay visible while it's folded.
-export function ToolRun({ calls, live, cardId }: { calls: (ToolCall | Permission)[]; live: boolean; cardId: string }) {
-  const [open, setOpen] = useState(false);
-  const tools = calls.filter((c): c is ToolCall => c.kind === "tool");
-  if (!tools.length) return calls.map((c, i) => <PermissionLine key={i} item={c as Permission} />);
-
-  const { text, more } = describeToolRun(tools.map((t) => ({ action: t.action ?? toolAction(t.name), target: t.summary })));
-  const running = live ? tools.find((t) => t.result === undefined && t.resultBytes === undefined) : undefined;
-  const failed = tools.filter((t) => t.isError).length;
-  const denied = calls.filter((c) => c.kind === "permission" && c.decision === "deny").length;
-  const waiting = calls.some((c) => c.kind === "permission" && !c.decision);
-  const images = [...new Set(tools.flatMap((t) => t.images ?? []))];
-
-  return (
-    <div className="min-w-0">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className="flex max-w-full items-center gap-1.5 text-left text-[12.5px] text-muted hover:text-ink"
-      >
-        {running && <Spinner size={10} />}
-        <span className="truncate">
-          {text}
-          {more > 0 && <span className="text-faint"> +{more}</span>}
-        </span>
-        {failed > 0 && <span className="shrink-0 text-danger">· {failed} failed</span>}
-        {denied > 0 && <span className="shrink-0 text-danger">· {denied} denied</span>}
-        {waiting && <span className="shrink-0 text-warn">· waiting for you</span>}
-        <Icon name="chevronRight" size={12} className={`transition-transform ${open ? "rotate-90" : ""}`} />
-      </button>
-      {running && !open && (
-        <div className="mt-0.5 truncate pl-4 font-mono text-[11.5px] text-faint">
-          {shortToolName(running.name)} {running.summary}
-        </div>
-      )}
-      {open ? (
-        <div className="mt-2 flex flex-col gap-1.5 border-l-2 border-line pl-3">
-          {calls.map((c, i) =>
-            c.kind === "tool" ? <ToolLine key={c.id || i} item={c} live={live} cardId={cardId} /> : <PermissionLine key={i} item={c} />,
-          )}
-        </div>
-      ) : (
-        images.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {images.map((src) => (
-              <MediaView key={src} src={src} alt="Screenshot" thumb={images.length > 1} />
-            ))}
-          </div>
-        )
-      )}
     </div>
   );
 }
@@ -219,40 +129,7 @@ function NotificationLine({ item }: { item: Extract<ThreadItem, { kind: "notific
   );
 }
 
-// A "!" command you ran from the reply box (lib/shell.ts): the command, what it printed, and whether
-// Claude has read it yet.
-function ShellLine({ item }: { item: Extract<ThreadItem, { kind: "shell" }> }) {
-  const running = item.ms === undefined;
-  const failed = item.timedOut || (item.exitCode ?? 0) !== 0;
-  return (
-    <div className="ml-10 overflow-hidden rounded-lg border border-line bg-sunken">
-      <div className="flex items-center gap-2 px-2.5 py-1.5 font-mono text-[12px]">
-        <span className="font-semibold text-warn">!</span>
-        <span className="min-w-0 flex-1 break-all text-ink">{item.command}</span>
-        {running && <Spinner size={10} />}
-      </div>
-      {item.output && (
-        <pre className="max-h-72 overflow-auto whitespace-pre-wrap border-t border-line px-2.5 py-2 font-mono text-[11.5px] leading-snug text-muted">
-          {item.output}
-        </pre>
-      )}
-      {!running && (
-        <div className="flex gap-2 border-t border-line px-2.5 py-1 text-[11px] text-faint">
-          <span className={failed ? "text-danger" : undefined}>
-            {item.timedOut ? "Stopped after 2 minutes" : item.exitCode === null ? "Couldn't run" : `Exit ${item.exitCode}`}
-          </span>
-          <span>{seconds(item.ms ?? 0)}</span>
-          <span className="ml-auto">{item.sent ? "Sent to Claude" : "Goes to Claude with your next message"}</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function seconds(ms: number) {
-  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
-}
-
+// A "!" command you ran from the reply box (lib/shell.ts). The row is in components/ShellLine.tsx.
 // A thread's messages and tool runs, then the reply streaming in. While ↑ edits a message (editFrom is
 // its index), that message is outlined and the turn it will replace, everything after it, fades. onSend lets
 // a key the thread asked for tell it once the key is in the vault.

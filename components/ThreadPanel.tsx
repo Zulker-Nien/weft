@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { folderName, isLive } from "@/lib/format";
 import type { PlanResets } from "@/lib/schedule";
+import { useThreadTransport } from "@/lib/thread-transport";
 import type { Card, PermissionMode, QuestionReply, ThreadItem } from "@/lib/types";
+import BackendBadge from "./BackendBadge";
 import { BackendPicker } from "./CardView";
 import CardActions from "./CardActions";
 import CrashGuard from "./CrashGuard";
@@ -17,6 +19,10 @@ import ThreadView from "./ThreadView";
 import CopilotEmpty from "./CopilotEmpty";
 
 // Loaded in its own CrashGuard (components/guarded.tsx), so a broken review panel leaves the thread and its reply box.
+//
+// The same panel opens a card on weft.zip, inside a transport that isn't the desktop's (lib/thread-transport.ts):
+// there the title, CLI and mode are read-only and the card's own actions (skills, star, archive, delete, the review
+// panel, Send later) stay on the Mac, so the callbacks for them are left out.
 const ReviewPanel = guarded(() => import("./ReviewPanel"), { what: "review panel", className: "mx-4 my-2" });
 
 export default function ThreadPanel({
@@ -40,6 +46,8 @@ export default function ThreadPanel({
   onEditor,
   editTitle = false,
   resets,
+  footer,
+  readOnly = false,
   className = "",
 }: {
   card: Card;
@@ -47,8 +55,8 @@ export default function ThreadPanel({
   streaming: string;
   onSend: (text: string) => Promise<void>;
   onAnswer: (allow: boolean, answers?: Record<string, string>, reply?: QuestionReply) => unknown;
-  onRelease: () => void;
-  onArchive: () => void;
+  onRelease?: () => void;
+  onArchive?: () => void;
   // The ☆: star or unstar the card.
   onStar?: () => void;
   // A click on the card's tags (or "+ tag"): opens the Tags… dialog.
@@ -57,12 +65,12 @@ export default function ThreadPanel({
   onShare?: () => void;
   // The browser pane beside the thread shows share, star and archive in its toolbar instead.
   marksInPane?: boolean;
-  onDelete: () => void;
+  onDelete?: () => void;
   // Left out while the browser shows beside the thread: the window's X sits in the browser's corner.
   onClose?: () => void;
-  onRename: (title: string) => void;
+  onRename?: (title: string) => void;
   // Applies to the open CLI right away, mid-turn included.
-  onMode: (mode: PermissionMode) => void;
+  onMode?: (mode: PermissionMode) => void;
   // The copilot's New chat, in place of the board card's skills, star, archive and delete.
   onNewChat?: () => void;
   // The ✏︎ beside the X: opens or closes the editor column (CardWorkspace draws no strip for it).
@@ -71,20 +79,25 @@ export default function ThreadPanel({
   // Opens with the title already being edited (Rename… in the card's right-click menu).
   editTitle?: boolean;
   // The plan's next 5-hour and weekly resets, the reply box's default Send later times.
-  resets: PlanResets;
+  resets?: PlanResets;
+  // Above the reply box, in place of the review panel (weft.zip: the replies still on their way to the Mac).
+  footer?: ReactNode;
+  // Nothing can be sent from here (weft.zip, a teammate's card): no reply box, no answers.
+  readOnly?: boolean;
   // Replaces the default sizing classes when the panel is rendered as a column inside CardWorkspace.
   className?: string;
 }) {
   const live = isLive(card);
   // The copilot opens here like any card, but it has no project and isn't filed, starred or renamed.
   const pilot = card.role === "copilot";
+  const { desktop } = useThreadTransport();
 
   return (
     <aside data-drop-target={card.id} className={className || "flex w-[44%] min-w-[380px] shrink-0 flex-col bg-panel last:flex-1"}>
       <header className="flex items-start gap-3 border-b border-line px-4 py-3">
         <div className="min-w-0 flex-1">
-          <PanelTitle card={card} editable={!pilot} editTitle={editTitle} onRename={onRename} />
-          <HeaderMeta card={card} pilot={pilot} onMode={onMode} onTags={onTags} />
+          <PanelTitle card={card} editable={!pilot && desktop} editTitle={editTitle} onRename={onRename} />
+          <HeaderMeta card={card} pilot={pilot} desktop={desktop} onMode={onMode} onTags={onTags} />
           {(card.stage || card.remaining) && (
             <div className="mt-1.5 flex min-w-0 items-center gap-1.5 text-[11.5px]">
               {card.stage && <span className="shrink-0 rounded bg-sunken px-1.5 py-px text-muted">{card.stage}</span>}
@@ -95,7 +108,9 @@ export default function ThreadPanel({
         {pilot ? (
           <NewChatButton onClick={onNewChat} />
         ) : (
-          <CardActions card={card} live={live} onSend={onSend} onShare={onShare} onStar={onStar} onArchive={onArchive} onDelete={onDelete} marksInPane={marksInPane} />
+          desktop && onArchive && onDelete && (
+            <CardActions card={card} live={live} onSend={onSend} onShare={onShare} onStar={onStar} onArchive={onArchive} onDelete={onDelete} marksInPane={marksInPane} />
+          )
         )}
         <EditorToggle open={editorOpen} onClick={onEditor} />
         {onClose && (
@@ -110,24 +125,7 @@ export default function ThreadPanel({
         )}
       </header>
 
-      {card.source === "claude-code" &&
-        (card.openElsewhere ? (
-          <p className="flex items-center gap-1.5 border-b border-warn/40 bg-warn-soft px-4 py-1.5 text-[11.5px] text-warn">
-            <Icon name="alert" size={12} />
-            <span className="min-w-0 flex-1">Open in the Claude app or a terminal right now.</span>
-            <button
-              onClick={onRelease}
-              title="Stop the Claude CLI that has this thread open, so replies continue here"
-              className="shrink-0 rounded px-1.5 py-0.5 font-medium underline underline-offset-2 hover:bg-warn/15"
-            >
-              Click here to continue
-            </button>
-          </p>
-        ) : (
-          <p className="border-b border-line px-4 py-1.5 text-[11.5px] text-muted">
-            Picked up from Claude Code. Replying here continues the same session.
-          </p>
-        ))}
+      <ClaudeCodeNote card={card} onRelease={onRelease} />
 
       <ThreadView
         card={card}
@@ -135,9 +133,33 @@ export default function ThreadPanel({
         streaming={streaming}
         onSend={onSend}
         onAnswer={onAnswer}
-        {...threadExtras(card, pilot, items, onSend, resets)}
+        readOnly={readOnly}
+        {...threadExtras(card, pilot, items, onSend, desktop ? resets : undefined, footer)}
       />
     </aside>
+  );
+}
+
+// A thread picked up from Claude Code: it continues the same session, unless a CLI elsewhere has it open right now
+// (then "Click here to continue" stops that CLI, where the panel can: onRelease).
+function ClaudeCodeNote({ card, onRelease }: { card: Card; onRelease?: () => void }) {
+  if (card.source !== "claude-code") return null;
+  if (!card.openElsewhere)
+    return <p className="border-b border-line px-4 py-1.5 text-[11.5px] text-muted">Picked up from Claude Code. Replying here continues the same session.</p>;
+  return (
+    <p className="flex items-center gap-1.5 border-b border-warn/40 bg-warn-soft px-4 py-1.5 text-[11.5px] text-warn">
+      <Icon name="alert" size={12} />
+      <span className="min-w-0 flex-1">Open in the Claude app or a terminal right now.</span>
+      {onRelease && (
+        <button
+          onClick={onRelease}
+          title="Stop the Claude CLI that has this thread open, so replies continue here"
+          className="shrink-0 rounded px-1.5 py-0.5 font-medium underline underline-offset-2 hover:bg-warn/15"
+        >
+          Click here to continue
+        </button>
+      )}
+    </p>
   );
 }
 
@@ -146,7 +168,7 @@ function PanelTitle({ card, editable, editTitle, onRename }: {
   card: Card;
   editable: boolean;
   editTitle: boolean;
-  onRename: (title: string) => void;
+  onRename?: (title: string) => void;
 }) {
   const [editing, setEditing] = useState(editTitle);
   if (editing && editable) {
@@ -167,7 +189,7 @@ function PanelTitle({ card, editable, editTitle, onRename }: {
         onBlur={(e) => {
           const title = e.currentTarget.value.trim();
           setEditing(false);
-          if (title && title !== card.title) onRename(title);
+          if (title && title !== card.title) onRename?.(title);
         }}
         className="w-full rounded border border-accent bg-panel px-1 py-0.5 text-[14px] font-medium leading-snug text-ink outline-none"
       />
@@ -176,8 +198,8 @@ function PanelTitle({ card, editable, editTitle, onRename }: {
   return (
     <h2
       title={editable ? "Click to rename" : undefined}
-      onClick={() => setEditing(true)}
-      className="line-clamp-2 cursor-text rounded text-[14px] font-medium leading-snug text-ink hover:bg-sunken"
+      onClick={() => setEditing(editable)}
+      className={`line-clamp-2 rounded text-[14px] font-medium leading-snug text-ink ${editable ? "cursor-text hover:bg-sunken" : ""}`}
     >
       {card.title}
     </h2>
@@ -185,16 +207,20 @@ function PanelTitle({ card, editable, editTitle, onRename }: {
 }
 
 // Under the title: the CLI, its mode, the folder (the copilot covers the whole board), the session and its tags.
-function HeaderMeta({ card, pilot, onMode, onTags }: {
+// Off the desktop, the CLI is a badge and the mode stays the Mac's.
+function HeaderMeta({ card, pilot, desktop, onMode, onTags }: {
   card: Card;
   pilot: boolean;
-  onMode: (mode: PermissionMode) => void;
+  desktop: boolean;
+  onMode?: (mode: PermissionMode) => void;
   onTags?: () => void;
 }) {
   return (
     <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted">
-      <BackendPicker card={card} />
-      <CrashGuard inline what="mode picker"><ModePicker small backend={card.backend} value={card.permissionMode} onChange={onMode} yolo={card.backend !== "puku" && !pilot} disabled={card.backend === "codex" && Boolean(card.sessionId)} /></CrashGuard>
+      {desktop ? <BackendPicker card={card} /> : <BackendBadge backend={card.backend} card={card} />}
+      {desktop && onMode && (
+        <CrashGuard inline what="mode picker"><ModePicker small backend={card.backend} value={card.permissionMode} onChange={onMode} yolo={card.backend !== "puku" && !pilot} disabled={card.backend === "codex" && Boolean(card.sessionId)} /></CrashGuard>
+      )}
       <span className="min-w-[3rem] truncate" title={card.cwd}>{pilot ? "✨ whole board" : folderName(card.cwd)}</span>
       {card.sessionId && (
         <span className="shrink-0 whitespace-nowrap font-mono text-faint" title={card.sessionId}>· {card.sessionId.slice(0, 8)}</span>
@@ -202,19 +228,21 @@ function HeaderMeta({ card, pilot, onMode, onTags }: {
       {card.warm && (
         <span className="shrink-0 whitespace-nowrap text-ok" title="The CLI is open, so a reply starts right away">· live</span>
       )}
-      <HeaderMarks card={card} onTags={pilot ? undefined : onTags} />
+      <HeaderMarks card={card} readOnly={!desktop} onTags={pilot ? undefined : onTags} />
     </div>
   );
 }
 
 // What the thread shows that differs for the copilot: no review panel or Send later, a few suggestions to start.
-function threadExtras(card: Card, pilot: boolean, items: ThreadItem[], onSend: (text: string) => Promise<void>, resets: PlanResets) {
+// Without resets (off the desktop) there's no Send later or review panel either; the caller's footer shows instead.
+function threadExtras(card: Card, pilot: boolean, items: ThreadItem[], onSend: (text: string) => Promise<void>, resets: PlanResets | undefined, footer: ReactNode) {
   if (pilot) {
     return {
       empty: <CopilotEmpty onAsk={(text) => void onSend(text).catch(() => {})} />,
       placeholder: "Ask about your threads, or tell me what to start",
     };
   }
+  if (!resets) return { footer };
   return {
     footer: card.column === "review" && <ReviewPanel card={card} items={items} onSend={onSend} />,
     replaceReply: card.column === "review" && Boolean(card.review),
@@ -235,8 +263,9 @@ function NewChatButton({ onClick }: { onClick?: () => void }) {
   );
 }
 
-// The card's GitHub issue (#N, a link) and its tags, which open the Tags… dialog ("+ tag" with none yet).
-function HeaderMarks({ card, onTags }: { card: Card; onTags?: () => void }) {
+// The card's GitHub issue (#N, a link) and its tags, which open the Tags… dialog ("+ tag" with none yet); read-only
+// (weft.zip), just the tags.
+function HeaderMarks({ card, readOnly, onTags }: { card: Card; readOnly: boolean; onTags?: () => void }) {
   return (
     <>
       {card.issue && (
@@ -244,7 +273,8 @@ function HeaderMarks({ card, onTags }: { card: Card; onTags?: () => void }) {
           #{card.issue.number}
         </a>
       )}
-      {onTags && (
+      {readOnly && card.tags?.length ? <HeaderTags tags={card.tags} /> : null}
+      {onTags && !readOnly && (
         <button
           type="button"
           onClick={onTags}

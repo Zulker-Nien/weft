@@ -1,15 +1,24 @@
 "use client";
 
 import { cardTags } from "@/lib/rail-view";
+import { runningBadge } from "@/lib/tasks-view";
 import type { Card } from "@/lib/types";
 import TagPill from "./TagPill";
+import Tip from "./Tip";
 
-// The card's GitHub issue (#N, a link) and up to two tags with "+N" for the rest, folded into the footer line.
+// The card's running subagents (a count), its GitHub issue (#N, a link) and up to two tags with "+N" for the rest,
+// folded into the footer line.
 export default function CardMarks({ card, onTag }: { card: Card; onTag?: (tag: string) => void }) {
   const { shown, more } = cardTags(card.tags);
-  if (!card.issue && !shown.length) return null;
+  const tasks = runningBadge(card.tasks);
+  if (!card.issue && !shown.length && !tasks) return null;
   return (
     <span className="flex shrink-0 items-center gap-1">
+      {tasks && (
+        <Tip text={tasks.title}>
+          <span className="shrink-0 font-medium text-accent">⑂{tasks.count}</span>
+        </Tip>
+      )}
       {card.issue && (
         <a
           href={card.issue.url}

@@ -4,8 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Card, ThreadItem } from "./types";
 import { useEditLast } from "./use-edit-last";
 
-const api = vi.hoisted(() => ({ editLast: vi.fn(() => Promise.resolve({})) }));
-vi.mock("./client", () => ({ api }));
+const edit = vi.fn(() => Promise.resolve());
 
 const card = (over: Partial<Card> = {}) => ({ id: "c1", ...over }) as Card;
 const items: ThreadItem[] = [
@@ -22,7 +21,7 @@ afterEach(() => {
 
 describe("useEditLast", () => {
   it("offers your last message, and marks it only while its card's box is editing", () => {
-    const { result, rerender } = renderHook(({ c }) => useEditLast(c, items, () => {}), { initialProps: { c: card() } });
+    const { result, rerender } = renderHook(({ c }) => useEditLast(c, items, edit, () => {}), { initialProps: { c: card() } });
     expect(result.current.editLast).toMatchObject({ text: "make it blue", canRewind: true, fileEdits: 1 });
     expect(result.current.editFrom).toBeUndefined();
     act(() => result.current.onEditing(true));
@@ -34,23 +33,24 @@ describe("useEditLast", () => {
     expect(result.current.editFrom).toBeUndefined();
   });
 
-  it("sends the edit through the API, then calls back", async () => {
+  it("sends the edit through the transport, then calls back", async () => {
     const onEdited = vi.fn();
-    const { result } = renderHook(() => useEditLast(card(), items, onEdited));
+    const { result } = renderHook(() => useEditLast(card(), items, edit, onEdited));
     await act(() => result.current.editLast!.onEdit("make it red"));
-    expect(api.editLast).toHaveBeenCalledWith("c1", "make it red");
+    expect(edit).toHaveBeenCalledWith("c1", "make it red");
     expect(onEdited).toHaveBeenCalled();
   });
 
   it("marks nothing for a message that can't rewind", () => {
-    const { result } = renderHook(() => useEditLast(card(), [{ kind: "user", text: "old", at: 1 }], () => {}));
+    const { result } = renderHook(() => useEditLast(card(), [{ kind: "user", text: "old", at: 1 }], edit, () => {}));
     act(() => result.current.onEditing(true));
     expect(result.current.editLast?.canRewind).toBe(false);
     expect(result.current.editFrom).toBeUndefined();
   });
 
-  it("offers nothing on the copilot or before you've sent anything", () => {
-    expect(renderHook(() => useEditLast(card({ role: "copilot" }), items, () => {})).result.current.editLast).toBeUndefined();
-    expect(renderHook(() => useEditLast(card(), [], () => {})).result.current.editLast).toBeUndefined();
+  it("offers nothing on the copilot, before you've sent anything, or where the transport can't edit", () => {
+    expect(renderHook(() => useEditLast(card({ role: "copilot" }), items, edit, () => {})).result.current.editLast).toBeUndefined();
+    expect(renderHook(() => useEditLast(card(), [], edit, () => {})).result.current.editLast).toBeUndefined();
+    expect(renderHook(() => useEditLast(card(), items, undefined, () => {})).result.current.editLast).toBeUndefined();
   });
 });

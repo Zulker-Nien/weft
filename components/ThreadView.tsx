@@ -1,29 +1,28 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { api } from "@/lib/client";
 import { isLive } from "@/lib/format";
 import { onScrollToTurn, pulse, reportTopTurn, topmostTurn, turnRow, PULSE_MS } from "@/lib/show-events";
 import type { PlanResets } from "@/lib/schedule";
 import { THREAD_PAGE_SIZE } from "@/lib/cloud-sync-types";
-import { applyThreadEvent, mergeOlderPage, pageThread, type ThreadPage } from "@/lib/thread-page";
-import type { BoardEvent, Card, QuestionReply, ThreadItem } from "@/lib/types";
-import { useBoardEvents } from "@/lib/use-events";
+import { mergeOlderPage, pageThread, type ThreadPage } from "@/lib/thread-page";
+import { useThreadTransport, type ThreadTransport } from "@/lib/thread-transport";
+import type { Card, QuestionReply, ThreadItem } from "@/lib/types";
 import { useEditLast } from "@/lib/use-edit-last";
-import CrashGuard from "./CrashGuard";
 import { guarded } from "./guarded";
-import Icon, { Spinner } from "./Icon";
-import PermissionInput, { PermissionActions } from "./PermissionInput";
-import StatusStrip from "./StatusStrip";
+import { useFileIndex } from "@/lib/use-file-index";
+import { FileIndexContext, FileLinkContext } from "./file-link-context";
+import { Spinner } from "./Icon";
+import { PermissionRequest, ThreadReply } from "./ThreadFooter";
 import { ThreadEntries, groupThread } from "./ThreadItems";
 
-// Loaded in its own CrashGuard (components/guarded.tsx): a reply box that fails, even as its module loads,
-// leaves the thread readable.
-const ReplyBox = guarded(() => import("./ReplyBox"), { what: "reply box", className: "mx-4 my-2" });
+// Loaded in its own CrashGuard (components/guarded.tsx), so a broken strip leaves the thread and its reply box.
+const TaskStrip = guarded(() => import("./TaskStrip"), { what: "subagents", inline: true });
 
 // A pending question, for the reply box, whose composer is where you type your own answer or a note.
-function questionFor(card: Card, onAnswer: (allow: boolean, answers?: Record<string, string>, reply?: QuestionReply) => unknown) {
+function questionFor(card: Card, onAnswer: (allow: boolean, answers?: Record<string, string>, reply?: QuestionReply) => unknown, transport: ThreadTransport) {
   const pending = card.pending;
+  const { grantFolder } = transport;
   if (!pending?.questions) return undefined;
   return {
     key: pending.id,
@@ -34,7 +33,7 @@ function questionFor(card: Card, onAnswer: (allow: boolean, answers?: Record<str
       onAnswer(true, answers, Object.keys(annotations).length ? { annotations } : undefined),
     onDecline: (chat: string) => onAnswer(false, undefined, chat.trim() ? { chat } : undefined),
     // Persist the read scope and queue the /add-dir slash command; the form answers the question itself.
-    onReadScope: (path: string) => void api.setReadScope(card.id, path).catch(() => {}),
+    onReadScope: grantFolder && ((path: string) => void grantFolder(card.id, path, "card").catch(() => {})),
   };
 }
 
@@ -50,6 +49,7 @@ export default function ThreadView({
   placeholder = "Reply to continue this thread",
   footer,
   replaceReply = false,
+  readOnly = false,
   scheduling,
 }: {
   card: Card;
@@ -65,6 +65,8 @@ export default function ThreadView({
   // Shown above the reply box, or in its place with replaceReply.
   footer?: ReactNode;
   replaceReply?: boolean;
+  // Nothing can be sent from here (weft.zip, a teammate's card): no reply box and no answers, just the status.
+  readOnly?: boolean;
   // Given on board threads, so the reply box offers Send later; resets are the plan's next 5-hour and weekly resets.
   scheduling?: { resets: PlanResets };
 }) {
@@ -78,28 +80,19 @@ export default function ThreadView({
   const [page, setPage] = useState<ThreadPage>(() => pageThread(items, { limit: THREAD_PAGE_SIZE }));
   const [loadingOlder, setLoadingOlder] = useState(false);
   const answered = answeredId !== null && answeredId === card.pending?.id;
-  const { editLast, editFrom, onEditing } = useEditLast(card, page.items, () => (stick.current = true));
-  const question = questionFor(card, onAnswer);
-  const showReply = !replaceReply || Boolean(question);
-  const status = <StatusStrip stats={card.stats} cwd={card.cwd} backend={card.backend} />;
+  const transport = useThreadTransport();
+  // The folder's files, re-read as the thread grows, so the names it mentions link to the editor column.
+  const fileIndex = useFileIndex(card.id, card.cwd, transport.listFiles, page.total);
+  const { editLast, editFrom, onEditing } = useEditLast(card, page.items, transport.editLast, () => (stick.current = true));
+  const question = questionFor(card, onAnswer, transport);
+  const showReply = !readOnly && (!replaceReply || Boolean(question));
 
-  // Fetch one page of the thread, newest (`before` omitted) or older (with `before=start`).
-  // A non-JSON body would throw at res.json() and reject the promise, so guard it: the caller
-  // (loadOlder, effects) catches or swallows, and an unreadable page leaves the user on the seed.
+  // Fetch one page of the thread, newest (`before` omitted) or older (with `before=start`), from the
+  // transport (lib/thread-transport.ts). A page it can't read leaves the user on what's loaded.
   const loadPage = useCallback(async (before?: number) => {
-    const params = new URLSearchParams();
-    if (before !== undefined) params.set("before", String(before));
-    params.set("limit", String(THREAD_PAGE_SIZE));
-    let data: ThreadPage;
-    try {
-      const res = await fetch(`/api/cards/${card.id}/thread?${params.toString()}`);
-      if (!res.ok) return;
-      data = (await res.json()) as ThreadPage;
-    } catch {
-      return;
-    }
-    setPage((prev) => (before === undefined ? data : mergeOlderPage(prev, data)));
-  }, [card.id]);
+    const data = await transport.loadPage(card.id, before);
+    if (data) setPage((prev) => (before === undefined ? data : mergeOlderPage(prev, data)));
+  }, [card.id, transport]);
 
   // On card change, fetch the newest page. The seed above covers the first paint; a microtask keeps
   // the setState out of the effect's synchronous render path (eslint: react-hooks/set-state-in-effect).
@@ -108,18 +101,10 @@ export default function ThreadView({
     queueMicrotask(() => void loadPage().catch(() => {}));
   }, [card.id, loadPage]);
 
-  // Live events: translate the absolute index to a local one in the loaded window.
-  useBoardEvents(
-    (event: BoardEvent) => {
-      if (event.type === "thread_cleared" && event.cardId === card.id) setPage({ items: [], start: 0, total: 0 });
-      if (event.type !== "thread" || event.cardId !== card.id) return;
-      setPage((prev) => applyThreadEvent(prev, event));
-    },
-    () => {
-      // Reconnect: re-pull the newest page so we self-heal any missed events.
-      loadPage().catch(() => {});
-    },
-  );
+  // Live changes land in the loaded window; a reconnect re-pulls the newest page to catch up on any it missed.
+  transport.useLive(card.id, setPage, () => {
+    loadPage().catch(() => {});
+  });
 
   // Follow new output unless the user has scrolled up to read.
   useEffect(() => {
@@ -200,20 +185,12 @@ export default function ThreadView({
     void Promise.resolve(onAnswer(allow)).catch(() => setAnsweredId(null));
   }
 
-  // "This card" / "Always" on an outside-folder prompt: grant the folder, then allow the call (lib/folder-guard.ts).
-  function grant(scope: "card" | "always") {
-    const dir = card.pending?.readScope?.directory;
-    if (!dir) return;
-    const granted = scope === "always" ? api.allowFolder(dir) : api.setReadScope(card.id, dir);
-    void granted.catch(() => {}).finally(() => answer(true));
-  }
-
   async function send(text: string) {
     await onSend(text);
     stick.current = true;
   }
 
-  const entries = groupThread(page.items);
+  const entries = groupThread(transport.useView(page.items));
 
   return (
     <>
@@ -236,7 +213,11 @@ export default function ThreadView({
           </div>
         )}
         {entries.length === 0 && !live && empty}
-        <ThreadEntries entries={entries} live={live} streaming={streaming} editFrom={editFrom} onSend={send} cardId={card.id} />
+        <FileLinkContext.Provider value={card.id}>
+          <FileIndexContext.Provider value={fileIndex}>
+            <ThreadEntries entries={entries} live={live} streaming={streaming} editFrom={editFrom} onSend={send} cardId={card.id} />
+          </FileIndexContext.Provider>
+        </FileLinkContext.Provider>
         {card.column === "running" && !streaming && (
           <div className="flex items-center gap-2 text-[12px] text-muted">
             <Spinner size={12} /> Working…
@@ -247,36 +228,10 @@ export default function ThreadView({
         )}
       </div>
 
-      {card.pending && !card.pending.questions && (
-        <CrashGuard key={card.pending.id} what="permission request" className="mx-4 my-2">
-        <div className="flex shrink-0 flex-col border-t border-warn/40 bg-warn-soft px-4 py-3">
-          <div className="flex items-start gap-2 text-[13px] font-medium text-ink">
-            <Icon name="lock" size={14} className="mt-0.5 text-warn" />
-            <span>{card.pending.title}</span>
-          </div>
-          <PermissionInput input={card.pending.input} edit={card.pending.edit} askedBy={card.title} why={card.pending.why} />
-          <PermissionActions
-            pending={card.pending}
-            answered={answered}
-            onAnswer={answer}
-            onWait={() => card.pending && void api.waitPermission(card.id, card.pending.id).catch(() => {})}
-            onGrant={grant}
-          />
-        </div>
-        </CrashGuard>
-      )}
-
+      <PermissionRequest card={card} readOnly={readOnly} answered={answered} answer={answer} />
+      <TaskStrip cardId={card.id} tasks={card.tasks} onStop={transport.stopTask} />
       {footer}
-      {showReply ? (
-        <ReplyBox key={card.id} question={question} cardId={card.id} cwd={card.cwd} live={live} placeholder={placeholder} suggestion={card.suggestion}
-          sendLater={scheduling && { backend: card.backend, resets: scheduling.resets, scheduled: card.scheduled ?? [] }}
-          status={status}
-          editLast={editLast} onEditing={onEditing}
-          onSend={send} onShell={(command) => api.shell(card.id, command).then(() => {})} onStop={() => api.stop(card.id).then(() => {})} />
-      ) : (
-        // The review panel stands in for the reply box; keep the context and limits in view under it.
-        <div className="shrink-0 border-t border-line px-4 py-1.5">{status}</div>
-      )}
+      <ThreadReply card={card} show={showReply} live={live} placeholder={placeholder} question={question} scheduling={scheduling} editLast={editLast} onEditing={onEditing} onSend={send} />
     </>
   );
 }

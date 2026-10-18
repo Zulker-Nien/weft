@@ -182,6 +182,8 @@ export const api = {
   // Wait on a symbol-claim prompt: Weft answers it once the card holding that code lets go.
   waitPermission: (id: string, pendingId: string) => call("POST", `/api/cards/${id}/permission`, { wait: true, pendingId }),
   stop: (id: string) => call("POST", `/api/cards/${id}/stop`),
+  // The task strip's Stop: ends one subagent or background command (lib/task-stop.ts).
+  stopTask: (id: string, taskId: string) => call<{ ok: true }>("POST", `/api/cards/${id}/tasks/${encodeURIComponent(taskId)}/stop`),
   // "!" in the reply box: runs a shell command in the card's folder (lib/shell.ts).
   shell: (id: string, command: string) => call<{ ok: true }>("POST", `/api/cards/${id}/shell`, { command }),
   // Stops the Claude CLI that has a picked-up session open in another app.

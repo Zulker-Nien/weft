@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { openFile } from "@/lib/open-file";
 import type { EditPreview } from "@/lib/edit-preview";
 import type { PendingPermission, PromptReason } from "@/lib/types";
+import { EditDiff } from "./EditDiff";
+import { useFileLink } from "./file-link-context";
 import { Spinner } from "./Icon";
 
 // The body of a permission prompt: first why it came up (a symbol-claim clash, or the card's permission
@@ -39,27 +42,7 @@ function Reason({ why }: { why: PromptReason }) {
   );
 }
 
-const ROW: Record<string, string> = {
-  "+": "bg-ok-soft text-ink",
-  "-": "bg-danger-soft text-ink",
-  " ": "text-muted",
-};
-
 const PRE = "max-h-36 overflow-auto rounded bg-panel/70 px-2 py-1.5 font-mono text-[11px]";
-
-function Diff({ edit }: { edit: EditPreview }) {
-  return (
-    <pre className={PRE} data-testid="edit-diff">
-      {edit.lines.map((l, i) => (
-        <div key={i} className={`whitespace-pre-wrap ${ROW[l.kind]}`}>
-          <span className="select-none opacity-60">{l.kind} </span>
-          {l.text || " "}
-        </div>
-      ))}
-      {edit.more > 0 && <div className="text-faint">… {edit.more} more lines</div>}
-    </pre>
-  );
-}
 
 export default function PermissionInput({
   input,
@@ -75,6 +58,7 @@ export default function PermissionInput({
   askedBy?: string;
 }) {
   const [raw, setRaw] = useState(false);
+  const cardId = useFileLink();
   const reason = why && <Reason why={why} />;
   if (!edit)
     return (
@@ -90,7 +74,18 @@ export default function PermissionInput({
         <span className="min-w-0 truncate text-muted" title={edit.file}>
           {askedBy && <span className="text-ink">‘{askedBy}’ </span>}
           {edit.creates ? "creates " : "changes "}
-          <span className="font-mono text-ink">{edit.file}</span>
+          {cardId ? (
+            <button
+              type="button"
+              data-testid="permission-open-file"
+              onClick={() => openFile({ cardId, path: edit.file, diff: true })}
+              className="cursor-pointer font-mono text-ink underline decoration-dotted underline-offset-2 hover:text-accent"
+            >
+              {edit.file}
+            </button>
+          ) : (
+            <span className="font-mono text-ink">{edit.file}</span>
+          )}
           {edit.symbols && (
             <>
               {" in "}
@@ -110,7 +105,7 @@ export default function PermissionInput({
           Raw
         </button>
       </div>
-      {raw ? <pre className={`whitespace-pre-wrap text-muted ${PRE}`}>{JSON.stringify(input, null, 2)}</pre> : <Diff edit={edit} />}
+      {raw ? <pre className={`whitespace-pre-wrap text-muted ${PRE}`}>{JSON.stringify(input, null, 2)}</pre> : <EditDiff edit={edit} />}
     </div>
   );
 }
@@ -130,7 +125,8 @@ export function PermissionActions({
   pending: PendingPermission;
   answered: boolean;
   onAnswer: (allow: boolean) => void;
-  onWait: () => void;
+  // Wait on a symbol claim; left out where the thread's transport can't (weft.zip), so only Go ahead and Deny show.
+  onWait?: () => void;
   // A folder outside the project (pending.readScope): allow it for this card or for every card, then answer yes.
   onGrant?: (scope: "card" | "always") => void;
 }) {
@@ -172,12 +168,12 @@ export function PermissionActions({
     );
   return (
     <div className="mt-2 flex gap-2">
-      {holder && (
+      {holder && onWait && (
         <button onClick={onWait} disabled={answered} className={PRIMARY} title={`Hold this edit until ‘${holder.title}’ finishes or commits, then redo it on top`}>
           Wait
         </button>
       )}
-      <button onClick={() => onAnswer(true)} disabled={answered} className={holder ? SECONDARY : PRIMARY}>
+      <button onClick={() => onAnswer(true)} disabled={answered} className={holder && onWait ? SECONDARY : PRIMARY}>
         {holder ? "Go ahead" : "Allow"}
       </button>
       {deny}

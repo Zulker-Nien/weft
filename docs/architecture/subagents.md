@@ -53,3 +53,33 @@ and use the Agent tool.
   prompt and the subagent model into a session's build, so a change in Settings replaces idle sessions (a busy turn keeps
   its CLI) and spares.
 - Ids are validated against `MODELS`, never free text, so a typo can't reach `--model` or the env.
+
+## Tracking
+
+The CLI reports every subagent and background command as task events; `lib/runner-turn.ts` hands each `system`
+message to `recordTask()` (`lib/task-ledger.ts`), which folds it into `card.tasks` with the pure reducer in `lib/tasks.ts`.
+
+| Event | Effect on the ledger |
+| --- | --- |
+| `task_started` | Adds a running task (kind from `task_type`, agent type, background flag); ambient and `skip_transcript` ones stay out |
+| `task_progress` | Tokens, tool uses, last tool, the progress summary; makes the task if its start was missed |
+| `task_updated` | Status (`killed` → stopped), end time, error, moved to the background |
+| `task_notification` | Final status, summary, output file, usage; `reason: worker_restart` → lost |
+| `background_tasks_changed` | The live set (replace semantics): a running background task missing from it becomes `ended` (outcome unknown), an unknown one is added |
+
+The CLI registers every foreground Bash call as a task too; those already show as tool rows, so `tracked()` keeps only
+agents and background tasks in the strip, the badge and the note, and a trim drops the foreground ones once they end.
+Running tasks are always kept, plus the newest 20 tracked ones that ended. A notification for a task whose start the
+ledger never saw (a foreground command from before it listened) is left out.
+
+- **The CLI ending** (`wrapUp` in `lib/runner-session.ts`, or `loadState` in `lib/store.ts` after a Weft restart) marks
+  running tasks `lost`: they ran in the CLI's process group, so they died with it.
+- **The next message** gets `taskNote()` ahead of it (`sendMessage` in `lib/runner.ts`): a `[Weft: …]` block naming
+  each lost task once, so a resumed CLI, which has no record of them, doesn't wait for reports that will never come.
+- **Idle closing** (`closeWhenIdle`, `trimIdle` in `lib/runner-state.ts`) skips a CLI with a live background task
+  (`hasLiveTasks`) and checks again after another keep-alive period. A task silent for 6 hours (`STALE_MS`) stops
+  counting, so a missed final event can't hold a CLI open forever.
+- **The UI**: `components/TaskStrip.tsx` (above the reply box, from `taskStripView` in `lib/tasks-view.ts`) shows running
+  tasks and those that ended in the last 15 minutes; `components/CardMarks.tsx` shows `⑂N` for running ones.
+
+Codex sends no task events, so its cards have no ledger.

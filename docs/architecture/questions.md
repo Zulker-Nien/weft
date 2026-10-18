@@ -105,7 +105,7 @@ ThreadView onAnswer(true, answers, reply)  ──►  api.answer(cardId, …)   
                                                        ▼
                 POST /api/cards/[id]/permission      (app/api/cards/[id]/permission/route.ts)
                   body: { allow, answers, pendingId, annotations?, chat? }
-                  readReply(body) — narrows annotations to { notes, preview } per question
+                  readQuestionReply(body) — narrows annotations to { notes, preview } per question
                                                        │
                                                        ▼
                             answerPermission(cardId, allow, answers, pendingId, reply)
@@ -123,7 +123,7 @@ ThreadView onAnswer(true, answers, reply)  ──►  api.answer(cardId, …)   
 
 `annotations` is set only when the user picks a single option (a preview
 annotation) and/or types a note beside a pick (a notes annotation). The
-permission route's `readReply` drops empty `notes`/blank `preview` and the
+permission route's `readQuestionReply` drops empty `notes`/blank `preview` and the
 whole `annotations` field if it ends up empty, so `updatedInput` carries
 nothing extra when the user just picked an option without a preview or note
 (`lib/runner-ask.ts:60-62`).
@@ -262,14 +262,14 @@ compute it (`QuestionForm.tsx:35`, `lib/types-card.ts:165-167`).
   allow: boolean,
   answers?: Record<string, string>,        // "label, label" per question
   pendingId?: string,                      // ties the answer to the request
-  annotations?: {                          // per question, narrowed by readReply
+  annotations?: {                          // per question, narrowed by readQuestionReply
     [question: string]: { notes?: string; preview?: string }
   },
   chat?: string,                           // declines with a message
 }
 ```
 
-`readReply` (`app/api/cards/[id]/permission/route.ts:6-23`) drops anything
+`readQuestionReply` (`lib/question-reply.ts`) drops anything
 that isn't an object, drops empty/blank `notes` and `preview`, and drops
 the whole `annotations` object if it ends up empty. It also drops
 `chat` if blank. The body is untrusted; the route goes through
