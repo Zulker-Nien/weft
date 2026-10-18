@@ -27,7 +27,7 @@ export default function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   const holdKey = mac ? "⌘" : "Ctrl";
 
   return (
-    <Modal title="Keyboard shortcuts" onClose={onClose} placement="top" className="max-h-[90vh] w-[94vw] max-w-[1100px]">
+    <Modal title="Keyboard shortcuts" onClose={onClose} placement="top" className="max-h-[84vh] w-[94vw] max-w-[1100px]">
       <div className="relative shrink-0 border-b border-line px-6 py-3">
         <Icon name="search" size={16} className="pointer-events-none absolute left-9 top-1/2 -translate-y-1/2 text-faint" />
         <input
