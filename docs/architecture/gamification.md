@@ -14,7 +14,7 @@ GET /api/game?cwd=&full=1 ── lib/game-server.ts gameState()
                                 ├─ lib/game-attributes.ts attributes, class, stack skills (pure)
                                 ├─ lib/game-badges.ts     badges, fixes, toasts (pure)
                                 └─ lib/project-checks.ts  measures repos → lib/project-badges.ts tree (pure)
-components/HeaderBadges.tsx → GameBadge.tsx (chip, toasts) → LoomDialog.tsx (+ LoomBadges, LoomCharts)
+components/HeaderBadges.tsx → GameBadge.tsx (chip, AchievementPopup) → LoomDialog.tsx (+ LoomBadges, LoomCharts)
 ```
 
 ## The activity log
@@ -89,11 +89,17 @@ which drives the quality XP bonus and the coverage-climber badge.
 `lib/project-badges.ts` lists every check with what counts and the prompt its **Set it up** card gets.
 To add one: add it to `CHECKS`, detect it in `lib/project-checks.ts`, and test both.
 
-## Toasts and quiet mode
+## The achievement popup and quiet mode
 
 The chip keeps the badges and level it has announced in `localStorage` (`weft-game-announced`). The first
-load announces nothing, so history doesn't arrive as a burst. Settings > Show progress (`weft-show-progress`
-cookie) hides the chip and its toasts.
+load announces nothing, so history doesn't arrive as a burst. After that, `toAnnounce` hands back the badges
+just earned (`fresh`) and the new level (`levelUp`), and `components/AchievementPopup.tsx` opens over the
+board: one badge gets the stage (icon, name, what earned it), several share it as a list (5 shown), a level-up
+names the new level and title. **See your profile** opens the Wefter Profile on Badges (or You for a level-up
+alone); **Nice!** and Escape close it. Behind it, `components/Confetti.tsx` throws one burst from the two lower
+corners on a click-through canvas, moved by the pure physics in `lib/confetti.ts` (`burst`, `step`: drag,
+gravity, terminal velocity), and draws nothing with Reduce motion on. Settings > Show progress
+(`weft-show-progress` cookie) hides the chip and its popups.
 
 ## Leagues
 

@@ -107,7 +107,7 @@ describe("fixFor", () => {
 describe("toAnnounce", () => {
   const b = (id: string, unlocked: boolean): Badge => ({ id, icon: "🏅", name: id, desc: "", group: "Habits", unlocked });
   it("stays quiet on the first load", () => {
-    expect(toAnnounce(null, [b("a", true), b("b", false)], 3)).toEqual({ next: { badges: ["a"], level: 3 }, text: null });
+    expect(toAnnounce(null, [b("a", true), b("b", false)], 3)).toEqual({ next: { badges: ["a"], level: 3 }, text: null, fresh: [], levelUp: null });
   });
 
   it("announces one badge, several, and level-ups", () => {

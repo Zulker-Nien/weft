@@ -55,23 +55,46 @@ afterEach(() => vi.unstubAllGlobals());
 
 function setup() {
   const onStart = vi.fn();
-  const onToast = vi.fn();
   const view = render(<GameBadge cwd="/dev/app" refresh={1} onStart={onStart} />);
-  return { onStart, onToast, view };
+  return { onStart, view };
 }
 
 describe("GameBadge", () => {
   it("shows the streak and level, and stays quiet the first time", async () => {
-    const { onToast } = setup();
+    setup();
     expect(await screen.findByRole("button", { name: "Wefter Profile: 4-day streak, level 2" })).toBeInTheDocument();
     await waitFor(() => expect(JSON.parse(localStorage.getItem("weft-game-announced") ?? "{}")).toEqual({ badges: ["first-card"], level: 2 }));
-    expect(onToast).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("toasts a badge earned since last time", async () => {
+  it("pops a badge earned since last time, and See your profile opens it on Badges", async () => {
     localStorage.setItem("weft-game-announced", JSON.stringify({ badges: [], level: 2 }));
-    const { onToast } = setup();
-    await waitFor(() => expect(onToast).toHaveBeenCalledWith("🏅 Badge unlocked: 🧵 First thread"));
+    setup();
+    const popup = await screen.findByRole("dialog", { name: "Achievement unlocked!" });
+    expect(popup).toHaveTextContent("First thread");
+    expect(popup).toHaveTextContent("Start a card");
+    await userEvent.click(screen.getByRole("button", { name: "See your profile" }));
+    expect(screen.queryByRole("dialog", { name: "Achievement unlocked!" })).not.toBeInTheDocument();
+    expect(await screen.findByText("Guarded")).toBeInTheDocument();
+  });
+
+  it("lists several badges earned at once", async () => {
+    localStorage.setItem("weft-game-announced", JSON.stringify({ badges: [], level: 2 }));
+    const extra = { id: "streak-7", icon: "🔥", name: "Week of work", desc: "7 days in a row", group: "Streaks" as const, unlocked: true, at: 2 };
+    state = game({ badges: [...game().badges, extra] });
+    setup();
+    const popup = await screen.findByRole("dialog", { name: "2 achievements unlocked!" });
+    expect(popup).toHaveTextContent("First thread");
+    expect(popup).toHaveTextContent("Week of work");
+  });
+
+  it("pops a level-up, and Nice! closes it", async () => {
+    localStorage.setItem("weft-game-announced", JSON.stringify({ badges: ["first-card"], level: 1 }));
+    setup();
+    const popup = await screen.findByRole("dialog", { name: "Level up!" });
+    expect(popup).toHaveTextContent("Level 2 · Thread");
+    await userEvent.click(screen.getByRole("button", { name: "Nice!" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("hides in quiet mode", async () => {

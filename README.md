@@ -482,7 +482,8 @@ answer the thread through `weft://reply` links. It starts a sprint's cards, or a
 ## Progress: streaks, badges and your wefter card
 
 Beside the code quality badge, **🔥 25 · Lv 15** is your streak and level (Settings → General → Show progress turns it
-off). Hover it for today's numbers; click it for your **Wefter Profile**:
+off). Hover it for today's numbers; click it for your **Wefter Profile**. A new badge or level pops up over the board
+with a burst of confetti (none with Reduce motion on), and **See your profile** opens your badges:
 
 - **XP and levels.** Starting a card earns 2 XP, a turn 1, and taking a card to Done 10, or 15 when its
   project's quality checklist scores 80+. Shipping pays more than starting, and healthy code pays more than
