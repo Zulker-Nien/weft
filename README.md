@@ -54,6 +54,12 @@ same time; Next.js allows one dev server per project folder.
   `weft.zip/a/<id>` link with a card's modes (workspace, public, email, password): a local page goes up as a sandboxed
   copy, refreshed each time you open Share…, and a public https site is framed as is; a localhost app says it can't be reached. The button is lit on a page
   that's already an app, and clicking it then takes it out. No apps, nothing on the rail.
+  A **data app** holds a folder (`~/.weft/apps/<slug>/`: its page and a `weft-app.json` naming the project folder, the
+  vault environment it asks for and its reads by name). The page asks for that env (Touch ID), then Weft runs its reads
+  on the Mac with the env's vault values, which never reach the page: Postgres functions through Supabase, and GA4
+  reports. 📈 **Growth** is the first one: accounts, signups, active accounts, retention cohorts, activation and page
+  views. Every app is also stored on prod under your account and comes back on any Mac you sign in on
+  (docs/architecture/mini-apps.md).
 - **Show rail**: a 72 px column right of the page in the browser pane, one mini per turn of the open thread
   (status dot, its first words, how long ago) and per page the pane showed, newest at the bottom like the chat. Each page
   is a small picture of what the pane showed (a few-KB WebP per page in `~/.weft/shots/`). Every message keeps the page on
@@ -530,6 +536,11 @@ pane side by side, updating as it works: private to your workspace, public, behi
 `~/.weft/show` page runs in a sandbox; a localhost page shows as its latest capture. Key-shaped text is masked and long tool
 outputs stay on your Mac. It reads what sync uploads, so the dialog turns sync on for the folder first. More in
 [docs/architecture/sharing.md](docs/architecture/sharing.md).
+
+**Share the board** (the share icon beside your avatar, its menu, ⌘K, or **Share** in the weft.zip board's header) shares the whole board: its link is your workspace's web board,
+`weft.zip/<workspace>/board`, with Copy and Open, a list of who can open it (members and pending invites), and an email box.
+An address that already has a Weft account joins the workspace at once; one that doesn't gets an email inviting them to sign
+up and join. Only owners and admins invite; a teammate sees the link and the list.
 
 ## Secrets vault
 

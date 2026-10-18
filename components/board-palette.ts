@@ -30,6 +30,8 @@ export interface PaletteActions {
   toggleBrowser: () => void;
   toggleTerminal: () => void;
   openSettings: () => void;
+  // Share board… (components/ShareBoardDialog.tsx): the web board's link and invites.
+  shareBoard: () => void;
   openHelp: () => void;
   addSecret: () => void;
   jumpToNeedsYou: () => void;
@@ -76,7 +78,11 @@ function restartItem(s: PaletteState, a: PaletteActions): PaletteItem {
 // keeps the sign-in round trip local; outside the desktop, openExternal opens a new tab in the system browser.
 // weft.zip spelled out here: importing SITE from lib/home pulls its server-only "use cache" code into the board.
 export function openTeamPage() {
-  const url = "https://weft.zip/team";
+  openWeftPage("https://weft.zip/team");
+}
+
+// Any weft.zip page (the team, a workspace's web board) in the pane, else the system browser.
+export function openWeftPage(url: string) {
   if (typeof window === "undefined") return;
   // Partial: a shell from before the pane has no browser bridge, so this falls back to the system browser.
   const pane: Partial<ShellBridge["browser"]> | undefined = window.threadboard?.browser;
@@ -99,6 +105,7 @@ function commandItems(s: PaletteState, a: PaletteActions): PaletteItem[] {
     command("help", "Show keyboard shortcuts", "zap", a.openHelp, "?", "hotkeys keys"),
     command("add-secret", "Add a secret", "lock", a.addSecret, "shift+s", "vault env key token password"),
     command("needs-you", "Jump to a card that needs you", "alert", a.jumpToNeedsYou, "a", "waiting"),
+    command("share-board", "Share the board…", "share", a.shareBoard, undefined, "share invite web board weft.zip team link"),
     command("team", "Your team", "globe", openTeamPage, undefined, "team members invite workspace weft.zip"),
     ...importIssuesItem(s, a),
     restartItem(s, a),

@@ -12,6 +12,7 @@ const teamsModMock = vi.hoisted(() => ({
 
 const teamOpsMock = vi.hoisted(() => ({
   runTeamOp: vi.fn(),
+  teamSnapshot: vi.fn(),
 }));
 
 const cacheMock = vi.hoisted(() => ({
@@ -22,7 +23,7 @@ vi.mock("./teams", () => teamsModMock);
 vi.mock("./team-ops", () => teamOpsMock);
 vi.mock("next/cache", () => cacheMock);
 
-import { changeMemberRole, inviteMember, removeMember, revokeInvite } from "./team-actions";
+import { boardShareTeam, changeMemberRole, inviteMember, removeMember, revokeInvite } from "./team-actions";
 import { ORG, USER } from "./team-actions.harness";
 
 const CTX = { user: USER, org: ORG, role: "owner" as const, orgs: [ORG], service: {} as never };
@@ -122,5 +123,15 @@ describe("revokeInvite", () => {
   it("trims a leading/trailing space in the invite id", async () => {
     await revokeInvite("acme", "  i1  ");
     expect(teamOpsMock.runTeamOp).toHaveBeenCalledWith(CTX, expect.objectContaining({ inviteId: "i1" }));
+  });
+});
+
+describe("boardShareTeam", () => {
+  it("gates on the board's workspace and returns its team snapshot", async () => {
+    teamsModMock.requireTeam.mockResolvedValueOnce(CTX);
+    teamOpsMock.teamSnapshot.mockResolvedValueOnce({ org: ORG });
+    await expect(boardShareTeam("acme")).resolves.toEqual({ org: ORG });
+    expect(teamsModMock.requireTeam).toHaveBeenCalledWith("acme", "/acme/team");
+    expect(teamOpsMock.teamSnapshot).toHaveBeenCalledWith(CTX);
   });
 });

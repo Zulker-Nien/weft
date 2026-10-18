@@ -21,6 +21,7 @@ import { useWebBoard, type LiveStatus } from "./useWebBoard";
 import { WebCommandStrip } from "./WebCommandStrip";
 import { WebNewCardDialog } from "./WebNewCardDialog";
 import { WebProjectBar } from "./WebProjectBar";
+import { WebShareBoard } from "./WebShareBoard";
 import { WebThreadPanel } from "./WebThreadPanel";
 
 export interface WebBoardProps {
@@ -81,6 +82,7 @@ export function WebBoard({ orgId, orgSlug, userId, initialCommands, initialCards
           </span>
           <div className="flex-1" />
           <LiveDot status={board.live} />
+          <WebShareBoard orgSlug={orgSlug} />
           <button onClick={() => setComposing(true)} className="rounded-md bg-accent px-2.5 py-1 text-[12px] font-medium text-on-accent hover:opacity-90">
             New thread
           </button>

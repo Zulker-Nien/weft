@@ -15,6 +15,7 @@ export interface BoardHeaderProps {
   hint: (id: string, fallback: string) => string;
   onToggleBrowser: () => void;
   onToggleTerminal: () => void;
+  onShareBoard: () => void;
   onOpenSettings: () => void;
   onOpenNew: () => void;
   // The three load-in-CrashGuard elements; each is a guarded() component from Board.tsx.
@@ -33,6 +34,7 @@ export default function BoardHeader({
   hint,
   onToggleBrowser,
   onToggleTerminal,
+  onShareBoard,
   onOpenSettings,
   onOpenNew,
   restartChip,
@@ -70,6 +72,14 @@ export default function BoardHeader({
         className={`rounded-md border p-1.5 ${terminalOpen ? "border-accent bg-accent-soft text-accent" : "border-line-strong text-muted hover:bg-sunken hover:text-ink"}`}
       >
         <Icon name="terminal" size={15} />
+      </button>
+      <button
+        onClick={onShareBoard}
+        title={hint("share-board", "Share the board")}
+        aria-label="Share the board"
+        className="rounded-md border border-line-strong p-1.5 text-muted hover:bg-sunken hover:text-ink"
+      >
+        <Icon name="share" size={15} />
       </button>
       <button
         onClick={onOpenSettings}

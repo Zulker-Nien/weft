@@ -13,9 +13,10 @@ function signedInId(state: ReturnType<typeof useAccount>["state"]): string | und
 }
 
 // The top bar's account control, right of Copilot. Signed out: "Sign in" with GitHub, which finishes in
-// your browser. Signed in: just your avatar, which opens a tiny menu (Settings, Your team). Hidden while
+// your browser. Signed in: a share icon (Share the board) and your avatar, which opens a tiny menu (Settings, Share the
+// board, Your team). Hidden while
 // loading, on errors, and in builds without a Supabase key, so it never costs header room for nothing.
-export default function AccountButton({ onOpenSettings }: { onOpenSettings: () => void }) {
+export default function AccountButton({ onOpenSettings, onShareBoard }: { onOpenSettings: () => void; onShareBoard?: () => void }) {
   const { state, busy, waiting, error, signIn } = useAccount();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -37,7 +38,8 @@ export default function AccountButton({ onOpenSettings }: { onOpenSettings: () =
   if (user) {
     const who = user.name ?? user.email ?? "your account";
     return (
-      <div ref={menuRef} className="relative shrink-0">
+      <div ref={menuRef} className="relative flex shrink-0 items-center gap-1">
+        <ShareBoardIcon onShareBoard={onShareBoard} />
         <button
           onClick={() => setMenuOpen((o) => !o)}
           aria-haspopup="menu"
@@ -66,6 +68,19 @@ export default function AccountButton({ onOpenSettings }: { onOpenSettings: () =
               <Icon name="sliders" size={14} className="text-muted" />
               Settings…
             </button>
+            {onShareBoard && (
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onShareBoard();
+                }}
+                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] text-ink hover:bg-sunken"
+              >
+                <Icon name="share" size={14} className="text-muted" />
+                Share the board…
+              </button>
+            )}
             <button
               role="menuitem"
               onClick={() => {
@@ -97,6 +112,21 @@ export default function AccountButton({ onOpenSettings }: { onOpenSettings: () =
     >
       {pending ? <Spinner size={13} /> : <Icon name="github" size={14} />}
       {waiting ? "Signing in…" : "Sign in"}
+    </button>
+  );
+}
+
+// One click to Share the board, beside the avatar; nothing when the board doesn't offer it.
+function ShareBoardIcon({ onShareBoard }: { onShareBoard?: () => void }) {
+  if (!onShareBoard) return null;
+  return (
+    <button
+      onClick={onShareBoard}
+      title="Share the board"
+      aria-label="Share the board"
+      className="rounded-md p-1.5 text-muted hover:bg-sunken hover:text-ink"
+    >
+      <Icon name="share" size={15} />
     </button>
   );
 }

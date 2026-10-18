@@ -92,6 +92,28 @@ describe("AccountButton", () => {
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
   });
 
+  it("offers Share the board… when the board passes a handler", async () => {
+    api.account.mockResolvedValue({ configured: true, user: ada });
+    const onShareBoard = vi.fn();
+    render(<AccountButton onOpenSettings={vi.fn()} onShareBoard={onShareBoard} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Signed in as Ada" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Share the board…" }));
+    expect(onShareBoard).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("menu")).toBeNull();
+    // The icon beside the avatar opens it in one click.
+    await userEvent.click(screen.getByRole("button", { name: "Share the board" }));
+    expect(onShareBoard).toHaveBeenCalledTimes(2);
+  });
+
+  it("leaves Share the board… out without a handler", async () => {
+    api.account.mockResolvedValue({ configured: true, user: ada });
+    setup();
+    await userEvent.click(await screen.findByRole("button", { name: "Signed in as Ada" }));
+    await screen.findByRole("menuitem", { name: /Settings/ });
+    expect(screen.queryByRole("menuitem", { name: "Share the board…" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Share the board" })).toBeNull();
+  });
+
   it("opens Your team in the pane when in the desktop, falling back to the system browser", async () => {
     api.account.mockResolvedValue({ configured: true, user: ada });
     setup();

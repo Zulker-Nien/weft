@@ -16,8 +16,8 @@
 import { revalidatePath } from "next/cache";
 import { isTeamRole } from "./team-types";
 import { requireTeam } from "./teams";
-import { runTeamOp } from "./team-ops";
-import type { TeamActionResult } from "./team-types";
+import { runTeamOp, teamSnapshot } from "./team-ops";
+import type { TeamActionResult, TeamSnapshot } from "./team-types";
 import type { TeamContext } from "./teams";
 
 export type { TeamActionResult };
@@ -35,6 +35,12 @@ async function gate(orgSlug: string): Promise<TeamContext> {
 // from the framework when the argument isn't a string, so we narrow here.
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+// The web board's Share the board dialog (components/web-board/WebShareBoard.tsx) reads the team through this: the
+// same snapshot the team page renders, behind the same gate, loaded when the dialog opens instead of with the board.
+export async function boardShareTeam(orgSlug: string): Promise<TeamSnapshot> {
+  return teamSnapshot(await gate(orgSlug));
 }
 
 export async function inviteMember(orgSlug: string, email: string, role: string): Promise<TeamActionResult> {

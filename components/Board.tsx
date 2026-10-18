@@ -73,6 +73,7 @@ const SideRail = guarded(() => import("./LibraryRail"), { what: "rail", classNam
 const TagsDialog = guarded(() => import("./TagsDialog"), { what: "tags dialog", className: "fixed left-4 top-16 z-50" });
 const PaneCardMarks = guarded(() => import("./PaneCardMarks"), { inline: true, what: "card marks" });
 const ShareCardDialog = guarded(() => import("./ShareCardDialog"), { what: "share dialog", className: "fixed left-4 top-16 z-50" });
+const ShareBoardDialog = guarded(() => import("./ShareBoardDialog"), { what: "share board dialog", className: "fixed left-4 top-16 z-50" });
 const HeaderBadges = guarded(() => import("./HeaderBadges"), { inline: true, what: "header badges" });
 const BoardFooter = guarded(() => import("./BoardFooter"), { what: "footer" });
 const ModifierHint = guarded(() => import("./ModifierHint"), { inline: true, what: "modifier hint", className: "fixed bottom-2 right-2 z-50" });
@@ -141,6 +142,7 @@ export default function Board() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [sharingBoard, setSharingBoard] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState("");
@@ -502,6 +504,7 @@ export default function Board() {
             toggleBrowser: () => toggleBrowser(),
             toggleTerminal: () => toggleTerminal(),
             openSettings: () => setShowSettings(true),
+            shareBoard: () => setSharingBoard(true),
             openHelp: () => setShowHelp(true),
             addSecret: () => addSecret(setLibraryOpen),
             jumpToNeedsYou: () => void jumpToNeedsYou(),
@@ -626,6 +629,7 @@ export default function Board() {
         hint={hint}
         onToggleBrowser={toggleBrowser}
         onToggleTerminal={toggleTerminal}
+        onShareBoard={() => setSharingBoard(true)}
         onOpenSettings={() => setShowSettings(true)}
         onOpenNew={() => openNew()}
         restartChip={<RestartChip restart={restartView.restart} notify={notify} />}
@@ -641,7 +645,7 @@ export default function Board() {
         copilotButton={
           <CopilotButton open={laneOpen} needsYou={copilotNeedsYou} title={hint("copilot", "Copilot")} onClick={toggleCopilot} />
         }
-        accountButton={<AccountButton onOpenSettings={() => setShowSettings(true)} />}
+        accountButton={<AccountButton onOpenSettings={() => setShowSettings(true)} onShareBoard={() => setSharingBoard(true)} />}
       />
 
       <CrashGuard what="project bar" className="mx-3 mt-2">
@@ -885,6 +889,7 @@ export default function Board() {
       {showHelp && <ShortcutsDialog onClose={() => setShowHelp(false)} />}
       {tagging && <TagsDialog card={tagging} all={tagCatalog.tags.map((t) => ({ tag: t.name, count: t.count }))} onChange={saveTags} onClose={closeTags} />}
       {sharing && <ShareCardDialog card={sharing} onClose={closeShare} />}
+      {sharingBoard && <ShareBoardDialog onClose={() => setSharingBoard(false)} />}
       <ModifierHint />
       {showPalette && (
         // The palette items accessor passes useCallback returns (which the type analyzer flags as

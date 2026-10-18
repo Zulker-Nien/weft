@@ -22,7 +22,7 @@ beforeEach(() => {
 
 function actions(): PaletteActions {
   const names = [
-    "openNew", "focusFilter", "toggleCopilot", "toggleBrowser", "toggleTerminal", "openSettings", "openHelp", "addSecret",
+    "openNew", "focusFilter", "toggleCopilot", "toggleBrowser", "toggleTerminal", "openSettings", "shareBoard", "openHelp", "addSecret",
     "jumpToNeedsYou", "archiveCards", "unarchive", "toggleShowArchived", "chooseSort", "focusReply", "closeThread",
     "toggleArchive", "stop", "move", "chooseProject", "openCard",
   ];
@@ -67,6 +67,15 @@ describe("boardPaletteItems", () => {
     expect(team?.label).toBe("Your team");
     expect(team?.keywords).toContain("team");
     expect(team?.icon).toBe("globe");
+  });
+
+  it("offers Share the board…, which opens its dialog", () => {
+    const a = actions();
+    const share = boardPaletteItems(state(), a).find((i) => i.id === "cmd-share-board");
+    expect(share?.label).toBe("Share the board…");
+    expect(share?.keywords).toContain("invite");
+    share?.run();
+    expect(a.shareBoard).toHaveBeenCalledTimes(1);
   });
 
   it("offers Restart Weft when idle, which arms the restart", () => {
