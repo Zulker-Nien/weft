@@ -45,18 +45,14 @@ export function inFolder(cwd: string, folders: string[]) {
   return folders.some((f) => cwd === f || cwd.startsWith(f.endsWith("/") ? f : `${f}/`));
 }
 
-// Kills the strays and returns their pids.
-export async function reapStrayClis(folders: string[], sdkDir = path.join(process.cwd(), "node_modules", "@anthropic-ai")) {
-  if (process.platform === "win32" || folders.length === 0) return [];
-  const { stdout } = await run("/bin/ps", ["-axo", "pid=,ppid=,command="]);
-  const orphans = parsePs(stdout).filter((p) => p.ppid === 1 && isThreadCli(p.command, sdkDir));
-  if (orphans.length === 0) return [];
+// SIGKILLs the pids whose working folder is one of Weft's projects and returns them.
+export async function killInFolders(pids: number[], folders: string[]) {
   // lsof exits 1 when some pid has gone in the meantime; what it printed still holds.
-  const lsof = await run("/usr/sbin/lsof", ["-a", "-d", "cwd", "-Fpn", "-p", orphans.map((p) => p.pid).join(",")]).catch(
+  const lsof = await run("/usr/sbin/lsof", ["-a", "-d", "cwd", "-Fpn", "-p", pids.join(",")]).catch(
     (err: unknown) => ({ stdout: (err as { stdout?: string }).stdout ?? "" }),
   );
   const cwds = parseLsof(lsof.stdout);
-  const strays = orphans.filter((p) => inFolder(cwds.get(p.pid) ?? "", folders)).map((p) => p.pid);
+  const strays = pids.filter((pid) => inFolder(cwds.get(pid) ?? "", folders));
   for (const pid of strays) {
     try {
       process.kill(pid, "SIGKILL");
@@ -64,6 +60,16 @@ export async function reapStrayClis(folders: string[], sdkDir = path.join(proces
       // Already gone.
     }
   }
+  return strays;
+}
+
+// Kills the strays and returns their pids.
+export async function reapStrayClis(folders: string[], sdkDir = path.join(process.cwd(), "node_modules", "@anthropic-ai")) {
+  if (process.platform === "win32" || folders.length === 0) return [];
+  const { stdout } = await run("/bin/ps", ["-axo", "pid=,ppid=,command="]);
+  const orphans = parsePs(stdout).filter((p) => p.ppid === 1 && isThreadCli(p.command, sdkDir));
+  if (orphans.length === 0) return [];
+  const strays = await killInFolders(orphans.map((p) => p.pid), folders);
   if (strays.length) console.log(`[weft] ended ${strays.length} thread CLI(s) an earlier server left running: ${strays.join(", ")}`);
   return strays;
 }

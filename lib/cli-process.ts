@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import type { SpawnedProcess, SpawnOptions } from "@anthropic-ai/claude-agent-sdk";
 import { globalSingleton } from "./global-singleton";
+import { findDescendantGroups, signalGroups } from "./process-tree";
 
 // Starts a thread's CLI in a process group of its own, so ending it ends everything it started.
 // puku-cli is a `node` wrapper whose `Puku` child outlives it: killing only the wrapper (all the
@@ -25,18 +26,26 @@ export function killGroup(pgid: number, signal: NodeJS.Signals): boolean {
   }
 }
 
-// SIGTERM now, SIGKILL whatever ignored it after the grace period.
+// SIGTERM now, SIGKILL whatever ignored it after the grace period. The groups the CLI's Bash commands run
+// in go too (lib/process-tree.ts): found while the CLI is still alive, since they reparent once it's gone.
 export function endGroup(pgid: number) {
-  if (!killGroup(pgid, "SIGTERM")) return;
+  const children = findDescendantGroups(pgid);
+  signalGroups(children, "SIGTERM");
+  const alive = killGroup(pgid, "SIGTERM");
+  if (!alive && !children.length) return;
   setTimeout(() => {
-    if (killGroup(pgid, "SIGKILL")) groups.delete(pgid);
+    signalGroups(children, "SIGKILL");
+    if (alive && killGroup(pgid, "SIGKILL")) groups.delete(pgid);
   }, KILL_GRACE_MS).unref();
 }
 
 // On the server's way out (Next's SIGTERM/SIGINT handlers call process.exit), take every CLI with it.
 // exit handlers run synchronously, so there's no grace: SIGKILL.
 export function killAllGroups() {
-  for (const pgid of [...groups]) killGroup(pgid, "SIGKILL");
+  for (const pgid of [...groups]) {
+    signalGroups(findDescendantGroups(pgid), "SIGKILL");
+    killGroup(pgid, "SIGKILL");
+  }
   groups.clear();
 }
 
@@ -47,6 +56,8 @@ type Listener = (...args: never[]) => void;
 type ChildListener = (...args: unknown[]) => void;
 
 export interface CliProcess extends SpawnedProcess {
+  // Leads the CLI's process group; the Services drawer (lib/services-snapshot.ts) finds the thread by it.
+  pid?: number;
   // The end of what the CLI wrote to stderr, for the error shown when it fails.
   stderrTail(): string;
 }
@@ -76,6 +87,7 @@ export function spawnCli(options: SpawnOptions, onStderr?: (text: string) => voi
   if (options.signal.aborted) abort();
   else options.signal.addEventListener("abort", abort, { once: true });
   return {
+    pid: child.pid,
     stdin: child.stdin,
     stdout: child.stdout,
     get killed() {

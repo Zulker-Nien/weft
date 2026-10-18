@@ -26,6 +26,8 @@ export default defineConfig({
     // Vitest 4's default threads pool times out spawning workers in CI under load (a few
     // files "fail to start forks worker" with no error in the worker). Forks is stable.
     pool: "forks",
+    // A worker whose run died (its parent killed mid-test) ends itself instead of running on under PID 1.
+    setupFiles: ["test/orphan-guard-setup.ts"],
     env: {
       THREADBOARD_DATA: path.join(sandbox, "data"),
       CLAUDE_CONFIG_DIR: path.join(sandbox, "claude"),

@@ -69,6 +69,18 @@ describe("spawnCli", () => {
     expect(await until(() => !alive(pid))).toBe(true);
   });
 
+  it("ends a child in a process group of its own, as the CLI's Bash commands run, with SIGKILL if it ignores SIGTERM", async () => {
+    const abort = new AbortController();
+    // `set -m` gives each background job its own group, like Claude Code's Bash tool.
+    const { child } = start("set -m; (trap '' TERM; exec sleep 60) & echo $!; wait", abort.signal);
+    const pid = await child;
+    strays.push(pid);
+    abort.abort();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(alive(pid)).toBe(true);
+    expect(await until(() => !alive(pid))).toBe(true);
+  });
+
   it("ends the group at once when the signal is already aborted", async () => {
     const abort = new AbortController();
     abort.abort();
@@ -110,8 +122,8 @@ describe("groups", () => {
     expect(groups.has(999_998)).toBe(false);
   });
 
-  it("killAllGroups SIGKILLs every CLI, and runs as the server exits", async () => {
-    const { child } = start("trap '' TERM; sleep 60 & echo $!; wait");
+  it("killAllGroups SIGKILLs every CLI and the groups it started, and runs as the server exits", async () => {
+    const { child } = start("set -m; (trap '' TERM; exec sleep 60) & echo $!; wait");
     const pid = await child;
     strays.push(pid);
     expect(process.listeners("exit")).toContain(killAllGroups);

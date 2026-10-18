@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -73,6 +73,21 @@ describe("the command line", () => {
     };
     expect(run("echo hi")).toBe("hi x\n");
     expect(run("exit 3 ;")).toBe(3);
+  });
+
+  it("passes a signal that stops it on to the command, and frees the lock", async () => {
+    const name = `signal-${process.pid}`;
+    const proc = spawn(process.execPath, [script, name, "echo $$; exec sleep 30"], {
+      env: { ...process.env, TSC_ONCE_ACTIVE: "1" },
+      stdio: ["ignore", "pipe", "inherit"],
+    });
+    const child = await new Promise<number>((resolve) => proc.stdout.once("data", (d: Buffer) => resolve(Number(d.toString().trim()))));
+    const exited = new Promise<number | null>((resolve) => proc.on("exit", (code) => resolve(code)));
+    proc.kill("SIGTERM");
+    expect(await exited).toBe(130);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(() => process.kill(child, 0)).toThrow();
+    expect(fs.existsSync(lockPath(name))).toBe(false);
   });
 
   it("explains its usage without a command", () => {

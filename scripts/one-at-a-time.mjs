@@ -61,20 +61,37 @@ async function main([name, command, ...args]) {
   }
   const once = process.env.TSC_ONCE_ACTIVE ? null : onPath("tsc-once");
   if (once) return delegate(once, name, [command, ...args].join(" "));
-  const file = lockPath(name);
+  return runHolding(name, [command, ...args].join(" "));
+}
+
+// Waits for the lock named `name`, runs `command` holding it (through a shell, or as one program when `args`
+// is given), and returns its exit code. A signal that ends
+// this script (a thread's Bash command stopped or timed out) goes on to the command too: left running, a
+// vitest run's workers outlived it under PID 1 (lib/orphan-guard.ts).
+export async function runHolding(name, command, { args, dir = process.env.WEFT_LOCK_DIR || os.tmpdir(), poll = POLL_MS } = {}) {
+  const file = lockPath(name, dir);
   await waitForLock(file, {
+    poll,
     onWait: (pid) => console.error(`${name}: another ${name} is running (pid ${pid}); waiting for it to finish…`),
   });
   const release = () => unlock(file);
   process.on("exit", release);
-  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
-    process.on(signal, () => {
+  const child = spawn(command, args ?? [], { stdio: "inherit", shell: !args });
+  const forward = (signal) => {
+    release();
+    child.kill(signal);
+    process.exit(130);
+  };
+  const signals = ["SIGINT", "SIGTERM", "SIGHUP"];
+  for (const signal of signals) process.on(signal, forward);
+  return new Promise((resolve) =>
+    child.on("exit", (code, signal) => {
+      for (const s of signals) process.off(s, forward);
+      process.off("exit", release);
       release();
-      process.exit(130);
-    });
-  }
-  const child = spawn([command, ...args].join(" "), { stdio: "inherit", shell: true });
-  return new Promise((resolve) => child.on("exit", (code, signal) => resolve(code ?? (signal ? 1 : 0))));
+      resolve(code ?? (signal ? 1 : 0));
+    }),
+  );
 }
 
 // The machine-wide tsc-once (github.com/fotoflo/zprofile bin/tsc-once), when installed, does this lock's job
