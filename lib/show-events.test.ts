@@ -16,14 +16,18 @@ describe("show events", () => {
     const offTop = onTopTurn(topped);
     scrollToTurn("t3");
     reportTopTurn("t5");
+    reportTopTurn("t9", true);
     expect(scrolled).toHaveBeenCalledWith("t3");
-    expect(topped).toHaveBeenCalledWith("t5");
+    expect(topped.mock.calls).toEqual([
+      ["t5", false],
+      ["t9", true],
+    ]);
     offScroll();
     offTop();
     scrollToTurn("t4");
     reportTopTurn("t6");
     expect(scrolled).toHaveBeenCalledTimes(1);
-    expect(topped).toHaveBeenCalledTimes(1);
+    expect(topped).toHaveBeenCalledTimes(2);
   });
 
   it("finds the first row still showing at the scroller's top, and a row by id", () => {

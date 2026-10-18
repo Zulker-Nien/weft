@@ -30,6 +30,18 @@ export function plain(text: string) {
     .trim();
 }
 
+function siteLabel(u: URL) {
+  const last = u.pathname.split("/").filter(Boolean).at(-1);
+  return last ? `/${decodeURIComponent(last)}` : u.host;
+}
+
+function fileLabel(pathname: string) {
+  const parts = decodeURIComponent(pathname).split("/").filter(Boolean);
+  const name = (parts.at(-1) ?? "").replace(/\.html?$/, "");
+  const dir = parts.at(-2);
+  return name === "index" && dir ? dir : name;
+}
+
 const fileName = (path: string) => path.split("/").filter(Boolean).slice(-2).join("/");
 
 type Tool = Extract<ThreadItem, { kind: "tool" }>;
@@ -43,12 +55,12 @@ function toolLine(tool: Tool) {
   return clip(name, MAX_COMMAND);
 }
 
-// "show-rail/index.html#live" for a local page, "localhost:3000/settings" for a site.
+// A page's name under its picture, short enough for 64 px (its full url is the tooltip): "show-rail#live"
+// for show-rail/index.html#live, "plan" for plan.html, "/settings" for localhost:3000/settings, "weft.zip" for a site's home.
 export function pageLabel(url: string) {
   try {
     const u = new URL(url);
-    const path = u.protocol === "file:" ? decodeURIComponent(u.pathname).split("/").filter(Boolean).slice(-2).join("/") : `${u.host}${u.pathname.replace(/\/$/, "")}`;
-    return `${path}${u.hash}`;
+    return `${u.protocol === "file:" ? fileLabel(u.pathname) : siteLabel(u)}${u.hash}`;
   } catch {
     return url;
   }
@@ -154,4 +166,11 @@ function withPages(minis: Mini[]) {
     const url = own?.url ?? shown;
     return url ? { ...m, url } : m;
   });
+}
+
+// Where the pane goes when the chat settles with turn id at its top: that turn's page, or at the end
+// of the chat the newest page; undefined when the pane already shows it or there's none.
+export function followUrl(minis: readonly Mini[], id: string, bottom: boolean, pageUrl: string) {
+  const url = bottom ? minis.findLast((m) => m.dot === "page")?.url : minis.find((m) => m.id === id)?.url;
+  return url && url !== pageUrl ? url : undefined;
 }

@@ -39,10 +39,16 @@ export interface TurnResult {
 // How a finished turn reads on the card: the reply without its status and review blocks, "Stopped", or
 // why it ended early. A stopped turn is never an error.
 export function readResult(turn: TurnResult): { summary: string; isError: boolean; status?: BoardStatus } {
+  const ended = `Ended early: ${turn.subtype.replace(/_/g, " ")}`;
+  // A runner like codex or puku sometimes sends the CLI's error message in `result` (a usage-limit
+  // notice, a rate-limit reason, an auth failure); surface it so the user can act, not just "error execution".
+  const errorDetail = turn.result?.trim();
   const parsed =
     turn.subtype === "success"
       ? (({ text, status }) => ({ text: extractReview(text).text, status }))(extractStatus(turn.result ?? ""))
-      : { text: `Ended early: ${turn.subtype.replace(/_/g, " ")}`, status: undefined };
+      : errorDetail
+      ? { text: `${ended}\n\n${errorDetail}`, status: undefined }
+      : { text: ended, status: undefined };
   return { summary: turn.stopped ? "Stopped" : parsed.text, isError: !turn.stopped && turn.isError, status: parsed.status };
 }
 

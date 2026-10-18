@@ -158,6 +158,18 @@ describe("readResult", () => {
     expect(out.status).toBeUndefined();
   });
 
+  it("appends the CLI's error message when a non-success subtype carries one", () => {
+    const out = readResult({ subtype: "error_execution", result: "You've hit your usage limit.", isError: true, stopped: false });
+    expect(out.summary).toBe("Ended early: error execution\n\nYou've hit your usage limit.");
+    expect(out.isError).toBe(true);
+    expect(out.status).toBeUndefined();
+  });
+
+  it("ignores a whitespace-only result on a non-success subtype", () => {
+    const out = readResult({ subtype: "error_execution", result: "   \n  ", isError: true, stopped: false });
+    expect(out.summary).toBe("Ended early: error execution");
+  });
+
   it("a stopped turn says 'Stopped' and isError is false even if isError was true", () => {
     const out = readResult({ subtype: "success", result: RESULT_WITH_STATUS, isError: true, stopped: true });
     expect(out.summary).toBe("Stopped");

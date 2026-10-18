@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { showMinis as oldestFirst, pageLabel, plain, turnId } from "./show-rail";
+import { followUrl, showMinis as oldestFirst, pageLabel, plain, turnId } from "./show-rail";
 import type { ThreadItem } from "./types";
 
 const NOW = 1_000_000_000;
@@ -102,7 +102,7 @@ describe("browser history", () => {
   it("puts each page the agent opened above its turn, tied to that turn", () => {
     const out = minis([user("go"), say("Opening", NOW + 1), open("http://localhost:3000/", NOW + 2), open("file:///Users/me/.weft/show/x/index.html#live", NOW + 3), result()]);
     expect(out.map((m) => [m.dot, m.text, m.turn])).toEqual([
-      ["page", "x/index.html#live", "t1"],
+      ["page", "x#live", "t1"],
       ["page", "localhost:3000", "t1"],
       ["ok", "Opening", undefined],
       ["usr", "go", undefined],
@@ -119,9 +119,9 @@ describe("browser history", () => {
       ],
     });
     expect(out.map((m) => [m.text, m.turn])).toEqual([
-      ["a.test/two", "t3"],
+      ["/two", "t3"],
       ["next", undefined],
-      ["a.test/one", "t1"],
+      ["/one", "t1"],
       ["hi", undefined],
       ["go", undefined],
     ]);
@@ -167,9 +167,32 @@ describe("browser history", () => {
   });
 
   it("labels pages short, and leaves a url it can't parse as is", () => {
-    expect(pageLabel("file:///Users/me/a%20b/page.html")).toBe("a b/page.html");
-    expect(pageLabel("https://weft.zip/docs/")).toBe("weft.zip/docs");
+    expect(pageLabel("file:///Users/me/a%20b/page.html")).toBe("page");
+    expect(pageLabel("file:///Users/me/show/rail/index.html#live")).toBe("rail#live");
+    expect(pageLabel("file:///index.html")).toBe("index");
+    expect(pageLabel("file:///")).toBe("");
+    expect(pageLabel("https://weft.zip/docs/")).toBe("/docs");
+    expect(pageLabel("http://localhost:3000/a%20b")).toBe("/a b");
     expect(pageLabel("not a url")).toBe("not a url");
+  });
+});
+
+describe("followUrl", () => {
+  const out = () => oldestFirst([user("go"), say("Opening", NOW + 1), open("http://a.test/", NOW + 2), result(), user("next", NOW + 3), say("Now b", NOW + 4), open("http://b.test/", NOW + 5), result()], { now: NOW });
+  const open = (url: string, at: number): ThreadItem => ({ kind: "tool", id: url, name: "mcp__browser__open_url", summary: url, at });
+
+  it("sends the pane to the page of the turn at the chat's top, or the newest page at its end", () => {
+    const list = out();
+    const first = list.find((m) => m.text === "Opening")!.id;
+    expect(followUrl(list, first, false, "http://b.test/")).toBe("http://a.test/");
+    expect(followUrl(list, first, true, "http://a.test/")).toBe("http://b.test/");
+  });
+
+  it("stays put when the pane already shows it, or the turn has no page", () => {
+    const list = out();
+    expect(followUrl(list, list.find((m) => m.text === "Now b")!.id, false, "http://b.test/")).toBeUndefined();
+    expect(followUrl(list, "t99", false, "http://b.test/")).toBeUndefined();
+    expect(followUrl(minis([user("go")]), "t0", true, "")).toBeUndefined();
   });
 });
 

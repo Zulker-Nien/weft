@@ -6,6 +6,9 @@ import { onScrollToTurn, reportTopTurn } from "@/lib/show-events";
 import type { Card, ThreadItem } from "@/lib/types";
 import ShowRail from "./ShowRail";
 
+const shots = vi.hoisted((): { map: Record<string, string> } => ({ map: {} }));
+vi.mock("@/lib/use-page-shots", () => ({ usePageShots: () => shots.map }));
+
 afterEach(cleanup);
 
 const at = Date.now();
@@ -77,5 +80,33 @@ describe("ShowRail", () => {
       return Promise.resolve();
     });
     expect(screen.getByTitle("On it.").getAttribute("aria-current")).toBe("true");
+  });
+
+  it("draws a page as its picture once captured, and a globe until then", () => {
+    const withPages: ThreadItem[] = [
+      ...items.slice(0, 2),
+      { kind: "tool", id: "o", name: "mcp__browser__open_url", summary: "http://localhost:3000/a", at },
+      { kind: "tool", id: "p", name: "mcp__browser__open_url", summary: "http://localhost:3000/b", at },
+    ];
+    shots.map = { "http://localhost:3000/a": "/api/cards/c1/shots?img=a&v=1" };
+    const { container } = render(<ShowRail card={card} hidden={false} items={withPages} pageUrl="http://localhost:3000/b" />);
+    expect(container.querySelector("img")?.getAttribute("src")).toBe("/api/cards/c1/shots?img=a&v=1");
+    expect(screen.getByTitle("http://localhost:3000/a").textContent).toContain("/a");
+    expect(screen.getByLabelText("Page on screen").querySelector("svg")).toBeTruthy();
+    shots.map = {};
+  });
+
+  it("moves the pane to the page of the turn the chat settles on", async () => {
+    vi.useFakeTimers();
+    const open = vi.fn(() => Promise.resolve());
+    window.threadboard = { browser: { open } } as unknown as typeof window.threadboard;
+    const withPage: ThreadItem[] = [...items.slice(0, 2), { kind: "tool", id: "o", name: "mcp__browser__open_url", summary: "http://localhost:3000/a", at }];
+    render(<ShowRail card={card} hidden={false} items={withPage} pageUrl="http://localhost:3000/b" />);
+    await act(async () => {
+      reportTopTurn("t1");
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(open).toHaveBeenCalledWith("http://localhost:3000/a");
+    vi.useRealTimers();
   });
 });
