@@ -120,7 +120,7 @@ function OptionRow({
         ❯
       </span>
       <span className="shrink-0 text-faint">{number}.</span>
-      {multi && <span className={on ? "text-accent" : "text-faint"}>{on ? "[✓]" : "[ ]"}</span>}
+      {multi && <span className={`shrink-0 whitespace-pre ${on ? "text-accent" : "text-faint"}`}>{on ? "[✓]" : "[ ]"}</span>}
       <span className="min-w-0">
         <span className={`font-medium ${on || here ? "text-accent" : "text-ink"}`}>
           {option.label}

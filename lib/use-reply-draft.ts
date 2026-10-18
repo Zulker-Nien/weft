@@ -14,11 +14,14 @@ export interface UseReplyDraft {
   // True while the box currently starts with "!"; with onShell, Enter runs the command.
   shell: boolean;
   setShell: (next: boolean) => void;
+  // True while the box holds nothing but whitespace (lib/reply-mode.ts: Continue only offers itself then).
+  empty: boolean;
 }
 
 export function useReplyDraft(cardId: string, onShell: unknown, clearError: () => void): UseReplyDraft {
   const [initial] = useState(() => readDraft(replyDraftKey(cardId)));
   const [shell, setShell] = useState(() => Boolean(onShell) && isBang(initial));
+  const [empty, setEmpty] = useState(() => !initial.trim());
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   // The draft not yet written. Closing the thread writes it, so Escape can close with text in the box.
   const unsaved = useRef<{ cardId: string; markdown: string } | null>(null);
@@ -26,6 +29,7 @@ export function useReplyDraft(cardId: string, onShell: unknown, clearError: () =
   function save(markdown: string, now = false) {
     clearError();
     setShell(Boolean(onShell) && isBang(markdown));
+    setEmpty(!markdown.trim());
     clearTimeout(timer.current);
     unsaved.current = { cardId, markdown };
     const write = () => {
@@ -44,5 +48,5 @@ export function useReplyDraft(cardId: string, onShell: unknown, clearError: () =
     [],
   );
 
-  return { initial, save, shell, setShell };
+  return { initial, save, shell, setShell, empty };
 }

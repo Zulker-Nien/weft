@@ -293,7 +293,9 @@ normal send does. An edited send can't use a warm spare, so it starts a cold CLI
 
 ### Continue (▶ Continue, ⌘.)
 
-The reply box's ▶ Continue button sends the literal word `continue` through the same `onSend` path a
+The reply box offers Continue only when the last turn stopped short (`turnCutOff` in `lib/reply-mode.ts`: a
+stop, an error, a plan limit or the app closing): as the primary button of an empty box, and as "Continue here"
+in the send menu once you've typed. It sends the literal word `continue` through the same `onSend` path a
 typed message uses — the same call the card-level ▶ makes (`lib/resume-actions.ts`,
 `api.send(id, "continue")`), which is the same shape every other message takes. On the desktop,
 ⌘. (or `mod+.`) does the same from the keyboard (`lib/use-reply-continue.ts`, registered in the

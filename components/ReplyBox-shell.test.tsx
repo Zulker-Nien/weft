@@ -33,7 +33,8 @@ describe("ReplyBox ! shell mode", () => {
   it("turns Send into Run while the box starts with !", async () => {
     const { box } = setup();
     await userEvent.type(box, "!ls");
-    expect(screen.getByRole("button", { name: "Run in the shell" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run" })).toBeInTheDocument();
+    expect(screen.getByText("Shell · repo")).toBeInTheDocument();
     await userEvent.clear(box);
     await userEvent.type(box, "ls");
     expect(screen.getByRole("button", { name: "Send" })).toBeInTheDocument();
@@ -42,8 +43,8 @@ describe("ReplyBox ! shell mode", () => {
   it("runs mid-turn rather than queueing, and drops Send now", async () => {
     const { onShell, box } = setup({ live: true });
     await userEvent.type(box, "!pwd");
-    expect(screen.queryByText("Send now")).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "Run in the shell" }));
+    expect(screen.queryByRole("button", { name: "More ways to send" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Run" }));
     expect(onShell).toHaveBeenCalledWith("pwd");
   });
 

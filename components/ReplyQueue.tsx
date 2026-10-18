@@ -83,19 +83,3 @@ export function ReplyQueue({
     </ul>
   );
 }
-
-// What Enter does to the message ↑ pulled back into the reply box, said above it while you edit.
-export function EditingNote({ canRewind, fileEdits, live }: { canRewind: boolean; fileEdits: number; live: boolean }) {
-  const enter = live ? "Enter stops this turn and replaces it" : "Enter replaces the reply below";
-  const files = fileEdits ? ` · ${fileEdits} file ${fileEdits === 1 ? "edit stays" : "edits stay"}` : "";
-  return (
-    <p className="mb-1.5 flex min-w-0 items-center gap-1.5 text-[11.5px] text-warn">
-      <Icon name="pencil" size={12} className="shrink-0" />
-      <span className="truncate">
-        {canRewind
-          ? `Editing your last message. ${enter} · Esc cancels${files}`
-          : "Editing a copy: this thread can't rewind, so it sends as a new message · Esc cancels"}
-      </span>
-    </p>
-  );
-}

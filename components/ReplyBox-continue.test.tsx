@@ -60,15 +60,16 @@ afterEach(() => {
 });
 
 describe("Continue button", () => {
-  it("sends the literal word 'continue' when clicked", async () => {
-    const { onSend } = setup();
+  it("is the primary of an empty box after a cut-off turn, and sends the literal word 'continue'", async () => {
+    const { onSend } = setup({ cutOff: true });
     await userEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(onSend).toHaveBeenCalledWith("continue");
   });
 
-  it("is shown when the thread is idle and no question or shell command is active", () => {
+  it("isn't offered after a turn that finished cleanly: the primary is Send", () => {
     setup();
-    expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send" })).toBeInTheDocument();
   });
 });
 
@@ -88,7 +89,7 @@ describe("Continue ⌘. shortcut", () => {
 
 describe("Continue visibility", () => {
   it("is hidden while a turn runs", () => {
-    setup({ live: true });
+    setup({ live: true, cutOff: true });
     expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
   });
 });
