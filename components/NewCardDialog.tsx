@@ -1,8 +1,9 @@
 "use client";
 
 import { useRef } from "react";
+import { isMac } from "@/lib/hotkeys";
 import { type NewCardInput } from "@/lib/client";
-import type { Card } from "@/lib/types";
+import type { Card, RestartStatus } from "@/lib/types";
 import { busyInFolder } from "@/lib/overlap";
 import { planLimitsFor } from "@/lib/board-view";
 import { startButton } from "@/lib/new-thread";
@@ -14,13 +15,16 @@ import Composer, { type ComposerHandle } from "./Composer";
 import Icon from "./Icon";
 import { NewCardDialogControls } from "./NewCardDialogControls";
 import { NewCardDialogFooter } from "./NewCardDialogFooter";
+import { RestartRequested } from "./RestartChip";
 import StatusStrip from "./StatusStrip";
+import { isBacklogKey } from "./submit-keys";
 
 export default function NewCardDialog({
   cards = [],
   home,
   defaultCwd,
   recentCwd,
+  restart,
   onClose,
   onCreate,
 }: {
@@ -31,6 +35,8 @@ export default function NewCardDialog({
   defaultCwd?: string;
   // Folder of the most recently active card outside home, used when nothing better is remembered.
   recentCwd?: string;
+  // An armed restart (lib/restart-when-idle.ts): a thread started now waits for it, so the header says so.
+  restart?: RestartStatus | null;
   onClose: () => void;
   // stay: started with ⌃↵, so the dialog stays open for the next thread.
   onCreate: (input: NewCardInput, opts?: { stay?: boolean }) => Promise<void>;
@@ -52,10 +58,20 @@ export default function NewCardDialog({
   const submit = (start: boolean, stay: boolean) => dialog.submit(start, { stay, ...composerOps, onCreate, onClose });
 
   return (
-    <aside className="flex w-[44%] min-w-[380px] shrink-0 flex-col bg-panel last:flex-1">
+    <aside
+      // Capture, so ⌘B adds to the Backlog before the composer reads it as bold.
+      onKeyDownCapture={(e) => {
+        if (!isBacklogKey(e, isMac())) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (!dialog.busy) void submit(false, false);
+      }}
+      className="flex w-[44%] min-w-[380px] shrink-0 flex-col bg-panel last:flex-1"
+    >
       <div className="flex shrink-0 items-center justify-between border-b border-line px-5 py-3.5">
-        <h2 className="min-w-0 truncate text-[15px] font-medium text-ink">
+        <h2 className="flex min-w-0 items-center gap-2 truncate text-[15px] font-medium text-ink">
           New thread
+          <RestartRequested restart={restart} />
         </h2>
         <button
           onClick={onClose}

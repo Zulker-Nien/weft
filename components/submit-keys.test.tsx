@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { submitFor } from "./submit-keys";
+import { isBacklogKey, submitFor } from "./submit-keys";
 
 const enter = { key: "Enter", metaKey: false, ctrlKey: false, shiftKey: false };
 
@@ -26,5 +26,22 @@ describe("submitFor", () => {
   it("in a reply Enter sends and Shift+Enter is a new line", () => {
     expect(submitFor(enter, "reply", false, true)).toBe("submit");
     expect(submitFor({ ...enter, shiftKey: true }, "reply", false, true)).toBeNull();
+  });
+});
+
+describe("isBacklogKey", () => {
+  const b = { key: "b", metaKey: false, ctrlKey: false, shiftKey: false, altKey: false };
+  it("is ⌘B on macOS and Ctrl+B elsewhere", () => {
+    expect(isBacklogKey({ ...b, metaKey: true }, true)).toBe(true);
+    expect(isBacklogKey({ ...b, key: "B", metaKey: true }, true)).toBe(true);
+    expect(isBacklogKey({ ...b, ctrlKey: true }, false)).toBe(true);
+  });
+  it("leaves the other modifiers and keys alone", () => {
+    expect(isBacklogKey({ ...b, ctrlKey: true }, true)).toBe(false);
+    expect(isBacklogKey({ ...b, metaKey: true }, false)).toBe(false);
+    expect(isBacklogKey({ ...b, metaKey: true, shiftKey: true }, true)).toBe(false);
+    expect(isBacklogKey({ ...b, metaKey: true, altKey: true }, true)).toBe(false);
+    expect(isBacklogKey({ ...b, key: "i", metaKey: true }, true)).toBe(false);
+    expect(isBacklogKey(b, true)).toBe(false);
   });
 });

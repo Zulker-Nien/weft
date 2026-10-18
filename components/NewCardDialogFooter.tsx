@@ -79,6 +79,11 @@ export function NewCardDialogFooter({
       >
         {busy === "backlog" && <Spinner size={12} />}
         {busy === "backlog" ? "Adding…" : "Add to backlog"}
+        {busy !== "backlog" && (
+          <kbd aria-hidden="true" className="font-sans opacity-60">
+            ⌘B
+          </kbd>
+        )}
       </button>
       <button
         onClick={() => onSubmit(true)}

@@ -44,3 +44,9 @@ export function submitKeys(variant: Variant, current: () => Submitters) {
     },
   });
 }
+
+// ⌘B (Ctrl+B off macOS) in the New thread dialog adds the thread to the Backlog, ahead of the editor's bold.
+export function isBacklogKey(e: Keys & { altKey: boolean }, mac: boolean): boolean {
+  const mod = mac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+  return mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "b";
+}

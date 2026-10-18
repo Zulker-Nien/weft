@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NewCardInput } from "@/lib/client";
-import type { Card } from "@/lib/types";
+import type { Card, RestartStatus } from "@/lib/types";
+import { isMac } from "@/lib/hotkeys";
 import { makeCard } from "./test-utils";
 import NewCardDialog from "./NewCardDialog";
 
@@ -25,7 +26,7 @@ vi.mock("./RepoPicker", () => ({
   ),
 }));
 
-function setup(props: { cards?: Card[]; defaultCwd?: string } = {}) {
+function setup(props: { cards?: Card[]; defaultCwd?: string; restart?: RestartStatus } = {}) {
   const onCreate = vi.fn<(input: NewCardInput) => Promise<void>>(() => Promise.resolve());
   const onClose = vi.fn();
   render(<NewCardDialog home="/home" defaultCwd="/repo/web" onCreate={onCreate} onClose={onClose} {...props} />);
@@ -38,6 +39,14 @@ beforeEach(() => {
 });
 
 describe("NewCardDialog", () => {
+  it("says Restart requested in its header while a restart waits", () => {
+    setup();
+    expect(screen.queryByText("Restart requested")).toBeNull();
+    cleanup();
+    setup({ restart: { armed: true, then: "relaunch", waiting: [] } });
+    expect(screen.getByText("Restart requested")).toBeInTheDocument();
+  });
+
   it("needs a prompt before it starts", async () => {
     const { onCreate } = setup();
     await userEvent.click(screen.getByRole("button", { name: "Start now" }));
@@ -71,6 +80,13 @@ describe("NewCardDialog", () => {
     await userEvent.type(box, "Later idea");
     await userEvent.click(screen.getByRole("button", { name: "Add to backlog" }));
     expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ prompt: "Later idea", cwd: "/repo/web", start: false }));
+  });
+
+  it("⌘B adds it to the backlog instead of bolding", async () => {
+    const { onCreate, box } = setup();
+    await userEvent.type(box, "Backlog by key");
+    fireEvent.keyDown(box, { key: "b", metaKey: isMac(), ctrlKey: !isMac() });
+    expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ prompt: "Backlog by key", start: false }));
   });
 
   it("picking another folder uses it, warms a CLI there and remembers it", async () => {

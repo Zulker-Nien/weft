@@ -7,7 +7,7 @@ import type { RestartStatus } from "@/lib/types";
 const cancelRestart = vi.fn(() => Promise.resolve({ armed: false, waiting: [] }));
 vi.mock("@/lib/client", () => ({ api: { cancelRestart: () => cancelRestart() } }));
 
-const { default: RestartChip } = await import("./RestartChip");
+const { default: RestartChip, RestartRequested } = await import("./RestartChip");
 
 afterEach(() => {
   cleanup();
@@ -35,7 +35,7 @@ describe("RestartChip", () => {
 
   it("counts the threads it waits on, names them on hover, and cancels on click", async () => {
     setup({ armed: true, then: "relaunch", waiting });
-    const chip = screen.getByRole("button", { name: "⟳ Restart after 2" });
+    const chip = screen.getByRole("button", { name: "⟳ Restart requested · 2" });
     await userEvent.hover(chip);
     expect(await screen.findByText(/Fix login/)).toBeTruthy();
     expect(screen.getByText(/Ship docs/)).toBeTruthy();
@@ -45,7 +45,7 @@ describe("RestartChip", () => {
 
   it("says update when the updater armed it, and restarting once nothing's left", async () => {
     setup({ armed: true, then: "update", waiting: [waiting[0]!] });
-    const chip = screen.getByRole("button", { name: "⟳ Update after 1" });
+    const chip = screen.getByRole("button", { name: "⟳ Update requested · 1" });
     await userEvent.hover(chip);
     expect(await screen.findByText(/this thread/)).toBeTruthy();
     cleanup();
@@ -61,5 +61,15 @@ describe("RestartChip", () => {
     const { notify } = setup({ armed: true, then: "relaunch", waiting });
     await userEvent.click(screen.getByRole("button"));
     await vi.waitFor(() => expect(notify).toHaveBeenCalledWith(expect.any(Error)));
+  });
+});
+
+describe("RestartRequested", () => {
+  it("shows the red pill only while a restart is armed", () => {
+    const view = render(<RestartRequested restart={{ armed: false, waiting }} />);
+    expect(view.container.innerHTML).toBe("");
+    cleanup();
+    render(<RestartRequested restart={{ armed: true, then: "relaunch", waiting }} />);
+    expect(screen.getByText("Restart requested")).toBeTruthy();
   });
 });
