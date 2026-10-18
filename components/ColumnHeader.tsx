@@ -4,11 +4,12 @@ import { useState, type ReactNode } from "react";
 import type { Column } from "@/lib/types";
 import BacklogActions, { type BacklogLane } from "./BacklogActions";
 import Icon from "./Icon";
+import ReviewFilterChips, { type ReviewChips } from "./ReviewFilterChips";
 import SprintsMenu from "./SprintsMenu";
 import { SwitchAllButton } from "./switch-all-button";
 import Tip from "./Tip";
 
-// A column's name and count. Running and Needs you get "Switch all" to move their threads to the other CLI, once a thread hit its plan limit. Review gets "Review all", which starts the commit walk-through card (lib/pile-review.ts), and "▶ Resume N" when turns there were cut off or failed (lib/card-resume.ts). Done also gets "Show N archived" and an archive-all button (Shift+E) for the cards it shows. Backlog's title drops its saved sprints, and it gets Save as sprint and an archive-all that asks first (BacklogActions).
+// A column's name and count. Running and Needs you get "Switch all" to move their threads to the other CLI, once a thread hit its plan limit. Review gets the Errors and Restart filter chips (ReviewFilterChips), "Review all", which starts the commit walk-through card (lib/pile-review.ts), and "▶ Resume N" when turns there were cut off or failed (lib/card-resume.ts). Done also gets "Show N archived" and an archive-all button (Shift+E) for the cards it shows. Backlog's title drops its saved sprints, and it gets Save as sprint and an archive-all that asks first (BacklogActions).
 export default function ColumnHeader({
   column,
   count,
@@ -23,6 +24,7 @@ export default function ColumnHeader({
   onSwitchAll,
   onReviewAll,
   backlog,
+  reviewFilter,
 }: {
   column: { id: Column; label: string };
   count: number | null;
@@ -37,18 +39,9 @@ export default function ColumnHeader({
   onSwitchAll?: () => void | Promise<void>;
   onReviewAll?: () => Promise<void>;
   backlog?: BacklogLane;
+  reviewFilter?: ReviewChips;
 }) {
   const done = column.id === "done";
-  const [reviewing, setReviewing] = useState(false);
-  async function reviewAll() {
-    if (!onReviewAll || reviewing) return;
-    setReviewing(true);
-    try {
-      await onReviewAll();
-    } finally {
-      setReviewing(false);
-    }
-  }
   return (
     <div className="relative flex items-center justify-between px-3 pb-1.5 pt-2.5">
       <ColumnTitle label={column.label} needsYou={needsYou} backlog={backlog} />
@@ -56,20 +49,9 @@ export default function ColumnHeader({
         {/* A narrow column (five columns on a small screen) keeps its actions as icons; one squeezed beside the
             open copilot lane keeps only its count and Archive all. */}
         <span className="flex items-center gap-2 @max-[150px]:hidden">
+          {reviewFilter && <ReviewFilterChips chips={reviewFilter} />}
           {onSwitchAll && count ? <SwitchAllButton onClick={() => void onSwitchAll()} /> : null}
-          {onReviewAll && count ? (
-            <Tip text="Walk through the Review cards one at a time: what each changed, its checks, then commit it" className="inline-flex">
-              <button
-                onClick={() => void reviewAll()}
-                disabled={reviewing}
-                aria-label={reviewing ? "Starting…" : "Review all"}
-                className="flex items-center gap-1 font-medium text-accent hover:opacity-80 disabled:opacity-50"
-              >
-                <Icon name="check" size={11} />
-                <Label>{reviewing ? "Starting…" : "Review all"}</Label>
-              </button>
-            </Tip>
-          ) : null}
+          {onReviewAll && count ? <ReviewAllButton onReviewAll={onReviewAll} /> : null}
           {resumeAll && (
             <Tip text={`Carry on the ${resumeAll.count} turn${resumeAll.count > 1 ? "s" : ""} here that a restart cut off or that failed`} className="inline-flex">
               <button onClick={resumeAll.run} aria-label={`Resume ${resumeAll.count}`} className="flex items-center gap-1 font-medium text-accent hover:opacity-80">
@@ -96,6 +78,33 @@ export default function ColumnHeader({
         {count}
       </span>
     </div>
+  );
+}
+
+// Review's "Review all": starts the commit walk-through card, held as "Starting…" until it has.
+function ReviewAllButton({ onReviewAll }: { onReviewAll: () => Promise<void> }) {
+  const [reviewing, setReviewing] = useState(false);
+  async function reviewAll() {
+    if (reviewing) return;
+    setReviewing(true);
+    try {
+      await onReviewAll();
+    } finally {
+      setReviewing(false);
+    }
+  }
+  return (
+    <Tip text="Walk through the Review cards one at a time: what each changed, its checks, then commit it" className="inline-flex">
+      <button
+        onClick={() => void reviewAll()}
+        disabled={reviewing}
+        aria-label={reviewing ? "Starting…" : "Review all"}
+        className="flex items-center gap-1 font-medium text-accent hover:opacity-80 disabled:opacity-50"
+      >
+        <Icon name="check" size={11} />
+        <Label>{reviewing ? "Starting…" : "Review all"}</Label>
+      </button>
+    </Tip>
   );
 }
 

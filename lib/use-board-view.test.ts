@@ -95,3 +95,16 @@ describe("useBoardView", () => {
     expect(result.current.sort).toBe("newest");
   });
 });
+
+describe("useBoardView review chips", () => {
+  it("starts with both off and toggles each on its own, without writing the cookie", () => {
+    const { result } = makeView();
+    expect(result.current.reviewFilter).toEqual({ errors: false, restart: false });
+    act(() => result.current.toggleReviewFilter("errors"));
+    expect(result.current.reviewFilter).toEqual({ errors: true, restart: false });
+    act(() => result.current.toggleReviewFilter("restart"));
+    act(() => result.current.toggleReviewFilter("errors"));
+    expect(result.current.reviewFilter).toEqual({ errors: false, restart: true });
+    expect(writePrefs).not.toHaveBeenCalled();
+  });
+});

@@ -39,7 +39,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - hotspots: components/Board.tsx (~850 lines), electron/main.cjs (~450; its control routes are `electron/pane-routes.cjs`, its splash IPC `electron/startup-ipc.cjs`), electron/vault.cjs (~390), electron/browser-pane.cjs (~345), lib/cloud-sync.ts (~365).
     Everything else is under 300 (2026-10-16): big files became re-exporting fronts (`lib/types.ts` → `lib/types-*.ts`,
     `lib/import.ts` → `lib/import-*.ts`, `lib/secret-guard.ts` → `lib/secret-guard-*.ts`, `lib/client.ts` → `lib/client-*.ts`).
-    Pure logic already moved out: `lib/board-view.ts` (columns, project chips, chime/unseen rules) and
+    Pure logic already moved out: `lib/board-view.ts` (columns, project chips, chime/unseen rules, Review's Errors/Restart filter chips drawn by `components/ReviewFilterChips.tsx`) and
     `lib/turn.ts` (how a turn's result reads, cost, limits); Board's hooks into `lib/use-*.ts` (`use-now`,
     `use-toast`, `use-desktop-bridge`, `use-copilot-card`, `use-board-actions`, `use-board-toggles`, `use-board-view`, `use-board-archive`,
     `use-board-card-actions`, plus `lib/board-focus.ts`, `lib/board-helpers.ts`) and its JSX into `BoardHeader`, `BoardColumn`, `BoardToast`.
