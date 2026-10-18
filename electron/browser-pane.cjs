@@ -3,6 +3,7 @@
 // 127.0.0.1 (see lib/browser-tools.ts).
 const { WebContentsView } = require("electron");
 const http = require("node:http");
+const path = require("node:path");
 const { isSelfUrl } = require("./self-url.cjs");
 const { createPaneSecrets } = require("./pane-secrets.cjs");
 const { secretRunRoutes } = require("./secret-run.cjs");
@@ -79,7 +80,7 @@ function createBrowserPane({ getWindow, getAppView, token, onContents, pages, on
     const existing = views.get(key);
     if (existing) return existing;
     const view = new WebContentsView({
-      webPreferences: { partition: "persist:threadboard-browser", sandbox: true, contextIsolation: true },
+      webPreferences: { partition: "persist:threadboard-browser", sandbox: true, contextIsolation: true, preload: path.join(__dirname, "pane-preload.cjs") },
     });
     view.setBackgroundColor("#ffffff");
     getWindow().contentView.addChildView(view);

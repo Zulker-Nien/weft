@@ -78,17 +78,23 @@ one vault environment it asks for, and its reads by name:
   naming the app, the project and the env and the vault names its reads need (`SUPABASE_SECRET_KEY` for a `supabase`
   read; `GA4_PROPERTY_ID` and `GA4_SERVICE_ACCOUNT_JSON` for a `ga4` one). The grant is kept in `~/.weft/app-grants.json`,
   keyed by the app's folder, with a hash of its manifest: change the env, the folder or a read and the app asks again.
-- **Main runs the reads** (`electron/app-data.cjs`, `electron/app-data-reads.cjs`). It answers only a pane page whose
-  top frame is a file in `~/.weft/apps/<slug>/` (real path, so no symlink or `..` out) that is saved as an app and holds
-  `weft-app.json`. The page sends a read's name and only the args its manifest declares, of the same type; it never
+- **Main runs the reads** (`electron/app-data.cjs`; which frame may ask in `electron/app-data-frame.cjs`, grants in
+  `electron/app-data-grants.cjs`, the two read kinds in `electron/app-data-reads.cjs`). It answers only the main frame
+  of a pane page (`event.sender.mainFrame`) that is a file directly in one app's folder, `~/.weft/apps/<slug>/` (real
+  path, so no symlink or `..` out, and not nested deeper), saved as an app, beside a `weft-app.json`. The page sends a read's name and only the args its manifest declares, of the same type; it never
   sends SQL, a URL or a function name. A `supabase` read calls that Postgres function through PostgREST with the env's
-  `SUPABASE_SECRET_KEY`; a `ga4` read signs a service-account JWT, gets a token (cached) and runs the manifest's
-  `runReport`. Rows come back capped at 5,000 rows and 2 MB, with a 15 s timeout; values stay in main.
+  `SUPABASE_SECRET_KEY`, as a GET: PostgREST runs it in a read-only transaction and only calls a `stable` function
+  that way, so a manifest naming a function that writes gets an error, not a write. The manifest's args are the
+  defaults the page may override; a `ga4` read signs a service-account JWT, gets a token (cached) and runs the manifest's
+  `runReport`. A read needs only its own names, so a blank GA4 key doesn't stop the Supabase reads, and a missing one
+  says which (`GA4_PROPERTY_ID has no value in aimhuge/weft · production yet.`). Supabase's and Google's errors come
+  back as their message. Rows come back capped at 5,000 rows and 2 MB, with a 15 s timeout; values stay in main.
 - **Reads are functions, reviewed in a migration.** The project's `supabase/migrations/` defines what an app may read:
   `security definer`, `set search_path = ''`, executable by `service_role` only, so the anon and signed-in keys can't
   call them. Weft's own are `growth_*` (`supabase/migrations/20261018054110_growth_reads.sql`).
 - **Outside Weft** (a normal browser, a weft.zip share link) `window.weft` isn't there and the page says to open it in
-  Weft on a Mac: the data never leaves the Mac it was granted on.
+  Weft on a Mac: the data never leaves the Mac it was granted on. A granted page sees its rows and can do with them
+  what any page can, so grant only apps you trust.
 
 📈 **Growth** is the first one (`~/.weft/apps/growth/`): accounts, signups and active accounts per day, weekly
 retention cohorts and the activation funnel from Weft's own Supabase (production), and page views, top pages and
@@ -97,11 +103,13 @@ sources from GA4 once its two vault names have values.
 ## Persisted on prod
 
 Every mini app is also a row in Weft's production Supabase, `cloud_mini_apps` (`lib/app-cloud.ts`,
-`supabase/migrations/20261018160000_cloud_mini_apps.sql`), under the signed-in account's workspace: its name, address,
+`supabase/migrations/20261018061014_cloud_mini_apps.sql`), under the signed-in account's workspace: its name, address,
 place on the rail and kind (`site`, `file` or `folder`). A file's or folder's page goes up to `weft-blobs` by content hash
 (only when it changed), and a folder app's manifest goes with it. `app/api/apps` pushes after each save, rename, move
-and remove (a remove leaves a tombstone, so it never comes back), after the response. A list pulls at most every 5
-minutes, in the background: an app this Mac lacks is written to `~/.weft/apps/<id>/` and added to the rail. Rows are the
+and remove (a remove leaves a tombstone, so it never comes back), after the response. A list syncs at most every 5
+minutes, in the background: an app this Mac lacks is written to `~/.weft/apps/<id>/` and added to the rail, and an app
+prod has no row for (saved before this, or signed out) goes up. A failed push is a warning in the server log; the local
+save stands. Rows are the
 owner's only (a manifest names a local folder), and signed out nothing goes up. A grant never goes up: each Mac asks
 for its own Touch ID.
 
@@ -109,9 +117,13 @@ for its own Touch ID.
 
 - A tile opens its page through the board's `showPage` (`lib/board-helpers.ts`): the board's own pane, `"board"` key.
 - Not built: `mcp__browser__save_app` so a thread can offer its page as an app, drag to reorder (Move up/down for now),
-  favicons, apps per project. A shared page's own pictures and scripts by relative path don't load remotely (only the one
+  favicons, apps per project. Data apps: revoking from the tile's menu (the page's Revoke for now), a data app's own
+  files beyond `index.html` going up to prod, a move pushing every app's new place (only the moved one's for now),
+  and reads that run on weft.zip rather than on a Mac. A shared page's own pictures and scripts by relative path don't load remotely (only the one
   file goes up), the link doesn't follow edits until the dialog opens again, and the visits list isn't shown in the app.
-- Tests: `lib/mini-apps.test.ts`, `lib/mini-app-store.test.ts`, `lib/use-mini-apps.test.ts`, `app/api/apps-route.test.ts`,
+- Tests: data apps `electron/app-data.test.ts`, `electron/app-data-reads.test.ts`, `electron/app-data-rules.test.ts`
+  (fixtures in `electron/app-data-test-helpers.ts`), prod `lib/app-cloud.test.ts` (fakes in `lib/app-cloud.harness.ts`);
+  `lib/mini-apps.test.ts`, `lib/mini-app-store.test.ts`, `lib/use-mini-apps.test.ts`, `app/api/apps-route.test.ts`,
   `components/AppsRail.test.tsx` (covers `SaveAppButton` too); sharing: `lib/app-share*.test.ts`, `lib/share-unlock.test.ts`,
   `lib/share-page-serve.test.ts`, `app/api/apps-share-route.test.ts`, `app/api/a/[id]/*/routes.test.ts`,
   `components/ShareAppDialog.test.tsx`, `components/LoomApps.test.tsx`.

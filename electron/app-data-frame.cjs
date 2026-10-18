@@ -1,0 +1,186 @@
+// Frame → folder → manifest for a data mini app (docs/architecture/mini-apps.md). The pane's main frame
+// is the only thing that runs here: an iframe or a frame outside <dataDir>/apps/<slug>/ is rejected
+// before the manifest or the saved-app check. Lives in its own file so app-data.cjs can stay focused
+// on grants and IPC.
+
+const fs = require("node:fs");
+const path = require("node:path");
+const { RPC_FN, READ_NAME } = require("./app-data-reads.cjs");
+
+const APPS_DIR = "apps";
+const APPS_FILE = "apps.json";
+
+// What a sender must look like: a webContents the pane owns, and the frame the message came from
+// must be that webContents' main frame (event.sender is the WebContents, its mainFrame a WebFrameMain).
+// An iframe inside a saved page is rejected before anything else runs.
+function senderOk(owns, event) {
+  if (!event?.sender || !owns(event.sender)) return false;
+  if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame) return false;
+  return true;
+}
+
+// Reads ~/.weft/apps.json on demand. Empty file or missing key both mean "no saved apps".
+function loadApps(dataDir) {
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(dataDir, APPS_FILE), "utf8"));
+    const list = Array.isArray(raw?.apps) ? raw.apps : [];
+    return list.filter((a) => a && typeof a.url === "string");
+  } catch {
+    return [];
+  }
+}
+
+// A real path must live under this dir, not just start with it. Stops "dataDir/apps/../something"
+// and a "dataDir/appsEvil" match. Both sides are realpath'd so macOS's /tmp → /private/tmp symlink
+// (and a dataDir mkdtemp'd under it) doesn't fool the comparison.
+function isInside(parent, child) {
+  let a, c;
+  try {
+    a = fs.realpathSync(parent);
+    c = fs.realpathSync(child);
+  } catch {
+    return false; // no apps folder yet, so nothing is inside it
+  }
+  if (a === c) return false;
+  const rel = path.relative(a, c);
+  return rel && !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
+function err(kind, message) {
+  const e = new Error(message);
+  e.kind = kind;
+  return e;
+}
+
+// The frame URL → an app folder under <dataDir>/apps/<slug>/. Realpath catches symlink escapes; if
+// the real path points outside the apps dir the frame isn't one of ours.
+function appFolderFromUrl(dataDir, frameUrl) {
+  if (typeof frameUrl !== "string" || !frameUrl) throw err("not-weft", "The page has no URL.");
+  let url;
+  try {
+    url = new URL(frameUrl);
+  } catch {
+    throw err("not-weft", "The page's URL isn't valid.");
+  }
+  if (url.protocol !== "file:") throw err("not-weft", `Open this app in Weft on your Mac to load its data (got ${url.protocol}).`);
+  // file: URLs are percent-encoded; realpathSync wants the OS form.
+  let real;
+  try {
+    real = fs.realpathSync(decodeURIComponent(url.pathname));
+  } catch {
+    throw err("not-weft", "The page's file path doesn't exist.");
+  }
+  const appsDir = path.join(dataDir, APPS_DIR);
+  if (!isInside(appsDir, real)) throw err("not-weft", "Open this app in Weft on your Mac to load its data.");
+  // The folder is real's parent, and it has to be one app's own folder (<apps>/<slug>), not the apps
+  // folder itself or a folder nested deeper in an app, which could carry a manifest of its own.
+  const folder = path.dirname(real);
+  if (path.dirname(folder) !== fs.realpathSync(appsDir)) throw err("not-weft", "A data app's page sits in its own folder in ~/.weft/apps.");
+  // A missing weft-app.json makes this not a data app (a plain saved page could live here too).
+  const manifestPath = path.join(folder, "weft-app.json");
+  if (!fs.existsSync(manifestPath)) throw err("not-weft", "This app has no weft-app.json.");
+  return { folder: real, manifestPath };
+}
+
+const VALID_ENV = new Set(["development", "preview", "production"]);
+
+// One read entry in the manifest, normalised.
+function normaliseRead(name, read) {
+  if (!READ_NAME.test(name)) throw err("manifest", `Read name ${JSON.stringify(name)} must be lowercase, with digits, _ or -.`);
+  if (!read || typeof read !== "object") throw err("manifest", `Read ${name} must be an object.`);
+  if (read.supabase !== undefined) {
+    if (typeof read.supabase !== "string" || !RPC_FN.test(read.supabase)) {
+      throw err("manifest", `Read ${name}'s supabase function isn't a Postgres identifier.`);
+    }
+    if (read.args !== undefined && (typeof read.args !== "object" || read.args === null || Array.isArray(read.args))) {
+      throw err("manifest", `Read ${name}'s args must be an object.`);
+    }
+    return read;
+  }
+  if (read.ga4 !== undefined) {
+    if (typeof read.ga4 !== "object" || read.ga4 === null || Array.isArray(read.ga4)) {
+      throw err("manifest", `Read ${name}'s ga4 must be an object.`);
+    }
+    return read;
+  }
+  throw err("manifest", `Read ${name} must have a "supabase" or "ga4" key.`);
+}
+
+// Plain object check used by the top-level fields' validation. Returns true when value is a
+// non-null, non-array object, the shape the manifest treats as a map.
+function isObjectMap(v) {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+// The top-level fields the manifest is allowed to have. Each one short-circuits with its own
+// plain-English error so the page can show what to fix.
+function normaliseTop(parsed) {
+  if (!parsed || typeof parsed !== "object") throw err("manifest", "weft-app.json must be an object.");
+  if (!parsed.name || typeof parsed.name !== "string") throw err("manifest", "weft-app.json is missing a name.");
+  if (parsed.env !== undefined && !VALID_ENV.has(parsed.env)) {
+    throw err("manifest", `weft-app.json's env (${parsed.env}) must be development, preview or production.`);
+  }
+  if (parsed.folder !== undefined && typeof parsed.folder !== "string") {
+    throw err("manifest", "weft-app.json's folder must be a string path.");
+  }
+  if (parsed.supabaseUrl !== undefined && parsed.supabaseUrl !== null && typeof parsed.supabaseUrl !== "string") {
+    throw err("manifest", "weft-app.json's supabaseUrl must be a string.");
+  }
+  if (parsed.reads !== undefined && !isObjectMap(parsed.reads)) {
+    throw err("manifest", "weft-app.json's reads must be an object.");
+  }
+}
+
+// Reads weft-app.json from the folder. Plain errors only: the page shows them in its UI.
+function readManifest(manifestPath, folder) {
+  let parsed;
+  try {
+    parsed = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  } catch (e) {
+    throw err("manifest", `weft-app.json isn't valid JSON: ${e.message}`);
+  }
+  normaliseTop(parsed);
+  const reads = {};
+  for (const [name, read] of Object.entries(parsed.reads ?? {})) reads[name] = normaliseRead(name, read);
+  return {
+    name: parsed.name,
+    folder: parsed.folder ?? folder, // the project folder the manifest says; else the app folder itself.
+    env: parsed.env ?? "development",
+    supabaseUrl: parsed.supabaseUrl ?? null,
+    reads,
+  };
+}
+
+// Loads the saved app whose url lives in the same folder as the frame. apps.json is the only source
+// for "saved"; a brand-new data app must be saved like any other mini app.
+function findSavedApp(dataDir, folder) {
+  const apps = loadApps(dataDir);
+  return apps.find((a) => {
+    let url;
+    try {
+      url = new URL(a.url);
+    } catch {
+      return false;
+    }
+    if (url.protocol !== "file:") return false;
+    let real;
+    try {
+      real = fs.realpathSync(decodeURIComponent(url.pathname));
+    } catch {
+      return false;
+    }
+    return path.dirname(real) === folder;
+  });
+}
+
+module.exports = {
+  senderOk,
+  appFolderFromUrl,
+  readManifest,
+  findSavedApp,
+  loadApps,
+  isInside,
+  APPS_DIR,
+  APPS_FILE,
+  err,
+};

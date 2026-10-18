@@ -167,3 +167,30 @@ describe("rememberAppShare", () => {
     expect(readApps()).toEqual([]);
   });
 });
+
+describe("insertAppAt", () => {
+  it("inserts the app at the requested index, clamping past the end to the size and negatives to 0", async () => {
+    const { apps } = await load();
+    const a = apps.saveApp("https://a.test", "A");
+    const b = apps.saveApp("https://b.test", "B");
+    apps.insertAppAt("c", { name: "C", url: "https://c.test", addedAt: 0 }, 0);
+    apps.insertAppAt("d", { name: "D", url: "https://d.test", addedAt: 0 }, 99);
+    apps.insertAppAt("e", { name: "E", url: "https://e.test", addedAt: 0 }, -5);
+    expect((readApps() as { id: string }[]).map((x) => x.id)).toEqual(["e", "c", a.id, b.id, "d"]);
+  });
+
+  it("is a no-op when the id is already in the list", async () => {
+    const { apps } = await load();
+    const a = apps.saveApp("https://a.test", "A");
+    expect(apps.insertAppAt(a.id, { name: "Other", url: "https://other.test", addedAt: 0 }, 0)).toBeUndefined();
+    expect(readApps()).toEqual([a]);
+  });
+
+  it("truncates a fractional position to an integer", async () => {
+    const { apps } = await load();
+    const a = apps.saveApp("https://a.test", "A");
+    const b = apps.saveApp("https://b.test", "B");
+    apps.insertAppAt("c", { name: "C", url: "https://c.test", addedAt: 0 }, 1.9);
+    expect((readApps() as { id: string }[]).map((x) => x.id)).toEqual([a.id, "c", b.id]);
+  });
+});

@@ -385,30 +385,21 @@ secretRun = require("./secret-run.cjs").setupSecretRun({ vault, dataDir: dataDir
 ({ vercel: vercelApi, env: vercelEnv } = require("./vercel.cjs").setupVercel({ ipcMain, dataDir: dataDir(), board: () => appView?.webContents, vault }));
 // And Supabase: its token is in the Keychain and its links are supabase/.temp/project-ref.
 supabaseApi = require("./supabase.cjs").setupSupabase({ ipcMain, dataDir: dataDir(), board: () => appView?.webContents, vault });
+// And data mini apps: the env grant + reads for panes saved as apps (electron/app-data.cjs, docs/architecture/mini-apps.md).
+require("./app-data.cjs").setupAppData({ ipcMain, dataDir: dataDir(), vault, readLink: require("./supabase.cjs").readLink, owns: (wc) => pane.owns(wc) });
 // And BlastCP: its sign-in is in the Keychain too, and which property a folder posts as is in the data folder.
 require("./blastcp.cjs").setupBlastcp({ ipcMain, dataDir: dataDir(), board: () => appView?.webContents });
 // And Cloudflare: its token is in the Keychain and which Worker or Pages project a folder is is in the data folder.
 require("./cloudflare.cjs").setupCloudflare({ ipcMain, dataDir: dataDir(), board: () => appView?.webContents });
-// The board's first cards are on screen: save this launch's timing and tell the board if it ran slow.
-ipcMain.handle("startup:ready", () => timer.finish());
 // Keep Working (electron/keep-working.cjs): the board's Settings → General → Laptop mode card; the
 // wiring lives in electron/keep-working-ipc.cjs to keep main.cjs under the size budget.
 require("./keep-working-ipc.cjs")({ ipcMain, keepWorking: menus.keepWorking, getBoardContents: () => appView?.webContents });
-ipcMain.on("badge:set",(_e, count) => menus.refreshWaiting(Number(count) || 0));
-ipcMain.on("splash:action", async (_e, action) => {
-  // "relaunch": a drawer whose main side arrived after launch (BlastCP) starts Weft again on the new code.
-  if (action === "relaunch") app.relaunch();
-  if (action === "quit" || action === "relaunch") return app.quit();
-  if (action === "logs") return shell.openPath(app.getPath("logs"));
-  if (action !== "retry") return;
-  if (!server) return boot();
-  await startup.show("Restarting…");
-  try {
-    await server.restart();
-    await startup.loadBoard(server.url);
-  } catch (err) {
-    startup.fail(err.message);
-  }
+// Splash IPC: the start screen's button row, the launch timing handshake and the dock badge count
+// (electron/startup-ipc.cjs). server and menus are getters: they're set later, at boot.
+require("./startup-ipc.cjs")({
+  ipcMain, app, shell, timer, boot, startup,
+  getServer: () => server,
+  getMenus: () => menus,
 });
 
 // ---- Lifecycle ----
