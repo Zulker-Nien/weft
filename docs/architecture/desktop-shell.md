@@ -134,6 +134,11 @@ A native `WebContentsView` overlaid on the board. Lazily created on first
   them as `mcp__browser__*` MCP tools (`open_url`, `read_page`, `screenshot`,
   `click`, `type_text`). The board itself drives the pane over IPC
   (`electron/preload.cjs`).
+- The routes beyond `/browser/*` (account session, vault blanks, folder access, restart when idle,
+  webhooks, Vercel and Supabase status for the copilot, board view) live in `electron/pane-routes.cjs`
+  (`paneRoutes(deps)`), which `main.cjs` calls with getters because the vault, Vercel and Supabase
+  are set up after the pane. It replaced a 25-line inline block in `main.cjs` (Extract Module),
+  which is how its size cap went down.
 - `POST /browser/url` returns the URL a card's page shows ("" with no page).
   `lib/show.ts` uses it, with `paneUrl()` / `openInPane()` in
   `lib/browser-tools.ts`, to keep the pane from being empty or stale: a working

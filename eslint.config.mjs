@@ -8,6 +8,9 @@ const LINE_COUNT = { skipBlankLines: true, skipComments: true };
 
 // Follow-up: split these files (longest first; SOUL.md hotspots) and extract the complex functions,
 // then lower or delete each entry. Never raise one: a file that grows past its number fails lint.
+// The cap is there to make you refactor: when a file hits it, name the smell and move code out
+// (Extract Function or Module), then lower its number. Never get under it by joining lines, dropping
+// blank lines or deleting comments; that hides the smell and makes the file worse.
 const OVERSIZE = {
   "components/Board.tsx": 933,
   "lib/runner.test.ts": 901,
@@ -20,7 +23,7 @@ const OVERSIZE = {
   "lib/board-view.test.ts": 520,
   "components/SettingsDialog.tsx": 471,
   "lib/use-dictation.test.ts": 425,
-  "electron/main.cjs": 399,
+  "electron/main.cjs": 389,
   "lib/import.ts": 391,
   "lib/library.ts": 391,
   "components/ReplyBox.tsx": 357,
