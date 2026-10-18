@@ -59,7 +59,7 @@ import { filterHasFocus as filterHasFocusImpl, focusFilter as focusFilterImpl, j
 import { announce, showPage, without } from "@/lib/board-helpers";
 import { cardHandlers } from "@/lib/card-handlers";
 import BoardHeader from "./BoardHeader";
-import BoardColumn, { COLUMN_LIMIT } from "./BoardColumn";
+import BoardColumn, { COLUMN_LIMIT, CardSkeleton } from "./BoardColumn";
 import BoardToast from "./BoardToast";
 
 // Each loads in its own CrashGuard (components/guarded.tsx), so a piece a thread left half-written, even one that
@@ -69,7 +69,7 @@ const CopilotButton = guarded(() => import("./CopilotButton"), { inline: true, w
 const CopilotLane = guarded(() => import("./CopilotLane"), { what: "copilot", className: "self-stretch shrink-0" });
 const RestartChip = guarded(() => import("./RestartChip"), { inline: true, what: "restart chip" });
 const BrowserPane = guarded(() => import("./BrowserPane"), { what: "browser pane", className: "m-3 w-[360px] self-start" });
-const CardView = guarded(() => import("./CardView"), { what: "card" });
+const CardView = guarded(() => import("./CardView"), { what: "card", placeholder: <CardSkeleton /> });
 const SideRail = guarded(() => import("./LibraryRail"), { what: "rail", className: "m-3 w-[220px] self-start" });
 const TagsDialog = guarded(() => import("./TagsDialog"), { what: "tags dialog", className: "fixed left-4 top-16 z-50" });
 const PaneCardMarks = guarded(() => import("./PaneCardMarks"), { inline: true, what: "card marks" });
