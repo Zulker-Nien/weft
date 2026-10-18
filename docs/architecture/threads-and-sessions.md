@@ -519,10 +519,19 @@ last 400 items. That function drops user messages the person didn't type (`is_me
 strips embedded `<system-reminder>` and `<user-prompt-submit-hook>` sections, turns
 `<bash-input>` into `! …`, shows slash commands the user typed but not completed local
 commands (like `/clear`) or their output, and attaches each `tool_result` to its `tool_use`
-by id. Images go through `lib/thread-media.ts` into the attachments folder: chat uploads of PNG,
-JPEG and GIF are converted to WebP by `lib/attachments.ts` before composer previews, stored thread
-refs and model image blocks use them; SVG and non-image uploads keep their original bytes, and
-malformed rasters fall back to the original upload. Screenshots in tool results become the tool
+by id. Images go through `lib/thread-media.ts` into the attachments folder, and PNG, JPEG and GIF end up as WebP
+(`lib/attachments.ts`, `sharp`, quality 85) on every way in; SVG and non-image files keep their original bytes, and a raster
+`sharp` can't decode is kept as it was:
+- composer uploads (`saveAttachment`): converted before the response, the original removed;
+- live tool screenshots and the pane thumbnail after each turn (`saveImageData`, async): the WebP comes back and no
+  original is kept (`liveToolResult` in `lib/thread-media.ts` makes `handleToolResults` in `lib/runner-turn.ts` wait for it;
+  text-only results still store at once);
+- images a transcript read picks up (`saveAttachmentData`, sync, so it can't wait): the original is written, a WebP is made
+  beside it in the background, and the next save of the same bytes returns the WebP. Threads may still point at the original.
+
+`scripts/webp-backfill.mjs` converts what was saved before this (`--convert` is safe while Weft runs; `--rewrite` needs Weft
+quit, points `board.json` and `threads/` at the WebP copies and deletes each original that nothing else, such as a
+`~/.claude/projects` transcript or a saved page, still mentions). Screenshots in tool results become the tool
 item's `images`, images pasted into Claude Code become inline
 `![…](path)` refs in the user's text, and local files the agent shows with `![…](path)` are
 copied in and the ref rewritten. `transcriptAt` records what was read, so unchanged sessions aren't re-read. A card
