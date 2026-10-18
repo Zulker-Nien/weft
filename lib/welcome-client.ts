@@ -1,0 +1,49 @@
+import type { GithubProfile } from "./github-profile";
+import type { Welcome } from "./welcome";
+import type { WelcomeProfile, WelcomeProject } from "./welcome-preview";
+
+// The board's side of /api/welcome (lib/welcome.ts): load it, answer it, change it in Settings.
+
+export interface WelcomePreview {
+  projects: WelcomeProject[];
+  profile: WelcomeProfile;
+  github: GithubProfile | null;
+}
+
+export interface WelcomeView {
+  welcome: Welcome | null;
+  preview?: WelcomePreview;
+}
+
+export interface WelcomeAnswer {
+  countHistory: boolean;
+  fresh: boolean;
+  skip: string[];
+}
+
+const WRITE = { "content-type": "application/json", "x-threadboard": "1" };
+
+async function json<T>(res: Response): Promise<T> {
+  const body = (await res.json().catch(() => ({}))) as T & { error?: string };
+  if (!res.ok) throw new Error(body.error || `Request failed (${res.status}).`);
+  return body;
+}
+
+export const loadWelcome = (replay = false) => fetch(`/api/welcome${replay ? "?replay=1" : ""}`).then((r) => json<WelcomeView>(r));
+
+// Settings → General's "Replay the welcome" asks the dialog to show itself again, as a preview.
+export const REPLAY_EVENT = "weft:welcome-replay";
+
+export const answerWelcome = (answer: WelcomeAnswer) =>
+  fetch("/api/welcome", { method: "POST", headers: WRITE, body: JSON.stringify(answer) }).then((r) => json<{ welcome: Welcome }>(r));
+
+export const changeWelcome = (patch: { countHistory: boolean } | { importAll: true }) =>
+  fetch("/api/welcome", { method: "PATCH", headers: WRITE, body: JSON.stringify(patch) }).then((r) => json<{ welcome: Welcome | null }>(r));
+
+// Screen 2's ticks to the answer: OK skips the unticked folders, Start fresh brings in none of the old ones.
+export function answerFor(countHistory: boolean, projects: WelcomeProject[], ticked: ReadonlySet<string>, fresh: boolean): WelcomeAnswer {
+  return { countHistory, fresh, skip: fresh ? [] : projects.filter((p) => !ticked.has(p.cwd)).map((p) => p.cwd) };
+}
+
+// The folders ticked to start with: every real project, no scratch ones.
+export const defaultTicks = (projects: WelcomeProject[]) => new Set(projects.filter((p) => !p.scratch).map((p) => p.cwd));
