@@ -202,3 +202,10 @@ then throws `X is not defined` when it draws. It rebuilds the file before the ed
 new ones don't, and reports each that the file still uses outside comments, strings, properties (`a.x`) and object
 keys (`x:`), unless the file now declares it itself. Text only, like the import guard.
 
+
+## Test runs (not a hook)
+
+No hook stands between a thread and `vitest`; the guarding happens around the run instead. `pnpm test` takes turns
+for whole-suite runs (`scripts/run-tests.mjs`), a worker whose run died ends itself (`lib/orphan-guard.ts`), a
+stopped card's Bash commands end with its CLI (`lib/process-tree.ts`), and the server reaps leftover workers every
+5 minutes (`lib/worker-reaper.ts`). See "Bash commands and orphaned test workers" in threads-and-sessions.md.

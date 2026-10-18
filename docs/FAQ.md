@@ -114,9 +114,9 @@ code-quality score, the uncommitted pile (**+N/−N**), your streak and, at the 
 ![The Weft board over the Canyon scene: five columns of cards, project chips, code quality, the uncommitted counter and streak in the header](../public/brand/faq/tour-board.jpg)
 
 **An open card.** The thread on the left, the page its thread opened on the right (here a chart it drew), and the
-glance rail of every turn and page beside it. A finished card hands you a review step to try and a **Done** button.
+show rail of every turn and page beside it. A finished card hands you a review step to try and a **Done** button.
 
-![An open card: the conversation and review step on the left, the burndown page the thread drew on the right, the glance rail at the edge](../public/brand/faq/tour-open-card.jpg)
+![An open card: the conversation and review step on the left, the burndown page the thread drew on the right, the show rail at the edge](../public/brand/faq/tour-open-card.jpg)
 
 **The copilot, code quality, connectors and your loom.**
 
@@ -384,7 +384,7 @@ Accounts shows each CLI's login status.
 
 ### Can I read and edit the files a thread is changing?
 
-Yes. An open card has four columns: thread, editor, browser pane and glance rail. Each one closes (a thin strip
+Yes. An open card has four columns: thread, editor, browser pane and show rail. Each one closes (a thin strip
 reopens it, ⌥⌘1–4) and resizes by dragging. Click a file path in the thread to open it in the editor: CodeMirror for
 code, a rich editor for Markdown, and a Changes view against git HEAD where you can revert one chunk at a time. ⌘S
 saves and ⌘P opens a file. The file reloads live while the thread edits it, and if you both changed it you get a
@@ -450,7 +450,7 @@ checklist first and tick steps off as they go.
 
 ### What's the strip of little pictures on the right of the pane?
 
-The glance rail: one mini per turn of the open thread and per page the pane showed, newest at the bottom like the chat.
+The show rail: one mini per turn of the open thread and per page the pane showed, newest at the bottom like the chat.
 Click one and the chat scrolls to that turn while the pane goes back to what it showed then. It hides in windows under
 980px.
 

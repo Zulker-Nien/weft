@@ -69,6 +69,31 @@ it kills processes whose parent is PID 1, that are `Puku`, a `puku-cli` wrapper 
 binary from Weft's `node_modules`, and whose cwd (from `lsof`) is in a project or card folder. A puku you run
 in a terminal has the shell as its parent, so it never matches.
 
+### Bash commands and orphaned test workers
+
+Claude Code runs every Bash command in a process group of its own (the command's `zsh` is its group's
+leader), so signalling the CLI's group never reached a `pnpm test` it had running. Vitest's forks pool makes
+it worse: tinypool's workers never watch their parent. An idle worker exits once the IPC channel closes, but one
+mid-test keeps running under PID 1, and a test with a live timer keeps it running for good. On 2026-10-17 twelve
+`node (vitest N)` workers, 24-56 minutes old, hung the Mac. Reproduced by killing a run's `node (vitest)`
+with SIGKILL or SIGTERM mid-test: every busy worker reparented to PID 1 and kept its CPU. Four layers now stop it:
+
+- **Workers end themselves.** `test/orphan-guard-setup.ts` (vitest `setupFiles`) calls `guardOrphan()`
+  (`lib/orphan-guard.ts`): a worker SIGKILLs itself on the IPC `disconnect`, or when a 2 s check sees its ppid
+  change. SIGKILL, because vitest swaps `process.exit` out during a test. In the same repro every worker was
+  gone within 4 s.
+- **Stopping a card takes its Bash commands with it.** `endGroup()` first lists the groups below the CLI's
+  (`lib/process-tree.ts`, one `ps -axo pid=,ppid=,pgid=`), while the CLI is still alive to link them, and
+  sends them the same SIGTERM, then SIGKILL after the grace. `killAllGroups()` does the same on server exit.
+- **Whole-suite runs take turns.** `pnpm test` and `pnpm coverage` go through `scripts/run-tests.mjs`: a run
+  with no file filter waits for the machine-wide `test` lock (`runHolding()` in `scripts/one-at-a-time.mjs`,
+  which also passes a SIGINT/SIGTERM/SIGHUP on to the command it holds the lock for). A run of named files
+  goes straight through.
+- **Backstop.** `startWorkerReaper()` (`lib/worker-reaper.ts`, started from `prewarm()`) reaps every 5 min
+  any `node (vitest N)` whose parent is PID 1, at least 2 min old, with its cwd in a project or card folder.
+  That catches a worker stuck in a synchronous loop, which can't reach its own check. A run whose
+  `node (vitest)` is alive keeps its workers' parent, so another card's tests are never touched.
+
 ### Idle puku CLIs (`lib/puku-idle.ts`)
 
 An idle puku-cli used 8-15% CPU (more with a big session) while Claude Code idled at 0.4%. A CPU profile over

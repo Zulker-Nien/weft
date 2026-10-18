@@ -31,7 +31,7 @@ Total files: 14. Over 500 lines: 0.
 | 137 | docs/architecture/runner.md |
 | 104 | docs/architecture/permissions.md |
 | 88 | docs/architecture/index.md |
-| 63 | docs/architecture/glance.md |
+| 63 | docs/architecture/show-rail.md |
 | 48 | docs/file-sizes.md |
 
 ## Delta from 2026-10-10 (earlier today)
@@ -50,7 +50,7 @@ Total files: 14. Over 500 lines: 0.
 Largest-files changes:
 
 - `docs/ROADMAP.md`: 285 → 288 (+3)
-- `docs/architecture/glance.md`: new at 63 lines
+- `docs/architecture/show-rail.md`: new at 63 lines
 
 All other rows unchanged. The earlier-today snapshot only saw the
 `docs/` tree (plus README.md); `app/`, `lib/`, `components/`,

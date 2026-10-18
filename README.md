@@ -39,7 +39,7 @@ same time; Next.js allows one dev server per project folder.
 - **Board view for threads**: a thread can screenshot, click, hover, type into and read Weft's own board window
   (`mcp__board_view__*`), so a thread changing a drawer or dialog tests it in the real app instead of asking you to click
   through. Revealed secrets read as ‹secret› and are blanked in its screenshots (docs/architecture/board-view.md).
-- **Editor column**: an open card is four columns, thread · editor · pane · glance; each closes to a thin strip
+- **Editor column**: an open card is four columns, thread · editor · pane · show; each closes to a thin strip
   (click it, or ⌥⌘1–4, to reopen; the editor opens from the ✏︎ beside the thread's ✕) and the line between any two
   drags to resize. Click any file path in the thread, or ⌘P, to open the
   file: CodeMirror for code, a what-you-see markdown editor that leaves the lines you didn't touch alone, and a Changes
@@ -73,7 +73,8 @@ same time; Next.js allows one dev server per project folder.
   automatic reload when a local dev server comes back (`electron/pane-error.cjs`).
 - **Themes**: Settings → General (or ⌘K "Theme: …") picks System, Light or Dark, or a scene: Twin Suns,
   Canyon, Coast Road, Neon City, Snow Pass or Salt Flats puts that picture behind the board with a palette drawn
-  from it and clear columns (`lib/theme.ts`, colors in `app/globals.css`; docs/architecture/themes.md).
+  from it and clear columns. The first launch opens on Twin Suns, or Salt Flats when the Mac is in light mode
+  (`lib/theme.ts`, colors in `app/globals.css`; docs/architecture/themes.md).
 - **Menu bar icon**: shows how many cards need you and lists them; click one to open it.
 - **Keep Working** (menu bar icon): your Mac stays awake with the lid shut, so threads keep running in a bag.
   Choose **Until threads finish** (sleep comes back once no card has been running for two minutes, 8 hours at most) or 1, 2, 3 or 8 hours.
@@ -162,6 +163,10 @@ The new-thread dialog (⌘N) and every card's reply box use the same editor:
   thread from cache at about a tenth of the price. After it, the chip reads `cache:cold 120k`: your
   next message sends the whole thread again at full price, which uses more of the 5-hour limit. For a
   new topic, a fresh card is cheaper.
+- **Limits burndown.** Hover over the status strip's `5hr` / `7d` to see the week so far: the weekly
+  limit left in red, the 5-hour one in green, red lines where either ran out, and green lines at the
+  5-hour resets (light), the next one (strong) and the weekly reset (strongest), with an even-pace line
+  to the weekly reset. Weft keeps a sample each time a thread's limits change, in `~/.weft/limits.jsonl`.
 - **Suggested next message.** After a turn, a Claude thread's reply box shows the CLI's guess at what
   you'll say next as its placeholder (as the Claude CLI does). Tab in the empty box fills it in to edit
   or send; it never sends on its own. It rides the turn's prompt cache, so it costs next to nothing,
@@ -220,6 +225,12 @@ whenever cards are waiting in it.
 Drag a Backlog card onto another one to set the order: drop on its top half to place the card before it,
 or its bottom half to place it after. Weft saves that order and uses it for the Backlog list, whatever
 sort is selected for the other columns.
+In the New thread dialog, **⌘B** adds the thread to the Backlog (the same as **Add to backlog**). Each Backlog card has
+an archive button on hover. The Backlog header has two more: the flag saves the cards it shows as a **sprint** ("Sprint 3 ·
+Oct 18"), and the box archives them all after an "Are you sure?" that can save them as a sprint first. Click the word
+**Backlog** for your sprints: what became of each one's cards (archived, started), **Restore N** to bring its archived
+cards back, double-click to rename, and delete (the sprint only, never its cards). Kept in `~/.weft/sprints.json`
+(`lib/sprints.ts`, `lib/sprint-store.ts`, `app/api/sprints`, `components/BacklogActions.tsx`, `components/SprintsMenu.tsx`).
 
 Replying to a card continues the same CLI session, so the agent keeps its context.
 
@@ -282,6 +293,40 @@ keeps their file dumps out of the thread's context. Settings → Models → Use 
 
 Idle threads pick a change up on their next message.
 
+Weft keeps track of each thread's subagents and background commands from the events the CLI sends. A line
+above the reply box says what's running and what finished ("3 subagents running · 2 done") and opens to each
+one's elapsed time, tool count and latest line; the card's footer counts the running ones (⑂3). A thread with a
+background task running keeps its CLI open past the idle timeout, since closing it would end the task. If the CLI
+ends anyway (a Weft restart), the tasks it took down are marked cut off and named to the thread with your next
+message, so it checks their output or reruns them instead of waiting.
+Each running row has a ■ Stop that ends just that task.
+
+## Services and dev servers
+
+The rail's 🖥 **Services** drawer lists everything Weft spawned: each thread's CLI (named by its card) with whatever
+it started, each dev server, each terminal shell and any other command, with its CPU and memory. The top says what
+they use out of this Mac ("2.8 of 10 cores · 7.9 GB of 16 GB"), splits it by kind (threads, dev servers, Weft,
+terminals) in a CPU bar and a memory bar whose empty part is the headroom left, and names the busiest service and
+the one holding the most memory. Expand a row to see its processes; **End** stops a service (a thread's CLI closes the way keep-alive would close
+it), and the ✕ beside a process ends just that one. Weft itself is listed so you can see what it costs, but can't
+be ended from there. The menu at the top sets how often it refreshes (every 1, 2, 5, 10 or 30 seconds, or paused).
+
+At the top of the drawer, above the CPU and memory, **Dev servers** has one row per folder your open cards work in, with the command that starts its
+dev server, found in its files: a `package.json` script (`dev`, `start`, `serve`, `preview` or one that runs `next dev`,
+`vite` and the like) with the lockfile's package manager, a Procfile's `web:` line, Rails, Django, a deno task, a
+Makefile target or wrangler. A folder with more than one has a picker. **Start** runs it through Weft; once it runs,
+**Stop** ends it and **Restart** starts it again, and the row says what happened ("Started 23:40 · starting", "Restarted 23:41 · 2× ·
+running") and links its url. A server a card already started is restarted, not started twice, and a port something
+else already answers on is named, and a server a thread started names that card ("· by Fix login"), which a click opens.
+Weft's own folder is listed last as "Weft itself" with no Start or Stop (its dev server is the one serving the board),
+and a link to the address it runs on (`:1024 ↗`), which opens in your browser since the pane won't show Weft inside itself. In the
+list below, a thread's name (a card's CLI, its dev server) opens its card too.
+
+Dev servers aren't kept inside threads. A thread starts one through Weft (`mcp__devservers__start`, which
+`/weft:preview` uses), so it keeps running after the thread's CLI closes and doesn't hold the CLI open. Its row
+has its url (opens in the browser pane), Restart, and Start once it stopped. A server a thread still starts with
+Bash in the background shows too, stop-only, and stays out of the thread's task strip.
+
 ## No waiting for CLIs to start
 
 A CLI takes 12–50s to start with a full Claude Code setup (MCP servers, plugins, hooks), so the
@@ -324,8 +369,9 @@ through the stages it is (Planning to Done) with what's left, and the footer rea
 `● weft 12m · 1t · $1.22` (the dot is the CLI: orange for claude, purple for puku).
 
 A card whose title says nothing (a picked-up session called "Image attachment", "Untitled thread", or just its
-prompt's first line) is renamed after its first turn, by Haiku, to something like
-"🐞 Compile Error: missing CoverageBadge import"; its emoji becomes the tile. A title you typed or edited is
+prompt's first line), or one longer than six words, is renamed after its next turn, by Haiku, to 3 to 6 words
+like "🐞 Compile Error: missing CoverageBadge import"; its emoji becomes the tile. Titles are never cut off
+mid-sentence. A title you typed or edited is
 never replaced, and Claude Code's own session title stops overwriting it once Weft has named the card.
 
 ## Skills and automations
@@ -337,6 +383,12 @@ loads, so they run as `/weft:<name>`:
   thread changed, then a push of the branch. A copy of the `done` skill from `fotoflo/claude-skills`.
   **Push on Done** in Settings → Automations (on by default) controls the push: it's a plain `git push` (`-u origin`
   for a branch's first), never forced, so a rejected push leaves the commit local and the card in Review.
+  The push is the deploy: on a project linked to Vercel, `deploy.mjs` then checks that Vercel deploys from
+  origin's repo (by id, so a renamed or re-created repo is caught) and waits for the pushed commit's build to
+  finish, behind any deploys already running. A failed build comes back with its log: the wrap-up fixes and
+  pushes again (twice at most) when the cause is its own, else starts a card to fix the build; either way the
+  card stays in Review until it deploys. Files other cards also edited are committed whole,
+  and the wrap-up never ends on a question.
 - `/weft:commit` commits the thread's changes with a conventional message (the `commit` skill,
   without its Vercel preview deploy).
 
@@ -445,8 +497,11 @@ off). Hover it for today's numbers; click it for **Your loom**:
   scanning, Dependabot, security headers, SECURITY.md), Observability (analytics, error tracking, tracing,
   structured logs, a health route), Docs and Delivery. Every check Weft finds missing has **Set it up**,
   which starts a card to install it. All five branches make the project **🚀 Production-ready**.
-- **League.** The ladder (Cotton to Gold Thread) is there, locked until Weft has accounts; this week's XP is
-  what it will rank you by.
+- **League.** Signed in to Weft, you're in a weekly league of up to 30 builders, Cotton to Gold Thread, ranked by the
+  XP you earn Monday to Sunday; the top 7 move up and the bottom 5 move down (fewer in a small league). Each row shows
+  that builder's week (XP, cards shipped, streak, level, the badges they earned since Monday) and opens their
+  `weft.zip/@username`. Only those numbers and your name go up, never prompts, code or project names. New accounts
+  join the current week's Cotton league the day they sign up.
 
 Everything comes from `~/.weft/activity.jsonl`, an append-only log the board writes as cards change
 (`lib/activity.ts`). The first time, it fills itself from your existing cards, imported Claude Code sessions
@@ -523,11 +578,15 @@ Settings → Sync lists your recent projects with a switch each. A project that'
 workspace on Supabase while you're signed in: an outbox sends a batch when a turn ends (never on the way to starting one),
 pictures and pages go up once each by content, and the page shows the last sync, how many items went up, how many wait and the
 last error, with **Sync now**. At `weft.zip/<workspace>/board` the same cards show in the board's own columns and cards (stage,
-tags, model, picture or emoji, what's left), live, with the project chips, filter and sort above them, and a click opens the
-thread the way the desktop draws it, oldest first with tool runs folded, Markdown, screenshots and tool outputs loading when you
+tags, model, picture or emoji, what's left), live, in the desktop's own window: its header (New thread on N, your avatar with
+workspaces, Team, Billing and Sign out), the project chips, filter and sort, and the 38px rail (★ starred, Board, Team, Billing).
+A click opens the card framed over the board like on the Mac, its browser pane's page on the right (synced pages sandboxed, a
+localhost page as its last capture) and the thread on the left the way the desktop draws it, oldest first with tool runs folded, Markdown, screenshots and tool outputs loading when you
 open them. **New thread** on the web board starts a card on your Mac: pick one of your synced folders, write the prompt, and the Mac that
-owns the folder makes the card and runs it, then the board opens it (the Mac has to be on and running Weft). Replying to a running
-thread from the web isn't built yet, and thread text isn't encrypted yet, so
+owns the folder makes the card and runs it, then the board opens it (the Mac has to be on and running Weft). The open card's reply
+box is the desktop's own and sends to that Mac too: your message goes into the thread as if typed there (held until the running
+turn ends, or **Send now** to stop it first), a permission request or question the thread is waiting on can be answered right there,
+■ stops the turn, and what the thread says comes back within about a second. Thread text isn't encrypted yet, so
 turn it on only for projects you're fine storing on Weft's servers. Separately, a long thread opens on its newest 50 items
 and loads older ones as you scroll up. More in [docs/architecture/cloud-sync.md](docs/architecture/cloud-sync.md).
 
@@ -541,6 +600,10 @@ outputs stay on your Mac. It reads what sync uploads, so the dialog turns sync o
 `weft.zip/<workspace>/board`, with Copy and Open, a list of who can open it (members and pending invites), and an email box.
 An address that already has a Weft account joins the workspace at once; one that doesn't gets an email inviting them to sign
 up and join. Only owners and admins invite; a teammate sees the link and the list.
+
+Every account has a public profile at `weft.zip/@username` (your GitHub login): picture, name, a GitHub link, when you
+joined, and the threads you've shared publicly. It never shows your email or workspace. More in
+[docs/architecture/profiles.md](docs/architecture/profiles.md).
 
 ## Secrets vault
 
@@ -625,7 +688,8 @@ does, so the Supabase CLI in any thread works on the right project. A folder who
 Supabase MCP server at a project shows up linked. A linked project shows its org, state (Healthy, Paused…; **Restore**
 wakes a paused one), region, API URL, which of the folder's `supabase/migrations` haven't been applied yet (with **Migrate**, a card that
 reviews them, applies them on your OK and lines the files up with Supabase's history), and links
-to its auth users, logs, API keys, usage and dashboard. More in
+to its auth users, logs, API keys, usage and dashboard. A thread that writes a migration applies it itself in the same
+turn; it asks first, with buttons, only when the migration drops or rewrites data. More in
 [docs/architecture/supabase.md](docs/architecture/supabase.md).
 
 ## Cloudflare
@@ -662,6 +726,14 @@ the copilot window. Each message you send it also carries a short note, which on
 sees, of what finished, needs you or failed on the board since your last message
 (`lib/copilot-digest.ts`); nothing runs a copilot turn on its own. "New chat" starts a fresh copilot session. In a normal browser tab the
 copilot opens as a pop-up at `/copilot`.
+
+Pick who your copilot is from its name in the lane header (`lib/copilot-personas.ts`). **Wingman**, the default, runs the
+board. **Founder** tests the business before you build it: competitors, buyers, pricing, offer and unit economics, one
+thread per step writing to a `founder/` folder, every number traced to an input (adapted from
+[founder-skill](https://github.com/Jakeschincariol/founder-skill), MIT). **Captain** runs the work as a sprint: office
+hours, CEO, engineering and design reviews, build, a staff-engineer review, QA, ship, retro, each step a thread (adapted
+from [gstack](https://github.com/garrytan/gstack), MIT). Both run those projects' own skills when they're installed.
+Switching persona starts a new chat, since the copilot reads its persona only when its CLI starts.
 
 A new copilot chat suggests what to ask: up to four chips Haiku writes from what Weft knows about your work, most
 urgent first ("Restart the deckcp auth wiring card, it was killed by SIGTERM", "Fill the Stripe vault blanks in weft:
@@ -724,7 +796,7 @@ Nothing runs on your Mac. `pnpm resend -- create|verify|webhook` sets up the Res
   screenshot, click, type_text) that drive the side pane. They're allowed without a prompt. Its
   `BROWSER_PROMPT` asks a thread facing a long task to open its plan as a page in its first tool calls and
   tick the steps off as it builds, so you watch the plan instead of a blank pane.
-- `lib/glance.ts` keeps the pane from ever being empty or stale. A card whose pane has no page gets a
+- `lib/show.ts` keeps the pane from ever being empty or stale. A card whose pane has no page gets a
   working page the moment its turn starts: a dimmed, slowly drifting scene of the Weft hovercar (one per card, from
   `electron/assets/backdrop-*.jpg` plus the splash's desert) behind the card's title, your ask with pasted images as
   thumbnails, and a running clock; the splash screen's desert scene sits beside the New thread
