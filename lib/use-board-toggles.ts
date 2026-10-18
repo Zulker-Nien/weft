@@ -44,7 +44,7 @@ export function useBoardToggles({
   const toggleBrowser = useCallback(() => {
     // An open card and its browser are one window: they open and close together.
     if (selectedRef.current) return;
-    if (window.threadboard) window.threadboard.browser.setVisible(!browserVisible);
+    if (window.weft) window.weft.browser.setVisible(!browserVisible);
     else setWebBrowserOpen(!browserVisible);
   }, [selectedRef, browserVisible, setWebBrowserOpen]);
 

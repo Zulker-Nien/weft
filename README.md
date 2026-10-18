@@ -841,9 +841,9 @@ Nothing runs on your Mac. `pnpm resend -- create|verify|webhook` sets up the Res
   update page when that page won't load (a dev server that isn't running).
 - `app/api/*` is the backend: cards, threads, permissions, and a server-sent events stream
   (`/api/events`) that keeps the board live. Every route only answers requests addressed to
-  127.0.0.1/localhost, and writes need an `x-threadboard` header, so other websites can't drive it.
+  127.0.0.1/localhost, and writes need an `x-weft-token` header, so other websites can't drive it.
 - Cards live in `~/.weft/board.json`, thread views in `~/.weft/threads/`. The CLIs keep their own
-  full transcripts as usual. Set `THREADBOARD_DATA` to use another folder. A `~/.threadboard`
+  full transcripts as usual. Set `WEFT_DATA` to use another folder. A `~/.threadboard`
   folder from before the rename is moved to `~/.weft` the first time the app starts.
 
 ## Troubleshooting

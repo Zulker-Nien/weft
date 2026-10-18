@@ -7,7 +7,7 @@ const runner = vi.hoisted(() => ({ answerPermission: vi.fn(), waitPermission: vi
 vi.mock("@/lib/runner", () => runner);
 
 const route = await import("./cards/[id]/permission/route");
-const WRITE = { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { host: "localhost:3457", "x-weft-token": "1", "content-type": "application/json" };
 const post = (body: unknown) =>
   route.POST(new Request("http://localhost:3457/api/cards/c1/permission", { method: "POST", headers: WRITE, body: JSON.stringify(body) }), {
     params: Promise.resolve({ id: "c1" }),

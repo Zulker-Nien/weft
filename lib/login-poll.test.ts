@@ -63,7 +63,7 @@ function statusSays(stdout: string) {
 beforeEach(async () => {
   vi.useFakeTimers();
   vi.resetModules();
-  delete (globalThis as { __threadboardLogins?: unknown }).__threadboardLogins;
+  delete (globalThis as { __weftLogins?: unknown }).__weftLogins;
   cp.children = [];
   cp.which.mockReset().mockImplementation((_file, [command]) => `/usr/local/bin/${command}\n`);
   cp.spawn.mockReset().mockImplementation(() => {

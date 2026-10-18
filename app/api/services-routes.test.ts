@@ -36,7 +36,7 @@ vi.mock("@/lib/dev-launchers", () => ({
 const route = await import("./services/route");
 
 const READ = { host: "localhost:3457" };
-const WRITE = { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { host: "localhost:3457", "x-weft-token": "1", "content-type": "application/json" };
 
 function req(url: string, { method = "GET", body, headers = WRITE }: { method?: string; body?: unknown; headers?: Record<string, string> } = {}) {
   return new Request(`http://localhost:3457/api${url}`, {
@@ -57,7 +57,7 @@ beforeEach(() => {
 });
 
 describe("GET /api/services", () => {
-  it("lists the services without needing x-threadboard", async () => {
+  it("lists the services without needing x-weft-token", async () => {
     const res = await route.GET(req("/services", { headers: READ }));
     expect(res.status).toBe(200);
     const json = (await res.json()) as { services: { id: string }[]; machine: unknown };
@@ -85,7 +85,7 @@ describe("GET /api/services", () => {
 describe("POST /api/services", () => {
   const post = (body: unknown, headers: Record<string, string> = WRITE) => route.POST(req("/services", { method: "POST", body, headers }));
 
-  it("denies a write without x-threadboard", async () => {
+  it("denies a write without x-weft-token", async () => {
     const res = await post({ action: "kill", id: "cli:c1" }, { host: "localhost:3457", "content-type": "application/json" });
     expect(res.status).toBe(403);
     expect(killService).not.toHaveBeenCalled();
@@ -95,7 +95,7 @@ describe("POST /api/services", () => {
   it("rejects a foreign host even with the header", async () => {
     const res = await post(
       { action: "kill", id: "cli:c1" },
-      { host: "evil.test", "x-threadboard": "1", "content-type": "application/json" },
+      { host: "evil.test", "x-weft-token": "1", "content-type": "application/json" },
     );
     expect(res.status).toBe(403);
   });

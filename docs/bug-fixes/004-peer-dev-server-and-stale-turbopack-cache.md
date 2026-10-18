@@ -100,7 +100,7 @@ if (classified?.kind === "peer") {
   return;
 }
 if (classified?.kind === "module-not-found" && classified.exists) {
-  const dist = process.env.THREADBOARD_DIST || ".next";
+  const dist = process.env.WEFT_DIST || ".next";
   const distPath = path.join(ROOT, dist);
   log.write(`--- weft: stale module resolution for "${classified.spec}"; removing ${dist} and retrying\n`);
   try { fs.rmSync(distPath, { recursive: true, force: true }); } catch {}

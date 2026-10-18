@@ -34,10 +34,10 @@ vi.mock("@/lib/github-profile", () => githubMock);
 
 const route = await import("./welcome/route");
 
-const GET_WRITE = { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" };
+const GET_WRITE = { host: "localhost:3457", "x-weft-token": "1", "content-type": "application/json" };
 const write = (body?: unknown) => ({
   host: "localhost:3457",
-  "x-threadboard": "1",
+  "x-weft-token": "1",
   "content-type": "application/json",
   ...(body === undefined ? {} : { "content-length": String(JSON.stringify(body).length) }),
 });

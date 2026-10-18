@@ -52,7 +52,7 @@ The check happens in three places:
   (`/api/admin/users?skip&take&q&sort`).
 - `app/(admin)/admin/settings/page.tsx` — server component, calls
   `requireSuperAdminWeft()`, then fetches `/api/admin/local` over loopback
-  with the `x-threadboard` header (the same guard every API route uses).
+  with the `x-weft-token` header (the same guard every API route uses).
 
 ## Rail
 

@@ -8,11 +8,11 @@ const slowest = { name: "page", label: "board page load", ms: 5200 };
 const slow: StartupResult = { total: 9400, usual: 3100, slow: true, slowest };
 
 function bridge(startupReady?: () => Promise<StartupResult>) {
-  window.threadboard = { startupReady } as unknown as ShellBridge;
+  window.weft = { startupReady } as unknown as ShellBridge;
 }
 
 afterEach(() => {
-  delete window.threadboard;
+  delete window.weft;
 });
 
 describe("slowStartupMessage", () => {
@@ -53,7 +53,7 @@ describe("useStartupCheck", () => {
     renderHook(() => useStartupCheck(true, toast));
     bridge();
     renderHook(() => useStartupCheck(true, toast));
-    delete window.threadboard;
+    delete window.weft;
     renderHook(() => useStartupCheck(true, toast));
     await new Promise((r) => setTimeout(r, 0));
     expect(toast).not.toHaveBeenCalled();

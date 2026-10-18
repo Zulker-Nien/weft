@@ -31,7 +31,7 @@ export default function TerminalDrawer({
 }) {
   const [panes, setPanesState] = useState<string[]>(() => panesByFolder.get(cwd) ?? [cwd]);
   const [focused, setFocused] = useState(panes[0] ?? cwd);
-  const bridge = typeof window === "undefined" ? undefined : window.threadboard;
+  const bridge = typeof window === "undefined" ? undefined : window.weft;
 
   function setPanes(next: string[]) {
     panesByFolder.set(cwd, next);
@@ -152,7 +152,7 @@ function TerminalPane({
   });
 
   useEffect(() => {
-    const bridge = window.threadboard;
+    const bridge = window.weft;
     if (!bridge?.terminal || !host.current) return;
     const el = host.current;
     let disposed = false;
@@ -218,7 +218,7 @@ function TerminalPane({
   }, [id, cwd, generation]);
 
   function restart() {
-    window.threadboard?.terminal.kill(id);
+    window.weft?.terminal.kill(id);
     setExited(null);
     setError(null);
     setGeneration((g) => g + 1);

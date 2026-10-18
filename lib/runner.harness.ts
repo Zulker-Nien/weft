@@ -212,7 +212,7 @@ export function childProcessMock(h: Harness, actual: typeof ChildProcess) {
   return { ...actual, default: { ...actual, execFileSync }, execFileSync };
 }
 
-const GLOBALS = ["__threadboardSessions", "__threadboardSpares", "__threadboardLoginWaiters", "__weftQueued", "__weftArchiveAfter"];
+const GLOBALS = ["__weftSessions", "__weftSpares", "__weftLoginWaiters", "__weftQueued", "__weftArchiveAfter"];
 
 // Empties the shared state and the runner's global maps; returns a fresh project folder for the test.
 export function resetHarness(h: Harness) {

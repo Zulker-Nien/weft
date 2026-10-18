@@ -4,14 +4,14 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-// scratch.sh against a temp THREADBOARD_DATA, run from a temp "repo" folder.
+// scratch.sh against a temp WEFT_DATA, run from a temp "repo" folder.
 const SCRIPT = path.join(__dirname, "scratch.sh");
 let tmp: string;
 let data: string;
 let repo: string;
 
 function run(...args: string[]) {
-  const r = spawnSync("bash", [SCRIPT, ...args], { cwd: repo, encoding: "utf8", env: { ...process.env, THREADBOARD_DATA: data } });
+  const r = spawnSync("bash", [SCRIPT, ...args], { cwd: repo, encoding: "utf8", env: { ...process.env, WEFT_DATA: data } });
   return { code: r.status, out: r.stdout.trim(), err: r.stderr };
 }
 

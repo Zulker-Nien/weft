@@ -22,7 +22,7 @@ describe("api calls", () => {
     const [url, init] = lastCall(fetch);
     expect(url).toBe("/api/cards/c1");
     expect(init.method).toBe("PATCH");
-    expect(init.headers).toEqual({ "content-type": "application/json", "x-threadboard": "1" });
+    expect(init.headers).toEqual({ "content-type": "application/json", "x-weft-token": "1" });
     expect(JSON.parse(init.body as string)).toEqual({ title: "New name" });
   });
 
@@ -130,7 +130,7 @@ describe("api.transcribe", () => {
     const [url, init] = lastCall(fetch);
     expect(url).toBe("/api/transcribe");
     expect(init.method).toBe("POST");
-    expect(init.headers).toEqual({ "x-threadboard": "1", "content-type": "audio/ogg" });
+    expect(init.headers).toEqual({ "x-weft-token": "1", "content-type": "audio/ogg" });
     expect(init.body).toBe(audio);
   });
 
@@ -195,7 +195,7 @@ describe("api.uploadAttachment", () => {
     const done = api.uploadAttachment(file, "a b.png");
     const xhr = FakeXHR.last;
     expect([xhr.method, xhr.url]).toEqual(["POST", "/api/attachments"]);
-    expect(xhr.headers).toEqual({ "x-threadboard": "1", "x-filename": "a%20b.png", "content-type": "image/png" });
+    expect(xhr.headers).toEqual({ "x-weft-token": "1", "x-filename": "a%20b.png", "content-type": "image/png" });
     expect(xhr.body).toBe(file);
     xhr.finish(200, JSON.stringify(saved));
     await expect(done).resolves.toEqual(saved);

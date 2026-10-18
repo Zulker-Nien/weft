@@ -3,9 +3,9 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-// Both attachment routes run against real files in a temp THREADBOARD_DATA; only sips is never
+// Both attachment routes run against real files in a temp WEFT_DATA; only sips is never
 // reached (nothing here is a big image).
-const WRITE = { host: "localhost", "x-threadboard": "1" };
+const WRITE = { host: "localhost", "x-weft-token": "1" };
 const URL_BASE = "http://localhost/api/attachments";
 
 let dir: string;
@@ -14,7 +14,7 @@ let serve: typeof import("./[name]/route");
 
 beforeAll(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-attach-route-"));
-  process.env.THREADBOARD_DATA = dir;
+  process.env.WEFT_DATA = dir;
   upload = await import("./route");
   serve = await import("./[name]/route");
 });

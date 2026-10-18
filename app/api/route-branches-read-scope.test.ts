@@ -63,7 +63,7 @@ vi.mock("@/lib/copilot", () => ({
 const runner = await import("@/lib/runner");
 const cardRoute = await import("./cards/[id]/route");
 
-const WRITE = { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { host: "localhost:3457", "x-weft-token": "1", "content-type": "application/json" };
 function req(url: string, { method = "GET", body, headers = WRITE }: { method?: string; body?: unknown; headers?: Record<string, string> } = {}) {
   return new Request(`http://localhost:3457/api${url}`, {
     method,

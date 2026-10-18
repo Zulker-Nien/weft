@@ -6,7 +6,7 @@ vi.mock("@/lib/shell", () => ({ runShell }));
 const route = await import("./cards/[id]/shell/route");
 
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
-const post = (body: unknown, headers: Record<string, string> = { "x-threadboard": "1" }) =>
+const post = (body: unknown, headers: Record<string, string> = { "x-weft-token": "1" }) =>
   new Request("http://localhost:3000/api/cards/c1/shell", {
     method: "POST",
     headers: { host: "localhost:3000", "content-type": "application/json", ...headers },

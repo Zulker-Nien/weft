@@ -424,13 +424,13 @@ describe("stop", () => {
     expect(q.aborted).toBe(false);
   });
 
-  it("ends the CLI if the turn hasn't ended 5s after stop", async () => {
+  it("ends the CLI if the turn hasn't ended 1.5s after stop", async () => {
     addCard({ id: "c1" });
     const q = await send("c1");
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     q.interrupt.mockImplementation(() => new Promise(() => {}));
     const stopping = runner.stop("c1");
-    await vi.advanceTimersByTimeAsync(5_000);
+    await vi.advanceTimersByTimeAsync(1_500);
     await stopping;
     expect(q.aborted).toBe(true);
     vi.useRealTimers();
@@ -721,7 +721,7 @@ describe("the CLI going away", () => {
 
 describe("stale sessions (BUILD)", () => {
   type Session = { build: string; busy: boolean };
-  const sessionsMap = () => g.__threadboardSessions as Map<string, Session>;
+  const sessionsMap = () => g.__weftSessions as Map<string, Session>;
 
   it("an idle session started by older code is replaced on the next message", async () => {
     addCard({ id: "c1" });
@@ -779,7 +779,7 @@ describe("stale sessions (BUILD)", () => {
   it("ensureSpare replaces a stale spare", async () => {
     runner.ensureSpare(cwd);
     await flush();
-    const spares = g.__threadboardSpares as Map<string, Session>;
+    const spares = g.__weftSpares as Map<string, Session>;
     nth([...spares.values()], 0, "spare").build = "older-build";
     runner.ensureSpare(cwd);
     await flush();
@@ -842,7 +842,7 @@ describe("edges", () => {
   it("a stale spare isn't adopted: it's closed and the card opens its own CLI", async () => {
     runner.ensureSpare(cwd);
     await flush();
-    const spares = g.__threadboardSpares as Map<string, { build: string }>;
+    const spares = g.__weftSpares as Map<string, { build: string }>;
     nth([...spares.values()], 0, "spare").build = "older-build";
     addCard({ id: "c1" });
     runner.sendMessage("c1", "go");

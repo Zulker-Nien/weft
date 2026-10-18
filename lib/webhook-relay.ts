@@ -33,7 +33,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const text = (body: string, status: number) => new Response(body, { status, headers: { "content-type": "text/plain" } });
 
 // Hop-by-hop headers, and the ones Vercel adds on the way in: none of them is the provider's.
-const DROPPED = /^(host|connection|keep-alive|content-length|transfer-encoding|te|trailer|upgrade|forwarded|x-real-ip|x-forwarded-.*|x-vercel-.*|x-threadboard)$/;
+const DROPPED = /^(host|connection|keep-alive|content-length|transfer-encoding|te|trailer|upgrade|forwarded|x-real-ip|x-forwarded-.*|x-vercel-.*|x-weft-token)$/;
 
 export function keptHeaders(headers: Headers): Record<string, string> {
   const kept: Record<string, string> = {};

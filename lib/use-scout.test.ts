@@ -88,7 +88,7 @@ describe("useScout", () => {
     await waitFor(() => expect(result.current.scout).toEqual(busy));
     expect(fetchMock).toHaveBeenCalledWith("/api/scout", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-threadboard": "1" },
+      headers: { "content-type": "application/json", "x-weft-token": "1" },
       body: JSON.stringify({ cwd: "/p" }),
     });
     act(() => result.current.started("f1"));

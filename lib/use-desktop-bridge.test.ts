@@ -22,7 +22,7 @@ function card(id: string, column: Column = "running"): Card {
   return { id, column } as Card;
 }
 
-// The parts of window.threadboard (electron/preload.cjs) the hook touches, with handles to drive them.
+// The parts of window.weft (electron/preload.cjs) the hook touches, with handles to drive them.
 function installBridge(platform = "darwin", state: BrowserState = open) {
   let browserListener: ((s: BrowserState) => void) | undefined;
   let copilotListener: ((s: { open: boolean }) => void) | undefined;
@@ -48,7 +48,7 @@ function installBridge(platform = "darwin", state: BrowserState = open) {
     },
     setBadge: vi.fn(),
   };
-  window.threadboard = bridge as unknown as ShellBridge;
+  window.weft = bridge as unknown as ShellBridge;
   return {
     bridge,
     offBrowser,
@@ -60,7 +60,7 @@ function installBridge(platform = "darwin", state: BrowserState = open) {
 
 afterEach(() => {
   cleanup();
-  delete window.threadboard;
+  delete window.weft;
 });
 
 describe("useDesktopBridge in a plain browser tab", () => {

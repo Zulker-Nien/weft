@@ -15,8 +15,8 @@ vi.mock("./store", () => ({
   getThread: (id: string) => threads.get(id) ?? [],
   listCards: () => [...cards.values()],
   // Use a getter so DATA_DIR is read fresh on every access — the vi.mock factory
-  // is only called once, but each test gets its own THREADBOARD_DATA temp dir.
-  get DATA_DIR() { return process.env.THREADBOARD_DATA; },
+  // is only called once, but each test gets its own WEFT_DATA temp dir.
+  get DATA_DIR() { return process.env.WEFT_DATA; },
 }));
 vi.mock("./settings", () => ({ syncFolders: () => [...settings.syncFolders] }));
 // What accountClient() does when startCloudSync gets no client: return the fake, or throw like a build with no accounts.
@@ -115,7 +115,7 @@ function resetState() {
 beforeEach(() => {
   vi.resetModules();
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-cloud-sync-"));
-  process.env.THREADBOARD_DATA = dir;
+  process.env.WEFT_DATA = dir;
   cards.clear();
   threads.clear();
   busListeners.clear();

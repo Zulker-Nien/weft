@@ -10,7 +10,7 @@ const scout = await import("@/lib/scout");
 const route = await import("./route");
 
 const READ = { host: "localhost:3457" };
-const WRITE = { ...READ, "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { ...READ, "x-weft-token": "1", "content-type": "application/json" };
 const req = (url: string, init: RequestInit = {}) => new Request(`http://localhost:3457/api/scout${url}`, init);
 const post = (body: unknown, headers: Record<string, string> = WRITE) =>
   route.POST(req("", { method: "POST", headers, body: typeof body === "string" ? body : JSON.stringify(body) }));

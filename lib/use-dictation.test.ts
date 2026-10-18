@@ -114,7 +114,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
-  delete window.threadboard;
+  delete window.weft;
 });
 
 async function startRecording(onText = vi.fn()) {
@@ -415,7 +415,7 @@ describe("useDictation without whisper", () => {
 
   it("never uses the desktop app's speech API, which has no service behind it", async () => {
     vi.stubGlobal("SpeechRecognition", FakeRecognizer);
-    window.threadboard = {} as ShellBridge;
+    window.weft = {} as ShellBridge;
     const { result } = await startRecording();
     expect(FakeRecognizer.instances).toHaveLength(0);
     expect(result.current.error).toBe("whisper-cli isn't installed.");

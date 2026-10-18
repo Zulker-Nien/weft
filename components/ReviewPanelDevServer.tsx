@@ -38,7 +38,7 @@ export function ReviewPanelDevServer({ cardId, plan }: { cardId: string; plan: R
   // The page opened before the server was up is blank; show it once the server answers.
   const up = status?.reachable;
   useEffect(() => {
-    if (up && plan.url) window.threadboard?.browser.open(plan.url, cardId).catch(() => {});
+    if (up && plan.url) window.weft?.browser.open(plan.url, cardId).catch(() => {});
   }, [up, plan.url, cardId]);
 
   async function act(action: "start" | "restart" | "stop") {

@@ -103,7 +103,7 @@ vi.mock("./folders", async () => {
   };
 });
 
-import { COPILOT_PROMPT, SAFE_BOARD_TOOLS, boardMcpServer, createBoardCard, describeBoardTool, isTrustedTool, threadBoardMcpServer } from "./board-tools";
+import { COPILOT_PROMPT, SAFE_BOARD_TOOLS, boardMcpServer, createBoardCard, describeBoardTool, isTrustedTool, weftMcpServer } from "./board-tools";
 
 const card = (over: Partial<Card> = {}): Card =>
   ({
@@ -273,22 +273,22 @@ describe("describeBoardTool", () => {
   });
 });
 
-describe("threadBoardMcpServer", () => {
+describe("weftMcpServer", () => {
   it("create_card on a board thread takes tags too", async () => {
-    threadBoardMcpServer(() => undefined, { start: vi.fn() });
+    weftMcpServer(() => undefined, { start: vi.fn() });
     await capturedTool("create_card").handler({ prompt: "x", folder: testRoot, start: false, tags: ["Docs"] });
     expect(nth(created, 0, "created card").input).toMatchObject({ tags: ["docs"], tagsBy: "user" });
   });
 
   it("registers only list_cards, create_card, restart_weft_when_idle and request_folder_access (no read, start, send, move, stop, answer)", () => {
-    threadBoardMcpServer(() => "parent-1", { start: vi.fn() });
+    weftMcpServer(() => "parent-1", { start: vi.fn() });
     expect(captures.map((t) => t.name)).toEqual(["list_cards", "create_card", "restart_weft_when_idle", "request_folder_access"]);
     expect(["list_cards", "create_card"].every((name) => SAFE_BOARD_TOOLS.has(name))).toBe(true);
     expect(SAFE_BOARD_TOOLS.has("start_card")).toBe(false);
   });
 
   it("list_cards returns 'No cards' when the board is empty, and a card's metadata when there is one", async () => {
-    threadBoardMcpServer(() => "parent-1", { start: vi.fn() });
+    weftMcpServer(() => "parent-1", { start: vi.fn() });
     const empty = await capturedTool("list_cards").handler({});
     expect(textOf(empty)).toBe("No cards.");
     expect(empty.isError).toBeUndefined();
@@ -299,7 +299,7 @@ describe("threadBoardMcpServer", () => {
   });
 
   it("list_cards prints one line per card and clips latest to its first short line", async () => {
-    threadBoardMcpServer(() => "parent-1", { start: vi.fn() });
+    weftMcpServer(() => "parent-1", { start: vi.fn() });
     const long = `${"word ".repeat(60)}\nsecond line`;
     cardStore.set("a", card({ id: "a", lastLine: long }));
     cardStore.set("b", card({ id: "b", lastLine: "\n  done here  \nmore" }));
@@ -313,7 +313,7 @@ describe("threadBoardMcpServer", () => {
   });
 
   it("list_cards marks starred cards with ★ and shows tags, only when a card has some", async () => {
-    threadBoardMcpServer(() => undefined, { start: vi.fn() });
+    weftMcpServer(() => undefined, { start: vi.fn() });
     cardStore.set("a", card({ id: "a", title: "Kept", starred: true, tags: ["bug fix", "ui"] }));
     cardStore.set("b", card({ id: "b", title: "Plain", tags: [] }));
     const lines = textOf(await capturedTool("list_cards").handler({})).split("\n");
@@ -323,7 +323,7 @@ describe("threadBoardMcpServer", () => {
   });
 
   it("list_cards leaves out done and archived cards by default and says how many", async () => {
-    threadBoardMcpServer(() => "parent-1", { start: vi.fn() });
+    weftMcpServer(() => "parent-1", { start: vi.fn() });
     cardStore.set("a", card({ id: "a", column: "running" }));
     cardStore.set("b", card({ id: "b", column: "done" }));
     cardStore.set("c", card({ id: "c", column: "review", archived: true }));
@@ -335,7 +335,7 @@ describe("threadBoardMcpServer", () => {
   });
 
   it("list_cards lists done and archived cards with include_done, alone or with a column", async () => {
-    threadBoardMcpServer(() => "parent-1", { start: vi.fn() });
+    weftMcpServer(() => "parent-1", { start: vi.fn() });
     cardStore.set("a", card({ id: "a", column: "running", updatedAt: 3 }));
     cardStore.set("b", card({ id: "b", column: "done", updatedAt: 2 }));
     cardStore.set("c", card({ id: "c", column: "review", archived: true, updatedAt: 1 }));
@@ -348,14 +348,14 @@ describe("threadBoardMcpServer", () => {
   });
 
   it("list_cards says 'No open cards' when only done ones are on the board", async () => {
-    threadBoardMcpServer(() => "parent-1", { start: vi.fn() });
+    weftMcpServer(() => "parent-1", { start: vi.fn() });
     cardStore.set("b", card({ id: "b", column: "done" }));
     const text = textOf(await capturedTool("list_cards").handler({}));
     expect(text).toBe("No open cards.\n1 done or archived left out; pass include_done=true to list them.");
   });
 
   it("list_cards lists newest first, up to limit, and counts the rest", async () => {
-    threadBoardMcpServer(() => "parent-1", { start: vi.fn() });
+    weftMcpServer(() => "parent-1", { start: vi.fn() });
     for (let i = 0; i < 5; i++) cardStore.set(`k${i}`, card({ id: `k${i}`, updatedAt: i }));
     const lines = textOf(await capturedTool("list_cards").handler({ limit: 2 })).split("\n");
     expect(lines).toEqual([
@@ -366,7 +366,7 @@ describe("threadBoardMcpServer", () => {
   });
 
   it("list_cards keeps the default under the tool-result limit on a big board", async () => {
-    threadBoardMcpServer(() => "parent-1", { start: vi.fn() });
+    weftMcpServer(() => "parent-1", { start: vi.fn() });
     for (let i = 0; i < 300; i++) {
       cardStore.set(`k${i}`, card({ id: `k${i}`, column: i % 2 ? "done" : "review", lastLine: "x".repeat(2000), remaining: "y".repeat(500) }));
     }
@@ -375,13 +375,13 @@ describe("threadBoardMcpServer", () => {
   });
 
   it("list_cards says 'No cards in <column>' when the column filter matches nothing", async () => {
-    threadBoardMcpServer(() => "parent-1", { start: vi.fn() });
+    weftMcpServer(() => "parent-1", { start: vi.fn() });
     const r = await capturedTool("list_cards").handler({ column: "done" });
     expect(textOf(r)).toBe("No cards in done.");
   });
 
   it("list_cards filters by column when asked", async () => {
-    threadBoardMcpServer(() => "parent-1", { start: vi.fn() });
+    weftMcpServer(() => "parent-1", { start: vi.fn() });
     cardStore.set("a", card({ id: "a", column: "backlog" }));
     cardStore.set("b", card({ id: "b", column: "review" }));
     const r = await capturedTool("list_cards").handler({ column: "review" });
@@ -392,7 +392,7 @@ describe("threadBoardMcpServer", () => {
   it("create_card on a board thread inherits the parent's folder, permission mode, and id", async () => {
     cardStore.set("parent-1", card({ id: "parent-1", cwd: testRoot, permissionMode: "bypassPermissions" }));
     const start = vi.fn();
-    threadBoardMcpServer(() => "parent-1", { start });
+    weftMcpServer(() => "parent-1", { start });
     const r = await capturedTool("create_card").handler({ prompt: "Refactor", title: "Refactor", folder: undefined, start: true });
     expect(textOf(r)).toMatch(/^Created and started c\d+: Refactor$/);
     const input = nth(created, 0, "created card").input;
@@ -403,7 +403,7 @@ describe("threadBoardMcpServer", () => {
 
   it("create_card uses defaults when there's no parent yet (spare CLI)", async () => {
     const start = vi.fn();
-    threadBoardMcpServer(() => undefined, { start });
+    weftMcpServer(() => undefined, { start });
     await capturedTool("create_card").handler({ prompt: "Hello" });
     const input = nth(created, 0, "created card").input;
     // No parent cwd and no folder override: createBoardCard gets folder="", which resolveFolder
@@ -415,7 +415,7 @@ describe("threadBoardMcpServer", () => {
 
   it("create_card with start=false leaves the card in Backlog and doesn't call actions.start", async () => {
     const start = vi.fn();
-    threadBoardMcpServer(() => undefined, { start });
+    weftMcpServer(() => undefined, { start });
     const r = await capturedTool("create_card").handler({ prompt: "x", start: false });
     expect(textOf(r)).toMatch(/^Created c\d+ in Backlog: /);
     expect(start).not.toHaveBeenCalled();
@@ -602,7 +602,7 @@ describe("createBoardCard ↔ tool handler integration", () => {
   it("the thread tool's create_card calls createBoardCard and then actions.start with the prompt", async () => {
     cardStore.set("parent-1", card({ id: "parent-1", cwd: testRoot, permissionMode: "default" }));
     const start = vi.fn();
-    threadBoardMcpServer(() => "parent-1", { start });
+    weftMcpServer(() => "parent-1", { start });
     await capturedTool("create_card").handler({ prompt: "Hi" });
     expect(nth(created, 0, "created card").input).toMatchObject({ prompt: "Hi", cwd: testRoot, parentId: "parent-1" });
     expect(start).toHaveBeenCalledWith(nth(created, 0, "created card").out.id, "Hi");

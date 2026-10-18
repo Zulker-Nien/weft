@@ -36,7 +36,7 @@ export function useBoardView({ select, setWebBrowserOpen }: BoardViewDeps) {
     (path: string | null) => {
       if (path !== project) {
         select(null);
-        if (window.threadboard) window.threadboard.browser.setVisible(false);
+        if (window.weft) window.weft.browser.setVisible(false);
         else setWebBrowserOpen(false);
       }
       setProject(path);

@@ -23,14 +23,14 @@ function setup(status: GithubStatus | null, project: string | null = null, error
   const notify = vi.fn();
   const onOpenUrl = vi.fn();
   const openExternal = vi.fn();
-  (window as unknown as { threadboard: unknown }).threadboard = { openExternal };
+  (window as unknown as { weft: unknown }).weft = { openExternal };
   render(<GithubDrawer status={status} error={error} reload={reload} project={project} onOpenUrl={onOpenUrl} notify={notify} />);
   return { reload, notify, onOpenUrl, openExternal };
 }
 
 beforeEach(() => vi.clearAllMocks());
 afterEach(() => {
-  delete (window as unknown as { threadboard?: unknown }).threadboard;
+  delete (window as unknown as { weft?: unknown }).weft;
 });
 
 describe("GithubDrawer", () => {

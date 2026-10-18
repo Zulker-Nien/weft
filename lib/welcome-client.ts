@@ -21,7 +21,7 @@ export interface WelcomeAnswer {
   skip: string[];
 }
 
-const WRITE = { "content-type": "application/json", "x-threadboard": "1" };
+const WRITE = { "content-type": "application/json", "x-weft-token": "1" };
 
 async function json<T>(res: Response): Promise<T> {
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };

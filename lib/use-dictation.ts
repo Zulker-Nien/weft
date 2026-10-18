@@ -26,7 +26,7 @@ interface SpeechRecognitionLike {
 function browserRecognizer(): (new () => SpeechRecognitionLike) | null {
   const w = window as unknown as { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike };
   // The desktop app's Chromium has the API but no service behind it.
-  if (window.threadboard) return null;
+  if (window.weft) return null;
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 

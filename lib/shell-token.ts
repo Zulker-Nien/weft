@@ -10,6 +10,6 @@ export function shellToken(dataDir = DATA_DIR): string {
   try {
     return fs.readFileSync(path.join(dataDir, "shell-token"), "utf8").trim();
   } catch {
-    return process.env.THREADBOARD_SHELL_TOKEN ?? "";
+    return process.env.WEFT_SHELL_TOKEN ?? "";
   }
 }

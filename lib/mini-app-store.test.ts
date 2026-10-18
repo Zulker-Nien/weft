@@ -3,14 +3,14 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// The apps sidebar's store, against a real file in a temp dir (THREADBOARD_DATA), never ~/.weft.
+// The apps sidebar's store, against a real file in a temp dir (WEFT_DATA), never ~/.weft.
 
 let dir: string;
-const g = globalThis as unknown as { __threadboardState?: unknown };
+const g = globalThis as unknown as { __weftState?: unknown };
 
 async function load() {
   vi.resetModules();
-  delete g.__threadboardState;
+  delete g.__weftState;
   const store = await import("./store");
   const apps = await import("./mini-app-store");
   return { store, apps };
@@ -21,10 +21,10 @@ const readApps = () => (JSON.parse(fs.readFileSync(appsFile(), "utf8")) as { app
 
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-apps-"));
-  process.env.THREADBOARD_DATA = dir;
+  process.env.WEFT_DATA = dir;
 });
 afterEach(() => {
-  delete g.__threadboardState;
+  delete g.__weftState;
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

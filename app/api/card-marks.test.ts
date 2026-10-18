@@ -21,7 +21,7 @@ const tagStore = await import("@/lib/tag-store");
 function patch(body: unknown) {
   const req = new Request("http://localhost:3457/api/cards/c1", {
     method: "PATCH",
-    headers: { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" },
+    headers: { host: "localhost:3457", "x-weft-token": "1", "content-type": "application/json" },
     body: JSON.stringify(body),
   });
   return route.PATCH(req, { params: Promise.resolve({ id: "c1" }) });

@@ -24,7 +24,7 @@ vi.mock("./tag-store", () => ({ rememberTags: vi.fn() }));
 vi.mock("./copilot-setup", () => ({ setupReport: vi.fn() }));
 vi.mock("./settings", () => ({ touchProject: vi.fn(), defaultPermissionMode: () => "auto", automations: () => [] }));
 
-const { SAFE_BOARD_TOOLS, describeBoardTool, isTrustedTool, threadBoardMcpServer } = await import("./board-tools");
+const { SAFE_BOARD_TOOLS, describeBoardTool, isTrustedTool, weftMcpServer } = await import("./board-tools");
 const { restartTool } = await import("./restart-tool");
 
 const waiting = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `w${i}`, title: `Card ${i}` }));
@@ -62,7 +62,7 @@ describe("restart_weft_when_idle", () => {
   });
 
   it("is registered on every board thread's server", () => {
-    threadBoardMcpServer(() => "parent-1", { start: vi.fn() });
+    weftMcpServer(() => "parent-1", { start: vi.fn() });
     expect(captures.map((x) => x.name)).toContain("restart_weft_when_idle");
   });
 

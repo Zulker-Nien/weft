@@ -4,14 +4,14 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Card, ThreadItem } from "./types";
 
-// store.ts reads THREADBOARD_DATA once at import, so each test points it at a fresh temp dir
+// store.ts reads WEFT_DATA once at import, so each test points it at a fresh temp dir
 // and re-imports the module. Never the real ~/.weft.
 let dir: string;
-const g = globalThis as unknown as { __threadboardState?: unknown };
+const g = globalThis as unknown as { __weftState?: unknown };
 
 async function load() {
   vi.resetModules();
-  delete g.__threadboardState;
+  delete g.__weftState;
   return import("./store");
 }
 
@@ -21,10 +21,10 @@ const input = (over: Partial<Card> = {}) =>
 
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-store-"));
-  process.env.THREADBOARD_DATA = dir;
+  process.env.WEFT_DATA = dir;
 });
 afterEach(() => {
-  delete g.__threadboardState;
+  delete g.__weftState;
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -186,7 +186,7 @@ describe("store data folder", () => {
   let home: string;
   beforeEach(() => {
     home = fs.mkdtempSync(path.join(os.tmpdir(), "weft-home-"));
-    delete process.env.THREADBOARD_DATA;
+    delete process.env.WEFT_DATA;
     vi.spyOn(os, "homedir").mockReturnValue(home);
   });
   afterEach(() => {

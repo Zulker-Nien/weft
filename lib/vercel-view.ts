@@ -76,7 +76,7 @@ export interface CreateResult {
   gitError: string | null;
 }
 
-// window.threadboard.vercel, from electron/preload.cjs.
+// window.weft.vercel, from electron/preload.cjs.
 export interface VercelBridge {
   status(folders: string[]): Promise<VercelStatus>;
   setToken(token: string): Promise<{ username: string }>;
@@ -185,7 +185,7 @@ export function pushAllText(r: VercelPushAllResult) {
 export const TOKEN_URL = "https://vercel.com/account/tokens";
 
 export function vercelBridge(): VercelBridge | null {
-  return (typeof window !== "undefined" && window.threadboard?.vercel) || null;
+  return (typeof window !== "undefined" && window.weft?.vercel) || null;
 }
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");

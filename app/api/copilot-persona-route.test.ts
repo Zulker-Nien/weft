@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// /api/copilot/persona: POST behind the localhost guard and x-threadboard, handing a known persona to
+// /api/copilot/persona: POST behind the localhost guard and x-weft-token, handing a known persona to
 // lib/copilot (which starts a new chat on it) and turning anything else away.
 
 vi.mock("@/lib/copilot", () => ({
@@ -11,7 +11,7 @@ const lib = await import("@/lib/copilot");
 const route = await import("./copilot/persona/route");
 
 const URL = "http://localhost:3457/api/copilot/persona";
-const WRITE = { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { host: "localhost:3457", "x-weft-token": "1", "content-type": "application/json" };
 const post = (body: string, headers: Record<string, string> = WRITE) => route.POST(new Request(URL, { method: "POST", headers, body }));
 
 beforeEach(() => vi.clearAllMocks());
@@ -38,7 +38,7 @@ describe("POST /api/copilot/persona", () => {
     expect(await res.json()).toEqual({ error: "CLI gone" });
   });
 
-  it("needs the x-threadboard header", async () => {
+  it("needs the x-weft-token header", async () => {
     const res = await post(JSON.stringify({ persona: "founder" }), { host: "localhost:3457" });
     expect(res.status).toBe(403);
     expect(lib.setCopilotPersona).not.toHaveBeenCalled();

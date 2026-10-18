@@ -78,7 +78,7 @@ export default function QuestionForm({
   const shown = q?.options[cursor];
 
   // The highlighted option's preview, in the card's browser pane.
-  const bridge = typeof window !== "undefined" ? window.threadboard : undefined;
+  const bridge = typeof window !== "undefined" ? window.weft : undefined;
   const previewing = q?.options.some((o) => o.preview) ? `${previewUrl ?? ""}${previewHash(state.tab, cursor)}` : null;
   useEffect(() => {
     if (previewing && previewUrl && bridge) void bridge.browser.open(previewing, cardId).catch(() => {});

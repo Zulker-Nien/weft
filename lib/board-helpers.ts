@@ -47,6 +47,6 @@ export function announce(card: Card, onClick: () => void): void {
 
 // In the board's own browser (no card open), or a new tab outside the desktop app.
 export function showPage(url: string): void {
-  if (window.threadboard) void window.threadboard.browser.open(url, "board");
+  if (window.weft) void window.weft.browser.open(url, "board");
   else window.open(url, "_blank");
 }

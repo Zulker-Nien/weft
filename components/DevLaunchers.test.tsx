@@ -118,7 +118,7 @@ describe("DevLaunchers", () => {
 
   it("links Weft's own address, opening it in the system browser rather than the pane", async () => {
     const openExternal = vi.fn();
-    vi.stubGlobal("threadboard", { openExternal });
+    vi.stubGlobal("weft", { openExternal });
     const p = props({ launchers: [stopped({ cwd: "/dev/weft", self: true, url: "http://127.0.0.1:1024" })] });
     render(<DevLaunchers {...p} />);
     await userEvent.click(screen.getByRole("button", { name: ":1024 ↗" }));

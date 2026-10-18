@@ -13,7 +13,7 @@ vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
 }));
 
 // The shell URL and token are read when the module loads.
-vi.stubEnv("THREADBOARD_SHELL_URL", "http://127.0.0.1:4567");
+vi.stubEnv("WEFT_SHELL_URL", "http://127.0.0.1:4567");
 vi.mock("./shell-token", () => ({ shellToken: () => "tok" }));
 const bt = await import("./browser-tools");
 
@@ -49,7 +49,7 @@ describe("BROWSER_PROMPT", () => {
   });
 
   it("puts pages in ~/.weft/show, which survives a reboot, not /tmp", () => {
-    const showDir = path.join(process.env.THREADBOARD_DATA!, "show");
+    const showDir = path.join(process.env.WEFT_DATA!, "show");
     expect(bt.BROWSER_PROMPT).toContain(`${showDir}/<topic>.html`);
     expect(bt.BROWSER_PROMPT).toContain(`${showDir}/<topic>/index.html`);
     // The test sandbox sits under os.tmpdir() (/tmp on Linux CI), so look past the show dir itself:
@@ -217,7 +217,7 @@ describe("the screenshot tool", () => {
 describe("outside the desktop app", () => {
   it("says the pane needs the desktop app, and the helpers fall back quietly", async () => {
     vi.resetModules();
-    vi.stubEnv("THREADBOARD_SHELL_URL", "");
+    vi.stubEnv("WEFT_SHELL_URL", "");
     const bare = await import("./browser-tools");
     const s = bare.browserMcpServer(() => "c1") as unknown as typeof server;
     const r = await s.tools.find((t) => t.name === "read_page")!.handler({});

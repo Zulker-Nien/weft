@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 // Pasted images and shown local files are copied into the attachments folder, so point the store
 // at a temp one before importing.
 const data = fs.mkdtempSync(path.join(os.tmpdir(), "weft-transcript-"));
-process.env.THREADBOARD_DATA = data;
+process.env.WEFT_DATA = data;
 
 const { transcriptToThread, typedPromptOf } = await import("./transcript");
 

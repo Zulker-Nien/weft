@@ -197,20 +197,20 @@ describe("promptItems", () => {
 describe("openTeamPage", () => {
   it("opens the team page in the pane when the desktop bridge is there", () => {
     const browserOpen = vi.fn(() => Promise.resolve());
-    (window as unknown as { threadboard: unknown }).threadboard = { browser: { open: browserOpen } };
+    (window as unknown as { weft: unknown }).weft = { browser: { open: browserOpen } };
     openTeamPage();
     expect(browserOpen).toHaveBeenCalledWith("https://weft.zip/team", "board");
     expect(openExternal).not.toHaveBeenCalled();
   });
 
   it("falls back to the system browser when the desktop isn't running", () => {
-    delete (window as unknown as { threadboard?: unknown }).threadboard;
+    delete (window as unknown as { weft?: unknown }).weft;
     openTeamPage();
     expect(openExternal).toHaveBeenCalledWith("https://weft.zip/team");
   });
 
   it("falls back to the system browser when the bridge is missing the pane (older shells)", () => {
-    (window as unknown as { threadboard: unknown }).threadboard = {};
+    (window as unknown as { weft: unknown }).weft = {};
     openTeamPage();
     expect(openExternal).toHaveBeenCalledWith("https://weft.zip/team");
   });

@@ -69,7 +69,7 @@ describe("answerWelcome", () => {
     expect(url).toBe("/api/welcome");
     expect(init).toMatchObject({
       method: "POST",
-      headers: { "content-type": "application/json", "x-threadboard": "1" },
+      headers: { "content-type": "application/json", "x-weft-token": "1" },
       body: JSON.stringify({ countHistory: true, fresh: false, skip: [] }),
     });
   });

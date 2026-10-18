@@ -40,7 +40,7 @@ export default function BoardError({ error, retry }: { error: Error & { digest?:
 function usePaneOutOfTheWay() {
   const wasVisible = useRef(false);
   useEffect(() => {
-    const browser = window.threadboard?.browser;
+    const browser = window.weft?.browser;
     if (!browser) return;
     let live = true;
     void browser.getState().then((state) => {
@@ -54,6 +54,6 @@ function usePaneOutOfTheWay() {
     };
   }, []);
   return () => {
-    if (wasVisible.current) window.threadboard?.browser.setVisible(true);
+    if (wasVisible.current) window.weft?.browser.setVisible(true);
   };
 }

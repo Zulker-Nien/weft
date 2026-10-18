@@ -7,7 +7,7 @@ import type { User } from "@supabase/supabase-js";
 // lib/account.ts against a fake supabase-js client: the file storage, the user view, and each auth call.
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-account-"));
-process.env.THREADBOARD_DATA = dir;
+process.env.WEFT_DATA = dir;
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const auth = {
@@ -98,14 +98,14 @@ describe("with a key", () => {
   });
 
   it("keeps the session in Electron main, behind the Keychain, inside the desktop app", async () => {
-    vi.stubEnv("THREADBOARD_SHELL_URL", "http://127.0.0.1:9");
+    vi.stubEnv("WEFT_SHELL_URL", "http://127.0.0.1:9");
     const account = await load();
     auth.getSession.mockResolvedValue({ data: { session: null } });
     await account.accountView();
     const [, , opts] = createClient.mock.calls[0] as [string, string, { auth: { storage: unknown } }];
     expect(opts.auth.storage).not.toBe(account.fileStorage);
     expect(opts.auth.storage).toHaveProperty("getItem");
-    vi.stubEnv("THREADBOARD_SHELL_URL", "");
+    vi.stubEnv("WEFT_SHELL_URL", "");
   });
 
   it("shows who's signed in", async () => {
@@ -125,7 +125,7 @@ describe("with a key", () => {
   });
 
   it("uses the weft:// callback when running inside the desktop app", async () => {
-    vi.stubEnv("THREADBOARD_SHELL_URL", "http://127.0.0.1:9");
+    vi.stubEnv("WEFT_SHELL_URL", "http://127.0.0.1:9");
     try {
       const account = await load();
       auth.signInWithOAuth.mockResolvedValue({ data: { url: "https://gh/login" }, error: null });
@@ -142,7 +142,7 @@ describe("with a key", () => {
       });
       expect(account.weftCallbackUrl()).toBe("weft://account-callback");
     } finally {
-      vi.stubEnv("THREADBOARD_SHELL_URL", "");
+      vi.stubEnv("WEFT_SHELL_URL", "");
     }
   });
 

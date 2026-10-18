@@ -74,7 +74,7 @@ describe("writeQuestionPreview", () => {
   beforeAll(async () => {
     dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-qp-"));
     vi.resetModules();
-    vi.stubEnv("THREADBOARD_DATA", dataDir);
+    vi.stubEnv("WEFT_DATA", dataDir);
     vi.doMock("./store", () => ({ DATA_DIR: dataDir }));
     prepped = await import("./question-preview");
   });

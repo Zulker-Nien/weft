@@ -39,7 +39,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `P2` **Dependencies** — "start this card when that one reaches Review or Done", for work that has to happen in order.
 - `P2` **Card density toggle** — compact cards (title and status only) for big boards, detailed cards for small ones.
 - `P2` **Column counts and limits** — show counts per column and warn when Running goes over a set number.
-- `P3` **Multiple boards** — separate boards (work, side projects) you switch between in the app, instead of restarting with another `THREADBOARD_DATA`.
+- `P3` **Multiple boards** — separate boards (work, side projects) you switch between in the app, instead of restarting with another `WEFT_DATA`.
 - `P3` **Custom columns** — add columns like "Blocked" or "QA" and map BOARD STATUS values onto them.
 - `P3` **Timeline view** — a lane per card showing when it ran and when it waited on you, to see parallelism and dead time.
 
@@ -140,7 +140,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `P2` **Batch approvals** — approve "start these five cards" once instead of five separate prompts.
 - `P2` **Reply drafts** — the copilot drafts the next message in a card's reply box for you to edit and send.
 - `P2` **More board tools** — give the copilot tools for archive, labels, priority, fork, diff, and templates as those features land.
-- `P2` **Copilot standing rules** — rules like "allow `npm test` on threadboard cards" that the copilot applies, listed and editable in settings.
+- `P2` **Copilot standing rules** — rules like "allow `npm test` on weft cards" that the copilot applies, listed and editable in settings.
 - `P2` **Copilot memory** — keep your stated preferences across "New chat" resets.
 - `P2` **Docked copilot** — an option to show the copilot as a side panel in the main window instead of a separate window.
 - `P3` **Loop watcher** — the copilot notices a card repeating the same failing command and stops it with a note.
@@ -262,7 +262,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 ## Cost and analytics
 
 - `Not planned` **Cost totals** — Weft runs on a Claude subscription, so dollar estimates are hidden everywhere (cards, threads, copilot, recipe pages); cost is still recorded per card.
-- `Done` **Prompt cache warmth** — the status strip's `cache:52m` counts down how long the thread's prompt cache stays warm after its last request (1 hour or 5 minutes, read from what the request wrote), then turns to `cache:cold 120k`: the next message sends that many tokens again at full price, a bigger bite of the 5-hour limit. Its tooltip gives the last request's cache hit share (`lib/turn.ts` `cacheAfter`, `CardStats.cache`). A cold thread's reply box makes **New card** its default (a Haiku summary, the touched files and the typed message start a fresh card; `lib/handoff.ts`, `POST /api/cards/[id]/handoff`), with "Send here · re-sends 184k" in the send menu (`lib/reply-mode.ts`).
+- `Done` **Prompt cache warmth** — the status strip's `cache:52m` counts down how long the thread's prompt cache stays warm after its last request (1 hour or 5 minutes, read from what the request wrote), then turns to `cache:cold 120k`: the next message sends that many tokens again at full price, a bigger bite of the 5-hour limit. Its tooltip gives the last request's cache hit share (`lib/turn.ts` `cacheAfter`, `CardStats.cache`). A cold thread over 30k tokens makes **Send fresh** its default: a new session in the same card, started from a brief (Haiku summary written ahead of time, what's open, the diff of its own edits; `lib/splice.ts`, `lib/splice-brief.ts`, `lib/splice-diff.ts`, `POST /api/cards/[id]/fresh`), with "Send with full history" in the send menu (`lib/reply-mode.ts`). Threads run with a 1-hour cache TTL (`lib/env.ts`).
 - `Done` **Limits chart** — hovering the status strip's `5hr` / `7d` shows the week from one weekly reset to the next: 168 green hour bars of the 5-hour limit left (left axis), 7 see-through red day bars of the weekly limit left in front (right axis) with burn-down tops, red lines at hits, green lines at 5-hour resets (light), the next one (strong) and the weekly reset (strongest). Threads ask for their limits after each turn (every 5 minutes at most) and log changes to `~/.weft/limits.jsonl` (`lib/limit-history.ts`, `lib/limit-chart.ts`, `/api/limits`, `components/LimitBurndown.tsx`). Next: a projection of when the weekly limit runs out at the current pace.
 - `P2` **Budgets** — a spend cap per card or per day; the card pauses and asks when it reaches it.
 - `P2` **Token usage per turn** — input, output, and cache tokens from each turn's result, to spot threads that reread too much.
@@ -348,7 +348,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `Done` **Welcome on first launch** — two screens before any session becomes a card: the Wefter Profile your Claude Code history makes, with where it came from (Opt out / OK), then the projects to bring in, scratch and worktree folders unticked (Start fresh / OK); existing boards are adopted silently; Settings → General has Count my Claude Code history, Bring them in and Replay (`lib/welcome.ts`, `lib/welcome-preview.ts`, `components/WelcomeDialog.tsx`). Next: the "What Weft knows" page, anonymous telemetry's first-launch notice, the first-Done profile reveal.
 - `P1` **First-run check** — on first launch, check for `claude` and `puku-cli`, their login state, and `git`, then pick a first project folder.
 - `P2` **Guided first card** — a starter card in a scratch folder that shows Running, Needs you, Review, and the browser pane in a couple of minutes.
-- `P2` **Data folder in settings** — choose where the board is stored from settings instead of the `THREADBOARD_DATA` variable.
+- `P2` **Data folder in settings** — choose where the board is stored from settings instead of the `WEFT_DATA` variable.
 - `Now` **Shortcuts sheet** — `?` lists every keyboard shortcut (board, composer, terminal, app menu), searchable by words or keys; hold ⌘ or ⇧ for a cheat card; tooltips, the filter box and right-click menus show keys.
 - `P2` **Export and import settings** — move the thread prompt, templates, and rules to another machine as one file.
 - `Now` **Theme** — light, dark, or follow the system, from Settings → Appearance; the desktop window chrome follows it too.

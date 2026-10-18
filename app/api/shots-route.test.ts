@@ -15,7 +15,7 @@ vi.mock("@/lib/page-shots", () => shots);
 const route = await import("./cards/[id]/shots/route");
 
 const READ = { host: "localhost:3457" };
-const WRITE = { ...READ, "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { ...READ, "x-weft-token": "1", "content-type": "application/json" };
 const params = { params: Promise.resolve({ id: "c1" }) };
 const req = (method: string, headers: Record<string, string>, query = "", body?: string) =>
   new Request(`http://localhost:3457/api/cards/c1/shots${query}`, { method, headers, body });
@@ -63,7 +63,7 @@ describe("POST /api/cards/[id]/shots", () => {
     expect(await res.json()).toEqual({ error: "disk full" });
   });
 
-  it("needs the x-threadboard header", async () => {
+  it("needs the x-weft-token header", async () => {
     expect((await route.POST(req("POST", READ, "", JSON.stringify({ url: "x" })), params)).status).toBe(403);
   });
 });

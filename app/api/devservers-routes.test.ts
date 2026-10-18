@@ -18,7 +18,7 @@ const devList = await import("@/lib/devserver-list");
 const taskStop = await import("@/lib/task-stop");
 const route = await import("./devservers/route");
 
-const WRITE = { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { host: "localhost:3457", "x-weft-token": "1", "content-type": "application/json" };
 
 function req(url: string, { method = "GET", body, headers = WRITE }: { method?: string; body?: unknown; headers?: Record<string, string> } = {}) {
   return new Request(`http://localhost:3457/api${url}`, {
@@ -33,7 +33,7 @@ beforeEach(() => {
 });
 
 describe("GET /devservers", () => {
-  it("lists every dev server Weft knows about, without needing x-threadboard", async () => {
+  it("lists every dev server Weft knows about, without needing x-weft-token", async () => {
     const res = await route.GET(req("/devservers", { headers: { host: "localhost:3457" } }));
     expect(res.status).toBe(200);
     const json = (await res.json()) as { servers: { cardId: string; source: string }[] };
@@ -75,8 +75,8 @@ describe("POST /devservers", () => {
     expect(taskStop.stopTask).not.toHaveBeenCalled();
   });
 
-  it("rejects a foreign host and a write without x-threadboard", async () => {
-    const foreignRes = await route.POST(req("/devservers", { method: "POST", body: { action: "stop", cardId: "c1" }, headers: { host: "evil.com", "x-threadboard": "1", "content-type": "application/json" } }));
+  it("rejects a foreign host and a write without x-weft-token", async () => {
+    const foreignRes = await route.POST(req("/devservers", { method: "POST", body: { action: "stop", cardId: "c1" }, headers: { host: "evil.com", "x-weft-token": "1", "content-type": "application/json" } }));
     expect(foreignRes.status).toBe(403);
     const noHeaderRes = await route.POST(req("/devservers", { method: "POST", body: { action: "stop", cardId: "c1" }, headers: { host: "localhost:3457", "content-type": "application/json" } }));
     expect(noHeaderRes.status).toBe(403);

@@ -25,7 +25,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   localStorage.removeItem("threadboard.cwd");
-  delete window.threadboard;
+  delete window.weft;
 });
 
 describe("without", () => {
@@ -96,10 +96,10 @@ describe("announce", () => {
 describe("showPage", () => {
   it("opens in the board's browser in the desktop app, else a new tab", () => {
     const open = vi.fn(() => Promise.resolve());
-    window.threadboard = { browser: { open } } as unknown as typeof window.threadboard;
+    window.weft = { browser: { open } } as unknown as typeof window.weft;
     showPage("https://a.test");
     expect(open).toHaveBeenCalledWith("https://a.test", "board");
-    delete window.threadboard;
+    delete window.weft;
     const tab = vi.spyOn(window, "open").mockReturnValue(null);
     showPage("https://b.test");
     expect(tab).toHaveBeenCalledWith("https://b.test", "_blank");

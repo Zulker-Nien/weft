@@ -9,7 +9,7 @@ const baseState = { mode: "off" } as const;
 
 describe("LaptopModeCard", () => {
   // The bridge is rebuilt in beforeEach, but the mocks are kept on this object so tests can read
-  // them with their full Mock type. The window.threadboard slot is set to the same shape as a
+  // them with their full Mock type. The window.weft slot is set to the same shape as a
   // ShellBridge would have, cast through unknown to keep the cast honest.
   let kw: {
     state: ReturnType<typeof vi.fn>;
@@ -33,11 +33,11 @@ describe("LaptopModeCard", () => {
         };
       }),
     };
-    window.threadboard = { keepWorking: kw } as unknown as ShellBridge;
+    window.weft = { keepWorking: kw } as unknown as ShellBridge;
   });
 
   afterEach(() => {
-    delete window.threadboard;
+    delete window.weft;
   });
 
   it("renders five chips and a status line, calls start on click", async () => {

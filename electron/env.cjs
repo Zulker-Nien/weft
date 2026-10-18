@@ -11,7 +11,7 @@ const path = require("node:path");
 const MARK = "__WEFT_PATH__";
 
 function defaultCacheFile() {
-  return path.join(process.env.THREADBOARD_DATA || path.join(os.homedir(), ".weft"), "shell-path");
+  return path.join(process.env.WEFT_DATA || path.join(os.homedir(), ".weft"), "shell-path");
 }
 
 function loginShellPath() {

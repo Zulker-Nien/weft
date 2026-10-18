@@ -1,13 +1,13 @@
 #!/bin/bash
 # scratch.sh — a private scratch folder for one /weft:done run, outside the project
-# Usage: scratch.sh new          → makes <THREADBOARD_DATA or ~/.weft>/done/run-XXXXXX, prints its path
+# Usage: scratch.sh new          → makes <WEFT_DATA or ~/.weft>/done/run-XXXXXX, prints its path
 #        scratch.sh clean <dir>  → removes that folder (only a run folder directly under done/)
 #
 # The batch's prompt files, tasks.json and out/ live here, never in the repo, so they don't land in
 # the commit pile and two wrap-ups running at once never share (or overwrite) each other's notes.
 # `new` also prunes run folders older than a day that a crashed or interrupted run left behind.
 
-BASE="${THREADBOARD_DATA:-$HOME/.weft}/done"
+BASE="${WEFT_DATA:-$HOME/.weft}/done"
 
 case "$1" in
   new)

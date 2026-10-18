@@ -40,7 +40,7 @@ for the `second-instance` handler). `pnpm desktop` runs the script before launch
 and `pnpm dev:protocol` runs it standalone.
 
 `lib/auth/desktop.ts:authRedirectTo()` returns the `weft://account-callback?next=…` URL when the
-Electron shell is running (`process.env.THREADBOARD_SHELL_URL` is set) and falls back to the
+Electron shell is running (`process.env.WEFT_SHELL_URL` is set) and falls back to the
 loopback HTTP origin for plain `next dev` (no Electron, no `weft://` handler at all).
 
 ## From link to session
@@ -59,7 +59,7 @@ loopback HTTP origin for plain `next dev` (no Electron, no `weft://` handler at 
 6. `handleLink` in `electron/main.cjs` sees the link is for the account callback and hands it to
    `accountLink.handle()` (built by `createAccountLink()` in `electron/account-link.cjs`). The handler
    parses the query string with `accountCallbackBody()` and POSTs it to `/api/auth/weft-callback`
-   on the loopback server with `x-threadboard: 1` and `content-type: application/json`. The shared
+   on the loopback server with `x-weft-token: 1` and `content-type: application/json`. The shared
    `warnUser` (in `electron/main.cjs`) is the single dialog the account-callback path uses for
    errors; `pageLinks` and `accountLink` both take it as `warn`, so the two flows stay in step.
 7. The route (`app/api/auth/weft-callback/route.ts`) calls `finishSignIn(code)` (in

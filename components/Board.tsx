@@ -203,7 +203,7 @@ export default function Board() {
     (id: string | null) => {
       // A card always opens full screen, with its browser beside the thread; closing it hides the browser.
       if (Boolean(id) !== Boolean(selectedRef.current)) {
-        if (window.threadboard) window.threadboard.browser.setVisible(Boolean(id));
+        if (window.weft) window.weft.browser.setVisible(Boolean(id));
         else setWebBrowserOpen(Boolean(id));
       }
       selectedRef.current = id;
@@ -365,7 +365,7 @@ export default function Board() {
   // While the New thread dialog is up, the browser pane beside it shows the splash. Closing it goes back to
   // the open card's browser (a card just started is open by then), or the pane as it was.
   useEffect(() => {
-    const bridge = window.threadboard;
+    const bridge = window.weft;
     if (!showNew || !bridge) return;
     const before = bridge.browser.getState();
     const page = api.newThreadPage();
@@ -415,7 +415,7 @@ export default function Board() {
     };
   });
 
-  useEffect(() => window.threadboard?.onMenu((action, payload) => onMenu.current(action, payload)), []);
+  useEffect(() => window.weft?.onMenu((action, payload) => onMenu.current(action, payload)), []);
 
   const filtering = Boolean(project || query.trim() || isFiltering(railFilter));
   // Picking another project or changing the filter collapses the columns again.

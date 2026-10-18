@@ -28,7 +28,7 @@ export interface WeftProcess {
 export function weftProcess(): WeftProcess {
   const port = process.env.PORT ?? "";
   const dir = process.cwd();
-  const app = Number(process.env.THREADBOARD_APP_PID);
+  const app = Number(process.env.WEFT_APP_PID);
   return {
     pids: [process.pid, process.ppid, app].filter((p) => Number.isInteger(p) && p > 1),
     port,

@@ -107,7 +107,7 @@ function SignIn({ error, onCheck }: { error: string | null; onCheck: () => Promi
           href={INSTALL_URL}
           onClick={(e) => {
             e.preventDefault();
-            window.threadboard?.openExternal(INSTALL_URL);
+            window.weft?.openExternal(INSTALL_URL);
           }}
           className="text-accent underline"
         >

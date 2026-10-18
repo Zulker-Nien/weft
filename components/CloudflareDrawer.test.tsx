@@ -52,13 +52,13 @@ function setup(status: CloudflareStatus | null, project: string | null = null, e
   const notify = vi.fn();
   const onOpenUrl = vi.fn();
   const openExternal = vi.fn();
-  (window as unknown as { threadboard: unknown }).threadboard = { openExternal };
+  (window as unknown as { weft: unknown }).weft = { openExternal };
   render(<CloudflareDrawer bridge={b as unknown as CloudflareBridge} status={status} error={error} reload={reload} project={project} onOpenUrl={onOpenUrl} notify={notify} />);
   return { b, reload, notify, onOpenUrl, openExternal };
 }
 
 afterEach(() => {
-  delete (window as unknown as { threadboard?: unknown }).threadboard;
+  delete (window as unknown as { weft?: unknown }).weft;
 });
 
 const drawer = (b: CloudflareBridge | null, status: CloudflareStatus | null, error: string | null = null) => (
@@ -78,7 +78,7 @@ describe("CloudflareDrawer", () => {
 
   it("asks for a restart in a Weft from before Cloudflare, and restarts", async () => {
     const splashAction = vi.fn();
-    (window as unknown as { threadboard: unknown }).threadboard = { desktop: true, splashAction };
+    (window as unknown as { weft: unknown }).weft = { desktop: true, splashAction };
     const { rerender } = render(drawer(null, null));
     expect(screen.getByText("Restart Weft to turn on Cloudflare")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Restart Weft" }));

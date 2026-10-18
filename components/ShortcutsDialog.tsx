@@ -17,7 +17,7 @@ export default function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   const sections = useMemo(
     () =>
       shortcutSections(registered, {
-        desktop: typeof window !== "undefined" && Boolean(window.threadboard),
+        desktop: typeof window !== "undefined" && Boolean(window.weft),
         dictation: bindingSpec(currentBinding("dictation"), mac),
       }),
     [registered, mac],

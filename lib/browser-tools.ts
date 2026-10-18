@@ -7,7 +7,7 @@ import { SHOW_DIR } from "./show-dir";
 import { shellToken } from "./shell-token";
 
 // The desktop shell (electron/main.cjs) passes these when it starts the Next server.
-const SHELL_URL = process.env.THREADBOARD_SHELL_URL;
+const SHELL_URL = process.env.WEFT_SHELL_URL;
 
 export const BROWSER_PROMPT = `You are running inside Weft, a desktop app with a browser pane beside the user's board.
 Use the mcp__browser__* tools to open pages there (for example a dev server you started), read them, take screenshots, and click or type. The user can see that pane.

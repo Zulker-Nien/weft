@@ -248,7 +248,7 @@ describe("vault view", () => {
     vi.stubGlobal("window", {});
     expect(vaultBridge()).toBeNull();
     const bridge = { overview: vi.fn() };
-    vi.stubGlobal("window", { threadboard: { vault: bridge } });
+    vi.stubGlobal("window", { weft: { vault: bridge } });
     expect(vaultBridge()).toBe(bridge);
   });
 });

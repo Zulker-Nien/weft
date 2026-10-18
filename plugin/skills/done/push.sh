@@ -2,14 +2,14 @@
 # push.sh — Phase 4: push the commit, if Weft's "Push on Done" setting is on (the default)
 # Usage: push.sh
 #
-# Reads pushOnDone from Weft's settings.json (THREADBOARD_DATA, else ~/.weft); a missing file or
+# Reads pushOnDone from Weft's settings.json (WEFT_DATA, else ~/.weft); a missing file or
 # key means on. Pushes the current branch with a plain `git push`, never --force. A branch with no
 # upstream yet goes to origin with -u.
 #
 # Exit 0: pushed, or skipped on purpose (setting off, no remote, detached HEAD, nothing to push).
 # Exit 1: the push failed (rejected, offline, auth): the commit stays local and the card goes to Review.
 
-SETTINGS="${THREADBOARD_DATA:-$HOME/.weft}/settings.json"
+SETTINGS="${WEFT_DATA:-$HOME/.weft}/settings.json"
 if [ -f "$SETTINGS" ] && grep -Eq '"pushOnDone"[[:space:]]*:[[:space:]]*false' "$SETTINGS"; then
   echo "Push on Done is off in Weft's Settings: not pushing."
   exit 0

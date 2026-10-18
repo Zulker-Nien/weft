@@ -9,7 +9,7 @@ import QuestionForm, { ARM_MS, type QuestionFormHandle } from "./QuestionForm";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  delete (window as { threadboard?: unknown }).threadboard;
+  delete (window as { weft?: unknown }).weft;
 });
 
 const ONE: Question[] = [
@@ -225,14 +225,14 @@ describe("QuestionForm", () => {
 
   it("shows the highlighted option's preview in the browser pane, or under the options without one", () => {
     const open = vi.fn(() => Promise.resolve());
-    (window as { threadboard?: unknown }).threadboard = { browser: { open } };
+    (window as { weft?: unknown }).weft = { browser: { open } };
     const { key } = setup(ONE, { previewUrl: "file:///show/c1-question.html" });
     expect(open).toHaveBeenLastCalledWith("file:///show/c1-question.html#0-0", "c1");
     key("ArrowDown");
     expect(open).toHaveBeenLastCalledWith("file:///show/c1-question.html#0-1", "c1");
     expect(screen.queryByText("| Nav | Content |")).toBeNull();
     cleanup();
-    delete (window as { threadboard?: unknown }).threadboard;
+    delete (window as { weft?: unknown }).weft;
     setup(ONE);
     expect(screen.getByText("| Nav | Content |")).toBeTruthy();
   });

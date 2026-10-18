@@ -80,7 +80,7 @@ export default function LaptopModeCard() {
   const [state, setState] = useState<KwState>({ mode: "off" });
   const [busy, setBusy] = useState(false);
   const now = useNow();
-  const bridge = typeof window !== "undefined" ? window.threadboard?.keepWorking : undefined;
+  const bridge = typeof window !== "undefined" ? window.weft?.keepWorking : undefined;
   const available = Boolean(bridge);
 
   useEffect(() => {

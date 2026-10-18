@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// The registry against a real file in a temp dir (THREADBOARD_DATA), never the real ~/.weft.
+// The registry against a real file in a temp dir (WEFT_DATA), never the real ~/.weft.
 let dir: string;
 
 async function load() {
@@ -13,7 +13,7 @@ async function load() {
 
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-webhooks-"));
-  process.env.THREADBOARD_DATA = dir;
+  process.env.WEFT_DATA = dir;
 });
 afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 

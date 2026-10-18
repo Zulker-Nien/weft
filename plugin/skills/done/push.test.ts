@@ -17,7 +17,7 @@ function commit(name: string) {
   git(work, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", name);
 }
 function push() {
-  const r = spawnSync("bash", [SCRIPT], { cwd: work, encoding: "utf8", env: { ...process.env, THREADBOARD_DATA: data } });
+  const r = spawnSync("bash", [SCRIPT], { cwd: work, encoding: "utf8", env: { ...process.env, WEFT_DATA: data } });
   return { code: r.status, out: r.stdout + r.stderr };
 }
 const remoteHead = () => git(tmp, "--git-dir", "origin.git", "rev-parse", "main");

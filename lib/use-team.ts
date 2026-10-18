@@ -21,8 +21,8 @@ export type TeamHook = {
   actions: TeamClientActions;
 };
 
-// The headers the local route needs; x-threadboard is what lib/guard.ts checks on writes.
-const WRITE_HEADERS = { "content-type": "application/json", "x-threadboard": "1" };
+// The headers the local route needs; x-weft-token is what lib/guard.ts checks on writes.
+const WRITE_HEADERS = { "content-type": "application/json", "x-weft-token": "1" };
 
 // We can't read the status from the typed `api` client (it throws on non-2xx), so the hook asks the
 // server directly and maps the status to a state. The forwarder has already turned a fetch error into

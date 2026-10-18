@@ -198,7 +198,7 @@ describe("useTeam", () => {
         "/api/account/team",
         expect.objectContaining({
           method: "POST",
-          headers: { "content-type": "application/json", "x-threadboard": "1" },
+          headers: { "content-type": "application/json", "x-weft-token": "1" },
           body: JSON.stringify({ org: "acme", action: "invite", email: "a@b.co", role: "member" }),
         }),
       ]);

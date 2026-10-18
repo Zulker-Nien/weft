@@ -49,7 +49,7 @@ export function restartStatus(): RestartStatus {
 
 // Arms the restart, or turns an armed relaunch into an update. With nothing running it restarts after SETTLE_MS.
 export function armRestart(then: RestartThen = "relaunch"): RestartStatus {
-  if (!process.env.THREADBOARD_SHELL_URL) throw new Error("Restarting Weft needs the desktop app.");
+  if (!process.env.WEFT_SHELL_URL) throw new Error("Restarting Weft needs the desktop app.");
   let drain = state.drain;
   if (drain) {
     if (then === "update") drain.then = "update";

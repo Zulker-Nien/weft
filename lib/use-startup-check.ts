@@ -17,7 +17,7 @@ export function slowStartupMessage(result: StartupResult): string | null {
 export function useStartupCheck(loaded: boolean, toast: (text: string) => void) {
   useEffect(() => {
     if (!loaded) return;
-    void window.threadboard
+    void window.weft
       ?.startupReady?.()
       .then((result) => {
         const message = slowStartupMessage(result);

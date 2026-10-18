@@ -36,7 +36,7 @@ const list = (...deployments: object[]) => ({ deployments });
 function deploy(wait: Record<string, string> = {}) {
   const env = {
     ...process.env,
-    THREADBOARD_DATA: data,
+    WEFT_DATA: data,
     DEPLOY_WAIT_MS: "300",
     DEPLOY_BUILD_WAIT_MS: "3000",
     DEPLOY_POLL_MS: "50",

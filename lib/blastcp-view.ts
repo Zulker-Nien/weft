@@ -50,7 +50,7 @@ export interface BlastcpWorkspace {
   properties: { slug: string; name: string }[];
 }
 
-// window.threadboard.blastcp, from electron/preload.cjs.
+// window.weft.blastcp, from electron/preload.cjs.
 export interface BlastcpBridge {
   status(folders: string[]): Promise<BlastcpStatus>;
   connect(): Promise<{ email: string }>;
@@ -65,7 +65,7 @@ export interface BlastcpBridge {
 export const SITE = "https://blastcp.com";
 
 export function blastcpBridge(): BlastcpBridge | null {
-  return (typeof window !== "undefined" && window.threadboard?.blastcp) || null;
+  return (typeof window !== "undefined" && window.weft?.blastcp) || null;
 }
 
 // The board reloaded onto BlastCP before Electron main did: main keeps the code it launched with, so its
@@ -75,7 +75,7 @@ export const needsRestart = (error: string | null) => !!error && error.includes(
 // Restarts Weft. A main from before "relaunch" ignores it, so after a moment quit instead, and Weft opens on
 // the new main next time. Returns false outside the desktop shell.
 export function restartWeft(wait = 1500) {
-  const shell = typeof window !== "undefined" ? window.threadboard : undefined;
+  const shell = typeof window !== "undefined" ? window.weft : undefined;
   if (!shell?.splashAction) return false;
   shell.splashAction("relaunch");
   setTimeout(() => shell.splashAction?.("quit"), wait);

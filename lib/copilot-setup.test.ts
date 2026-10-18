@@ -15,7 +15,7 @@ const h = vi.hoisted(() => ({
   statusOf: vi.fn(),
 }));
 h.dir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-copilot-setup-"));
-process.env.THREADBOARD_DATA = h.dir;
+process.env.WEFT_DATA = h.dir;
 afterAll(() => fs.rmSync(h.dir, { recursive: true, force: true }));
 
 vi.mock("node:child_process", () => ({ execFile: h.execFile }));

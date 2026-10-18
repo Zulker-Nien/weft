@@ -178,7 +178,7 @@ describe("restartGuard", () => {
 describe("weftProcess", () => {
   it("is this server, its parent, the app main.cjs names, and the port and folder it runs in", () => {
     vi.stubEnv("PORT", "1234");
-    vi.stubEnv("THREADBOARD_APP_PID", "777");
+    vi.stubEnv("WEFT_APP_PID", "777");
     const weft = weftProcess();
     expect(weft.pids).toEqual([process.pid, process.ppid, 777]);
     expect(weft.port).toBe("1234");
@@ -187,7 +187,7 @@ describe("weftProcess", () => {
   });
 
   it("leaves out an app pid it wasn't given, and a port it doesn't know", () => {
-    vi.stubEnv("THREADBOARD_APP_PID", "");
+    vi.stubEnv("WEFT_APP_PID", "");
     delete process.env.PORT;
     const weft = weftProcess();
     expect(weft.pids).toEqual([process.pid, process.ppid].filter((p) => p > 1));

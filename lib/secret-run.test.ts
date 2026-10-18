@@ -10,7 +10,7 @@ vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
   tool: (name: string, _description: string, _schema: unknown, handler: Handler) => ({ name, handler }),
 }));
 
-vi.stubEnv("THREADBOARD_SHELL_URL", "http://127.0.0.1:4567");
+vi.stubEnv("WEFT_SHELL_URL", "http://127.0.0.1:4567");
 vi.mock("./shell-token", () => ({ shellToken: () => "tok" }));
 const sr = await import("./secret-run");
 
@@ -176,8 +176,8 @@ describe("devSecrets", () => {
   });
 
   it("does nothing outside the desktop app", async () => {
-    vi.stubEnv("THREADBOARD_SHELL_URL", "");
+    vi.stubEnv("WEFT_SHELL_URL", "");
     expect(await sr.devSecrets(card!, "npm run dev", proj)).toEqual({});
-    vi.stubEnv("THREADBOARD_SHELL_URL", "http://127.0.0.1:4567");
+    vi.stubEnv("WEFT_SHELL_URL", "http://127.0.0.1:4567");
   });
 });

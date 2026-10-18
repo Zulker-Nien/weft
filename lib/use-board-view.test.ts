@@ -53,7 +53,7 @@ describe("useBoardView", () => {
   });
 
   it("changing project closes the open thread and hides the browser", () => {
-    (window as { threadboard?: unknown }).threadboard = undefined;
+    (window as { weft?: unknown }).weft = undefined;
     const { result, select, setWebBrowserOpen } = makeView();
     act(() => result.current.chooseProject("/repo"));
     select.mockClear();

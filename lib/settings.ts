@@ -63,7 +63,7 @@ interface Settings {
 
 const FILE = path.join(DATA_DIR, "settings.json");
 function settings(): Settings {
-  return globalSingleton("__threadboardSettings", () => {
+  return globalSingleton("__weftSettings", () => {
     const saved = fs.existsSync(FILE) ? (JSON.parse(fs.readFileSync(FILE, "utf8")) as Partial<Settings>) : {};
     return {
       threadPrompt: saved.threadPrompt,

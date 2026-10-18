@@ -4,13 +4,13 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BoardEvent } from "./types";
 
-// The catalog against a real store in a temp dir (THREADBOARD_DATA), never the real ~/.weft.
+// The catalog against a real store in a temp dir (WEFT_DATA), never the real ~/.weft.
 let dir: string;
-const g = globalThis as unknown as { __threadboardState?: unknown };
+const g = globalThis as unknown as { __weftState?: unknown };
 
 async function load() {
   vi.resetModules();
-  delete g.__threadboardState;
+  delete g.__weftState;
   const store = await import("./store");
   const tags = await import("./tag-store");
   const { subscribe } = await import("./bus");
@@ -28,10 +28,10 @@ const tagsOf = ({ store }: Loaded, id: string) => store.getCard(id)?.tags;
 
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-tags-"));
-  process.env.THREADBOARD_DATA = dir;
+  process.env.WEFT_DATA = dir;
 });
 afterEach(() => {
-  delete g.__threadboardState;
+  delete g.__weftState;
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

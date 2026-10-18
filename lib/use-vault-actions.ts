@@ -130,7 +130,7 @@ export function useVaultActions(bridge: VaultBridge | null, overview: { vaults: 
   }, [bridge, revealed, change, notify]);
 
   const menu = useCallback(async (v: VaultSummary, s: VaultSecret, e: React.MouseEvent) => {
-    const shell = window.threadboard;
+    const shell = window.weft;
     if (!shell?.popupMenu) return;
     e.preventDefault();
     const others = (overview?.vaults ?? []).filter((o) => o.id !== v.id);

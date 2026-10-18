@@ -53,7 +53,7 @@ export default function SupabaseDrawer({
   const [projects, setProjects] = useState<SupabaseProject[] | null>(null);
   const [orgs, setOrgs] = useState<SupabaseOrg[] | null>(null);
 
-  const shell = typeof window !== "undefined" ? window.threadboard : undefined;
+  const shell = typeof window !== "undefined" ? window.weft : undefined;
   if (needsRestart(Boolean(shell), bridge, error)) return <Restart />;
   if (!bridge) return <Note>Supabase links live in Weft&apos;s desktop app, where Electron keeps your token in the Keychain.</Note>;
   if (error) return <Note>{error}</Note>;
@@ -177,7 +177,7 @@ function Restart() {
       <div>
         <button
           onClick={() => {
-            window.threadboard?.splashAction?.("relaunch");
+            window.weft?.splashAction?.("relaunch");
             setAsked(true);
           }}
           disabled={asked}

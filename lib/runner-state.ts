@@ -127,10 +127,10 @@ export interface Session {
   done: Promise<void>;
 }
 
-export const sessions = globalSingleton("__threadboardSessions", () => new Map<string, Session>());
-export const spares = globalSingleton("__threadboardSpares", () => new Map<string, Session>());
+export const sessions = globalSingleton("__weftSessions", () => new Map<string, Session>());
+export const spares = globalSingleton("__weftSpares", () => new Map<string, Session>());
 // Cards waiting for a CLI login to finish, to run again afterwards.
-export const loginWaiters = globalSingleton("__threadboardLoginWaiters", () => new Map<Backend, Set<string>>());
+export const loginWaiters = globalSingleton("__weftLoginWaiters", () => new Map<Backend, Set<string>>());
 // Messages waiting to run on a card one turn at a time, such as the skills of board automations.
 export const queued = globalSingleton("__weftQueued", () => new Map<string, string[]>());
 // Cards moved to Done: archived once the queued Done skills have all run.

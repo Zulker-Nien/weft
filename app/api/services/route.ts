@@ -6,7 +6,7 @@ import { killProc, killService, ServiceRefused } from "@/lib/services-kill";
 import { listServices, machineInfo } from "@/lib/services-snapshot";
 
 // The rail's Services drawer: every process Weft spawned, grouped by what started it, with CPU and
-// memory (lib/services-snapshot.ts). Reads need no x-threadboard header; writes do (guard()).
+// memory (lib/services-snapshot.ts). Reads need no x-weft-token header; writes do (guard()).
 export async function GET(req: Request) {
   const denied = guard(req, { write: false, sensitive: true });
   if (denied) return denied;

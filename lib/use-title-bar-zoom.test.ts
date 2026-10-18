@@ -8,12 +8,12 @@ const zoomVar = () => document.documentElement.style.getPropertyValue("--zoom");
 
 afterEach(() => {
   cleanup();
-  delete (window as { threadboard?: ShellBridge }).threadboard;
+  delete (window as { weft?: ShellBridge }).weft;
   document.documentElement.style.removeProperty("--zoom");
 });
 
 function withZoom(read: () => number) {
-  window.threadboard = { zoomFactor: read } as unknown as ShellBridge;
+  window.weft = { zoomFactor: read } as unknown as ShellBridge;
 }
 
 describe("useTitleBarZoom", () => {

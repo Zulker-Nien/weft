@@ -4,7 +4,7 @@ import path from "node:path";
 import { defineConfig } from "vitest/config";
 
 // Safety net: tests never see the real ~/.weft or ~/.claude. Files that need clean state set their own
-// THREADBOARD_DATA (and HOME) to a fresh temp dir before importing the module under test.
+// WEFT_DATA (and HOME) to a fresh temp dir before importing the module under test.
 const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "weft-test-"));
 
 // Vitest can't load the real `server-only` (it's a Next build-time marker), so alias every import of it to an
@@ -29,7 +29,7 @@ export default defineConfig({
     // A worker whose run died (its parent killed mid-test) ends itself instead of running on under PID 1.
     setupFiles: ["test/orphan-guard-setup.ts"],
     env: {
-      THREADBOARD_DATA: path.join(sandbox, "data"),
+      WEFT_DATA: path.join(sandbox, "data"),
       CLAUDE_CONFIG_DIR: path.join(sandbox, "claude"),
       HOME: path.join(sandbox, "home"),
     },

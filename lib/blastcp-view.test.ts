@@ -16,7 +16,7 @@ describe("blastcpBridge", () => {
   it("is null outside the desktop shell and the bridge inside it", () => {
     expect(blastcpBridge()).toBeNull();
     const bridge = { status: () => null };
-    (globalThis as { window?: unknown }).window = { threadboard: { blastcp: bridge } };
+    (globalThis as { window?: unknown }).window = { weft: { blastcp: bridge } };
     expect(blastcpBridge()).toBe(bridge);
     (globalThis as { window?: unknown }).window = {};
     expect(blastcpBridge()).toBeNull();
@@ -33,15 +33,15 @@ describe("needsRestart and restartWeft", () => {
   it("asks main to relaunch, then quits if it's still here", () => {
     vi.useFakeTimers();
     expect(restartWeft()).toBe(false);
-    (globalThis as { window?: unknown }).window = { threadboard: {} };
+    (globalThis as { window?: unknown }).window = { weft: {} };
     expect(restartWeft()).toBe(false);
     const splashAction = vi.fn();
-    (globalThis as { window?: unknown }).window = { threadboard: { splashAction } };
+    (globalThis as { window?: unknown }).window = { weft: { splashAction } };
     expect(restartWeft(100)).toBe(true);
     expect(splashAction).toHaveBeenLastCalledWith("relaunch");
     vi.advanceTimersByTime(100);
     expect(splashAction).toHaveBeenLastCalledWith("quit");
-    (globalThis as { window?: { threadboard?: object } }).window = {};
+    (globalThis as { window?: { weft?: object } }).window = {};
     vi.useRealTimers();
   });
 });

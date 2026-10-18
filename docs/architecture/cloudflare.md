@@ -70,7 +70,7 @@ the drawer then offers **Restart Weft** (`needsRestart` in `lib/cloudflare-view.
   IPC handlers answer the board window only.
 - `electron/cloudflare-api.cjs`: request building (GET, POST, DELETE), `NARROW` and `narrowToken`, errors, reading Cloudflare's answers (`pagesDeploy`, `workerDeploy`,
   `pagesUrl`, `workerUrl`, `pagesGit`) and the folder's wrangler config (`wranglerOf`).
-- `electron/preload.cjs`: `window.threadboard.cloudflare`.
+- `electron/preload.cjs`: `window.weft.cloudflare`.
 - `lib/cloudflare-view.ts`: types, the bridge, matching, labels. `lib/use-cloudflare.ts`: loading.
 - `components/CloudflareDrawer.tsx` (token form, linked folders, restart), `components/CloudflarePicker.tsx` (Link…),
   `components/CloudflareLogo.tsx`.

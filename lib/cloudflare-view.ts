@@ -66,7 +66,7 @@ export interface CloudflareProject {
   updatedAt: number;
 }
 
-// window.threadboard.cloudflare, from electron/preload.cjs.
+// window.weft.cloudflare, from electron/preload.cjs.
 export interface CloudflareBridge {
   status(folders: string[]): Promise<CloudflareStatus>;
   setToken(token: string): Promise<TokenSaved>;
@@ -95,13 +95,13 @@ export function tokenSavedLine(saved: TokenSaved) {
 }
 
 export function cloudflareBridge(): CloudflareBridge | null {
-  return (typeof window !== "undefined" && window.threadboard?.cloudflare) || null;
+  return (typeof window !== "undefined" && window.weft?.cloudflare) || null;
 }
 
 // Weft's desktop shell is running, but from before Cloudflare: its preload has no bridge, or main has no
 // handlers yet. Either way a restart turns it on.
 export function needsRestart(bridge: CloudflareBridge | null, error: string | null) {
-  if (!bridge) return typeof window !== "undefined" && Boolean(window.threadboard?.desktop);
+  if (!bridge) return typeof window !== "undefined" && Boolean(window.weft?.desktop);
   return !!error && error.includes("No handler registered for 'cloudflare:");
 }
 

@@ -30,7 +30,7 @@ function setup() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  window.threadboard = { openExternal } as unknown as typeof window.threadboard;
+  window.weft = { openExternal } as unknown as typeof window.weft;
 });
 
 describe("BillingStatus", () => {

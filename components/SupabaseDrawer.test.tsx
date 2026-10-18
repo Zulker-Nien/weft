@@ -48,13 +48,13 @@ function setup(status: SupabaseStatus | null, project: string | null = null, err
   const onStart = vi.fn((): Promise<string | undefined> => Promise.resolve("card-1"));
   const openExternal = vi.fn();
   const splashAction = vi.fn();
-  (window as unknown as { threadboard: unknown }).threadboard = { openExternal, splashAction };
+  (window as unknown as { weft: unknown }).weft = { openExternal, splashAction };
   render(<SupabaseDrawer bridge={b as unknown as SupabaseBridge} status={status} error={error} reload={reload} project={project} cards={cards} onOpenCard={onOpenCard} onStart={onStart} onOpenUrl={onOpenUrl} notify={notify} />);
   return { b, reload, notify, onOpenUrl, onOpenCard, onStart, openExternal, splashAction };
 }
 
 afterEach(() => {
-  delete (window as unknown as { threadboard?: unknown }).threadboard;
+  delete (window as unknown as { weft?: unknown }).weft;
 });
 
 describe("SupabaseDrawer", () => {

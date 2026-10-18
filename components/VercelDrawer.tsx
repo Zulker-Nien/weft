@@ -166,7 +166,7 @@ function TokenForm({ error, busy, onSave, onForget }: { error: string | null; bu
           href={TOKEN_URL}
           onClick={(e) => {
             e.preventDefault();
-            window.threadboard?.openExternal(TOKEN_URL);
+            window.weft?.openExternal(TOKEN_URL);
           }}
           className="text-accent underline"
         >
@@ -262,7 +262,7 @@ function Linked({ link, repo, onOpenUrl }: { link: VercelLink; repo: string | nu
       {actions.length > 0 && (
         <div className="flex flex-wrap gap-x-2.5 gap-y-0.5">
           {actions.map((a) => (
-            <button key={a.label} onClick={() => window.threadboard?.openExternal(a.url)} className="text-faint hover:text-ink" title={a.url}>
+            <button key={a.label} onClick={() => window.weft?.openExternal(a.url)} className="text-faint hover:text-ink" title={a.url}>
               {a.label} ↗
             </button>
           ))}

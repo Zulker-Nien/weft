@@ -53,7 +53,7 @@ export const DEFAULT_ORIGIN = "http://localhost:3000";
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const SECRET_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-// Read when used, not at import, so a test's THREADBOARD_DATA counts.
+// Read when used, not at import, so a test's WEFT_DATA counts.
 const file = () => path.join(DATA_DIR, "webhooks.json");
 
 function read(): Webhook[] {

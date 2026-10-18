@@ -11,8 +11,8 @@ lives in `electron/server.cjs`.
 
 - `app.setName("Weft")`, `productName` in `package.json` is "Weft".
 - `TOKEN` is a 24-byte random hex string generated once at startup; passed to the
-  control server (see below) and to the Next server as `THREADBOARD_SHELL_TOKEN`.
-- `PREFERRED_PORT` is `THREADBOARD_PORT` or `1024`. From source, `server.cjs` first runs
+  control server (see below) and to the Next server as `WEFT_SHELL_TOKEN`.
+- `PREFERRED_PORT` is `WEFT_PORT` or `1024`. From source, `server.cjs` first runs
   `electron/free-port.cjs`, which kills whatever listens there and deletes the dev build folder
   (`.next`), so a stale server never forces a second port or a shared build folder; the packaged
   app still falls back to a free port when 1024 is taken. (`pnpm dev`, the board-only mode without Electron, also
@@ -45,7 +45,7 @@ lives in `electron/server.cjs`.
   - `weft://copilot` → `showCopilot()`
   - `weft://card/<id>` → `sendMenu("open-card", id)`
   - `weft://new?prompt=…&folder=…&title=…&cli=puku` → POSTs `/api/cards`
-    (with `x-threadboard: 1`) and then opens the new card. `start=1` is
+    (with `x-weft-token: 1`) and then opens the new card. `start=1` is
     ignored on purpose: the card is always created with `start: false` and
     the New Thread dialog opens pre-filled, so a clickjacked link can't
     fire a thread (L-3). The handler is in `electron/new-thread-link.cjs`
@@ -69,13 +69,13 @@ lives in `electron/server.cjs`.
 ## `electron/server.cjs`
 
 Supervises the Next server. Three run modes, decided by `app.isPackaged` and the
-env var `THREADBOARD_PROD`:
+env var `WEFT_PROD`:
 
 - **Dev** (`pnpm desktop`): `next dev -H 127.0.0.1 -p <port>` under
   `npm_node_execpath` (the same Node that ran `pnpm desktop`). Stdout and
   stderr are also written to the parent's stdout.
 - **Start** (`pnpm app`): builds into `.next-app`, then runs `next start`, gated on
-  `THREADBOARD_PROD=1`.
+  `WEFT_PROD=1`.
 - **Packaged standalone** (`pnpm dist`): the standalone build at
   `process.resourcesPath/server/server.js` is launched as `${name} Helper` (e.g.
   `Weft Helper`) — the helper binary inside `Weft Helper.app/Contents/MacOS/`,
@@ -129,8 +129,8 @@ A native `WebContentsView` overlaid on the board. Lazily created on first
   `POST /browser/open`, `GET /browser/text`, `GET /browser/screenshot`,
   `POST /browser/click`, `POST /browser/type`. Every request is checked for
   `Authorization: Bearer <token>` (the same `TOKEN` from `main.cjs`); the URL +
-  token are passed to the Next server as `THREADBOARD_SHELL_URL` /
-  `THREADBOARD_SHELL_TOKEN`, where `lib/browser-tools.ts` reads them and wraps
+  token are passed to the Next server as `WEFT_SHELL_URL` /
+  `WEFT_SHELL_TOKEN`, where `lib/browser-tools.ts` reads them and wraps
   them as `mcp__browser__*` MCP tools (`open_url`, `read_page`, `screenshot`,
   `click`, `type_text`). The board itself drives the pane over IPC
   (`electron/preload.cjs`).
@@ -168,12 +168,12 @@ A native `WebContentsView` overlaid on the board. Lazily created on first
 
 ## `electron/preload.cjs`
 
-The single `contextBridge.exposeInMainWorld("threadboard", …)` call. The UI's only
+The single `contextBridge.exposeInMainWorld("weft", …)` call. The UI's only
 door into the shell: `browser.*` (open / state / setVisible / setBounds / back /
 forward / reload / onState), `dialog.openFolder`, `openExternal`, `revealFolder`, `popupMenu`, `setBadge`,
 `copilot.toggle` and `copilot.onState`, `onMenu`, and `splashAction` (only used by
 the splash screen's retry/logs/quit buttons). Typed in `lib/client.ts` as
-`ShellBridge`; when `window.threadboard` is absent the board is running in a normal
+`ShellBridge`; when `window.weft` is absent the board is running in a normal
 browser tab (`pnpm dev`).
 
 ## `electron/env.cjs`
@@ -212,7 +212,7 @@ Tested against a fake window in `electron/startup-screen.test.ts`.
 Every launch is timed. `createStartupTimer()` is created at the top of `main.cjs`; `mark(name)` records ms since the
 process started at each phase (`ready` Electron start, `path` login shell PATH, `port` freeing the port, `server`
 server start, `page` board page load), and the board finishes the run with the `board` mark (its first cards are on
-screen) through `startup:ready` (`threadboard.startupReady()` in the preload). `finish()` appends the run to
+screen) through `startup:ready` (`weft.startupReady()` in the preload). `finish()` appends the run to
 `~/.weft/startup.jsonl` (the last 50) and returns a verdict: the total, the median of the last 10 launches in the
 same mode (null until there are 3), the slowest phase, and `slow`. Slow means over 1.5x the usual time and at least
 2s over it. `lib/use-startup-check.ts` shows a toast naming the slowest phase when `slow` is true. List recent
@@ -289,12 +289,12 @@ grant no longer matches and reads of a protected folder get `Operation not permi
 Documents read fine, Downloads didn't). Remove the Electron entry with **−**, add `node_modules/electron/dist/Electron.app`
 again with **+**, and relaunch Weft. The "Weft" entries are the `~/Applications/Weft.app` launcher, a different app.
 
-`pnpm dist` runs `THREADBOARD_DIST=.next-dist THREADBOARD_STANDALONE=1 next
+`pnpm dist` runs `WEFT_DIST=.next-dist WEFT_STANDALONE=1 next
 build && node scripts/prepare-standalone.mjs .next-dist && electron-builder --mac
 --dir`. The build flow:
 
 1. `next build` with `output: "standalone"` (`next.config.ts` sets it when
-   `THREADBOARD_STANDALONE=1`) produces `.next-dist/standalone/`. Tracing pulls in the whole
+   `WEFT_STANDALONE=1`) produces `.next-dist/standalone/`. Tracing pulls in the whole
    project, because `lib/login.ts` spawns CLIs by a computed path, which Next can't trace
    narrowly; the prepare script prunes the extras.
 2. `scripts/prepare-standalone.mjs`:
@@ -322,7 +322,7 @@ executable, macOS saw a second app named Weft, and quitting by name (`osascript 
 
 The board's card and column menus are native, so the narrow board never clips them.
 `lib/card-menu.ts` builds them as plain data (`cardMenu`, `columnMenu`; flat, no submenus, tested in
-`lib/card-menu.test.ts`); `components/use-board-menus.ts` passes them to `threadboard.popupMenu` and runs
+`lib/card-menu.test.ts`); `components/use-board-menus.ts` passes them to `weft.popupMenu` and runs
 the picked id through the board's own move, archive, open and API calls. In a plain browser tab there is
 no shell, so the browser's own menu shows.
 

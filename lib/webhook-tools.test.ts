@@ -14,8 +14,8 @@ vi.mock("./webhook-forward", () => ({ createRelay: vi.fn() }));
 
 // The registry is real, in a temp dir; only the desktop shell (fetch) and the relay are faked.
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-webhook-tools-"));
-process.env.THREADBOARD_DATA = dir;
-vi.stubEnv("THREADBOARD_SHELL_URL", "http://127.0.0.1:4567");
+process.env.WEFT_DATA = dir;
+vi.stubEnv("WEFT_SHELL_URL", "http://127.0.0.1:4567");
 vi.mock("./shell-token", () => ({ shellToken: () => "tok" }));
 const wt = await import("./webhook-tools");
 const registry = await import("./webhooks");

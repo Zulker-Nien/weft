@@ -12,24 +12,24 @@ const req = (headers: Record<string, string>) => new Request("http://x/api", { h
 describe("guard", () => {
   it("lets localhost hosts through with the write header", () => {
     for (const host of ["127.0.0.1:3456", "localhost:3456", "localhost", "[::1]:3456"]) {
-      expect(guard(req({ host, "x-threadboard": "1" }))).toBeNull();
+      expect(guard(req({ host, "x-weft-token": "1" }))).toBeNull();
     }
   });
 
   it("rejects other hosts with 403, even with the header", async () => {
     for (const host of ["evil.com", "evil.com:3456", "127.0.0.1.evil.com", "localhost.evil.com:80", "0.0.0.0:3456", ""]) {
-      const res = guard(req({ host, "x-threadboard": "1" }));
+      const res = guard(req({ host, "x-weft-token": "1" }));
       expect(res?.status, host).toBe(403);
       expect(((await res!.json()) as { error: string }).error).toBe("Forbidden host");
     }
   });
 
-  it("requires x-threadboard: 1 for writes", async () => {
+  it("requires x-weft-token: 1 for writes", async () => {
     const res = guard(req({ host: "localhost:3456" }));
     expect(res?.status).toBe(403);
-    expect(((await res!.json()) as { error: string }).error).toBe("Missing x-threadboard header");
-    expect(guard(req({ host: "localhost:3456", "x-threadboard": "0" }))?.status).toBe(403);
-    expect(guard(req({ host: "localhost:3456", "x-threadboard": "true" }))?.status).toBe(403);
+    expect(((await res!.json()) as { error: string }).error).toBe("Missing x-weft-token header");
+    expect(guard(req({ host: "localhost:3456", "x-weft-token": "0" }))?.status).toBe(403);
+    expect(guard(req({ host: "localhost:3456", "x-weft-token": "true" }))?.status).toBe(403);
   });
 
   it("does not need the header for reads", () => {
@@ -60,6 +60,20 @@ describe("guard without a Host header", () => {
     const res = guard(new Request("http://x/api"), { write: false });
     expect(res?.status).toBe(403);
     expect(await res!.json()).toEqual({ error: "Forbidden host" });
+  });
+});
+
+describe("guard writes with the launch token", () => {
+  const write = (headers: Record<string, string>) => guard(req({ host: "localhost:3456", ...headers }));
+
+  it("accepts the launch token in place of 1, and nothing else", () => {
+    token.value = "secret-token";
+    expect(write({ "x-weft-token": "secret-token" })).toBeNull();
+    expect(write({ "x-weft-token": "wrong-token!" })?.status).toBe(403);
+  });
+
+  it("does not take an arbitrary value where there is no token", () => {
+    expect(write({ "x-weft-token": "secret-token" })?.status).toBe(403);
   });
 });
 

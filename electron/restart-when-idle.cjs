@@ -8,7 +8,7 @@ async function armRestart(server, then = "relaunch", fetchImpl = fetch) {
   try {
     const res = await fetchImpl(`${server.url}/api/restart`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-threadboard": "1" },
+      headers: { "content-type": "application/json", "x-weft-token": "1" },
       body: JSON.stringify({ then }),
     });
     if (res.ok) return null;

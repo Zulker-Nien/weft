@@ -63,7 +63,7 @@ const settings = await import("@/lib/settings");
 const batchRoute = await import("./cards/switch-backend/route");
 const cardRoute = await import("./cards/[id]/switch-backend/route");
 
-const WRITE = { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { host: "localhost:3457", "x-weft-token": "1", "content-type": "application/json" };
 
 function req(url: string, { method = "GET", body, headers = WRITE }: { method?: string; body?: unknown; headers?: Record<string, string> } = {}) {
   return new Request(`http://localhost:3457/api${url}`, {

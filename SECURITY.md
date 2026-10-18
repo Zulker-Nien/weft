@@ -13,7 +13,7 @@ Include what you found, steps to reproduce, and the impact. We aim to reply with
 ## What's in scope
 
 - The local server: every `app/api/*` route should only answer requests addressed to
-  127.0.0.1/localhost, and writes need the `x-threadboard` header (`lib/guard.ts`). A way for a
+  127.0.0.1/localhost, and writes need the `x-weft-token` header (`lib/guard.ts`). A way for a
   website or another local user to drive the board is a vulnerability.
 - The browser-pane control server in `electron/browser-pane.cjs` (token-guarded, 127.0.0.1).
 - The `weft://` link handler.

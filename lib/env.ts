@@ -18,7 +18,7 @@ const INHERITED = /^(CLAUDECODE$|CLAUDE_CODE_|CLAUDE_AGENT_SDK_|CLAUDE_PID$|CLAU
 // token (any thread holding it could drive the pane without Weft's tools). Every CLI gets this env, so
 // nothing secret may live in the server's environment unless it's stripped here
 // (docs/architecture/secrets.md).
-const INTERNAL = /^THREADBOARD_SHELL_/;
+const INTERNAL = /^WEFT_SHELL_/;
 // What Weft's own `next dev` sets in its process, and the NEXT_PUBLIC_ values it loads from Weft's .env:
 // a thread's shell should look like your terminal. NODE_ENV=development breaks `next build` in any other
 // project (its prerender fails), and PORT would point a thread's dev server at Weft's own port. Your own
@@ -45,6 +45,9 @@ export function cliEnv(): NodeJS.ProcessEnv {
   env.CLAUDE_CODE_ENTRYPOINT = "sdk-ts";
   // So .claude/settings.json's hook can tell this server's own CLIs from ones a thread starts (lib/weft-thread.ts).
   env.WEFT_SERVER_PID = String(process.pid);
+  // A thread left alone for 5 minutes loses its prompt cache and re-sends everything at full price; an hour keeps it
+  // warm across a coffee. Subscriptions already get this; API keys don't (1-hour writes cost more).
+  env.CLAUDE_CODE_PROMPT_CACHE_TTL = "1h";
   return env;
 }
 

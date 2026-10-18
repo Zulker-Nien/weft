@@ -8,7 +8,7 @@ function listen(channel, callback) {
 
 // The UI's only door into the shell: the side browser pane, the copilot window, native dialogs,
 // and menu, dock, tray, and shortcut actions.
-contextBridge.exposeInMainWorld("threadboard", {
+contextBridge.exposeInMainWorld("weft", {
   desktop: true,
   platform: process.platform,
   // The page's zoom (View > Zoom In/Out); the traffic lights don't zoom, so the title bar scales back.

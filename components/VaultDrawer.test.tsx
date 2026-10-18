@@ -40,7 +40,7 @@ function bridge() {
 }
 
 function setup(project: string | null, popupMenu?: (items: unknown) => Promise<unknown>, ov = overview) {
-  if (popupMenu) (window as unknown as { threadboard: unknown }).threadboard = { popupMenu };
+  if (popupMenu) (window as unknown as { weft: unknown }).weft = { popupMenu };
   const b = bridge();
   const reload = vi.fn(() => Promise.resolve());
   const notify = vi.fn();
@@ -49,7 +49,7 @@ function setup(project: string | null, popupMenu?: (items: unknown) => Promise<u
 }
 
 afterEach(() => {
-  delete (window as unknown as { threadboard?: unknown }).threadboard;
+  delete (window as unknown as { weft?: unknown }).weft;
 });
 
 describe("VaultDrawer", () => {

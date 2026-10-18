@@ -55,14 +55,14 @@ describe("BlastcpDrawer", () => {
 
   it("asks for a restart when main hasn't loaded BlastCP yet", async () => {
     const splashAction = vi.fn();
-    window.threadboard = { splashAction } as unknown as typeof window.threadboard;
+    window.weft = { splashAction } as unknown as typeof window.weft;
     setup(null, { error: "Error invoking remote method 'blastcp:status': Error: No handler registered for 'blastcp:status'" });
     expect(screen.getByText("Restart Weft to turn on BlastCP")).toBeInTheDocument();
     await userEvent.click(screen.getByText("Restart Weft"));
     expect(splashAction).toHaveBeenCalledWith("relaunch");
     expect(screen.getByText("Restarting…")).toBeDisabled();
     expect(screen.getByText(/open it again/)).toBeInTheDocument();
-    delete window.threadboard;
+    delete window.weft;
   });
 
   it("shows Asking while the first status loads", () => {

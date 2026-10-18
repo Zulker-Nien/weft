@@ -74,7 +74,7 @@ export default function ProjectMenu({
 
   // The desktop app has a native folder picker; a browser tab gets a field to paste a path into.
   function openFolder() {
-    const bridge = window.threadboard;
+    const bridge = window.weft;
     if (!bridge) {
       showForm("open");
       return;

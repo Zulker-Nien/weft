@@ -20,7 +20,7 @@ vi.mock("./desktop", () => ({
   openExternal: (url: string) => {
     openExternalMock(url);
   },
-  isDesktop: () => Boolean(window.threadboard),
+  isDesktop: () => Boolean(window.weft),
   authRedirectTo: (next: string) => `weft://account-callback?next=${encodeURIComponent(next)}`,
 }));
 
@@ -36,11 +36,11 @@ describe("useAuth", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     api.account.mockResolvedValue(signedOut);
-    delete (window as unknown as { threadboard?: { openExternal?: (u: string) => void } }).threadboard;
+    delete (window as unknown as { weft?: { openExternal?: (u: string) => void } }).weft;
   });
 
   afterEach(() => {
-    delete (window as unknown as { threadboard?: { openExternal?: (u: string) => void } }).threadboard;
+    delete (window as unknown as { weft?: { openExternal?: (u: string) => void } }).weft;
   });
 
   it("loads the account view on mount", async () => {
@@ -64,7 +64,7 @@ describe("useAuth", () => {
   });
 
   it("signInWithOAuth fetches the URL and opens the system browser", async () => {
-    (window as unknown as { threadboard: { openExternal: (u: string) => void } }).threadboard = {
+    (window as unknown as { weft: { openExternal: (u: string) => void } }).weft = {
       openExternal: openExternalMock,
     };
     const { result } = renderHook(() => useAuth());

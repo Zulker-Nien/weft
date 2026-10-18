@@ -45,7 +45,7 @@ function createPageLinks({ getServer, contentsFor, warn, weftDir = WEFT_DIR }) {
   async function post(card, route, body) {
     const res = await fetch(`${getServer().url}/api/cards/${encodeURIComponent(card)}/${route}`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-threadboard": "1" },
+      headers: { "content-type": "application/json", "x-weft-token": "1" },
       body: JSON.stringify(body),
     });
     const data = await res.json().catch(() => ({}));

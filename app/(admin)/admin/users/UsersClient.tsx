@@ -78,7 +78,7 @@ function useUsersQuery({ skip, take, searchTerm, sort }: { skip: number; take: n
       setState((s) => ({ ...s, isLoading: true }));
       const params = new URLSearchParams({ skip: String(skip), take: String(take), sort });
       if (searchTerm) params.set("q", searchTerm);
-      fetch(`/api/admin/users?${params}`, { headers: { "x-threadboard": "1" } })
+      fetch(`/api/admin/users?${params}`, { headers: { "x-weft-token": "1" } })
         .then(async (r) => {
           const data = (await r.json().catch(() => ({}))) as ApiResult;
           if (cancelled) return;

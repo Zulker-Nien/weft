@@ -34,7 +34,7 @@ interface LoginRun {
 }
 
 // Kept on globalThis so dev-mode reloads don't lose a login in progress.
-export const runs = globalSingleton("__threadboardLogins", () => new Map<Backend, LoginRun>());
+export const runs = globalSingleton("__weftLogins", () => new Map<Backend, LoginRun>());
 
 const binaries = new Map<Backend, string>();
 

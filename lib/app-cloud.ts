@@ -18,7 +18,7 @@ import { listApps, insertAppAt } from "./mini-app-store";
 import { DATA_DIR } from "./store";
 
 const PULL_INTERVAL_MS = 5 * 60 * 1000;
-// Computed lazily so tests that override THREADBOARD_DATA after import still see their own dir.
+// Computed lazily so tests that override WEFT_DATA after import still see their own dir.
 const APPS_DIR = () => path.join(DATA_DIR, "apps");
 
 // A row the pull reads. Only the columns lib/app-cloud.ts writes are selectable here.

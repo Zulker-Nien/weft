@@ -35,7 +35,7 @@ const newThreadPageRoute = await import("./new-thread-page/route");
 const projectsRoute = await import("./projects/route");
 const newProjectRoute = await import("./projects/new/route");
 
-const WRITE = { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { host: "localhost:3457", "x-weft-token": "1", "content-type": "application/json" };
 const READ = { host: "localhost:3457" };
 
 function req(url: string, { method = "GET", body, headers = WRITE }: { method?: string; body?: unknown; headers?: Record<string, string> } = {}) {
@@ -70,12 +70,12 @@ describe("guard", () => {
     expect(quality.measureQuality).not.toHaveBeenCalled();
   });
 
-  it.each(reads)("%s needs no x-threadboard header", async (_name, call) => {
+  it.each(reads)("%s needs no x-weft-token header", async (_name, call) => {
     expect((await call(req("/x", { headers: READ }))).status).toBe(200);
   });
 
-  it("POST /new-thread-page rejects a foreign host and a missing x-threadboard header", () => {
-    expect(newThreadPageRoute.POST(req("/new-thread-page", { method: "POST", headers: { host: "evil.com", "x-threadboard": "1" } })).status).toBe(403);
+  it("POST /new-thread-page rejects a foreign host and a missing x-weft-token header", () => {
+    expect(newThreadPageRoute.POST(req("/new-thread-page", { method: "POST", headers: { host: "evil.com", "x-weft-token": "1" } })).status).toBe(403);
     expect(newThreadPageRoute.POST(req("/new-thread-page", { method: "POST", headers: READ })).status).toBe(403);
     expect(show.newThreadUrl).not.toHaveBeenCalled();
   });

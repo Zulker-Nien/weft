@@ -35,7 +35,7 @@ export default function CopilotChat() {
   const [error, setError] = useState<string | null>(null);
   const opened = useRef(false);
   // On macOS the header doubles as the title bar, under the window's traffic lights.
-  const mac = useSyncExternalStore(noopSubscribe, () => window.threadboard?.platform ?? "", () => "") === "darwin";
+  const mac = useSyncExternalStore(noopSubscribe, () => window.weft?.platform ?? "", () => "") === "darwin";
   useTitleBarZoom();
   // The copilot's own window: files dropped anywhere in it go to its reply box.
   useFileDrop((_spot, files) => handFiles(COPILOT_ID, files));

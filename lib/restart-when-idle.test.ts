@@ -34,7 +34,7 @@ const lastRestart = () => events.flatMap((e) => (e.type === "restart" ? [e.resta
 
 beforeEach(() => {
   vi.useFakeTimers();
-  vi.stubEnv("THREADBOARD_SHELL_URL", "http://127.0.0.1:9");
+  vi.stubEnv("WEFT_SHELL_URL", "http://127.0.0.1:9");
   cards.clear();
   busy.clear();
   queued.clear();
@@ -50,7 +50,7 @@ afterEach(() => {
 
 describe("armRestart", () => {
   it("needs the desktop app", () => {
-    vi.stubEnv("THREADBOARD_SHELL_URL", "");
+    vi.stubEnv("WEFT_SHELL_URL", "");
     expect(() => armRestart()).toThrow(/desktop app/);
     expect(restartArmed()).toBe(false);
   });

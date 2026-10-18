@@ -8,7 +8,7 @@ vi.mock("@/lib/scheduler", () => ({
 const scheduler = await import("@/lib/scheduler");
 const { POST, DELETE } = await import("./route");
 
-const WRITE = { host: "localhost:3000", "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { host: "localhost:3000", "x-weft-token": "1", "content-type": "application/json" };
 const ctx = (id = "c1") => ({ params: Promise.resolve({ id }) });
 const req = (method: string, body: unknown, headers: Record<string, string> = WRITE) =>
   new Request("http://localhost/api/cards/c1/scheduled", { method, headers, body: JSON.stringify(body) });
@@ -53,7 +53,7 @@ describe("POST /api/cards/[id]/scheduled", () => {
     expect(res.status).toBe(400);
   });
 
-  it("is guarded: no x-threadboard header or a foreign host is 403", async () => {
+  it("is guarded: no x-weft-token header or a foreign host is 403", async () => {
     expect((await POST(req("POST", { text: "hi", at: 1 }, { host: "localhost" }), ctx())).status).toBe(403);
     expect((await POST(req("POST", { text: "hi", at: 1 }, { ...WRITE, host: "evil.com" }), ctx())).status).toBe(403);
     expect(scheduler.scheduleMessage).not.toHaveBeenCalled();

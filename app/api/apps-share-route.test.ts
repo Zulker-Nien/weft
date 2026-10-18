@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 // /api/apps/share: GET ?id=<appId> reads the app's share state, PUT { id, mode, password? } writes a new one.
-// The localhost guard (write also needs x-threadboard) wraps both, and the lib's AppShareError is passed
+// The localhost guard (write also needs x-weft-token) wraps both, and the lib's AppShareError is passed
 // through verbatim while any other error becomes a 500.
 
 vi.mock("next/server", () => ({ connection: async () => {} }));
@@ -25,7 +25,7 @@ const lib = await import("@/lib/app-share");
 const route = await import("./apps/share/route");
 
 const READ = { host: "localhost:3457" };
-const WRITE = { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { host: "localhost:3457", "x-weft-token": "1", "content-type": "application/json" };
 const put = (body: string, headers: Record<string, string> = WRITE) => route.PUT(new Request("http://localhost:3457/api/apps/share", { method: "PUT", headers, body }));
 
 describe("GET /api/apps/share", () => {

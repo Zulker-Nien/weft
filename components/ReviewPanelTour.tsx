@@ -59,7 +59,7 @@ export function ReviewPanelTour({
 
   // Show each step's page as you reach it.
   useEffect(() => {
-    if (url) window.threadboard?.browser.open(url, cardId).catch(() => {});
+    if (url) window.weft?.browser.open(url, cardId).catch(() => {});
   }, [url, cardId]);
 
   const last = index >= steps.length - 1;
@@ -129,7 +129,7 @@ export function ReviewPanelTour({
               {step.title}
             </h3>
             <button
-              onClick={() => void (url ? window.threadboard?.browser.open(url, cardId) : window.threadboard?.browser.setVisible(true))}
+              onClick={() => void (url ? window.weft?.browser.open(url, cardId) : window.weft?.browser.setVisible(true))}
               title={url ?? "Show the browser pane"}
               className="flex shrink-0 items-center gap-1 rounded-md border border-line-strong px-2 py-0.5 text-[11.5px] text-ink hover:bg-sunken"
             >

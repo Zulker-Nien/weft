@@ -14,7 +14,7 @@ const store = vi.hoisted(() => ({
 vi.mock("@/lib/sprint-store", () => store);
 
 const route = await import("./sprints/route");
-const WRITE = { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" };
+const WRITE = { host: "localhost:3457", "x-weft-token": "1", "content-type": "application/json" };
 const make = (method: "GET" | "POST" | "PATCH" | "DELETE", body?: unknown, headers: Record<string, string> = WRITE) =>
   new Request("http://localhost:3457/api/sprints", { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
 

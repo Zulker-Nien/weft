@@ -16,7 +16,7 @@ let login: typeof import("./login");
 
 beforeEach(async () => {
   vi.resetModules();
-  delete (globalThis as { __threadboardLogins?: unknown }).__threadboardLogins;
+  delete (globalThis as { __weftLogins?: unknown }).__weftLogins;
   bus.publish.mockReset();
   login = await import("./login");
 });

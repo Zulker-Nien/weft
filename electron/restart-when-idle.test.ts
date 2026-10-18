@@ -15,7 +15,7 @@ describe("armRestart", () => {
     expect(await armRestart(server, "update", fetchImpl)).toBeNull();
     expect(fetchImpl).toHaveBeenCalledWith("http://127.0.0.1:3457/api/restart", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-threadboard": "1" },
+      headers: { "content-type": "application/json", "x-weft-token": "1" },
       body: JSON.stringify({ then: "update" }),
     });
   });

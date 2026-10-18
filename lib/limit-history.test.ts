@@ -20,7 +20,7 @@ const lines = () => fs.readFileSync(file(), "utf8").split("\n").filter(Boolean).
 
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-limits-"));
-  process.env.THREADBOARD_DATA = dir;
+  process.env.WEFT_DATA = dir;
 });
 afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 
@@ -50,7 +50,7 @@ describe("recordLimits", () => {
   });
 
   it("never throws when the folder can't be written", async () => {
-    process.env.THREADBOARD_DATA = path.join(dir, "file");
+    process.env.WEFT_DATA = path.join(dir, "file");
     fs.writeFileSync(path.join(dir, "file"), "");
     const { recordLimits } = await load();
     expect(() => recordLimits("claude", { fiveHour: { used: 1 } })).not.toThrow();

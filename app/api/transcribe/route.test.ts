@@ -9,7 +9,7 @@ vi.mock("@/lib/transcribe", () => ({
 
 const { dictationStatus, transcribe } = await import("@/lib/transcribe");
 const URL_BASE = "http://localhost/api/transcribe";
-const WRITE = { host: "localhost", "x-threadboard": "1" };
+const WRITE = { host: "localhost", "x-weft-token": "1" };
 
 const post = (body: BodyInit | null, headers: Record<string, string> = {}) =>
   POST(new Request(URL_BASE, { method: "POST", body, headers: { ...WRITE, ...headers } }));
