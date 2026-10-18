@@ -5,10 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 // vi.hoisted runs before vi.mock so the factories can close over the mocks without a TDZ error.
-const { createServerClient, createClient, cookies } = vi.hoisted(() => ({
+const { createServerClient, createClient, cookies, connection } = vi.hoisted(() => ({
   createServerClient: vi.fn(),
   createClient: vi.fn(),
   cookies: vi.fn(),
+  connection: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock("@supabase/ssr", () => ({ createServerClient }));
@@ -18,6 +19,7 @@ vi.mock("./supabase-project", () => ({
   SUPABASE_KEY: "sb_publishable_test",
 }));
 vi.mock("next/headers", () => ({ cookies }));
+vi.mock("next/server", () => ({ connection }));
 
 async function load() {
   vi.resetModules();
@@ -83,6 +85,14 @@ describe("webClient", () => {
     // The cookieClient mock returns a fresh `auth` object each call; assert
     // the shape (an `auth.getClaims` function) rather than identity.
     expect(typeof client.auth.getClaims).toBe("function");
+  });
+
+  it("awaits connection() before it builds the client, so supabase-js's Date.now() is past the prerender", async () => {
+    const { webClient } = await load();
+    cookies.mockResolvedValue({ getAll: vi.fn(() => []), set: vi.fn() });
+    await webClient();
+    expect(connection).toHaveBeenCalled();
+    expect(connection.mock.invocationCallOrder[0]).toBeLessThan(createServerClient.mock.invocationCallOrder[0]!);
   });
 });
 
