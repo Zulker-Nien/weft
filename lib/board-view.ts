@@ -30,6 +30,19 @@ export const SORTERS: Record<SortKey, (a: Card, b: Card) => number> = {
   oldest: (a, b) => a.createdAt - b.createdAt,
 };
 
+// Backlog uses each card's `order` so the user can drag cards into a chosen sequence.
+// Smaller numbers come first; ties (cards without an order yet, or matching numbers) fall
+// back to the column's chosen sort so an unmoved card still sits next to its peers.
+export function backlogSorter(view: BoardView): (a: Card, b: Card) => number {
+  const fallback = SORTERS[view.sort];
+  return (a, b) => {
+    const ao = a.order;
+    const bo = b.order;
+    if (typeof ao === "number" && typeof bo === "number" && ao !== bo) return ao - bo;
+    return fallback(a, b);
+  };
+}
+
 // The board's columns: the cards in the chosen project that match the filter, each column sorted.
 // rootOf folds a worktree into its main repo, so its cards show under that project.
 // What a free-text query is asking for. `tag:foo` narrows to a single tag (case-insensitive,
@@ -69,7 +82,7 @@ export function groupByColumn(cards: Card[], view: BoardView, rootOf: (cwd: stri
     if (!cardMatches(card)) continue;
     groups.get(shownColumn(card))?.push(card);
   }
-  for (const list of groups.values()) list.sort(SORTERS[view.sort]);
+  for (const [column, list] of groups) list.sort(column === "backlog" ? backlogSorter(view) : SORTERS[view.sort]);
   return groups;
 }
 

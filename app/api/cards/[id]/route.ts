@@ -7,7 +7,7 @@ import { withReadScope } from "@/lib/read-scope";
 import { archiveWhenIdle, endSession, isBusy, queueMessages, sendMessage, setPermissionMode } from "@/lib/runner";
 import { addScheduled } from "@/lib/schedule";
 import { dismissSession } from "@/lib/settings";
-import { deleteCard, getCard, updateCard } from "@/lib/store";
+import { deleteCard, getCard, reorderCard, updateCard } from "@/lib/store";
 import { rememberTags } from "@/lib/tag-store";
 import { normalizeTags } from "@/lib/tags";
 import { COLUMNS, MODES, type Card, type Column, type PermissionMode } from "@/lib/types";
@@ -97,6 +97,9 @@ export async function PATCH(req: Request, { params }: Ctx) {
       // The live session also gets a /add-dir slash command via the inbox so the in-flight turn
       // can keep reading.
       readScope?: unknown;
+      // The backlog's drop-onto-card gesture: place this card before `before` (a sibling id)
+      // in the card's own column, or at the end when null.
+      before?: string | null;
     };
 
     if (body.title !== undefined) {
@@ -141,6 +144,17 @@ export async function PATCH(req: Request, { params }: Ctx) {
     }
 
     if (body.column && body.column !== card.column) moveCard(card, body.column);
+
+    // Reorder inside a column. We accept before only on its own (no other body fields
+    // required) so a drag can land its PATCH even when nothing else changed. The card's
+    // own column is reordered — other columns are left alone.
+    if ("before" in body) {
+      if (body.before !== null && typeof body.before !== "string") {
+        throw new Error("before must be a card id or null.");
+      }
+      reorderCard(id, body.before ?? null);
+    }
+
     return Response.json({ card: getCard(id) });
   } catch (err) {
     return fail(err);

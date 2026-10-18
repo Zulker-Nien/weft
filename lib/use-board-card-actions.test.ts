@@ -4,8 +4,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Card, Column } from "./types";
 
 const apiMove = vi.fn<(id: string, column: Column) => Promise<unknown>>();
+const apiReorder = vi.fn<(id: string, before: string | null) => Promise<unknown>>();
 const apiMark = vi.fn<(id: string, patch: { tags?: string[] }) => Promise<unknown>>();
-vi.mock("./client", () => ({ api: { move: (id: string, column: Column) => apiMove(id, column), mark: (id: string, patch: { tags?: string[] }) => apiMark(id, patch) } }));
+vi.mock("./client", () => ({
+  api: {
+    move: (id: string, column: Column) => apiMove(id, column),
+    reorder: (id: string, before: string | null) => apiReorder(id, before),
+    mark: (id: string, patch: { tags?: string[] }) => apiMark(id, patch),
+  },
+}));
 
 const { useBoardCardActions } = await import("./use-board-card-actions");
 
@@ -14,8 +21,10 @@ const card = (over: Partial<Card> = {}): Card =>
 
 beforeEach(() => {
   apiMove.mockReset();
+  apiReorder.mockReset();
   apiMark.mockReset();
   apiMove.mockResolvedValue({ card: card() });
+  apiReorder.mockResolvedValue({ card: card() });
   apiMark.mockResolvedValue({ card: card() });
 });
 
@@ -23,9 +32,10 @@ afterEach(cleanup);
 
 function makeActions(cards: Card[] = [card()]) {
   const setDragOver = vi.fn<(column: Column | null) => void>();
+  const setCards = vi.fn<(updater: (cards: Card[]) => Card[]) => void>();
   const notify = vi.fn();
-  const { result } = renderHook(() => useBoardCardActions({ cards, setDragOver, notify }));
-  return { result, setDragOver, notify };
+  const { result } = renderHook(() => useBoardCardActions({ cards, setCards, setDragOver, notify }));
+  return { result, setDragOver, setCards, notify };
 }
 
 describe("useBoardCardActions", () => {
@@ -85,5 +95,59 @@ describe("useBoardCardActions", () => {
     const { result } = makeActions([]);
     act(() => result.current.tagCard("ghost", "x"));
     expect(apiMark).not.toHaveBeenCalled();
+  });
+
+  it("reorder stamps a new order on the card and calls api.reorder", () => {
+    const cards = [
+      card({ id: "a", column: "backlog", order: 100 }),
+      card({ id: "b", column: "backlog", order: 200 }),
+      card({ id: "c", column: "backlog", order: 300 }),
+    ];
+    const { result, setCards } = makeActions(cards);
+    act(() => result.current.reorder("c", "a", true));
+    expect(apiReorder).toHaveBeenCalledWith("c", "a");
+    // The optimistic setCards updater produces an order between the new neighbors.
+    const updater = setCards.mock.calls[0]![0];
+    const next = updater(cards);
+    const moved = next.find((c) => c.id === "c")!;
+    const neighbor = next.find((c) => c.id === "a")!;
+    // The card lands before `a`, so its new order is less than a's. The "place before
+    // the first card" formula subtracts ORDER_STEP from the first neighbor, so the
+    // number itself can be negative — only the relative order matters.
+    expect(moved.order!).toBeLessThan(neighbor.order!);
+  });
+
+  it("reorder at the end (before=false on the last sibling) calls api.reorder with null", () => {
+    const cards = [
+      card({ id: "a", column: "backlog", order: 100 }),
+      card({ id: "b", column: "backlog", order: 200 }),
+    ];
+    const { result, setCards } = makeActions(cards);
+    act(() => result.current.reorder("a", "b", false));
+    expect(apiReorder).toHaveBeenCalledWith("a", null);
+    const updater = setCards.mock.calls[0]![0];
+    const next = updater(cards);
+    const moved = next.find((c) => c.id === "a")!;
+    const last = next.find((c) => c.id === "b")!;
+    expect(moved.order!).toBeGreaterThan(last.order!);
+  });
+
+  it("reorder is a no-op for an unknown card", () => {
+    const { result, setCards } = makeActions([card({ id: "a", column: "backlog" })]);
+    act(() => result.current.reorder("ghost", "a", true));
+    expect(apiReorder).not.toHaveBeenCalled();
+    expect(setCards).not.toHaveBeenCalled();
+  });
+
+  it("reorder surfaces an api error through notify", async () => {
+    apiReorder.mockRejectedValueOnce(new Error("offline"));
+    const cards = [
+      card({ id: "a", column: "backlog", order: 100 }),
+      card({ id: "b", column: "backlog", order: 200 }),
+    ];
+    const { result, notify } = makeActions(cards);
+    act(() => result.current.reorder("a", "b", true));
+    await Promise.resolve();
+    expect(notify).toHaveBeenCalledWith(new Error("offline"));
   });
 });

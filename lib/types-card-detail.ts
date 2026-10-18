@@ -26,6 +26,11 @@ export interface Card {
   columnAt?: number;
   // Filed away after its Done automations finished; the board hides it until "Show archived".
   archived?: boolean;
+  // Manual order inside its column. Backlog uses this so you can drag cards into a chosen
+  // order; smaller numbers come first; ties fall back to the column's chosen sort. Set by
+  // the reorder route and the backlog's drop-onto-card gesture (lib/store.ts reorderCard,
+  // lib/use-board-card-actions.ts reorder). Old cards backfill from createdAt on load.
+  order?: number;
   // Running its /done (or Done's automations) and archived when that ends: the board shows it in Done meanwhile.
   wrappingUp?: boolean;
   // Skills a "prompt-matches" automation has already run in this thread, so each runs once.

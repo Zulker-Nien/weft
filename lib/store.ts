@@ -112,6 +112,7 @@ function threadFile(id: string) {
 
 export function listCards(): Card[] {
   backfillPictures();
+  backfillOrder();
   return [...state().cards.values()].sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
@@ -155,7 +156,10 @@ export function createCard(
   id: string = randomUUID(),
 ): Card {
   const now = Date.now();
-  const card: Card = { ...input, id, column: "backlog", createdAt: now, updatedAt: now };
+  // Stamp an order so the new card lands at the end of its column's chosen order (Backlog
+  // surfaces by order; createdAt is a fine starting value since it's monotonically
+  // increasing per-card). This also means a brand-new card sorts after older ones.
+  const card: Card = { ...input, id, column: "backlog", createdAt: now, updatedAt: now, order: now };
   state().cards.set(card.id, card);
   saveBoard();
   publish({ type: "card", card });
@@ -164,7 +168,12 @@ export function createCard(
 
 // Adds many cards at once with a single save (used when picking up existing sessions).
 export function addCards(cards: Card[]) {
-  for (const card of cards) state().cards.set(card.id, card);
+  for (const card of cards) {
+    // Mirror createCard: stamp order on cards that don't have one. Old imports may carry
+    // createdAt but no order, so we backfill here too.
+    if (typeof card.order !== "number") card.order = card.createdAt;
+    state().cards.set(card.id, card);
+  }
   saveBoard();
   for (const card of cards) publish({ type: "card", card });
 }
@@ -177,6 +186,67 @@ export function updateCard(id: string, patch: Partial<Card>): Card {
   Object.assign(card, patch, { updatedAt: now }, moved ? { columnAt: now } : {});
   // A card's symbol claims (lib/claims.ts) end with its work: at Done, or when it's archived.
   if (card.column === "done" || card.archived) delete card.claims;
+  saveBoard();
+  publish({ type: "card", card });
+  return card;
+}
+
+// Order for new cards. Half-step between neighbors; renumber the column when the gap closes.
+export const ORDER_STEP = 1024;
+
+// Backfill order on any card that doesn't have it. Runs once on first listCards after load.
+const orderBackfillOnce = globalThis as unknown as { __weftOrderBackfill?: boolean };
+export function backfillOrder() {
+  if (orderBackfillOnce.__weftOrderBackfill) return;
+  orderBackfillOnce.__weftOrderBackfill = true;
+  const cards = [...state().cards.values()];
+  let changed = false;
+  for (const card of cards) {
+    if (typeof card.order === "number") continue;
+    card.order = card.createdAt;
+    changed = true;
+  }
+  if (changed) saveBoard();
+}
+
+// Place `id` before `beforeId` (or at the end of its column when beforeId is null) in the
+// card's own column. Other columns are left alone — the user is only reordering Backlog.
+export function reorderCard(id: string, beforeId: string | null): Card {
+  const card = state().cards.get(id);
+  if (!card) throw new Error(`No card ${id}`);
+  // Siblings in the same column, ordered by the chosen sort (createdAt) so the formula below
+  // is stable regardless of the card's current order.
+  const siblings = [...state().cards.values()]
+    .filter((c) => c.column === card.column && c.id !== id)
+    .sort((a, b) => a.createdAt - b.createdAt);
+  // The new position of `card` in `siblings`. beforeId === null puts it at the end.
+  const beforeIndex = beforeId === null ? siblings.length : Math.max(0, siblings.findIndex((c) => c.id === beforeId));
+  // prev = sibling just before the slot, next = sibling just after. The card's new order
+  // is the midpoint; if the gap has collapsed (rare with ORDER_STEP), renumber the whole
+  // column and try again.
+  const before = beforeIndex;
+  const prevSibling = before > 0 ? siblings[before - 1] : undefined;
+  const nextSibling = before < siblings.length ? siblings[before] : undefined;
+  const prev = prevSibling?.order;
+  const next = nextSibling?.order;
+  let newOrder: number;
+  if (prev === undefined && next === undefined) newOrder = ORDER_STEP;
+  else if (prev === undefined) newOrder = (next as number) - ORDER_STEP;
+  else if (next === undefined) newOrder = prev + ORDER_STEP;
+  else {
+    const gap = next - prev;
+    if (gap >= 2) newOrder = prev + Math.floor(gap / 2);
+    else {
+      // Gap collapsed; renumber and retry.
+      const ordered = [card, ...siblings].sort((a, b) => a.createdAt - b.createdAt);
+      for (let i = 0; i < ordered.length; i++) {
+        const c = ordered[i] as Card;
+        c.order = (i + 1) * ORDER_STEP;
+      }
+      newOrder = card.order as number;
+    }
+  }
+  card.order = newOrder;
   saveBoard();
   publish({ type: "card", card });
   return card;

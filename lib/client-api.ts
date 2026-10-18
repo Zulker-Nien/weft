@@ -142,6 +142,7 @@ export const api = {
   list: () => call<{ cards: Card[]; home: string; roots: Record<string, string> }>("GET", "/api/cards"),
   create: (input: NewCardInput) => call<{ card: Card }>("POST", "/api/cards", input),
   move: (id: string, column: Column) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { column }),
+  reorder: (id: string, before: string | null) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { before }),
   rename: (id: string, title: string) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { title }),
   setMode: (id: string, permissionMode: PermissionMode) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { permissionMode }),
   archive: (id: string, archived: boolean) => call<{ card: Card }>("PATCH", `/api/cards/${id}`, { archived }),

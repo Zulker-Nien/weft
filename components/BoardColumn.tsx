@@ -4,6 +4,7 @@
 // a "Show more" button when the column is collapsed, and the placeholder / add-thread button.
 // CardView is loaded through guarded() in Board.tsx and rendered via the `renderCard` prop so this
 // file does not have to know the lazy-load wrapper.
+import { useState } from "react";
 import type { CSSProperties, DragEvent, MouseEvent, ReactNode } from "react";
 import type { Card, Column } from "@/lib/types";
 import type { LaneState } from "@/lib/copilot-lane";
@@ -34,6 +35,11 @@ export interface BoardColumnProps {
   onDragLeave: () => void;
   onDrop: (e: DragEvent) => void;
   onColumnContextMenu: (e: MouseEvent) => void;
+  // Backlog-only: a card dropped on a sibling calls this with the moved id, the target id, and
+  // whether the drop was on the top half (place before) or bottom half (place after). target is
+  // the card it landed on, and `before` is true when the drop indicator was on its top
+  // half (place before) and false when it was on the bottom half (place after).
+  onReorder?: (id: string, target: string, before: boolean) => void;
   // Column header props.
   needsYou: boolean;
   archivedCount: number;
@@ -62,6 +68,7 @@ export default function BoardColumn({
   onDragLeave,
   onDrop,
   onColumnContextMenu,
+  onReorder,
   needsYou,
   archivedCount,
   showArchived,
@@ -75,12 +82,20 @@ export default function BoardColumn({
   onAddBacklog,
 }: BoardColumnProps) {
   const style: CSSProperties = { minWidth: columnMinWidth(laneState) };
+  // Which backlog card the drop indicator is on, and on which side. null when no card is hovered.
+  const [dropMarker, setDropMarker] = useState<{ id: string; before: boolean } | null>(null);
   return (
     <section
       data-column={column.id}
       onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
+      onDragLeave={() => {
+        onDragLeave();
+        setDropMarker(null);
+      }}
+      onDrop={(e) => {
+        onDrop(e);
+        setDropMarker(null);
+      }}
       onContextMenu={onColumnContextMenu}
       style={style}
       className={`@container flex w-[264px] shrink flex-col rounded-xl border ${dragOver ? "border-accent bg-accent-soft" : "border-transparent bg-sunken"}`}
@@ -100,7 +115,18 @@ export default function BoardColumn({
         onReviewAll={onReviewAll}
       />
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
-        {shown.map((card) => renderCard(card))}
+        {shown.map((card) => (
+          <CardDropSlot
+            key={card.id}
+            card={card}
+            reorderable={Boolean(onReorder)}
+            marker={dropMarker?.id === card.id ? dropMarker.before : null}
+            onMarkerChange={(before) => setDropMarker(before === null ? null : { id: card.id, before })}
+            onReorder={(id, before) => onReorder?.(id, card.id, before)}
+          >
+            {renderCard(card)}
+          </CardDropSlot>
+        ))}
         {shown.length < count && (
           <button
             onClick={onShowMore}
@@ -125,3 +151,67 @@ export default function BoardColumn({
 
 // Re-export the helper for callers that still want to compute "is this card overlapping?"
 export { busyHere };
+
+// Wraps a card in a drop target when reordering is on. The drop indicator is a 1-pixel-thick
+// accent line on the top or bottom edge of the hovered card; whichever half the cursor enters
+// decides before vs. after. Drops on the same card the user picked up are ignored — that's a
+// no-op reorder, not a move.
+function CardDropSlot({
+  card,
+  reorderable,
+  marker,
+  onMarkerChange,
+  onReorder,
+  children,
+}: {
+  card: Card;
+  reorderable: boolean;
+  // null when no marker, true when on the top half (place before), false when on the bottom.
+  marker: boolean | null;
+  onMarkerChange: (before: boolean | null) => void;
+  onReorder: (id: string, before: boolean) => void;
+  children: ReactNode;
+}) {
+  if (!reorderable) return <>{children}</>;
+  return (
+    <div
+      data-drop-slot={card.id}
+      onDragOver={(e) => {
+        // Only react to drags that carry a card id; ignore file drops, text, etc.
+        const types = e.dataTransfer.types;
+        if (!types.includes("text/plain")) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const rect = e.currentTarget.getBoundingClientRect();
+        const before = e.clientY - rect.top < rect.height / 2;
+        if (marker !== before) onMarkerChange(before);
+      }}
+      onDragLeave={(e) => {
+        // Only clear when the cursor leaves this slot for something other than a child. relatedTarget
+        // is the element the cursor entered; if it's still inside this slot, keep the marker.
+        const next = e.relatedTarget as Node | null;
+        if (next && e.currentTarget.contains(next)) return;
+        onMarkerChange(null);
+      }}
+      onDrop={(e) => {
+        const id = e.dataTransfer.getData("text/plain");
+        if (!id || id === card.id) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const rect = e.currentTarget.getBoundingClientRect();
+        const before = e.clientY - rect.top < rect.height / 2;
+        onReorder(id, before);
+        onMarkerChange(null);
+      }}
+      className="relative"
+    >
+      {marker !== null && (
+        <div
+          aria-hidden
+          className={`pointer-events-none absolute inset-x-0 z-10 h-0.5 rounded-full bg-accent ${marker ? "top-0" : "bottom-0"}`}
+        />
+      )}
+      {children}
+    </div>
+  );
+}

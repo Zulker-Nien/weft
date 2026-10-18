@@ -225,7 +225,7 @@ export default function Board() {
   const latestCwd = latest?.cwd;
 
   // Drag/drop, tag, and the "skip my own move's chime" ref (used by useBoardEvents below).
-  const { ownMoves, move, drop, tagCard } = useBoardCardActions({ cards, setDragOver, notify });
+  const { ownMoves, move, drop, reorder, tagCard } = useBoardCardActions({ cards, setCards, setDragOver, notify });
   // Project filter and sort, persisted to a cookie.
   const { project, sort, chooseProject, chooseSort, loadFromPrefs } = useBoardView({ select, setWebBrowserOpen });
   // Archive, unarchive, focus the next card, and the last batch (for Z / Undo).
@@ -714,7 +714,6 @@ export default function Board() {
                 onShowMore={() => setExpanded({ view, columns: [...expandedColumns, column.id] })}
                 renderCard={(card) => (
                   <CardView
-                    key={card.id}
                     guardName={card.title}
                     card={card}
                     now={now}
@@ -737,6 +736,7 @@ export default function Board() {
                 }}
                 onDragLeave={() => setDragOver((c) => (c === column.id ? null : c))}
                 onDrop={(e) => drop(column.id, e)}
+                onReorder={column.id === "backlog" ? (id, target, before) => reorder(id, target, before) : undefined}
                 onColumnContextMenu={(e) => void onColumnMenu(column.id, e)}
                 needsYou={column.id === "needs_you" && count > 0}
                 archivedCount={archivedCount}
