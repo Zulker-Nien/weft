@@ -76,6 +76,11 @@ ledger never saw (a foreground command from before it listened) is left out.
   running tasks `lost`: they ran in the CLI's process group, so they died with it.
 - **The next message** gets `taskNote()` ahead of it (`sendMessage` in `lib/runner.ts`): a `[Weft: …]` block naming
   each lost task once, so a resumed CLI, which has no record of them, doesn't wait for reports that will never come.
+- **Orphans on resume**: a resumed CLI also sends a `task_notification` of status `stopped` for tasks the old process left
+  behind. Its structured `reason` (`worker_restart`) is often missing, so `isOrphaned` in `lib/tasks.ts` also matches the
+  summary "Orphaned by a previous … process exit" and keeps them `lost`, not `stopped`. A task Weft already marked lost and
+  told keeps its `told` mark and cut-off time; a new one gets `told: false`. While one is untold, the strip's hint
+  (`CUT_OFF_HINT`) says a message tells the thread, which can run it again.
 - **Idle closing** (`closeWhenIdle`, `trimIdle` in `lib/runner-state.ts`) skips a CLI with a live background task
   (`hasLiveTasks`) and checks again after another keep-alive period. A task silent for 6 hours (`STALE_MS`) stops
   counting, so a missed final event can't hold a CLI open forever.
