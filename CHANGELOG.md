@@ -9,6 +9,8 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 ## [Unreleased]
 
 ### Added
+- **Confetti for achievements.** A new badge or level opens a popup with a burst of confetti instead of a toast: one badge gets the stage, several share a list, and **See your profile** opens the Badges tab (`components/AchievementPopup.tsx`, `components/Confetti.tsx`, `lib/confetti.ts`).
+
 - **League emails.** A welcome on the day you join a league, a Thursday and a Sunday nudge when a move is in play, and Monday's results, from a daily Vercel cron at 13:00 UTC; at most one a day, each sent once (`league_emails`), with one-click unsubscribe (`profiles.league_emails`) (`lib/league-mail*.ts`, `app/api/league/{emails,open,unsubscribe}`, `supabase/migrations/20261017171804_league_emails.sql`).
 
 - **Tokens and plan-limit hits on your Wefter Profile.** The You tab charts your tokens for the last 30 days, from every Claude Code and puku-cli transcript, with a dot over each day you hit your 5-hour or weekly limit; two new badges, ⏳ Hit the ceiling and 🗓️ Ran the week dry, unlock on your first hit of each (`lib/usage.ts`, `lib/usage-scan.ts`, `components/LoomUsage.tsx`).
@@ -46,6 +48,7 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Fixed
 
+- **"Review all" and "Resume N" stay once the board loads.** Backlog's column appears after the cards load and narrows every column below 230px, where the header hid all its actions. Narrow columns now keep them as icons (✓, ▶ N) and hide the row only under 150px, beside the open copilot lane (`components/ColumnHeader.tsx`).
 - **"Show N more" no longer jumps while the board loads.** Until a card's component loaded, the column drew nothing, so "Show 5 more" floated to the top and then dropped below the cards. Each card now draws a card-sized blank first (`CardSkeleton` in `components/BoardColumn.tsx`).
 - **`file.ts:42` in a thread jumps to line 42.** The editor column opened the file at the top: the request's line never reached `CodeEditor`'s `line` prop. The tab now carries it (`setLine` in `lib/editor-tabs.ts`).
 - **Resting the mouse on the copilot pill peeks.** The hidden lane's pill took an `onPeek` it never called; hovering it for 350ms now opens the peek digest, a pass over it doesn't (`components/CopilotHider.tsx`).
