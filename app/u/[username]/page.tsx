@@ -6,6 +6,7 @@
 // awaited inside it while the shell prerenders.
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { connection } from "next/server";
 import { notFound } from "next/navigation";
 import { isDeployed } from "@/lib/home";
 import { loadPublicProfile } from "@/lib/public-profile";
@@ -28,6 +29,8 @@ function NotDeployed() {
 
 async function PageBody({ params }: { params: Promise<{ username: string }> }) {
   const { username } = await params;
+  // Request-bound first: the service client's supabase-js reads Date.now(), which cacheComponents refuses mid-prerender.
+  await connection();
   const profile = await loadPublicProfile(username);
   if (!profile) notFound();
   return <PublicProfileView profile={profile} />;

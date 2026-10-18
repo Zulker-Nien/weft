@@ -38,6 +38,11 @@ cannot dot into a temporary client reference"; reproduced 2026-10-13 on Next 16.
 
 ## Files
 
+`lib/web-session.ts` `webClient()` awaits `connection()` before `cookies()`: building a Supabase client reads `Date.now()`,
+which cacheComponents refuses during prerender on a cold lambda, and only `connection()` gets a render past that. Every gate
+(`requireTeam`, `currentWorkspaceSlug`, `readSessionIdentity`) goes through it; pages that reach `serviceClient()` without
+a gate (/s, /a, /u) call `connection()` themselves (`lib/prerender-check.ts` flags the miss).
+
 - `supabase/migrations/20261013170000_teams.sql`: `orgs`, `org_memberships`, `invitations` (the package's 0001/0002
   schema), profile columns the package reads (`current_org_id`, `display_name` generated from `name`,
   `last_login_at`, `login_count`), and `private.create_personal_org` with the `on_auth_user_created_workspace`

@@ -186,6 +186,11 @@ parser (comments and strings don't count):
   page or above, or a layout above that renders its `children` inside `<Suspense>` (`app/[orgSlug]/layout.tsx` covers
   its pages). Metadata functions are never covered. `connection()` isn't flagged: the admin pages await it at the top
   and build.
+- **Clock before connection** (`facts.clock`): a page or layout function whose first call is `serviceClient()`, ahead of
+  `connection()`, `webClient()` or `webUser()`, is flagged. supabase-js reads `Date.now()` as it builds a client, and on a
+  cold lambda (the client is cached after) cacheComponents refuses it mid-prerender, even inside `<Suspense>` and after
+  `cookies()`; only `connection()` moves past it (/invite/[token] on 2026-10-18; /login, /team, /[orgSlug]/* the same day).
+  `webClient()` awaits `connection()` itself, so every `requireTeam`/`webUser` gate is covered.
 - **Where it runs**: `lib/prerender-check.test.ts` walks the real tree (`treeProblems`) so `pnpm test` fails before a
   deploy; and the route import guard runs `prerenderCheck` on every Edit/MultiEdit/Write to a route file, only when the
   project's next.config turns cacheComponents on, and only for problems the edit adds: a segment config is denied, a

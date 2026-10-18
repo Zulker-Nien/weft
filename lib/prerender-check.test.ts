@@ -87,6 +87,27 @@ describe("prerenderFacts", () => {
   });
 });
 
+describe("prerenderFacts clock", () => {
+  const clock = (src: string) => prerenderFacts(src, "page.tsx").clock;
+
+  it("names a function that builds a service client before anything request-bound", () => {
+    expect(clock("async function Body() { const s = serviceClient(); await webUser(); }")).toEqual(["Body"]);
+    expect(clock("const Body = async () => { if (!serviceClient()) return null; };")).toEqual(["Body"]);
+  });
+
+  it("lets connection(), webClient() or webUser() come first", () => {
+    expect(clock("async function A() { await connection(); serviceClient(); }")).toEqual([]);
+    expect(clock("async function B() { const u = await webUser(); serviceClient(); }")).toEqual([]);
+    expect(clock("async function C() { const c = await webClient(); serviceClient(); }")).toEqual([]);
+  });
+
+  it("skips nested functions, other calls, method calls and bodyless declarations", () => {
+    expect(clock("async function A() { const f = () => serviceClient(); await connection(); }")).toEqual([]);
+    expect(clock("async function B() { other(); x.serviceClient(); }")).toEqual([]);
+    expect(clock("declare function D(): void;")).toEqual([]);
+  });
+});
+
 describe("prerenderProblems and treeProblems", () => {
   let root: string;
   const write = (files: Record<string, string>) => {
@@ -123,6 +144,15 @@ describe("prerenderProblems and treeProblems", () => {
     const m = only(problems("app/page.tsx", "export async function generateMetadata() { await cookies(); }"));
     expect(m.message).toContain("generateMetadata awaits cookies() outside <Suspense>");
     expect(m.message).toContain("make the metadata static");
+  });
+
+  it("names a service client built before connection() as blocking, even inside <Suspense>", () => {
+    const src = "async function Body() { serviceClient(); }\nexport default function Page() { return <Suspense><Body /></Suspense>; }";
+    const p = only(problems("app/s/[id]/page.tsx", src));
+    expect(p.kind).toBe("blocking");
+    expect(p.message).toContain("app/s/[id]/page.tsx: Body calls serviceClient() before anything request-bound");
+    expect(p.message).toContain("await connection()");
+    expect(problems("app/api/x/route.ts", "export async function GET() { serviceClient(); }")).toEqual([]);
   });
 
   it("reads the file from disk without a source, and lets generateStaticParams await params", () => {

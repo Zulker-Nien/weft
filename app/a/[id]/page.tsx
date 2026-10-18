@@ -5,6 +5,7 @@
 // Like /s/[id], it lives in a <Suspense> for cacheComponents: the gate reads the cookie, and params is runtime data.
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { connection } from "next/server";
 import { notFound, redirect } from "next/navigation";
 import { ShareGateForm } from "@aimhuge/share/client";
 import { appShareAccess } from "@/lib/app-share-access";
@@ -22,6 +23,8 @@ export const metadata: Metadata = {
 
 async function PageBody({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // Request-bound first: the service client's supabase-js reads Date.now(), which cacheComponents refuses mid-prerender.
+  await connection();
   const access = await appShareAccess(id);
   if (access.kind === "missing") notFound();
   if (access.kind === "login") redirect(`/login?next=${encodeURIComponent(`/a/${id}`)}`);

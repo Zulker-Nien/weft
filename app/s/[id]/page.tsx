@@ -7,6 +7,7 @@
 // read means we couldn't be a static route.
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { connection } from "next/server";
 import { notFound, redirect } from "next/navigation";
 import { ShareGateForm } from "@aimhuge/share/client";
 import { isDeployed } from "@/lib/home";
@@ -58,6 +59,8 @@ function Unconfigured() {
 // params is runtime data too, so it's awaited here, inside the <Suspense>, not in Page: the shell prerenders.
 async function PageBody({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // Request-bound first: the service client's supabase-js reads Date.now(), which cacheComponents refuses mid-prerender.
+  await connection();
   const access = await shareAccess(id);
   if (access.kind === "unconfigured") return <Unconfigured />;
   if (access.kind === "missing") notFound();

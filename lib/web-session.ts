@@ -7,6 +7,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { connection } from "next/server";
 import { SUPABASE_KEY, SUPABASE_URL } from "./supabase-project";
 
 export type CookieOptions = Record<string, unknown>;
@@ -34,8 +35,12 @@ export function cookieClient(jar: CookieJar, url = SUPABASE_URL, key = SUPABASE_
 
 export type WebClient = ReturnType<typeof cookieClient>;
 
-// The current request's client (Server Components, Route Handlers, Server Actions).
+// The current request's client (Server Components, Route Handlers, Server Actions). connection() first: supabase-js
+// reads Date.now() as it builds a client, and under cacheComponents only connection() moves a render past the stage
+// where that throws ("unstable value `Date.now()` while prerendering"; cookies() alone isn't enough). Every gate
+// (requireTeam, currentWorkspaceSlug, readSessionIdentity) reaches serviceClient() after this, so it's covered too.
 export async function webClient(): Promise<WebClient> {
+  await connection();
   return cookieClient(await cookies());
 }
 

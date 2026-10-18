@@ -11,6 +11,10 @@ import ts from "typescript";
 // - runtime data (`await params`/`searchParams`, `await cookies()`/`headers()`) awaited directly in the default export
 //   or in generateMetadata/generateViewport, outside any <Suspense>: "uncached or runtime data during prerendering".
 //   A heuristic: awaits inside a helper the page calls aren't seen.
+// - a page or layout function that calls serviceClient() before connection(), webClient() or webUser() (both await
+//   connection()): supabase-js reads Date.now() as it builds the client, "encountered the unstable value Date.now()
+//   while prerendering". Not a build error: it fires on a cold lambda only (the client is cached after), and left
+//   /invite/[token] on its fallback on 2026-10-18. <Suspense> doesn't help; only connection() does.
 // lib/prerender-check.test.ts runs it over the real tree; lib/route-import-guard.ts runs it on each edit to a route
 // file. The TypeScript parser, so comments and strings that mention these never count. Only node: imports and
 // typescript: scripts/import-check-hook.mjs loads this file with Node's type stripping.
@@ -20,6 +24,9 @@ const SEGMENT_CONFIGS = new Set(["dynamic", "revalidate", "fetchCache", "dynamic
 // Not connection(): app/(admin)/admin/settings/page.tsx awaits it at the top and builds (it marks a route dynamic on purpose).
 const RUNTIME_CALLS = new Set(["cookies", "headers"]);
 const RUNTIME_PROPS = new Set(["params", "searchParams"]);
+// Builds a Supabase client (Date.now()) / moves the render past the prerender (connection(), or a helper awaiting it).
+const CLOCK_CALLS = new Set(["serviceClient"]);
+const REQUEST_BOUND = new Set(["connection", "webClient", "webUser"]);
 const METADATA_FNS = new Set(["generateMetadata", "generateViewport"]);
 const RENDER_FILE = /^(?:page|layout)\.[jt]sx?$/;
 const ROUTE_HANDLER = /^route\.[jt]s$/;
@@ -44,6 +51,8 @@ export interface PrerenderFacts {
   // Renders `children` inside a <Suspense>: every page below this layout is inside a boundary.
   suspendsChildren: boolean;
   reads: Read[];
+  // The functions that build a service client before anything request-bound.
+  clock: string[];
 }
 
 export function prerenderFacts(src: string, file: string): PrerenderFacts {
@@ -56,7 +65,8 @@ export function prerenderFacts(src: string, file: string): PrerenderFacts {
     const fn = typeof target === "string" ? top.fns.get(target) : target;
     if (fn) reads.push(...runtimeReads(fn).map((what) => ({ fn: name === "default" ? "the default export" : name, what })));
   }
-  return { segmentConfigs: top.segmentConfigs, staticParams: top.exported.has("generateStaticParams"), suspendsChildren: suspendsChildren(sf), reads };
+  const clock = [...top.fns].filter(([, fn]) => clockFirst(fn)).map(([name]) => name);
+  return { segmentConfigs: top.segmentConfigs, staticParams: top.exported.has("generateStaticParams"), suspendsChildren: suspendsChildren(sf), reads, clock };
 }
 
 // A module's top level: its segment config exports, its functions by name, and what it exports, each as the function
@@ -138,6 +148,22 @@ function runtimeReads(fn: ts.FunctionLikeDeclaration): string[] {
   return reads;
 }
 
+// Whether a function's own body (not functions nested in it) calls serviceClient() before connection(), webClient()
+// or webUser(), in source order.
+function clockFirst(fn: ts.FunctionLikeDeclaration): boolean {
+  const seen: { first?: string } = {};
+  const visit = (node: ts.Node) => {
+    if (seen.first || ts.isFunctionLike(node)) return;
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+      const name = node.expression.text;
+      if (CLOCK_CALLS.has(name) || REQUEST_BOUND.has(name)) seen.first = name;
+    }
+    if (!seen.first) ts.forEachChild(node, visit);
+  };
+  if (fn.body) ts.forEachChild(fn.body, visit);
+  return !!seen.first && CLOCK_CALLS.has(seen.first);
+}
+
 // `params`, `props.params`, `cookies()`: the runtime data an awaited expression is, or null.
 function readOf(node: ts.Expression): string | null {
   const e = ts.isParenthesizedExpression(node) ? node.expression : node;
@@ -205,6 +231,9 @@ export function prerenderProblems(root: string, file: string, src?: string): Pro
     message: `${rel} exports \`${name}\`: "Route segment config "${name}" is not compatible with nextConfig.cacheComponents". Delete it (runtime data already renders per request; cache with "use cache" + cacheLife instead of revalidate).`,
   }));
   if (!render) return problems;
+  for (const fn of facts.clock) {
+    problems.push({ kind: "blocking", message: `${rel}: ${fn} calls serviceClient() before anything request-bound: "Next.js encountered the unstable value \`Date.now()\` while prerendering" on a cold start. \`await connection()\` (next/server) first, as app/invite/[token]/page.tsx's InviteBody does.` });
+  }
   const reads = facts.reads.filter((r) => !(r.what === "params" && facts.staticParams));
   const pageReads = reads.filter((r) => r.fn === "the default export");
   const covered = pageReads.length > 0 && insideSuspense(appDir, file);
