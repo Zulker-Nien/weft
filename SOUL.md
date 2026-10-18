@@ -156,6 +156,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `lib/sprint-plan.ts` + `app/api/sprint` + `components/BacklogBadge.tsx`: the "☰ N" Backlog counter beside it and the card it starts,
   a read-only planner that sizes each Backlog card, flags duplicates and finished ones, and groups the rest into sprints of cards
   touching different files (no worktrees, so overlap is the constraint); starts a sprint's cards only on your OK.
+- `lib/sprints.ts` + `lib/sprint-store.ts` + `app/api/sprints` + `lib/use-sprints.ts` + `components/BacklogActions.tsx` + `components/SprintsMenu.tsx`: saved sprints, the Backlog header's flag (Save as sprint) and
+  Archive all (asks first), and the list under the "Backlog" title (Restore, rename, delete), in `~/.weft/sprints.json`; ⌘B in New thread adds to the Backlog (`isBacklogKey` in `components/submit-keys.ts`).
 - `lib/card-pictures.ts`: a card's thumbnail (latest thread image, or a pane capture after each turn from `lib/show.ts`) and its Haiku emoji tile; `lib/retitle.ts` renames a card with a placeholder title ("Image attachment") after its turn (`titleBy` marks a name Weft or you chose) and gives an untagged card 1 to 3 tags in the same Haiku call (`tagsBy`); `components/CardView.tsx` draws the card.
 - `lib/tags.ts` + `lib/tag-store.ts` + `app/api/tags` + `lib/rail-view.ts` + `components/LibraryRail.tsx` (`SideRail`) + `components/TagsDrawer.tsx` +
   `components/TagsDialog.tsx` + `components/CardMarks.tsx` + `components/StarButton.tsx`: ★ star (never auto-archived; the rail's ★ filters
