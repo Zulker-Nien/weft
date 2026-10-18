@@ -1,6 +1,6 @@
 import { firstMessage } from "./automations";
 import { resolveFolder } from "./folders";
-import { asText, shortTitle, titleFromPrompt } from "./format";
+import { asText, cleanTitle, titleFromPrompt } from "./format";
 import { effortFor } from "./new-thread";
 import { sendMessage } from "./runner";
 import { defaultPermissionMode, touchProject } from "./settings";
@@ -20,7 +20,7 @@ const MODEL_ID = /^[\w.\-\[\]]{1,60}$/;
 export function createCardFromBody(body: Record<string, unknown>): Card {
   const prompt = asText(body.prompt).trim();
   if (!prompt) throw new Error("Write a prompt for this thread.");
-  const typedTitle = shortTitle(asText(body.title));
+  const typedTitle = cleanTitle(asText(body.title));
   const title = typedTitle || titleFromPrompt(prompt);
 
   const cwd = resolveFolder(body.cwd);

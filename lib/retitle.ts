@@ -1,9 +1,9 @@
-import { shortTitle, titleFromPrompt } from "./format";
+import { cleanTitle, TITLE_WORDS, titleFromPrompt, titleWords } from "./format";
 import { normalizeTag, normalizeTags, tagCounts } from "./tags";
 import type { Card } from "./types";
 
 // Naming cards: a card whose title says nothing ("Image attachment", "Untitled thread", or just its
-// prompt's first line) gets a short Haiku title with an emoji after its first turn, like
+// prompt's first line), or runs past six words, gets a short Haiku title with an emoji after its next turn, like
 // "🐞 Compile Error: missing CoverageBadge import". A title you typed is never touched. A card with no
 // tags gets one to three in the same call (lib/tags.ts), picked from the board's own tags when one fits.
 
@@ -30,12 +30,15 @@ const BULLET = /^\s*(?:[-*•]|\d+[.)])\s+/;
 // What a tag Haiku picked may look like: words, not a sentence, markup or a label.
 const PLAIN_TAG = /^[\p{L}\p{N}][\p{L}\p{N} &+./_-]*$/u;
 
-// Whether this card should get an automatic title: nobody named it, and its title is empty, a
-// placeholder, or only its prompt's first line.
+// Whether this card should get an automatic title: you didn't name it, and its title is empty, a
+// placeholder, only its prompt's first line, or too long to scan (more than TITLE_WORDS words, or one
+// the old four-word cut left ending in "…"). An automatic title is redone only for being too long.
 export function shouldRetitle(card: Pick<Card, "title" | "prompt" | "titleBy" | "role">) {
-  if (card.titleBy || card.role === "copilot") return false;
+  if (card.titleBy === "user" || card.role === "copilot") return false;
   const title = card.title.trim();
-  return !title || PLACEHOLDER.test(title) || title === titleFromPrompt(card.prompt);
+  const tooLong = titleWords(title) > TITLE_WORDS || title.endsWith("…");
+  if (card.titleBy === "auto") return tooLong;
+  return !title || tooLong || PLACEHOLDER.test(title) || title === titleFromPrompt(card.prompt);
 }
 
 // Whether this card should get automatic tags: it has none, and you haven't set (or cleared) them yourself.
@@ -56,7 +59,7 @@ export function tagVocabulary(cards: readonly Pick<Card, "tags">[], catalog: rea
   return [...new Set(names)].slice(0, MAX_VOCABULARY);
 }
 
-const TITLE_RULE = `in 3 or 4 words, as one emoji, a space, then a specific title (a kind of "Compile Error: missing import" or "Add dark mode toggle"). Say what the work is, not that a file or screenshot was attached.`;
+const TITLE_RULE = `in 3 to ${String(TITLE_WORDS)} words, as one emoji, a space, then a specific title (a kind of "Compile Error: missing import" or "Add dark mode toggle"). Say what the work is, not that a file or screenshot was attached.`;
 
 function tagRule(vocabulary: readonly string[]) {
   const known = vocabulary.slice(0, MAX_VOCABULARY);
@@ -95,15 +98,15 @@ Tags: <tag>, <tag>
 ${turnText(ask, reply)}`;
 }
 
-// The card title from Haiku's reply: its first line, without quotes or a "Title:" label, clipped to
-// 3–4 words so the board stays scannable. Undefined when nothing usable came back.
+// The card title from Haiku's reply: its first line, without quotes or a "Title:" label, kept whole
+// (only clipped at MAX_TITLE characters). Undefined when nothing usable came back.
 export function parseTitle(reply: string) {
   const line = reply
     .split("\n")
     .map((l) => l.replace(/^\s*(title\s*:\s*)/i, "").replace(/^["'`“”*_#\s]+|["'`“”*_.\s]+$/g, ""))
     .find(Boolean);
   if (!line) return undefined;
-  const short = shortTitle(line);
+  const short = cleanTitle(line);
   return short.length > MAX_TITLE ? `${short.slice(0, MAX_TITLE - 1).trimEnd()}…` : short;
 }
 

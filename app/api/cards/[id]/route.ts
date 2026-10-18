@@ -1,7 +1,7 @@
 import { firstMessage, messagesForMove, doneOverrides } from "@/lib/automations";
 import { randomUUID } from "node:crypto";
 import { resolveFolder } from "@/lib/folders";
-import { asText, shortTitle } from "@/lib/format";
+import { asText, cleanTitle } from "@/lib/format";
 import { fail, guard } from "@/lib/guard";
 import { withReadScope } from "@/lib/read-scope";
 import { archiveWhenIdle, endSession, isBusy, queueMessages, sendMessage, setPermissionMode } from "@/lib/runner";
@@ -103,7 +103,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
     };
 
     if (body.title !== undefined) {
-      const title = shortTitle(asText(body.title));
+      const title = cleanTitle(asText(body.title));
       if (title) updateCard(id, { title, titleBy: "user" });
     }
 

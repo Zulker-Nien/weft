@@ -19,8 +19,15 @@ describe("shouldRetitle", () => {
     expect(shouldRetitle(card({ title: "Image compression" }))).toBe(false);
   });
 
-  it("never touches a named card or the copilot", () => {
+  it("rewrites a title longer than six words, or one the old cut left ending in an ellipsis", () => {
+    expect(shouldRetitle(card({ title: "Fix the build so all the tests pass" }))).toBe(true);
+    expect(shouldRetitle(card({ title: "🐞 Compile Error: missing CoverageBadge…", titleBy: "auto" }))).toBe(true);
+    expect(shouldRetitle(card({ title: "🐞 Fix the flaky login test now", titleBy: "auto" }))).toBe(false);
+  });
+
+  it("never touches a title you typed, an automatic one that fits, or the copilot", () => {
     expect(shouldRetitle(card({ title: "Image attachment", titleBy: "user" }))).toBe(false);
+    expect(shouldRetitle(card({ title: "Fix the build so all the tests pass", titleBy: "user" }))).toBe(false);
     expect(shouldRetitle(card({ title: "Image attachment", titleBy: "auto" }))).toBe(false);
     expect(shouldRetitle(card({ title: "Image attachment", role: "copilot" }))).toBe(false);
   });
@@ -123,9 +130,9 @@ describe("parseTitle", () => {
     expect(parseTitle("\n\n**✨ Polish**")).toBe("✨ Polish");
   });
 
-  it("clips to four words and ends in an ellipsis when longer", () => {
-    expect(parseTitle(`🐞 ${"a ".repeat(20).trimEnd()}`)).toBe("🐞 a a a a…");
-    expect(parseTitle("🐞 a a a a a a a a a a")).toBe("🐞 a a a a…");
+  it("keeps every word Haiku wrote", () => {
+    expect(parseTitle("🐞 Fix flaky login test on CI")).toBe("🐞 Fix flaky login test on CI");
+    expect(parseTitle("🐞 a a a a a a a a a a")).toBe("🐞 a a a a a a a a a a");
   });
 
   it("cuts a long single-word title at the byte cap and rejects an empty reply", () => {

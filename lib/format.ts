@@ -158,24 +158,24 @@ export function describeToolRun(calls: { action: string; target?: string }[], sh
   };
 }
 
-// How many words a card title is allowed to be. The user wants titles around 3–4 words; the rest of
-// the prompt is still in the thread, so a tight title is plenty to recognise the card on the board.
-export const TITLE_WORDS = 4;
+// How many words a card title should be. Titles aren't cut to it: one longer than this that you didn't
+// type is rewritten by Haiku after the card's next turn (lib/retitle.ts), so it still reads as a sentence.
+export const TITLE_WORDS = 6;
+// The most characters a title keeps, so a pasted paragraph can't become one.
+const MAX_TITLE_CHARS = 80;
 const LEADING_EMOJI = /^\p{Extended_Pictographic}(?:️|‍\p{Extended_Pictographic})*/u;
 
-// A card title in 3–4 words: the leading emoji (if any) followed by the first TITLE_WORDS words, with
-// an ellipsis if it had more. Keeps the emoji the card's tile shows, drops nothing inside a line.
-export function shortTitle(input: string): string {
-  const trimmed = input.trim();
-  if (!trimmed) return trimmed;
-  const match = LEADING_EMOJI.exec(trimmed);
-  const emoji = match?.[0] ?? "";
-  const rest = trimmed.slice(emoji.length).trim();
-  const words = rest.split(/\s+/).filter(Boolean);
-  if (words.length <= TITLE_WORDS && !emoji) return trimmed;
-  const kept = words.slice(0, TITLE_WORDS).join(" ");
-  const head = emoji ? `${emoji} ${kept}`.trim() : kept;
-  return words.length > TITLE_WORDS ? `${head.trimEnd()}…` : head;
+// A card title as given, trimmed and on one line, clipped only at MAX_TITLE_CHARS.
+export function cleanTitle(input: string): string {
+  const line = input.trim().replace(/\s+/g, " ");
+  return line.length > MAX_TITLE_CHARS ? `${line.slice(0, MAX_TITLE_CHARS - 1).trimEnd()}…` : line;
+}
+
+// The words in a title after its leading emoji.
+export function titleWords(title: string): number {
+  const trimmed = title.trim();
+  const emoji = LEADING_EMOJI.exec(trimmed)?.[0] ?? "";
+  return trimmed.slice(emoji.length).split(/\s+/).filter(Boolean).length;
 }
 
 // A card title from its prompt: the first line with words in it, without Markdown markup or pasted
@@ -196,12 +196,12 @@ export function titleFromPrompt(prompt: string, max = 60) {
     .map(clean)
     .find(Boolean);
   if (line) {
-    const short = shortTitle(line);
+    const short = cleanTitle(line);
     return short.length > max ? `${short.slice(0, max - 1).trimEnd()}…` : short;
   }
   const media = /!\[([^\]\n]*)\]/.exec(prompt)?.[1]?.trim();
   const named = media ? `Look at ${media}` : "New thread";
-  return shortTitle(named);
+  return cleanTitle(named);
 }
 
 export function formatTokens(n: number) {

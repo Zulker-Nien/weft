@@ -12,12 +12,13 @@ import {
   formatTokens,
   isLive,
   shortToolName,
-  shortTitle,
+  cleanTitle,
   STAGES,
   stageStep,
   summarizeInput,
   timeAgo,
   titleFromPrompt,
+  titleWords,
   toolAction,
   worktreeParent,
 } from "./format";
@@ -137,14 +138,14 @@ describe("describeToolRun", () => {
 });
 
 describe("titleFromPrompt", () => {
-  it("uses the first line with words, minus markdown, clipped to four words", () => {
+  it("uses the first line with words, minus markdown", () => {
     expect(titleFromPrompt("# Fix the **login** bug\nmore")).toBe("Fix the login bug");
     expect(titleFromPrompt("- [ ] add [docs](http://x) now")).toBe("add docs now");
     expect(titleFromPrompt("```\n---\n\nreal line")).toBe("real line");
   });
 
-  it("ends in an ellipsis when the first line had more than four words", () => {
-    expect(titleFromPrompt("Fix the build so tests pass cleanly")).toBe("Fix the build so…");
+  it("keeps every word of a first line that fits", () => {
+    expect(titleFromPrompt("Fix the build so tests pass cleanly")).toBe("Fix the build so tests pass cleanly");
   });
 
   it("truncates a long title to its byte cap", () => {
@@ -159,22 +160,29 @@ describe("titleFromPrompt", () => {
   });
 });
 
-describe("shortTitle", () => {
-  it("keeps a four-word title untouched", () => {
-    expect(shortTitle("Add dark mode toggle")).toBe("Add dark mode toggle");
+describe("cleanTitle", () => {
+  it("keeps every word, on one line", () => {
+    expect(cleanTitle("Fix the build so tests pass cleanly")).toBe("Fix the build so tests pass cleanly");
+    expect(cleanTitle("  🐞 Compile Error:\n missing   import ")).toBe("🐞 Compile Error: missing import");
   });
 
-  it("ends in an ellipsis when longer than four words", () => {
-    expect(shortTitle("Fix the build so tests pass cleanly")).toBe("Fix the build so…");
-  });
-
-  it("keeps a leading emoji and clips the words after it", () => {
-    expect(shortTitle("🐞 Compile Error: missing CoverageBadge import")).toBe("🐞 Compile Error: missing CoverageBadge…");
+  it("clips a pasted paragraph at 80 characters", () => {
+    const title = cleanTitle("word ".repeat(40));
+    expect(title).toHaveLength(80);
+    expect(title.endsWith("…")).toBe(true);
   });
 
   it("returns an empty string for empty input", () => {
-    expect(shortTitle("")).toBe("");
-    expect(shortTitle("   ")).toBe("");
+    expect(cleanTitle("")).toBe("");
+    expect(cleanTitle("   ")).toBe("");
+  });
+});
+
+describe("titleWords", () => {
+  it("counts the words after a leading emoji", () => {
+    expect(titleWords("🐞 Compile Error: missing import")).toBe(4);
+    expect(titleWords("Add dark mode toggle")).toBe(4);
+    expect(titleWords("  ")).toBe(0);
   });
 });
 
