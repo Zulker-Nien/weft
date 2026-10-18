@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { DAY, FIVE_HOURS, hitMarks, HOUR, leftAt, limitsChart, resetMarks, resetMs, WEEK, weekEnd, type LimitSample } from "./limit-chart";
+import { DAY, FIVE_HOURS, hitMarks, HOUR, leftAt, limitsChart, QUARTER_HOUR, resetMarks, resetMs, WEEK, weekEnd, type LimitSample } from "./limit-chart";
 
-// The status strip's limits chart: 168 hour slots of the 5-hour limit, 7 day slots of the weekly one
-// with their burn-down edge, hits and reset lines.
+// The status strip's limits chart: 672 15-minute slots of the 5-hour limit (4 per hour), 7 day slots
+// of the weekly one with their burn-down edge, hits and reset lines.
 
 const T0 = 1_800_000_000_000; // a whole minute
 const sec = (ms: number) => ms / 1000;
@@ -84,19 +84,23 @@ describe("resetMarks", () => {
 describe("limitsChart", () => {
   const end = T0 + 2 * DAY + 3 * HOUR; // the weekly reset
   const start = end - WEEK;
-  const now = start + 5 * DAY + 2.5 * HOUR; // day 6, inside hour 2 (slot 122)
+  // 5 min past a 15-min boundary so the slot containing now is well-formed.
+  const now = start + 5 * DAY + 2 * HOUR + 35 * 60_000;
   const fiveReset = now + 2 * HOUR;
 
-  it("splits the week into 168 hours and 7 days, empty ahead of now", () => {
+  it("splits the week into 672 15-minute slots and 7 days, empty ahead of now", () => {
     const chart = limitsChart([], { fiveHour: { used: 30, resetsAt: sec(fiveReset) }, sevenDay: { used: 60, resetsAt: sec(end) } }, now);
     expect([chart.start, chart.end, chart.now]).toEqual([start, end, now]);
-    expect(chart.hours).toHaveLength(168);
+    expect(chart.hours).toHaveLength(672);
     expect(chart.days).toHaveLength(7);
-    expect(chart.hours[0]).toEqual({ from: start, to: start + HOUR, left: "unknown" });
-    // The window opened 3 hours before now; the hour that holds now reads the card's current 70%.
-    expect(chart.hours.at(121)?.left).toBe("unknown");
-    expect(chart.hours.at(122)?.left).toBe(70);
-    expect(chart.hours.at(123)?.left).toBeNull();
+    expect(chart.hours[0]).toEqual({ from: start, to: start + QUARTER_HOUR, left: "unknown" });
+    // The window opened 3 hours (12 slots) before now. now sits 5 min into slot 490, so slots
+    // 477..489 are unlogged ("unknown"), slot 490 reads the card's current 70%, and slot 491+ is
+    // in the future (null).
+    expect(chart.hours.at(477)?.left).toBe("unknown");
+    expect(chart.hours.at(489)?.left).toBe("unknown");
+    expect(chart.hours.at(490)?.left).toBe(70);
+    expect(chart.hours.at(491)?.left).toBeNull();
     expect(chart.days.map((d) => d.left)).toEqual(["unknown", "unknown", "unknown", "unknown", "unknown", 40, null]);
     expect(chart.days.at(5)?.edge).toEqual([[now, 40]]);
     expect(chart.days.at(6)?.edge).toEqual([]);
@@ -120,15 +124,16 @@ describe("limitsChart", () => {
     const rows = [five(now - HOUR, 100, fiveReset), week(now - HOUR, 50, end)];
     const chart = limitsChart(rows, { fiveHour: { used: 100, resetsAt: sec(fiveReset) + 0.4 }, sevenDay: { used: 50, resetsAt: sec(end) } }, now);
     expect(chart.marks).toContainEqual({ at: now - HOUR, kind: "hit" });
-    expect(chart.hours.at(122)?.left).toBe(0);
+    // now is inside slot 490; leftAt reads the 100% reading at now - HOUR.
+    expect(chart.hours.at(490)?.left).toBe(0);
   });
 
   it("leaves out a card's window that has already reset or is older than the history", () => {
     const sevenDay = { used: 0, resetsAt: sec(end) };
     const stale = limitsChart([], { fiveHour: { used: 63, resetsAt: sec(now - HOUR) }, sevenDay }, now);
-    expect(stale.hours.at(122)?.left).toBe("unknown");
+    expect(stale.hours.at(490)?.left).toBe("unknown");
     const older = limitsChart([five(now - HOUR, 10, now + 3 * HOUR)], { fiveHour: { used: 63, resetsAt: sec(now + HOUR) }, sevenDay }, now);
-    expect(older.hours.at(122)?.left).toBe(90);
+    expect(older.hours.at(490)?.left).toBe(90);
   });
 
   it("ignores readings after now and spans 7 days ending 5 hours out without a weekly reset", () => {

@@ -1,9 +1,10 @@
 import type { Backend, CardStats } from "./types";
 
 // The status strip's limits chart (components/LimitBurndown.tsx), worked out from the limit history
-// (lib/limit-history.ts): the week from one weekly reset to the next as 168 hour slots of the 5-hour limit
-// left and 7 day slots of the weekly limit left, each day with its burn-down edge, plus where either limit
-// was hit and where the 5-hour windows and the week reset. Pure: times in unix ms, shares 0-100.
+// (lib/limit-history.ts): the week from one weekly reset to the next as 672 15-minute slots of the
+// 5-hour limit left (4 per hour) and 7 day slots of the weekly limit left, each day with its burn-down
+// edge, plus where either limit was hit and where the 5-hour windows and the week reset. Pure: times
+// in unix ms, shares 0-100.
 
 export type LimitKind = "five_hour" | "seven_day";
 
@@ -17,6 +18,7 @@ export interface LimitSample {
 }
 
 export const HOUR = 60 * 60 * 1000;
+export const QUARTER_HOUR = 15 * 60_000;
 export const FIVE_HOURS = 5 * HOUR;
 export const DAY = 24 * HOUR;
 export const WEEK = 7 * DAY;
@@ -171,7 +173,7 @@ export function limitsChart(samples: LimitSample[], stats: CardStats, now: numbe
     start,
     end,
     now,
-    hours: slots(rows, "five_hour", start, HOUR, 168, now),
+    hours: slots(rows, "five_hour", start, QUARTER_HOUR, WEEK / QUARTER_HOUR, now),
     days,
     marks: [...resetMarks(inWeek, next, start, end, now), ...hitMarks(inWeek)],
   };

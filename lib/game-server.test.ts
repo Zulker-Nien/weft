@@ -27,6 +27,7 @@ vi.mock("./activity", () => ({
   readActivity: () => log,
   record: vi.fn((e: Omit<ActivityEvent, "id">) => log.push({ ...e, id: `r${log.length}` })),
 }));
+vi.mock("./limit-poll", () => ({ startLimitPoll: vi.fn() }));
 vi.mock("./store", () => ({ DATA_DIR: "/tmp/weft-game-test-data", listCards: () => board.cards }));
 // The first-launch welcome (lib/welcome.ts) gates the activity log: with it unset everything
 // counts; with countHistory false, only events and cards after the welcome's at count. The default

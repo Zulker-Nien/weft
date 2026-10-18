@@ -4,6 +4,7 @@ import { publish, subscribe } from "@/lib/bus";
 import type { BoardEvent } from "@/lib/types";
 
 vi.mock("next/server", () => ({ connection: async () => {} }));
+vi.mock("@/lib/limit-poll", () => ({ startLimitPoll: vi.fn() }));
 
 const { GET } = await import("./route");
 
