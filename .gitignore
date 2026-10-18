@@ -62,3 +62,4 @@ supabase/.temp/
 /plugin/skills/done/scout.md
 /plugin/skills/done/tests.md
 /plugin/skills/done/tasks.json
+.env.local
