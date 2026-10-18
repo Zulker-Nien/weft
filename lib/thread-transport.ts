@@ -8,6 +8,7 @@
 import { createContext, useContext } from "react";
 import { api } from "./client";
 import { filesApi } from "./client-files";
+import { openCardById } from "./open-card";
 import { THREAD_PAGE_SIZE } from "./cloud-sync-types";
 import { applyThreadEvent, type ThreadPage } from "./thread-page";
 import type { BoardEvent, ThreadItem } from "./types";
@@ -69,7 +70,12 @@ export const localTransport: ThreadTransport = {
   stop: (cardId) => api.stop(cardId).then(() => {}),
   shell: (cardId, command) => api.shell(cardId, command).then(() => {}),
   editLast: (cardId, text) => api.editLast(cardId, text).then(() => {}),
-  handoff: (cardId, message) => api.handoff(cardId, message).then((r) => r.card.title),
+  // The new card replaces the old one in the panel as soon as it's made.
+  handoff: (cardId, message) =>
+    api.handoff(cardId, message).then(({ card }) => {
+      openCardById(card.id);
+      return card.title;
+    }),
   grantFolder: (cardId, directory, scope) => (scope === "always" ? api.allowFolder(directory) : api.setReadScope(cardId, directory)).then(() => {}),
   waitPermission: (cardId, pendingId) => api.waitPermission(cardId, pendingId).then(() => {}),
   stopTask: (cardId, taskId) => api.stopTask(cardId, taskId).then(() => {}),

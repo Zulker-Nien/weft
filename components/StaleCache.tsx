@@ -4,6 +4,7 @@ import { useState } from "react";
 import { cacheMinutesLeft, formatTokens } from "@/lib/format";
 import type { CacheState } from "@/lib/types";
 import { useNow } from "@/lib/use-now";
+import Icon from "./Icon";
 import Tip from "./Tip";
 
 export interface StaleProps {
@@ -38,8 +39,9 @@ export default function StaleCache({ cache, onContinue }: StaleProps) {
         type="button"
         disabled={state.busy}
         onClick={() => void start()}
-        className="rounded px-1.5 py-0.5 text-ink hover:bg-sunken disabled:opacity-60"
+        className="inline-flex items-center gap-1 rounded-md bg-accent px-2 py-1 text-[12px] font-medium text-on-accent shadow-sm hover:opacity-90 disabled:opacity-60"
       >
+        <Icon name="forward" size={12} />
         {state.busy ? "Summarizing…" : "Continue in new card"}
       </button>
       {state.note && <span className="text-muted">{state.note}</span>}
