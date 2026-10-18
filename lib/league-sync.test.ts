@@ -10,7 +10,7 @@ vi.mock("./game-server", () => ({
 }));
 vi.mock("./profile-card-sync", () => ({ syncProfileCard: profileCardSync.sync }));
 
-const { FIRST_SYNC_MS, leagueView, NOT_DEPLOYED, startLeagueSync, SYNC_MS, syncWeek } = await import("./league-sync");
+const { FIRST_SYNC_MS, leagueView, NOT_DEPLOYED, startLeagueSync, SYNC_MS, syncWeek, tierView } = await import("./league-sync");
 
 const ENTRY: LeagueEntry = { week: "2026-10-12", xp: 120, shipped: 4, streak: 9, level: 6, badges: [{ icon: "🔥", name: "Hot" }] };
 const STANDING = {
@@ -105,6 +105,39 @@ describe("leagueView", () => {
       throw "boom";
     };
     expect(await leagueView({ client: () => fake().client, entry: throwing })).toEqual({ state: "error", error: "boom" });
+  });
+});
+
+describe("tierView", () => {
+  const BROWSE = { ...STANDING, cohort: 0, tier: undefined };
+
+  it("reads every league of a tier without posting", async () => {
+    const { client, rpc } = fake({ standings: [BROWSE] });
+    const view = await tierView(3, { client: () => client, entry: () => ENTRY });
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith("league_browse", { p_week: "2026-10-12", p_tier: 3 });
+    expect(view).toMatchObject({ state: "ready", tier: 3, league: "Silk", leagues: [{ cohort: 0, rows: [{ name: "Alex" }] }] });
+  });
+
+  it("refuses a tier that isn't one", async () => {
+    const { client, rpc } = fake();
+    for (const t of [-1, 6, 1.5, NaN]) expect(await tierView(t, { client: () => client })).toEqual({ state: "error", error: "No such league." });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("is signed out without a session", async () => {
+    expect(await tierView(0, { client: () => fake({ session: false }).client })).toEqual({ state: "signed-out" });
+    expect(await tierView(0, { client: () => null })).toEqual({ state: "signed-out" });
+  });
+
+  it("is empty on null, and reports a failed read", async () => {
+    expect(await tierView(0, { client: () => fake({ standings: null }).client, entry: () => ENTRY })).toMatchObject({ state: "ready", leagues: [] });
+    expect(await tierView(0, { client: () => fake({ standingsError: "denied" }).client, entry: () => ENTRY })).toEqual({ state: "error", error: "denied" });
+    const throwing = () => {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- a non-Error throw is the branch under test
+      throw "boom";
+    };
+    expect(await tierView(0, { client: () => fake().client, entry: throwing })).toEqual({ state: "error", error: "boom" });
   });
 });
 

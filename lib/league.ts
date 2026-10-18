@@ -109,6 +109,20 @@ const toBadges = (raw: unknown): LeagueBadge[] =>
       })
     : [];
 
+const toRow = (r: Omit<StandingRow, "tier">): LeagueRow => ({
+  rank: r.rank,
+  userId: r.user_id,
+  name: r.name || "Builder",
+  avatar: r.avatar_url,
+  username: r.username,
+  xp: r.xp,
+  shipped: r.shipped,
+  streak: r.streak,
+  level: r.level,
+  badges: toBadges(r.badges),
+  isMe: r.is_me,
+});
+
 export function toLeagueView(week: string, rows: StandingRow[]): LeagueView {
   const tier = rows[0]?.tier ?? 0;
   const { up, down } = leagueMoves(rows.length);
@@ -119,18 +133,33 @@ export function toLeagueView(week: string, rows: StandingRow[]): LeagueView {
     league: leagueName(tier),
     up,
     down,
-    rows: rows.map((r) => ({
-      rank: r.rank,
-      userId: r.user_id,
-      name: r.name || "Builder",
-      avatar: r.avatar_url,
-      username: r.username,
-      xp: r.xp,
-      shipped: r.shipped,
-      streak: r.streak,
-      level: r.level,
-      badges: toBadges(r.badges),
-      isMe: r.is_me,
-    })),
+    rows: rows.map(toRow),
   };
+}
+
+// One row of public.league_browse (supabase/migrations/20261018175456_league_browse.sql): a builder in one of a tier's leagues.
+export interface BrowseRow extends Omit<StandingRow, "tier"> {
+  cohort: number;
+}
+
+export interface TierLeague {
+  cohort: number;
+  rows: LeagueRow[];
+  up: number;
+  down: number;
+}
+
+// Every league of one tier this week, for the Leagues dialog; yours, when you're in this tier, comes first.
+export type TierView =
+  | { state: "signed-out" }
+  | { state: "error"; error: string }
+  | { state: "ready"; week: string; tier: number; league: string; leagues: TierLeague[] };
+
+export function toTierView(week: string, tier: number, rows: BrowseRow[]): TierView {
+  const byCohort = new Map<number, LeagueRow[]>();
+  for (const r of rows) byCohort.set(r.cohort, [...(byCohort.get(r.cohort) ?? []), toRow(r)]);
+  const leagues = [...byCohort].map(([cohort, list]) => ({ cohort, rows: list, ...leagueMoves(list.length) }));
+  const mine = (l: TierLeague) => (l.rows.some((r) => r.isMe) ? 0 : 1);
+  leagues.sort((a, b) => mine(a) - mine(b) || a.cohort - b.cohort);
+  return { state: "ready", week, tier, league: leagueName(tier), leagues };
 }

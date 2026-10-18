@@ -157,7 +157,14 @@ The new-thread dialog (⌘N) and every card's reply box use the same editor:
   model; it uses superwhisper's or Homebrew's models, or the one in `WEFT_WHISPER_MODEL`. In a
   normal browser tab without whisper it falls back to the browser's speech recognition.
 - **Drafts are kept** per card and for the new-thread dialog until sent, so closing it loses nothing.
-- **Send later.** The clock beside Send (Alt+Enter) holds a reply until a time you pick. On a Claude
+- **One button that says what Enter does.** The reply box is in one mode at a time, named on a chip inside it
+  and on its button: **Send**, **Queue** while a turn runs (the ▾ beside it has **Send now**, which stops the
+  turn first), **Answer** while a question waits, **Run** for a `!` command (green, with the folder named),
+  **Replace** after ↑ (amber, with how many file edits stay). ■ Stop keeps its own spot while a turn runs. The
+  button also picks the cheaper default: **New card** when the prompt cache has gone cold (a summary, the touched
+  files and what you typed start a fresh card; **Send here** is in the ▾), **Send at 10:39pm** when the 5-hour
+  limit is used up, and **Continue** in an empty box only after a turn stopped short (`lib/reply-mode.ts`).
+- **Send later.** In the send button's ▾ menu (Alt+Enter), it holds a reply until a time you pick. On a Claude
   thread the first choice is a minute after the 5-hour limit resets (the time in the bottom bar), so
   a message written when you hit the limit goes out as the new window opens. When the weekly limit
   is at 90% or more it adds "At the weekly reset", and once the weekly limit is used up that comes
@@ -514,7 +521,9 @@ with a burst of confetti (none with Reduce motion on), and **See your profile** 
   XP you earn Monday to Sunday; the top 7 move up and the bottom 5 move down (fewer in a small league). Each row shows
   that builder's week (XP, cards shipped, streak, level, the badges they earned since Monday) and opens their
   `weft.zip/@username`. Only those numbers and your name go up, never prompts, code or project names. New accounts
-  join the current week's Cotton league the day they sign up.
+  join the current week's Cotton league the day they sign up. The header's **🏆 Linen #1** chip, beside the streak,
+  opens every league: click any tier, Cotton to Gold Thread, to see each of its leagues this week and who's in them.
+  The profile's League tab keeps just yours.
 - **League emails.** Weft emails you about your league: a welcome on day one with who's in it and the rules, a
   Thursday and a Sunday nudge only when a move is in play ("27 XP from moving up", "9 XP keeps you in Wool"), and
   Monday's results (moved up, held, or moved down, with last week's podium). One email a day at most; every one has a

@@ -9,10 +9,11 @@ const QualityBadge = guarded(() => import("./QualityBadge"), { inline: true, wha
 const PileBadge = guarded(() => import("./PileBadge"), { inline: true, what: "pile badge" });
 const BacklogBadge = guarded(() => import("./BacklogBadge"), { inline: true, what: "backlog badge" });
 const GameBadge = guarded(() => import("./GameBadge"), { inline: true, what: "streak badge" });
+const LeagueBadge = guarded(() => import("./LeagueBadge"), { inline: true, what: "league badge" });
 const WelcomeDialog = guarded(() => import("./WelcomeDialog"), { inline: true, what: "welcome" });
 
-// The header's badges for the project in view: code quality, the uncommitted pile, the Backlog, and your streak
-// and level, and first launch's welcome beside the streak it introduces. They refresh whenever a turn ends or a card ships somewhere, so they follow the threads' work.
+// The header's badges for the project in view: code quality, the uncommitted pile, the Backlog, your streak
+// and level, your league, and first launch's welcome beside the streak it introduces. They refresh whenever a turn ends or a card ships somewhere, so they follow the threads' work.
 // `start` begins a card (an improvement, a commit walk, a "Set it up"); it rejects when that fails.
 export default function HeaderBadges({
   cwd,
@@ -41,6 +42,7 @@ export default function HeaderBadges({
       <PileBadge cwd={cwd} refresh={turnTick} onStart={start} onError={notify} />
       <BacklogBadge cwd={cwd} refresh={`${turnTick}:${waiting}`} onStart={start} onError={notify} />
       <GameBadge cwd={cwd} refresh={`${turnTick}:${done}`} onStart={begin} />
+      <LeagueBadge refresh={done} />
       <WelcomeDialog onError={notify} />
     </>
   );

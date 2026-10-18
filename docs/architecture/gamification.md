@@ -107,7 +107,8 @@ gravity, terminal velocity), and draws nothing with Reduce motion on. Settings >
 gameState() ── lib/league.ts leagueEntry() ──> { week, xp, shipped, streak, level, badges }
   └─ lib/league-sync.ts: every 10 min (startLeagueSync, from prewarm) and on opening the tab
        └─ rpc league_submit ──> public.league_weeks (one row per account per week)
-/api/league ── rpc league_standings(week) ──> the caller's league ──> components/LeagueTab.tsx
+/api/league ── rpc league_standings(week) ──> the caller's league ──> components/LeagueTab.tsx, the 🏆 chip (LeagueBadge.tsx)
+/api/league?tier=N ── rpc league_browse(week, tier) ──> every league of a tier ──> components/LeaguesDialog.tsx
 ```
 
 - **What goes up.** This week's XP (`weekXp`), cards shipped (`weekShipped`), the current streak, your level and the
@@ -124,7 +125,11 @@ gameState() ── lib/league.ts leagueEntry() ──> { week, xp, shipped, stre
   (at 0 XP) the day they sign up, before their Mac ever posts. It swallows its own errors: a league never fails a sign-up.
 - **Access.** `league_weeks` has RLS on and no policies; both RPCs are security definer and act only as `auth.uid()`.
   `league_standings` returns only your league's rows, with `profiles.username` (else the GitHub login) for the
-  `weft.zip/@username` link (docs/architecture/profiles.md).
+  `weft.zip/@username` link (docs/architecture/profiles.md). `league_browse` (20261018175456_league_browse.sql) returns every
+  league of one tier, ranked within each, to any signed-in builder: the first 10 leagues (300 builders) at most.
+- **Where it shows.** The header's 🏆 chip (`components/LeagueBadge.tsx`, hidden with the streak by Settings > Show progress)
+  reads your league and rank and opens the Leagues dialog: the ladder as six tier buttons, opening on yours, each
+  tier's leagues underneath (yours first). The Loom's League tab shows only your league, with an All leagues button.
 - **Small leagues.** With few accounts each tier holds one league, so a winner who moves up can find themselves alone; a lone
   builder doesn't move up again until someone joins.
 

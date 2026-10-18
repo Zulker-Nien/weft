@@ -10,6 +10,10 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Added
 
+- **The reply box's button says what Enter does.** One mode at a time, named on a chip in the box and on the primary: Send, Queue (while a turn runs), Answer, Run (a `!` command, in green with the folder), Replace (after ↑, in amber with the file edits that stay) or Send copy. Send now, Send later and Continue here moved into a ▾ beside it; ■ Stop keeps its own slot. The default follows the thread: **New card** when the prompt cache is cold (the stale-cache row above the box is gone; **Send here** is in the ▾), **Send at <reset>** when the 5-hour window is used up, and **Continue** only after a turn that stopped short (`lib/reply-mode.ts`, `components/ReplyButtons.tsx`, `components/ReplyModeChip.tsx`).
+
+- **🏆 Leagues in the header.** A chip beside the streak shows your league and rank ("🏆 Linen #1") and opens every league: click any tier, Cotton to Gold Thread, to see its leagues this week and who's in them (`components/LeaguesDialog.tsx`, the `league_browse` RPC). The profile's League tab keeps just your own league.
+
 - **Continue in new card.** A thread whose prompt cache has gone cold shows a "stale cache" tag above its reply box with a **Continue in new card** button: Haiku summarizes the thread and a new card starts in the same folder and CLI with the summary, the files it touched and the message typed in the box (`lib/handoff.ts`). The button is a solid accent button, and the panel switches to the new card as soon as it exists (`lib/open-card.ts`).
 
 - The project bar's More menu has **Clone from GitHub…**: type `owner/name` or a github.com URL and it clones into `~/dev` and selects the project.
@@ -51,6 +55,8 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 - **Services: everything Weft started, with CPU and memory.** The rail's 🖥 drawer lists every process Weft spawned, one row per thread CLI (named by its card), dev server, terminal shell or other command, each with its CPU and memory and a total at the top; expand a row for its processes and end the whole service or one process (Weft itself is listed but can't be ended there). Pick how often it refreshes (every 1 to 30s, or paused); the icon counts what's running. Dev servers keep their url, Restart and Start: threads start them through Weft with `mcp__devservers__start` (and `/weft:preview` does) instead of Bash in the background, so a server outlives its thread's CLI and no longer keeps it open; one a thread still starts the old way shows there too and leaves the thread's task strip (`lib/services.ts`, `lib/services-snapshot.ts`, `lib/services-kill.ts`, `app/api/services`, `components/ServicesDrawer.tsx`, `lib/devserver.ts`, `lib/devserver-tools.ts`).
 
 ### Fixed
+
+- A multi-select question's `[ ]` no longer wraps into "[" over "]", and the board footer's limits line no longer peeks out under an open card.
 
 - **"Review all" and "Resume N" stay once the board loads.** Backlog's column appears after the cards load and narrows every column below 230px, where the header hid all its actions. Narrow columns now keep them as icons (✓, ▶ N) and hide the row only under 150px, beside the open copilot lane (`components/ColumnHeader.tsx`).
 - **"Show N more" no longer jumps while the board loads.** Until a card's component loaded, the column drew nothing, so "Show 5 more" floated to the top and then dropped below the cards. Each card now draws a card-sized blank first (`CardSkeleton` in `components/BoardColumn.tsx`).
