@@ -3,10 +3,11 @@
 // Board actions that start or open work: open a card (warm its CLI so a reply is fast), open the
 // New thread dialog, create a card, start the quality / commit-walk-through cards from the header
 // badges, and run "Review all" on the Review column.
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { api, type NewCardInput } from "./client";
 import { startPileReview } from "./pile-review";
 import { lastFolder } from "./board-helpers";
+import { onOpenCardRequest } from "./open-card";
 import type { Card } from "./types";
 
 export interface BoardActions {
@@ -61,6 +62,9 @@ export function useBoardActions({
     },
     [select],
   );
+
+  // A thread asked to open another card ("Continue in new card"): it replaces this one in the panel.
+  useEffect(() => onOpenCardRequest((id) => select(id)), [select]);
 
   const create = useCallback(async (input: NewCardInput) => {
     await api.create(input);

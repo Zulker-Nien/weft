@@ -10,7 +10,7 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Added
 
-- **Continue in new card.** A thread whose prompt cache has gone cold shows a "stale cache" tag above its reply box with a **Continue in new card** button: Haiku summarizes the thread and a new card starts in the same folder and CLI with the summary, the files it touched and the message typed in the box (`lib/handoff.ts`).
+- **Continue in new card.** A thread whose prompt cache has gone cold shows a "stale cache" tag above its reply box with a **Continue in new card** button: Haiku summarizes the thread and a new card starts in the same folder and CLI with the summary, the files it touched and the message typed in the box (`lib/handoff.ts`). The button is a solid accent button, and the panel switches to the new card as soon as it exists (`lib/open-card.ts`).
 
 - The project bar's More menu has **Clone from GitHub…**: type `owner/name` or a github.com URL and it clones into `~/dev` and selects the project.
 - **Confetti for achievements.** A new badge or level opens a popup with a burst of confetti instead of a toast: one badge gets the stage, several share a list, and **See your profile** opens the Badges tab (`components/AchievementPopup.tsx`, `components/Confetti.tsx`, `lib/confetti.ts`).

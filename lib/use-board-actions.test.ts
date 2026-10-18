@@ -18,6 +18,7 @@ const startPileReview = vi.fn<(...args: unknown[]) => Promise<void>>();
 vi.mock("./pile-review", () => ({ startPileReview: (...args: unknown[]) => startPileReview(...args) }));
 
 const { useBoardActions } = await import("./use-board-actions");
+const { openCardById } = await import("./open-card");
 
 const card = (over: Partial<Card> = {}): Card =>
   ({ id: "c1", title: "T", column: "running", cwd: "/repo", tags: [], archived: false, starred: false, warm: false, ...over }) as Card;
@@ -74,6 +75,12 @@ describe("useBoardActions", () => {
     const { result } = make({ project: null });
     act(() => result.current.openNew());
     expect(apiWarm).toHaveBeenCalledWith({ cwd: "/last" });
+  });
+
+  it("selects a card a thread asks to open", () => {
+    const { select } = make();
+    act(() => openCardById("handed"));
+    expect(select).toHaveBeenCalledWith("handed");
   });
 
   it("openCard selects the card", () => {
