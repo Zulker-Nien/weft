@@ -497,6 +497,10 @@ off). Hover it for today's numbers; click it for your **Wefter Profile**:
   observability checks), Craft (the cards you wrapped up with `/done`, reviewed, documented and refactored) and Stamina. Your top
   two name your class, like "Roaming Shipper". Stack skills level up each technology (from `package.json`
   and friends) by the cards you ship with it.
+- **Tokens and limit hits.** Your last 30 days of tokens as bars, read from every Claude Code and puku-cli
+  transcript (in Weft or the terminal, so it has your history from day one), with a dot over each day you
+  ran out of your 5-hour (amber) or weekly (red) plan limit. Hover a day for its tokens in and out and its hits.
+  Two badges go with it: ⏳ Hit the ceiling and 🗓️ Ran the week dry.
 - **The cloth.** Your last 26 weeks as woven stitches, brighter for bigger days, blue where a freeze covered one.
 - **Badges.** 38 of them: milestones, streaks, habits (five cards running at once, night owl, refactorer…),
   code health (coverage at 80/95/100%, guarded, strict, slim files, clean tree) and the production-ready

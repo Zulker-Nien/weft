@@ -1,6 +1,6 @@
 # Progress: streaks, XP, badges and the builder card
 
-The header's 🔥 chip and its "Your loom" dialog turn your work in Weft into a streak, a level, badges,
+The header's 🔥 chip and its "Wefter Profile" dialog turn your work in Weft into a streak, a level, badges,
 a builder card and each project's production-ready tree, and, when you're signed in to Weft, a weekly league.
 
 ## Data flow
@@ -20,13 +20,17 @@ components/HeaderBadges.tsx → GameBadge.tsx (chip, toasts) → LoomDialog.tsx 
 ## The activity log
 
 `~/.weft/activity.jsonl` holds one JSON event per line: `created`, `start` (with how many cards run at once),
-`turn` (with how many turns), `done` (with the card's cost and title) and `quality` (a project's daily
-checklist score and coverage). Every event has a stable id, so a sync can tell what it already sent.
+`turn` (with how many turns), `done` (with the card's cost and title), `quality` (a project's daily
+checklist score and coverage) and `limit` (a plan window a Weft thread ran out of, below). Every event has a stable id, so a sync can tell what it already sent.
 
 - **Backfill.** The first read writes events for every card on the board (`backfillEvents`): created at
   `createdAt`, its turns at its last activity, Done at `updatedAt`. Imported Claude Code sessions count.
   Backfilled ids are `created:<card>`, `turns:<card>`, `done:<card>`, so re-running is a no-op; on each
   server start, cards the log has never seen (no `created:<card>`) are backfilled the same way.
+- **History opt-out.** The first-launch welcome (`lib/welcome.ts`) asks whether your Claude Code history
+  counts. The log keeps every event either way; with `countHistory` off, `gameState` drops events and cards
+  from before the welcome's `at` (`countsAt`), so turning it back on in Settings → General restores them.
+  A board adopted from before the welcome takes `at` from its first card made in Weft itself.
 - **Live.** `trackActivity()` subscribes to the bus once per server process. `/api/events` (which the board
   opens first) and `/api/game` both call it. It remembers each card's column and turn count and logs what
   changed (`changeEvents`). The copilot is left out.
@@ -50,6 +54,29 @@ checklist score and coverage). Every event has a stable id, so a sync can tell w
   background on `/api/game` and re-reads a transcript only when its size changed; `~/.weft/craft.json` keeps
   `[size, habits]` per session id.
 - **Class**: the top attribute's noun after the second's adjective ("Roaming Shipper").
+
+## Usage and limit hits
+
+The You tab's **Tokens, last 30 days** chart (`components/LoomUsage.tsx`) and the two limit badges come
+from every Claude Code and puku-cli transcript, in Weft or the terminal, so history counts from day one.
+
+- **The scan** (`lib/usage-scan.ts`): lists `*.jsonl` under `~/.claude/projects/*` and `~/.puku-cli/projects/*`,
+  and reads each file only past the byte offset it stopped at last time, to its last full line. `~/.weft/usage.json`
+  keeps, per file, that offset, the last request counted, each day's `[input, output]` tokens and the limit hits.
+  It runs in the background from `/api/game`, one at a time and at most once a minute; the first scan of ~4 GB
+  (1,250 transcripts) took about 15 s and saves every 200 files. A shortened file is read again from the start.
+- **Tokens** (`lib/usage.ts` `readLine`): an assistant line's `input_tokens + cache_creation_input_tokens` and
+  `output_tokens`, counted once per `requestId` (the CLI writes one line per content block with the same usage).
+  Cache reads aren't counted; they'd dwarf everything else. Synthetic error messages carry no tokens.
+- **Limit hits**: an `isApiErrorMessage` line whose text is a plan limit ("You've hit your session limit · resets
+  4:10am", "weekly limit", the old "usage limit reached|<epoch>"), not the API's own "Rate limit reached".
+  `limitKind` names the window: session or 5-hour → 5-hour; weekly, Opus or Sonnet caps, or a reset with a date
+  or more than 5 hours away → weekly. A live Weft thread also logs one: a `rate_limit_event` with
+  `status: "rejected"` (`lib/runner-turn.ts`, id `limit:<window>:<resetsAt>`, so a busy hour logs it once) and
+  a plan-limit error (`lib/rate-limit.ts`, the weekly window when the card saw it at 100%).
+- **One hit per window** (`distinctHits`): parallel threads all hit the same window, so hits of one kind within
+  the window's length of the first, naming the same reset (or one naming none), count once.
+- **Badges**: ⏳ Hit the ceiling (your 5-hour limit) and 🗓️ Ran the week dry (your weekly limit), dated by the first hit.
 
 ## Projects
 
