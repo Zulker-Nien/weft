@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { gameState } from "./game-server";
 import { globalSingleton } from "./global-singleton";
-import { leagueEntry, toLeagueView, type LeagueEntry, type LeagueView, type StandingRow } from "./league";
+import { LEAGUES } from "./game";
+import { leagueEntry, toLeagueView, toTierView, type BrowseRow, type LeagueEntry, type LeagueView, type StandingRow, type TierView } from "./league";
 import { syncProfileCard } from "./profile-card-sync";
 import { safeClient, signedIn } from "./signed-in-client";
 
@@ -60,6 +61,22 @@ export async function leagueView({ client = safeClient, entry = ownEntry, now = 
     const { data, error } = res as { data: StandingRow[] | null; error: { message: string; code?: string } | null };
     if (error) throw rpcError(error);
     return toLeagueView(mine.week, data ?? []);
+  } catch (err) {
+    return { state: "error", error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+// The Leagues dialog: every league of one tier this week, read only (your own post happens in leagueView).
+export async function tierView(tier: number, { client = safeClient, entry = ownEntry, now = Date.now }: LeagueDeps = {}): Promise<TierView> {
+  if (!Number.isInteger(tier) || tier < 0 || tier >= LEAGUES.length) return { state: "error", error: "No such league." };
+  const c = client();
+  if (!c || !(await signedIn(c))) return { state: "signed-out" };
+  try {
+    const { week } = entry(now());
+    const res: unknown = await c.rpc("league_browse", { p_week: week, p_tier: tier });
+    const { data, error } = res as { data: BrowseRow[] | null; error: { message: string; code?: string } | null };
+    if (error) throw rpcError(error);
+    return toTierView(week, tier, data ?? []);
   } catch (err) {
     return { state: "error", error: err instanceof Error ? err.message : String(err) };
   }

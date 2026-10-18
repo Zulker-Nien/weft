@@ -93,7 +93,7 @@ function YouTab({ game, onOpenApp }: { game: GameState; onOpenApp: (url: string)
   );
 }
 
-// "Wefter Profile": your wefter card (with your GitHub profile and your mini apps), badges, each project's production-ready tree and the league ladder.
+// "Wefter Profile": your wefter card (with your GitHub profile and your mini apps), badges, each project's production-ready tree and your league (every league is the header's 🏆, components/LeaguesDialog.tsx).
 // Opens with the header chip's light state and measures your projects in the background.
 export default function LoomDialog({
   cwd,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Badge } from "./game-badges";
-import { leagueEntry, leagueMoves, leagueName, profileUrl, toLeagueView, weekBadges, zoneOf, type StandingRow } from "./league";
+import { leagueEntry, leagueMoves, leagueName, profileUrl, toLeagueView, toTierView, weekBadges, zoneOf, type BrowseRow, type StandingRow } from "./league";
 
 // Sat 17 Oct 2026, local noon; its week starts Mon 12 Oct.
 const NOW = new Date(2026, 9, 17, 12).getTime();
@@ -92,5 +92,29 @@ describe("toLeagueView", () => {
 
   it("is an empty Cotton league with no rows", () => {
     expect(toLeagueView("2026-10-12", [])).toEqual({ state: "ready", week: "2026-10-12", tier: 0, league: "Cotton", up: 0, down: 0, rows: [] });
+  });
+});
+
+describe("toTierView", () => {
+  const b = (over: Partial<BrowseRow> = {}): BrowseRow => ({ ...row({ is_me: false }), cohort: 0, ...over });
+
+  it("groups a tier into its leagues, yours first, each with its own moves", () => {
+    const view = toTierView("2026-10-12", 1, [
+      b({ cohort: 0, user_id: "a", rank: 1 }),
+      b({ cohort: 0, user_id: "b", rank: 2 }),
+      b({ cohort: 1, user_id: "me", rank: 1, is_me: true, badges: [{ icon: "🔥", name: "Hot" }] }),
+    ]);
+    expect(view).toMatchObject({ state: "ready", week: "2026-10-12", tier: 1, league: "Linen" });
+    if (view.state !== "ready") throw new Error("not ready");
+    expect(view.leagues.map((l) => l.cohort)).toEqual([1, 0]);
+    expect(view.leagues[0]).toMatchObject({ up: 1, down: 0, rows: [{ userId: "me", isMe: true, badges: [{ icon: "🔥", name: "Hot" }] }] });
+    expect(view.leagues[1]?.rows.map((r) => r.userId)).toEqual(["a", "b"]);
+  });
+
+  it("keeps cohort order when you aren't in the tier, and is empty with nobody there", () => {
+    const view = toTierView("2026-10-12", 2, [b({ cohort: 2, user_id: "x" }), b({ cohort: 0, user_id: "y" })]);
+    if (view.state !== "ready") throw new Error("not ready");
+    expect(view.leagues.map((l) => l.cohort)).toEqual([0, 2]);
+    expect(toTierView("2026-10-12", 5, [])).toEqual({ state: "ready", week: "2026-10-12", tier: 5, league: "Gold Thread", leagues: [] });
   });
 });

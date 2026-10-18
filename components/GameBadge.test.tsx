@@ -120,7 +120,7 @@ describe("GameBadge", () => {
     expect(onStart).toHaveBeenCalledWith("/dev/app", expect.stringContaining("pre-commit hook"), "Guarded for app");
   });
 
-  it("shows each project's tree and the locked league ladder", async () => {
+  it("shows each project's tree and an All leagues button", async () => {
     setup();
     await userEvent.click(await screen.findByRole("button", { name: /Wefter Profile/ }));
     await userEvent.click(await screen.findByRole("button", { name: "Projects" }));
@@ -128,7 +128,7 @@ describe("GameBadge", () => {
     expect(screen.getByText(/50% lines covered/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "League" }));
     expect(await screen.findByText(/Sign in to Weft/)).toBeInTheDocument();
-    expect(screen.getByText("🔒 Linen")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /All leagues/ })).toBeInTheDocument();
     expect(screen.getByText("This week: 30 XP")).toBeInTheDocument();
   });
 
