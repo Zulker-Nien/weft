@@ -57,6 +57,29 @@ export async function loadShare(id: string): Promise<LoadedShare | null> {
   return { share, card };
 }
 
+// The gate's verdict on any share row, a card's (cloud_shares) or a mini app's (cloud_app_shares, lib/app-share-access.ts):
+// the row's mode, the workspace membership for private, the pass cookie for the gated modes.
+export type GateVerdict = Exclude<ShareAccess, { kind: "ok" } | { kind: "missing" }> | { kind: "ok" };
+
+// `id` is the link's id, the one the pass cookie was granted for.
+export async function gateVerdict(
+  id: string,
+  share: { org_id: string; mode: string },
+  opts: { gate?: ShareGateKit; hasPass?: boolean } = {},
+): Promise<GateVerdict> {
+  const mode = share.mode;
+  // An unknown mode (an old row from before the package renamed something, a row tampered with) is
+  // treated like the strictest private mode: refuse, never render. Fail closed.
+  if (!isCardShareMode(mode)) return { kind: "denied" };
+  if (mode === "public") return { kind: "ok" };
+  if (mode === "private") return memberVerdict(share.org_id);
+  // The gated modes: a valid pass short-circuits to ok; otherwise the gate form.
+  const gate = opts.gate ?? getShareGate();
+  const hasPass = opts.hasPass ?? (await hasGatePass(gate, id));
+  if (hasPass) return { kind: "ok" };
+  return { kind: "gate", mode };
+}
+
 // The verdict, parameterized so the unlock route can hand in the pass cookie state instead of
 // re-reading next/headers (a Server Component is read-only). The page and the live route take the
 // no-arg form.
@@ -66,22 +89,12 @@ export async function shareAccessFor(
 ): Promise<ShareAccess> {
   const loaded = await loadShare(id);
   if (!loaded) return { kind: "unconfigured" };
-  const { share } = loaded;
   if (!loaded.card) return { kind: "missing" };
-  const mode = share.mode;
-  // An unknown mode (an old row from before the package renamed something, a row tampered with) is
-  // treated like the strictest private mode: refuse, never render. Fail closed.
-  if (!isCardShareMode(mode)) return { kind: "denied" };
-  if (mode === "public") return { kind: "ok", share: loaded };
-  if (mode === "private") return privateAccess(loaded);
-  // The gated modes: a valid pass short-circuits to ok; otherwise the gate form.
-  const gate = opts.gate ?? getShareGate();
-  const hasPass = opts.hasPass ?? (await hasGatePass(gate, id));
-  if (hasPass) return { kind: "ok", share: loaded };
-  return { kind: "gate", mode };
+  const verdict = await gateVerdict(id, loaded.share, opts);
+  return verdict.kind === "ok" ? { kind: "ok", share: loaded } : verdict;
 }
 
-async function privateAccess(loaded: LoadedShare): Promise<ShareAccess> {
+async function memberVerdict(orgId: string): Promise<GateVerdict> {
   const service = serviceClient();
   if (!service) return { kind: "unconfigured" };
   const user = await webUser();
@@ -91,11 +104,11 @@ async function privateAccess(loaded: LoadedShare): Promise<ShareAccess> {
   const { data: membership } = await service
     .from("org_memberships")
     .select("role")
-    .eq("org_id", loaded.share.org_id)
+    .eq("org_id", orgId)
     .eq("user_id", user.id)
     .maybeSingle<{ role: string }>();
   if (!membership) return { kind: "denied" };
-  return { kind: "ok", share: loaded };
+  return { kind: "ok" };
 }
 
 // The simple form, used by the page and the live poll. Re-uses shareAccessFor with no pass override

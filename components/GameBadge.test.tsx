@@ -38,7 +38,8 @@ beforeEach(() => {
   state = game();
   localStorage.clear();
   document.cookie = "weft-show-progress=; path=/; max-age=0";
-  vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ game: state })))));
+  // The You tab's My mini apps asks /api/apps; everything else here is the game.
+  vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve(new Response(JSON.stringify(url.startsWith("/api/apps") ? { apps: [] } : { game: state })))));
 });
 afterEach(() => vi.unstubAllGlobals());
 

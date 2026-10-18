@@ -3,14 +3,18 @@
 import { useRef, useState } from "react";
 import { appFor, appGlyph, appMenu, type AppAction, type MiniApp } from "@/lib/mini-apps";
 import { appActions, useMiniApps } from "@/lib/use-mini-apps";
+import { guarded } from "./guarded";
 import Tip from "./Tip";
+
+const ShareAppDialog = guarded(() => import("./ShareAppDialog"), { what: "share dialog", className: "fixed left-4 top-16 z-50" });
 
 // Mini apps on the left rail, below 🖥 Services (components/LibraryRail.tsx): one tile per page saved from the
 // browser pane (components/SaveAppButton.tsx). A click opens the app in the board's pane; right-click renames,
-// moves, copies or removes it. With no apps it draws nothing, not even its divider: the pane's Save as app button (the grid) is the way in.
+// shares, moves, copies or removes it. With no apps it draws nothing, not even its divider: the pane's Save as app button (the grid) is the way in.
 export default function AppsRail({ current, onOpen, notify }: { current?: string; onOpen: (url: string) => void; notify: (err: unknown) => void }) {
   const apps = useMiniApps();
   const [renaming, setRenaming] = useState<string | null>(null);
+  const [sharing, setSharing] = useState<MiniApp | null>(null);
   if (!apps.length) return null;
   const active = appFor(apps, current);
 
@@ -22,6 +26,7 @@ export default function AppsRail({ current, onOpen, notify }: { current?: string
     const run = (p: Promise<unknown>) => void p.catch(notify);
     if (picked === "open") onOpen(app.url);
     else if (picked === "rename") setRenaming(app.id);
+    else if (picked === "share") setSharing(app);
     else if (picked === "up") run(appActions.move(app.id, at - 1));
     else if (picked === "down") run(appActions.move(app.id, at + 1));
     else if (picked === "copy") run(navigator.clipboard.writeText(app.url));
@@ -54,6 +59,7 @@ export default function AppsRail({ current, onOpen, notify }: { current?: string
         </div>
       ))}
       </div>
+      {sharing && <ShareAppDialog app={sharing} onClose={() => setSharing(null)} />}
     </>
   );
 }

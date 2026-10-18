@@ -59,7 +59,7 @@ export default function ReplyButtons({
             type="button"
             onClick={onStop}
             aria-label="Stop the current turn"
-            className="ml-1 flex shrink-0 items-center gap-1 rounded-md border border-line-strong px-2 py-1 text-[12px] text-ink hover:bg-sunken"
+            className="ml-1 flex h-8 shrink-0 items-center gap-1 rounded-md border border-line-strong px-2.5 text-[12px] text-ink hover:bg-sunken"
           >
             <Icon name="stop" size={12} /> Stop
           </button>
@@ -78,7 +78,7 @@ export default function ReplyButtons({
             onClick={onContinue}
             disabled={sending}
             aria-label="Continue"
-            className="ml-1 flex shrink-0 items-center gap-1 rounded-md border border-line-strong px-2 py-1 text-[12px] text-ink hover:bg-sunken disabled:opacity-40"
+            className="ml-1 flex h-8 shrink-0 items-center gap-1 rounded-md border border-line-strong px-2.5 text-[12px] text-ink hover:bg-sunken disabled:opacity-40"
           >
             <Icon name="play" size={12} /> Continue
           </button>
@@ -90,7 +90,7 @@ export default function ReplyButtons({
             type="button"
             onClick={() => onSend(true)}
             disabled={sending}
-            className="ml-1 shrink-0 rounded-md border border-line-strong px-2 py-1 text-[12px] text-ink hover:bg-sunken disabled:opacity-40"
+            className="ml-1 flex h-8 shrink-0 items-center rounded-md border border-line-strong px-2.5 text-[12px] text-ink hover:bg-sunken disabled:opacity-40"
           >
             Send now
           </button>

@@ -11,15 +11,17 @@ const list = vi.fn<() => Promise<{ apps: MiniApp[] }>>();
 const save = vi.fn<(url: string, name?: string) => Promise<{ app: MiniApp }>>();
 const update = vi.fn<(id: string, patch: { name?: string; to?: number }) => Promise<{ app: MiniApp }>>();
 const remove = vi.fn<(id: string) => Promise<{ ok: true }>>();
+const share = vi.fn<(method: string, url: string, body?: unknown) => Promise<unknown>>();
 vi.mock("./client-api", () => ({ call: vi.fn(async (method: string, url: string, body?: unknown) => {
   if (method === "GET" && url === "/api/apps") return list();
   if (method === "POST" && url === "/api/apps") return save((body as { url: string; name?: string }).url, (body as { url: string; name?: string }).name);
   if (method === "PATCH" && url === "/api/apps") return update((body as { id: string; name?: string; to?: number }).id, { name: (body as { name?: string }).name, to: (body as { to?: number }).to });
   if (method === "DELETE" && url === "/api/apps") return remove((body as { id: string }).id);
+  if (url.startsWith("/api/apps/share")) return share(method, url, body);
   throw new Error(`unexpected ${method} ${url}`);
 }) }));
 
-const { appActions, reloadApps, resetMiniApps, useMiniApps } = await import("./use-mini-apps");
+const { appActions, appsApi, reloadApps, resetMiniApps, useMiniApps } = await import("./use-mini-apps");
 
 const a: MiniApp = { id: "a", name: "A", url: "https://a.test", addedAt: 1 };
 const b: MiniApp = { id: "b", name: "B", url: "https://b.test", addedAt: 2 };
@@ -125,5 +127,15 @@ describe("reloadApps", () => {
     await waitFor(() => expect(result.current).toEqual([a]));
     await act(() => reloadApps());
     expect(result.current).toEqual([a, b]);
+  });
+});
+
+describe("appsApi share", () => {
+  it("reads an app's share with its id in the query, and sets one with the id in the body", async () => {
+    share.mockResolvedValue({ kind: "signed-out" });
+    await appsApi.getShare("a b");
+    expect(share).toHaveBeenLastCalledWith("GET", "/api/apps/share?id=a%20b", undefined);
+    await appsApi.setShare("a", { mode: "public" });
+    expect(share).toHaveBeenLastCalledWith("PUT", "/api/apps/share", { id: "a", mode: "public" });
   });
 });

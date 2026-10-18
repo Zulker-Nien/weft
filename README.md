@@ -49,13 +49,17 @@ same time; Next.js allows one dev server per project folder.
 - **Mini apps**: a page you keep coming back to (a thread's dashboard in `~/.weft/show`, a dev server, any site) is
   one click from the board. The grid button in the browser pane's toolbar saves the page as an app; it joins the
   left rail as a tile below 🖥 Services (its first letter, or the emoji its name starts with). Click a tile
-  to open it in the pane; right-click to rename, move, copy the address or remove it. The button is lit on a page
+  to open it in the pane; right-click to rename, share, move, copy the address or remove it. Your apps also show as
+  **My mini apps** on your wefter profile (the 🔥 chip's You tab), each with a share button. **Share…** gives an app a
+  `weft.zip/a/<id>` link with a card's modes (workspace, public, email, password): a local page goes up as a sandboxed
+  copy, refreshed each time you open Share…, and a public https site is framed as is; a localhost app says it can't be reached. The button is lit on a page
   that's already an app, and clicking it then takes it out. No apps, nothing on the rail.
-- **Glance rail**: a 72 px column right of the page in the browser pane, one mini per turn of the open thread
-  (status dot, its first words, how long ago) and per page the pane showed, newest at the bottom like the chat. Every message keeps the page on
-  screen as you sent it. Click any mini and the chat
-  scrolls to that turn while the pane goes back to the page it showed then; scroll the
-  chat and the turn at its top lights up. Hidden in windows under 980 px (docs/architecture/glance-rail.md).
+- **Show rail**: a 72 px column right of the page in the browser pane, one mini per turn of the open thread
+  (status dot, its first words, how long ago) and per page the pane showed, newest at the bottom like the chat. Each page
+  is a small picture of what the pane showed (a few-KB WebP per page in `~/.weft/shots/`). Every message keeps the page on
+  screen as you sent it. Click any mini and the chat scrolls to that turn while the pane goes back to the page it showed
+  then; scroll the chat and the turn at its top lights up and the pane follows to its page, back to the newest at the
+  end of the chat. Hidden in windows under 980 px (docs/architecture/show-rail.md).
 - **Browser pane zoom**: the % button in the pane's toolbar zooms the page (Chrome's steps, plus
   50–200% presets); ⌘+ / ⌘− / ⌘0 and ⌘+scroll work on the page too, and a trackpad pinch magnifies.
 - **Failed loads say why**: a page that won't load in the browser pane (say a card's dev server stopped) shows Weft's
@@ -207,6 +211,10 @@ message again in a fresh CLI.
 The Backlog column is hidden by default. Turn it on with Settings → General → Show backlog. It also shows
 whenever cards are waiting in it.
 
+Drag a Backlog card onto another one to set the order: drop on its top half to place the card before it,
+or its bottom half to place it after. Weft saves that order and uses it for the Backlog list, whatever
+sort is selected for the other columns.
+
 Replying to a card continues the same CLI session, so the agent keeps its context.
 
 Right-click a card for a native menu where everything is one click: open, rename, start, move to
@@ -293,7 +301,14 @@ and pick by number or Enter, checkboxes for multi-select, a tab per question wit
 review (whatever you type there goes with the answers as a note on all of them). The reply box is the one place to type: your
 own answer when nothing is picked, a note on your pick when something is, and text you were already
 writing carries over. An option's preview (a mockup or snippet) shows in the card's browser pane as you
-highlight it.
+highlight it. **Chat about this** sends the box's text to the agent instead of an answer, and **Skip** declines the
+question. A send, number key or click in the first moment after a question appears is held, so a message you
+were just finishing doesn't become its answer; an answer that doesn't arrive brings the card back to try again.
+
+When a background command or subagent ends, the thread shows the `<task-notification>` the CLI sent the agent
+(its summary, red if the task failed), so a turn it started on its own answers something you can see. A Review card
+whose thread wrote no review tour still gets a **Done** button beside **Build review tour**: it runs `/weft:done`,
+like a tour's last step.
 
 A card leads with what the thread last said, under its title, beside its latest picture: a
 screenshot or image from the thread, or a capture of its browser pane taken after each turn (hover

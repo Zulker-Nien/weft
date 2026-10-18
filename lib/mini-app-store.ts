@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { DATA_DIR } from "./store";
 import { appNameFrom, cleanAppName, cleanAppUrl, moveApp, upsertApp, type MiniApp } from "./mini-apps";
+import type { CardShareMemo } from "./types-card-detail";
 
 // The left rail's mini apps (lib/mini-apps.ts), in their order, in ~/.weft/apps.json.
 
@@ -64,4 +65,13 @@ export function removeApp(id: unknown) {
   const apps = listApps();
   find(apps, id);
   writeApps(apps.filter((a) => a.id !== id));
+}
+
+// The app's share link as Supabase last answered it (lib/app-share.ts); written only when it changed.
+export function rememberAppShare(id: string, share: CardShareMemo) {
+  const apps = listApps();
+  const had = apps.find((a) => a.id === id);
+  if (!had) return;
+  if (had.share?.id === share.id && had.share.mode === share.mode && had.share.hasPassword === share.hasPassword) return;
+  writeApps(apps.map((a) => (a.id === id ? { ...a, share } : a)));
 }

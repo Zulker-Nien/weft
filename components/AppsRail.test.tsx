@@ -23,11 +23,22 @@ const appActions = vi.hoisted(() => ({
   move: vi.fn(() => Promise.resolve()),
   remove: vi.fn(() => Promise.resolve()),
 }));
+const shareAppDialogProps = vi.hoisted(() => ({ current: null as { app: MiniApp; onClose: () => void } | null }));
 vi.mock("@/lib/use-mini-apps", () => ({
   useMiniApps: vi.fn(() => []),
   appActions,
   reloadApps: vi.fn(() => Promise.resolve()),
   resetMiniApps: vi.fn(),
+}));
+vi.mock("./ShareAppDialog", () => ({
+  default: (props: { app: MiniApp; onClose: () => void }) => {
+    shareAppDialogProps.current = props;
+    return (
+      <div role="dialog" aria-label={`Share “${props.app.name}”`}>
+        <button type="button" onClick={props.onClose}>Close</button>
+      </div>
+    );
+  },
 }));
 import { useMiniApps } from "@/lib/use-mini-apps";
 
@@ -42,6 +53,7 @@ beforeEach(() => {
   appActions.rename.mockReset().mockResolvedValue(undefined);
   appActions.move.mockReset().mockResolvedValue(undefined);
   appActions.remove.mockReset().mockResolvedValue(undefined);
+  shareAppDialogProps.current = null;
   setApps([]);
   delete (window as unknown as { threadboard?: unknown }).threadboard;
   // happy-dom's navigator.clipboard is not implemented; the right-click "Copy address" branch needs it.
@@ -140,6 +152,21 @@ describe("AppsRail", () => {
     await userEvent.clear(input);
     await userEvent.type(input, "Hub{Escape}");
     expect(appActions.rename).not.toHaveBeenCalled();
+  });
+
+  it("opens the share dialog when the right-click menu picks 'share'", async () => {
+    setApps(apps);
+    const popupMenu = vi.fn().mockResolvedValueOnce("share");
+    (window as unknown as { threadboard: { popupMenu: typeof popupMenu } }).threadboard = { popupMenu };
+    render(<AppsRail onOpen={vi.fn()} notify={vi.fn()} />);
+    expect(shareAppDialogProps.current).toBeNull();
+    await userEvent.pointer({ keys: "[MouseRight]", target: screen.getByRole("button", { name: "Docs" }) });
+    await waitFor(() => expect(popupMenu).toHaveBeenCalledTimes(1));
+    expect(shareAppDialogProps.current).not.toBeNull();
+    expect(shareAppDialogProps.current?.app).toMatchObject({ id: "a", name: "Docs" });
+    expect(screen.getByRole("dialog", { name: /Share “Docs”/ })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog", { name: /Share “Docs”/ })).not.toBeInTheDocument();
   });
 });
 

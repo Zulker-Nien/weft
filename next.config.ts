@@ -8,15 +8,21 @@ const nextConfig: NextConfig = {
   distDir: process.env.THREADBOARD_DIST || ".next",
   // `pnpm dist` builds a self-contained server that the packaged Weft.app runs.
   output: process.env.THREADBOARD_STANDALONE ? "standalone" : undefined,
-  // The SDK finds its native Claude Code binary with a runtime require.resolve that tracing can't
-  // see, so pull in the platform package explicitly.
+  // Local threads run AI in the desktop server. Include the SDK and native CLI in its standalone
+  // package, but don't ship that runtime with Vercel's server, which relays work to desktop.
   outputFileTracingIncludes: {
-    "/**/*": [
-      "./node_modules/@anthropic-ai/claude-agent-sdk/**/*",
-      `./node_modules/@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/**/*`,
-    ],
     // app/faq/page.tsx reads the FAQ from disk.
     "/faq": ["./docs/FAQ.md"],
+    ...(process.env.THREADBOARD_STANDALONE
+      ? {
+          // The SDK finds its native Claude Code binary with a runtime require.resolve that tracing can't
+          // see, so pull in the platform package explicitly for the packaged desktop server.
+          "/**/*": [
+            "./node_modules/@anthropic-ai/claude-agent-sdk/**/*",
+            `./node_modules/@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/**/*`,
+          ],
+        }
+      : {}),
   },
   // lib/login.ts runs a CLI by a runtime path, which makes tracing pull in the whole project
   // folder; keep electron-builder's output (dist/) out of it. These globs match anywhere in a path,

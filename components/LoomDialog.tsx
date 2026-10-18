@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import type { GameState } from "@/lib/game-server";
+import { showPage } from "@/lib/board-helpers";
 import { setupPrompt, type CheckDef, type ProjectReport } from "@/lib/project-badges";
+import LoomApps from "./LoomApps";
+import CrashGuard from "./CrashGuard";
 import { BadgesTab, ProjectsTab } from "./LoomBadges";
 import { Bar, Cloth, Radar } from "./LoomCharts";
 import LoomProfile from "./LoomProfile";
@@ -31,7 +34,7 @@ function Stat({ label, value, sub }: { label: string; value: React.ReactNode; su
   );
 }
 
-function YouTab({ game }: { game: GameState }) {
+function YouTab({ game, onOpenApp }: { game: GameState; onOpenApp: (url: string) => void }) {
   const { level, streak, records: r } = game;
   return (
     <div className="flex flex-col gap-4">
@@ -64,6 +67,9 @@ function YouTab({ game }: { game: GameState }) {
         </div>
         <Radar attrs={game.attributes} />
       </div>
+      <CrashGuard what="mini apps">
+        <LoomApps onOpen={onOpenApp} />
+      </CrashGuard>
       {game.skills.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {game.skills.map((s) => (
@@ -107,7 +113,7 @@ function LeagueTab({ game }: { game: GameState }) {
   );
 }
 
-// "Your loom": your wefter card (with your GitHub profile), badges, each project's production-ready tree and the league ladder.
+// "Your loom": your wefter card (with your GitHub profile and your mini apps), badges, each project's production-ready tree and the league ladder.
 // Opens with the header chip's light state and measures your projects in the background.
 export default function LoomDialog({
   cwd,
@@ -161,7 +167,15 @@ export default function LoomDialog({
         {measuring && <span className="ml-auto text-[11.5px] text-muted">Measuring your projects…</span>}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        {tab === "you" && <YouTab game={game} />}
+        {tab === "you" && (
+          <YouTab
+            game={game}
+            onOpenApp={(url) => {
+              onClose();
+              showPage(url);
+            }}
+          />
+        )}
         {tab === "badges" && <BadgesTab badges={game.badges} project={inView} onSetup={setup} />}
         {tab === "projects" && <ProjectsTab projects={game.projects} inView={game.inView} onSetup={setup} />}
         {tab === "league" && <LeagueTab game={game} />}

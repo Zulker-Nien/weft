@@ -103,12 +103,22 @@ memory, so a Vercel redeploy or a new instance doesn't reset it.
   Weft deployments don't share a bucket space and a stolen DB row can't be matched back to a
   viewer without the pepper. The route reads the real remote address off `x-real-ip` (set by
   Vercel at the edge), not the `x-forwarded-for` chain, which a client can forge.
-- The window rolls on the first attempt after a quiet period (`upsert` resets `count` to 1 and
-  `first_at` to now); further attempts in the same window bump `count` atomically; over the
-  limit answers 429 with a `Retry-After` set to the seconds until the existing row's `first_at`
-  ages out. Fails open on a Supabase error so a rate-limit outage doesn't lock out share
-  visitors; the route still 503s when no service key is configured (the only path that makes
-  the limit unreachable).
+- One round trip per attempt: `checkAndRecord` calls `public.share_unlock_bump`
+  (`20261018045842_share_unlock_bump.sql`), a single `INSERT … ON CONFLICT DO UPDATE` that rolls the
+  window (count back to 1, `first_at` to now) or bumps `count`, capped at max + 1, under the row lock.
+  Racing attempts on one bucket queue on the row, so at most 10 get through (the first version read
+  then updated in two trips and could let a burst past; pentest 2026-10-18, F-2). Over the limit
+  answers 429 with a `Retry-After` set to the seconds until the row's `first_at` ages out. Fails
+  open on a Supabase error so a rate-limit outage doesn't lock out share visitors.
+- The route answers 503 anywhere `VERCEL` isn't set (F-6): off Vercel nothing rewrites `x-real-ip`,
+  so a caller could pick a fresh bucket per request. It also 503s with no service key.
+
+## Sharing a mini app
+
+A mini app's **Share…** uses the same dialog frame, modes, gate, pass cookie and sandboxed page serving for a
+`weft.zip/a/<id>` link, from its own `cloud_app_shares` table, since a mini app lives on the Mac rather than in cloud
+sync: mini-apps.md has the rest. `gateVerdict` (`lib/share-access.ts`), `lib/share-page-serve.ts` and
+`lib/share-unlock.ts` are the shared parts.
 
 ## Sharing the board
 

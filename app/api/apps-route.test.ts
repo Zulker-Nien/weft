@@ -12,6 +12,9 @@ const store = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/mini-app-store", () => store);
 
+const dropAppShare = vi.hoisted(() => vi.fn(() => Promise.resolve()));
+vi.mock("@/lib/app-share", () => ({ dropAppShare }));
+
 const route = await import("./apps/route");
 const WRITE = { host: "localhost:3457", "x-threadboard": "1", "content-type": "application/json" };
 const make = (method: "GET" | "POST" | "PATCH" | "DELETE", body?: unknown, headers: Record<string, string> = WRITE) =>
@@ -22,6 +25,7 @@ beforeEach(() => {
   store.saveApp.mockReset().mockReturnValue({ id: "saved", name: "Saved", url: "https://saved.test", addedAt: 0 });
   store.updateApp.mockReset().mockReturnValue({ id: "u", name: "Updated", url: "https://u.test", addedAt: 0 });
   store.removeApp.mockReset();
+  dropAppShare.mockReset().mockResolvedValue(undefined);
 });
 
 describe("GET /apps", () => {
@@ -97,6 +101,23 @@ describe("DELETE /apps", () => {
   it("removes the app and replies ok", async () => {
     const res = await route.DELETE(make("DELETE", { id: "a" }));
     expect(store.removeApp).toHaveBeenCalledWith("a");
+    expect(await res.json()).toEqual({ ok: true });
+  });
+
+  it("drops the app's share link, looking the app up by id first", async () => {
+    const app = { id: "a", name: "A", url: "https://a.test", addedAt: 0, share: { id: "s1", mode: "public" as const, hasPassword: false } };
+    store.listApps.mockReturnValueOnce([app]);
+    const res = await route.DELETE(make("DELETE", { id: "a" }));
+    expect(dropAppShare).toHaveBeenCalledWith(app);
+    expect(await res.json()).toEqual({ ok: true });
+  });
+
+  it("still answers ok when dropAppShare rejects (the app is gone either way)", async () => {
+    const app = { id: "a", name: "A", url: "https://a.test", addedAt: 0, share: { id: "s1", mode: "public" as const, hasPassword: false } };
+    store.listApps.mockReturnValueOnce([app]);
+    dropAppShare.mockRejectedValueOnce(new Error("supabase down"));
+    const res = await route.DELETE(make("DELETE", { id: "a" }));
+    expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
   });
 

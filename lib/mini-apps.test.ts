@@ -192,8 +192,8 @@ describe("appMenu", () => {
     expect(menu.find((i) => "id" in i && i.id === "down")?.enabled).toBe(false);
   });
 
-  it("lists rename, copy, remove and two separators", () => {
+  it("lists rename, share, copy, remove and two separators", () => {
     const menu = appMenu(three, "1");
-    expect(menu.map((i) => ("id" in i ? i.id : "sep"))).toEqual(["open", "rename", "sep", "up", "down", "copy", "sep", "remove"]);
+    expect(menu.map((i) => ("id" in i ? i.id : "sep"))).toEqual(["open", "rename", "share", "sep", "up", "down", "copy", "sep", "remove"]);
   });
 });

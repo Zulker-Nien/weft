@@ -1,4 +1,5 @@
 import { tagHue } from "./tags";
+import type { CardShareMemo } from "./types-card-detail";
 
 // Mini apps: a page from the browser pane, saved so it's one click away on the left rail, below
 // Services (components/AppsRail.tsx). A thread's HTML page in ~/.weft/show, a dashboard, a dev server: anything
@@ -10,6 +11,8 @@ export interface MiniApp {
   name: string;
   url: string;
   addedAt: number;
+  // Its share link as last read from Supabase (lib/app-share.ts), so the Share dialog and My mini apps draw at once.
+  share?: CardShareMemo;
 }
 
 export const MAX_APP_NAME = 40;
@@ -81,13 +84,14 @@ export function moveApp(apps: readonly MiniApp[], id: string, to: number): MiniA
 }
 
 // Right-click on an app on the rail.
-export type AppAction = "open" | "rename" | "up" | "down" | "copy" | "remove";
+export type AppAction = "open" | "rename" | "share" | "up" | "down" | "copy" | "remove";
 
 export function appMenu(apps: readonly MiniApp[], id: string) {
   const i = apps.findIndex((a) => a.id === id);
   return [
     { id: "open", label: "Open" },
     { id: "rename", label: "Rename…" },
+    { id: "share", label: "Share…" },
     { type: "separator" as const },
     { id: "up", label: "Move up", enabled: i > 0 },
     { id: "down", label: "Move down", enabled: i >= 0 && i < apps.length - 1 },

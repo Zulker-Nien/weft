@@ -133,3 +133,37 @@ describe("removeApp", () => {
     expect(() => apps.removeApp("nope")).toThrow("No such app.");
   });
 });
+
+describe("rememberAppShare", () => {
+  it("writes the share memo once, and skips a memo that's the same as what's already there", async () => {
+    const { apps } = await load();
+    const saved = apps.saveApp("https://example.com", "App");
+    apps.rememberAppShare(saved.id, { id: "s1", mode: "public", hasPassword: false });
+    expect((readApps()[0] as { share: unknown }).share).toEqual({ id: "s1", mode: "public", hasPassword: false });
+
+    const before = fs.readFileSync(appsFile(), "utf8");
+    apps.rememberAppShare(saved.id, { id: "s1", mode: "public", hasPassword: false });
+    const after = fs.readFileSync(appsFile(), "utf8");
+    expect(after).toBe(before);
+
+    // A changed memo writes; here the mode flips and hasPassword becomes true.
+    apps.rememberAppShare(saved.id, { id: "s1", mode: "password", hasPassword: true });
+    expect((readApps()[0] as { share: unknown }).share).toEqual({ id: "s1", mode: "password", hasPassword: true });
+  });
+
+  it("leaves the other apps as they were", async () => {
+    const { apps } = await load();
+    const one = apps.saveApp("https://one.example.com", "One");
+    const two = apps.saveApp("https://two.example.com", "Two");
+    apps.rememberAppShare(two.id, { id: "s2", mode: "public", hasPassword: false });
+    expect(readApps()).toEqual([one, { ...two, share: { id: "s2", mode: "public", hasPassword: false } }]);
+  });
+
+  it("ignores an unknown app id (the app may have been removed before the share answer landed)", async () => {
+    const { apps } = await load();
+    const saved = apps.saveApp("https://example.com", "App");
+    apps.removeApp(saved.id);
+    apps.rememberAppShare(saved.id, { id: "s1", mode: "public", hasPassword: false });
+    expect(readApps()).toEqual([]);
+  });
+});

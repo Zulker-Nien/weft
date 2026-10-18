@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
+import type { AppShareState, AppShareUpdate } from "./app-share-types";
 import { call } from "./client-api";
 import type { MiniApp } from "./mini-apps";
 
@@ -28,6 +29,9 @@ export const appsApi = {
   save: (url: string, name?: string) => call<{ app: MiniApp }>("POST", "/api/apps", { url, name }),
   update: (id: string, patch: { name?: string; to?: number }) => call<{ app: MiniApp }>("PATCH", "/api/apps", { id, ...patch }),
   remove: (id: string) => call<{ ok: true }>("DELETE", "/api/apps", { id }),
+  // The app's Share dialog: its weft.zip link, or why it can't have one (lib/app-share.ts).
+  getShare: (id: string) => call<AppShareState>("GET", `/api/apps/share?id=${encodeURIComponent(id)}`),
+  setShare: (id: string, update: AppShareUpdate) => call<AppShareState>("PUT", "/api/apps/share", { id, ...update }),
 };
 
 export function reloadApps() {

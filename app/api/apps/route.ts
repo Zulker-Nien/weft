@@ -1,3 +1,4 @@
+import { dropAppShare } from "@/lib/app-share";
 import { fail, guard } from "@/lib/guard";
 import { listApps, removeApp, saveApp, updateApp } from "@/lib/mini-app-store";
 
@@ -40,7 +41,10 @@ export async function DELETE(req: Request) {
   if (denied) return denied;
   try {
     const body = (await req.json()) as Body;
+    const app = listApps().find((a) => a.id === body.id);
     removeApp(body.id);
+    // Its share link goes with it; the app is gone either way.
+    await dropAppShare(app).catch(() => {});
     return Response.json({ ok: true });
   } catch (err) {
     return fail(err);

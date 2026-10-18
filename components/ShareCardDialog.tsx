@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { CopyLinkButton, ShareAccessFields, ShareDialog, useShareAccess, type SaveShareAccess } from "@aimhuge/share/client";
 import { api } from "@/lib/client";
@@ -9,8 +9,8 @@ import { isCardShareMode, seedShareState, type CardShareState } from "@/lib/shar
 import type { Card } from "@/lib/types";
 import { useAccount } from "@/lib/use-account";
 import { useEscape } from "@/lib/use-escape";
-import { openTeamPage } from "./board-palette";
 import Icon, { Spinner } from "./Icon";
+import { errorText, NoWorkspace, SHARE_BUTTON, ShareNote, SignedOut } from "./ShareParts";
 
 // Share… (the card's right-click menu): one weft.zip link that shows this thread and its browser pane, live,
 // behind one of @aimhuge/share's modes (never editing: that would run turns on this Mac). The link reads the
@@ -20,12 +20,6 @@ import Icon, { Spinner } from "./Icon";
 // It goes to document.body, centered over the whole window, and counts as an overlay so the browser pane (a native
 // view drawn above the page) steps aside while it's open.
 const POLL_MS = 2000;
-
-const BUTTON = "flex items-center gap-1.5 rounded-md border border-line-strong px-2.5 py-1.5 text-[12.5px] text-ink hover:bg-sunken disabled:opacity-60";
-
-function message(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
 
 function hydrateFrom(state: CardShareState, hydrate: ReturnType<typeof useShareAccess>["hydrate"]) {
   if (state.kind === "ok") hydrate({ shareMode: state.mode, editRequiresEmail: false, hasPassword: state.hasPassword });
@@ -50,7 +44,7 @@ export default function ShareCardDialog({ card, onClose }: { card: Card; onClose
       setState(answer);
       return answer.kind === "ok" ? { ok: true } : { ok: false, error: "Sharing isn't available right now." };
     } catch (err) {
-      return { ok: false, error: message(err) };
+      return { ok: false, error: errorText(err) };
     }
   };
   const access = useShareAccess({ save });
@@ -66,7 +60,7 @@ export default function ShareCardDialog({ card, onClose }: { card: Card; onClose
       setError(null);
       hydrateFrom(answer, hydrate);
     } catch (err) {
-      setError(message(err));
+      setError(errorText(err));
     }
   }, [card.id, hydrate]);
 
@@ -89,7 +83,7 @@ export default function ShareCardDialog({ card, onClose }: { card: Card; onClose
       await api.cloudSyncSetFolder(folder, true);
       await load();
     } catch (err) {
-      setError(message(err));
+      setError(errorText(err));
     }
   }
 
@@ -138,27 +132,15 @@ function ShareBody({
       return <NotSynced folder={state.folder} onSyncOn={onSyncOn} />;
     case "pending":
       return (
-        <Note>
+        <ShareNote>
           <Spinner size={13} /> Uploading this card…
-        </Note>
+        </ShareNote>
       );
     case "signed-out":
       return <SignedOut account={account} />;
     case "no-workspace":
-      return (
-        <Note>
-          Your account has no workspace yet. Make one at{" "}
-          <button type="button" onClick={openTeamPage} className="text-accent underline">
-            weft.zip/team
-          </button>
-          , then share from here.
-        </Note>
-      );
+      return <NoWorkspace />;
   }
-}
-
-function Note({ children }: { children: ReactNode }) {
-  return <p className="flex items-center gap-1.5 text-[13px] text-ink">{children}</p>;
 }
 
 function NotSynced({ folder, onSyncOn }: { folder: string; onSyncOn: (folder: string) => Promise<void> }) {
@@ -174,7 +156,7 @@ function NotSynced({ folder, onSyncOn }: { folder: string; onSyncOn: (folder: st
       <button
         type="button"
         disabled={busy}
-        className={BUTTON}
+        className={SHARE_BUTTON}
         onClick={() => {
           setBusy(true);
           void onSyncOn(folder).finally(() => setBusy(false));
@@ -183,21 +165,6 @@ function NotSynced({ folder, onSyncOn }: { folder: string; onSyncOn: (folder: st
         {busy ? <Spinner size={13} /> : <Icon name="globe" size={14} />}
         Turn on sync for {name}
       </button>
-    </div>
-  );
-}
-
-// The top bar's sign-in (components/AccountButton.tsx): GitHub, finished in your browser.
-function SignedOut({ account }: { account: ReturnType<typeof useAccount> }) {
-  const { busy, waiting, error, signIn } = account;
-  return (
-    <div className="space-y-2 text-[13px] text-ink">
-      <p>Sign in to Weft to share.</p>
-      <button type="button" disabled={busy !== null} className={BUTTON} onClick={() => void signIn("github")}>
-        {busy === "github" || waiting ? <Spinner size={13} /> : <Icon name="github" size={14} />}
-        {waiting ? "Signing in…" : "Sign in with GitHub"}
-      </button>
-      {error && <p className="text-[12px] text-danger">{error}</p>}
     </div>
   );
 }
