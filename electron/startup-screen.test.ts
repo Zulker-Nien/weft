@@ -56,9 +56,10 @@ describe("startup screen", () => {
     contents.emit("did-fail-load", {}, -6, "ERR_FILE_NOT_FOUND", "file:///splash.html", true);
     await tick();
     expect(contents.scripts).toEqual([]);
-    contents.emit("did-fail-load", {}, -102, "ERR_CONNECTION_REFUSED", "http://127.0.0.1:3000/", true);
+    // -2 ERR_FAILED isn't in TRANSIENT, so it falls straight through to showError instead of retrying.
+    contents.emit("did-fail-load", {}, -2, "ERR_FAILED", "http://127.0.0.1:3000/", true);
     await tick();
-    expect(contents.scripts).toEqual(['showError("The board didn\'t load (ERR_CONNECTION_REFUSED).")']);
+    expect(contents.scripts).toEqual(['showError("The board didn\'t load (ERR_FAILED).")']);
   });
 
   it("shows a crashed renderer, not a clean exit", async () => {
