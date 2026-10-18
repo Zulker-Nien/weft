@@ -9,6 +9,7 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 ## [Unreleased]
 
 ### Added
+- **League emails.** A welcome on the day you join a league, a Thursday and a Sunday nudge when a move is in play, and Monday's results, from a daily Vercel cron at 13:00 UTC; at most one a day, each sent once (`league_emails`), with one-click unsubscribe (`profiles.league_emails`) (`lib/league-mail*.ts`, `app/api/league/{emails,open,unsubscribe}`, `supabase/migrations/20261017171804_league_emails.sql`).
 
 - **Tokens and plan-limit hits on your Wefter Profile.** The You tab charts your tokens for the last 30 days, from every Claude Code and puku-cli transcript, with a dot over each day you hit your 5-hour or weekly limit; two new badges, ⏳ Hit the ceiling and 🗓️ Ran the week dry, unlock on your first hit of each (`lib/usage.ts`, `lib/usage-scan.ts`, `components/LoomUsage.tsx`).
 

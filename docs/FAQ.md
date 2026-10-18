@@ -50,7 +50,7 @@ running, what needs you and what's ready to review.
 On a loom, the warp threads run lengthwise and the weft is the thread that crosses them, over and under, binding them
 into cloth. On the board, every card is a warp thread, and Weft is the thread across them: the board, the pane and
 the copilot that turn a pile of separate agent threads into finished work. The same picture runs all the way through:
-the levels go Thread, Strand, Yarn, Bolt, Loom and Tapestry, your progress dialog is "Your loom", and your activity
+the levels go Thread, Strand, Yarn, Bolt, Loom and Tapestry, your progress dialog is your Wefter Profile, and your activity
 shows up as woven stitches.
 
 ### What's with the cars anyway?
@@ -118,7 +118,7 @@ show rail of every turn and page beside it. A finished card hands you a review s
 
 ![An open card: the conversation and review step on the left, the burndown page the thread drew on the right, the show rail at the edge](../public/brand/faq/tour-open-card.jpg)
 
-**The copilot, code quality, connectors and your loom.**
+**The copilot, code quality, connectors and your Wefter Profile.**
 
 <p>
 <img src="../public/brand/faq/tour-copilot.jpg" alt="The copilot lane: what finished since you last asked, what needs you, and the cockpit" width="32%">
@@ -130,9 +130,9 @@ Left: the copilot lane tells you what finished and what's waiting on you. Middle
 checklist and the scout's top findings. Right: a connector drawer, here Supabase with its unapplied migration and a
 **Migrate** button.
 
-![Your loom: your wefter card, streak, attributes, stack levels and 26 weeks of activity as woven stitches](../public/brand/faq/tour-loom.jpg)
+![Your Wefter Profile: your wefter card, streak, attributes, stack levels and 26 weeks of activity as woven stitches](../public/brand/faq/tour-loom.jpg)
 
-**Your loom** is the progress dialog behind the 🔥 chip: your streak, what you're good at, the stack you ship in, and
+**Your Wefter Profile** is the progress dialog behind the 🔥 chip: your streak, what you're good at, the stack you ship in, and
 a woven cloth of your last 26 weeks.
 
 ### Does it work on Windows or Linux?
@@ -285,8 +285,9 @@ them in the 🏷 drawer (⌘L).
 
 ### Does Weft show my existing Claude Code sessions?
 
-Yes. On launch and every minute, Weft picks up the sessions `claude --resume` lists, read-only from `~/.claude/projects`,
-as cards. Replying continues the same session; if it's open in another app or changed in the last 10 minutes, Weft
+Yes. On first launch Weft asks first: a welcome shows the profile your sessions make and the projects they're in, and
+you pick which come in (or Start fresh). After that, on launch and every minute, Weft picks up the sessions
+`claude --resume` lists, read-only from `~/.claude/projects`, as cards. Replying continues the same session; if it's open in another app or changed in the last 10 minutes, Weft
 continues it as a copy so two apps never write to one session. Deleting a picked-up card hides that session for good.
 puku-cli sessions aren't picked up yet.
 
@@ -733,7 +734,7 @@ Your streak and level. Starting a card earns 2 XP, a turn 1, a card taken to Don
 scores 80+). Shipping pays more than starting. Every 7-day run earns a streak freeze (up to 2). Turn it off with
 Settings → General → Show progress.
 
-### What's in "Your loom"?
+### What's in your Wefter Profile?
 
 Your wefter card (with your GitHub profile when `gh` is signed in) and seven attributes worked out from what you build,
 whose top two name your class ("Roaming Shipper"); stack skills by technology; 26 weeks of activity as woven stitches;

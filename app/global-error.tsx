@@ -1,8 +1,17 @@
 "use client";
 
+import posthog from "posthog-js";
+import { useEffect } from "react";
+
 // The root layout itself failed. This replaces the whole document, so it carries its own styles
 // (globals.css doesn't reach it) and follows the OS light/dark setting.
 export default function GlobalError({ error, retry }: { error: Error & { digest?: string }; retry: () => void }) {
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN && process.env.NEXT_PUBLIC_POSTHOG_HOST) {
+      posthog.captureException(error);
+    }
+  }, [error]);
+
   return (
     <html lang="en" style={{ colorScheme: "light dark" }}>
       <body style={{ fontFamily: "system-ui, sans-serif", margin: 0, padding: 32 }}>
