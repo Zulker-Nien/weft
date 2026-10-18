@@ -1,0 +1,178 @@
+/* weft.zip/@username (components/profile/PublicProfileView.tsx). Borrows .wz-app's tokens and backdrop from
+   components/team/team.css; plain global CSS with a wz-profile prefix, since next.config.ts routes every .css
+   through the Tailwind loader, which drops module exports. .wz-app clips its overflow, so the page scrolls here. */
+
+.wz-profile {
+  min-height: 100vh;
+  overflow-y: auto;
+}
+
+.wz-profileTop,
+.wz-profileMain {
+  position: relative;
+  z-index: 1;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.wz-profileTop {
+  padding-top: 22px;
+}
+
+.wz-profileHome {
+  font-family: var(--display);
+  font-size: 20px;
+  color: var(--thread);
+  text-decoration: none;
+}
+
+.wz-profileHome:hover {
+  color: var(--clay-2);
+}
+
+.wz-profileMain {
+  padding-top: 36px;
+  padding-bottom: 64px;
+}
+
+.wz-profileCard {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 28px 30px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgb(31 39 66 / 0.9), rgb(23 29 49 / 0.95));
+  border: 1px solid var(--line-2);
+  box-shadow: var(--shadow);
+}
+
+.wz-profileAvatar {
+  flex-shrink: 0;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  border: 2px solid var(--line-2);
+  object-fit: cover;
+}
+
+.wz-profileInitial {
+  display: grid;
+  place-items: center;
+  background: var(--clay-soft);
+  color: var(--clay-2);
+  font-family: var(--display);
+  font-size: 40px;
+}
+
+.wz-profileWho {
+  min-width: 0;
+}
+
+.wz-profileName {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 32px;
+  line-height: 1.12;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+
+.wz-profileHandle {
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--thread-3);
+}
+
+.wz-profileFacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 12px;
+  font-size: 13.5px;
+  color: var(--thread-2);
+}
+
+.wz-profileFacts a,
+.wz-profileThread {
+  color: var(--thread);
+  text-decoration: none;
+}
+
+.wz-profileFacts a:hover {
+  color: var(--clay-2);
+  text-decoration: underline;
+}
+
+.wz-profileThreads {
+  margin-top: 36px;
+}
+
+.wz-profileSection {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--thread-3);
+}
+
+.wz-profileEmpty {
+  margin: 0;
+  color: var(--thread-3);
+}
+
+.wz-profileList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.wz-profileList li + li {
+  border-top: 1px solid var(--line);
+}
+
+.wz-profileThread {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 18px;
+  background: rgb(23 29 49 / 0.6);
+  transition: background 0.15s;
+}
+
+.wz-profileThread:hover {
+  background: var(--panel-2);
+}
+
+.wz-profileThreadTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wz-profileThreadDate {
+  flex-shrink: 0;
+  font-size: 12.5px;
+  color: var(--thread-3);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 560px) {
+  .wz-profileCard {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 24px;
+  }
+
+  .wz-profileName {
+    font-size: 26px;
+  }
+}

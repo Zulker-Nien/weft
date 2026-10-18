@@ -31,6 +31,11 @@ const nextConfig: NextConfig = {
   outputFileTracingExcludes: {
     "/**/*": ["./dist/mac*/**/*", "./dist/Weft-*", "./dist/builder-*"],
   },
+  // weft.zip/@username is a public profile. A route folder can't start with "@" (a parallel-route slot), so the
+  // handle is rewritten to app/u/[username]; beforeFiles so the [orgSlug] segment never sees it.
+  rewrites() {
+    return Promise.resolve({ beforeFiles: [{ source: "/@:username", destination: "/u/:username" }], afterFiles: [], fallback: [] });
+  },
   cacheComponents: true,
   partialPrefetching: true,
   // The Agent SDK spawns the CLI from files inside its own package, so it must not be bundled.

@@ -1,0 +1,43 @@
+// weft.zip/@username: an account's public profile (docs/architecture/profiles.md). A folder can't be named
+// "@…" (that's a parallel-route slot), so next.config.ts rewrites /@:username here; /u/<username> works too.
+// No sign-in: lib/public-profile.ts reads it through the service client and returns public fields only.
+//
+// Like /s/[id], the body sits in a <Suspense> for cacheComponents: params are request data, so they're
+// awaited inside it while the shell prerenders.
+import type { Metadata } from "next";
+import { Suspense } from "react";
+import { notFound } from "next/navigation";
+import { isDeployed } from "@/lib/home";
+import { loadPublicProfile } from "@/lib/public-profile";
+import { PublicProfileView } from "@/components/profile/PublicProfileView";
+import "@/components/team/team.css";
+
+// Static on purpose, like /s/[id]'s: a per-profile title would need the params outside the <Suspense>.
+export const metadata: Metadata = { title: "Profile · Weft" };
+
+function NotDeployed() {
+  return (
+    <div className="wz-app wz-auth">
+      <main className="wz-authCard">
+        <h1 className="wz-authTitle">Profiles</h1>
+        <p className="wz-authSub">Public profiles live on weft.zip.</p>
+      </main>
+    </div>
+  );
+}
+
+async function PageBody({ params }: { params: Promise<{ username: string }> }) {
+  const { username } = await params;
+  const profile = await loadPublicProfile(username);
+  if (!profile) notFound();
+  return <PublicProfileView profile={profile} />;
+}
+
+export default function Page({ params }: { params: Promise<{ username: string }> }) {
+  if (!isDeployed()) return <NotDeployed />;
+  return (
+    <Suspense fallback={<p className="wz-boardLoading">Loading the profile…</p>}>
+      <PageBody params={params} />
+    </Suspense>
+  );
+}
