@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
+import posthog from "posthog-js";
 import { bangCommand } from "@/lib/bang";
 import { type PlanResets } from "@/lib/schedule";
 import { replyPlaceholder } from "@/lib/reply-placeholder";
@@ -76,6 +77,11 @@ export default function ReplyBox({
 
   const setErrorWrap = (err: unknown) => setError(err instanceof Error ? err.message : String(err));
   const clearError = () => setError(null);
+  const captureReply = () => {
+    if (process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN && process.env.NEXT_PUBLIC_POSTHOG_HOST) {
+      posthog.capture("thread_reply_sent", { reply_type: "message" });
+    }
+  };
   const { initial, save: saveDraft, shell } = useReplyDraft(cardId, onShell, clearError);
 
   // The turn ended and nothing is being edited: what was queued leaves the queue as one message.
@@ -87,7 +93,7 @@ export default function ReplyBox({
   }
 
   const sendOutgoing = useEffectEvent((text: string) => {
-    onSend(text).catch((err: unknown) => {
+    onSend(text).then(captureReply).catch((err: unknown) => {
       setQueue((q) => [text, ...q]);
       setPaused(true);
       setErrorWrap(err);
@@ -185,6 +191,7 @@ export default function ReplyBox({
       // Send now: interrupt the running turn first, then the message goes out as the next one.
       if (live) await onStop();
       await onSend(text);
+      captureReply();
       setPaused(false);
       saveDraft("", true);
       composer.current?.clear();
@@ -207,6 +214,7 @@ export default function ReplyBox({
     try {
       if (live) await onStop();
       await onSend(text);
+      captureReply();
       setPaused(false);
     } catch (err) {
       setQueue((q) => [text, ...q]);
@@ -228,7 +236,10 @@ export default function ReplyBox({
     question: Boolean(question),
     shell,
     editing,
-    onSend,
+    onSend: async (text) => {
+      await onSend(text);
+      captureReply();
+    },
     setError: setErrorWrap,
   });
 

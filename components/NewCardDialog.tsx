@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import posthog from "posthog-js";
 import { isMac } from "@/lib/hotkeys";
 import { type NewCardInput } from "@/lib/client";
 import type { Card, RestartStatus } from "@/lib/types";
@@ -55,7 +56,22 @@ export default function NewCardDialog({
     clear: () => composer.current?.clear(),
     focus: () => composer.current?.focus(),
   };
-  const submit = (start: boolean, stay: boolean) => dialog.submit(start, { stay, ...composerOps, onCreate, onClose });
+  const submit = (start: boolean, stay: boolean) =>
+    dialog.submit(start, {
+      stay,
+      ...composerOps,
+      onCreate: async (input, options) => {
+        await onCreate(input, options);
+        if (input.start && process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN && process.env.NEXT_PUBLIC_POSTHOG_HOST) {
+          posthog.capture("thread_started", {
+            backend: input.backend,
+            model: input.model || "default",
+            effort: input.effort || "default",
+          });
+        }
+      },
+      onClose,
+    });
 
   return (
     <aside

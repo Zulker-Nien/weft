@@ -1,7 +1,8 @@
-// The General page: laptop mode, appearance, the Backlog and Progress toggles, and sound settings.
+// The General page: laptop mode, appearance, the Backlog and Progress toggles, your Claude Code history, and sound settings.
 import { setShowBacklog, setShowProgress } from "@/lib/board-prefs";
 import { SETTINGS_HINT, SETTINGS_TITLE } from "@/lib/settings-shared";
 import AppearancePicker from "./AppearancePicker";
+import HistorySettings from "./HistorySettings";
 import LaptopModeCard from "./LaptopModeCard";
 import { SettingsCard, SettingsSectionHeader } from "./SettingsLayout";
 import SoundSettings from "./SoundSettings";
@@ -51,6 +52,7 @@ export default function SettingsGeneralPage({
             setProgress(on);
           }}
         />
+        <HistorySettings />
       </SettingsCard>
       <SettingsCard>
         <SoundSettings titleClass={SETTINGS_TITLE} hintClass={SETTINGS_HINT} />
