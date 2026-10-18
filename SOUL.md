@@ -72,7 +72,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `electron/terminal.cjs` + `components/TerminalDrawer.tsx`: the terminal drawer (node-pty shell over IPC, xterm.js).
 - `lib/runner.ts`: one Agent SDK `query()` per Claude Code or puku thread, its public API (send, queue, stop, retry, login); Codex uses `lib/codex-runner.ts` with `codex exec --json` and resumes by session id. Behind it
   `lib/runner-state.ts` (sessions, shared maps, `hooks` back into runner.ts), `lib/runner-session.ts` (start and drive a CLI,
-  warm spares, the BUILD fingerprint), `lib/runner-turn.ts` (what the CLI sends during a turn) and `lib/runner-ask.ts` (permissions);
+  warm spares, the BUILD fingerprint), `lib/runner-turn.ts` (what the CLI sends during a turn; `lib/runner-tasks.ts` writes a `<task-notification>` row when a background task ends) and `lib/runner-ask.ts` (permissions);
   puku-cli via `pathToClaudeCodeExecutable` (`lib/cli-path.ts`), whose gateway drops the system prompt, so its first message carries
   the folder, CLAUDE.md/AGENTS.md and Weft's prompt instead (`lib/puku-context.ts`); every CLI starts in its own process group so its children end
   with it (`lib/cli-process.ts`), and `lib/cli-reaper.ts` ends the orphans a killed server left behind. The init's model plus the effort (the card's, else `effortLevel` from the CLI's settings, `lib/cli-defaults.ts`)
@@ -218,9 +218,11 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `lib/browser-tools.ts`: `mcp__browser__*` tools every thread gets.
 - `lib/mini-apps.ts` + `lib/mini-app-store.ts` + `app/api/apps` + `lib/use-mini-apps.ts` + `components/AppsRail.tsx` + `components/SaveAppButton.tsx`: mini apps, pages
   saved from the browser pane (its toolbar's grid button) as tiles on the left rail below 🖥 Services (rendered inside `components/LibraryRail.tsx`), in `~/.weft/apps.json`; a tile opens its page in the board's pane. No apps, nothing on the rail (docs/architecture/mini-apps.md).
+  `components/LoomApps.tsx` lists them as My mini apps on the Loom's You tab. `lib/app-share.ts` + `lib/app-share-types.ts` + `app/api/apps/share` + `components/ShareAppDialog.tsx` (with `components/ShareParts.tsx`, shared with the card's dialog): Share… on an app, a `weft.zip/a/<id>` link (`cloud_app_shares`) to an uploaded copy of a local page or a framed https site; `lib/app-share-access.ts` + `app/a/[id]` + `app/api/a/[id]/{page,unlock}` serve it behind the card link's gate (`gateVerdict`, `lib/share-unlock.ts`, `lib/share-page-serve.ts`).
 - Browser pane: `components/BrowserPane.tsx` draws the toolbar and the placeholder the native view (`electron/browser-pane.cjs`)
   lies over; `components/ShowRail.tsx` + `lib/show-rail.ts` + `lib/show-events.ts` + `lib/pane-page.ts` (stamps each sent message with the pane's page) are the 72 px show rail right of the page,
-  one mini per turn and per page the pane showed (the thread's `open_url` calls plus pages opened by hand, in memory), synced with the chat by two window events (`show:scroll-to`, `show:pulse`) on rows tagged `data-turn` (docs/architecture/show-rail.md).
+  one mini per turn and per page the pane showed (the thread's `open_url` calls plus pages opened by hand, in memory), synced with the chat by two window events (`show:scroll-to`, `show:pulse`) on rows tagged `data-turn`;
+  pages are small WebP pictures (`lib/page-shots.ts` + `app/api/cards/[id]/shots` + `lib/use-page-shots.ts`) and the pane follows the chat's scroll (`lib/use-pane-follow.ts`) (docs/architecture/show-rail.md).
 - `lib/board-view-tools.ts` + `electron/board-view.cjs` + `electron/control-server.cjs`: `mcp__board_view__*`, a thread's eyes and hands
   on the board window itself (screenshot, click, hover, type, read; fixed scripts, no arbitrary JS; `data-secret` reads as ‹secret›,
   `data-secret-action` can't be clicked) through the pane's token-guarded control server (docs/architecture/board-view.md).
@@ -285,10 +287,11 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - `puku-trial.md` — the puku trial: a puku thread with no Puku login runs through the deployed Weft's proxy on Weft's own key, day-long token, per-account daily cap.
   - `email-forwarding.md` — `weft.zip` mail → Resend → Svix-signed `email.received` → one inbox.
   - `github-issues.md` — a project's open GitHub issues become Backlog cards, one direction, polled every 5 min, instant sync via the deployed relay.
-  - `mini-apps.md` — pages saved from the browser pane as tiles on the left rail below Services: `~/.weft/apps.json`, `/api/apps`, the pane's Save as app button, right-click menu.
+  - `mini-apps.md` — pages saved from the browser pane as tiles on the left rail below Services: `~/.weft/apps.json`, `/api/apps`, the pane's Save as app button, right-click menu, My mini apps on the profile, and Share… at `weft.zip/a/<id>`.
   - `tags.md` — ★ star and tags (the GitHub-label-style rules, the catalog in `~/.weft/tags.json`, the 🏷 drawer, pills on the card); replaced the library.
   - `dev-servers.md` — Weft-owned dev servers and the rail's 🖥 Services drawer: `mcp__devservers__*`, why not Bash `run_in_background`, how the process tree is split and killed, the task strip's per-task Stop.
   - `editor.md` — the open card's four columns (thread, editor, pane, show), the editor (CodeMirror, TipTap markdown with diff3 saves, Changes vs. HEAD), the files route and its safety, `weft:open-file`, inline diffs.
+  - `file-drop.md` — files dragged from Finder: the hand-off store, the window router, the `dropTarget` composers, why waiting files go in on the next task.
   - `show-rail.md` — the browser pane's 72 px rail of one mini per turn and per page, its dots, fallbacks and browser history, and the two events that sync it with the chat.
   - `board-view.md` — `mcp__board_view__*`: a thread's eyes and hands on the board window itself, fixed scripts, the token-guarded control server.
   - `keyboard-shortcuts.md` — the shortcut registry, the `?` sheet, tooltips, key badges, the `ModifierHint` component.

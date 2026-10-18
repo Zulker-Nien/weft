@@ -143,6 +143,8 @@ export function ReviewPanelTour({
               ref={composer}
               variant="reply"
               cwd={cwd}
+              // It stands in for the reply box, so files dropped on this card or thread land here.
+              dropTarget={cardId}
               initial={readDraft(feedbackKey(cardId, index))}
               placeholder="Anything wrong or missing here? Paste a screenshot to show it. (Enter to send)"
               onSubmit={() => void sendFeedback()}

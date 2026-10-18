@@ -100,18 +100,40 @@ describe("useFileDrop", () => {
 });
 
 describe("useHandedFiles", () => {
-  it("takes files already waiting, then each new hand-off", () => {
+  it("takes files already waiting (on the next task), then each new hand-off", () => {
+    vi.useFakeTimers();
     const insert = vi.fn<(files: File[]) => void>();
     const names = (call: number) => (insert.mock.calls[call]?.[0] ?? []).map((f) => f.name);
     handFiles("t1", [new File(["x"], "early.png")]);
     const hook = renderHook(({ target }) => useHandedFiles(target, insert), { initialProps: { target: undefined as string | undefined } });
+    act(() => {
+      vi.runAllTimers();
+    });
     expect(insert).not.toHaveBeenCalled();
     hook.rerender({ target: "t1" });
+    expect(insert).not.toHaveBeenCalled();
+    act(() => {
+      vi.runAllTimers();
+    });
     expect(names(0)).toEqual(["early.png"]);
     act(() => handFiles("t1", [new File(["x"], "late.pdf")]));
     expect(names(1)).toEqual(["late.pdf"]);
     act(() => handFiles("other", [new File(["x"], "no")]));
     expect(insert).toHaveBeenCalledTimes(2);
     hook.unmount();
+    vi.useRealTimers();
+  });
+
+  it("drops the pending take when it unmounts first", () => {
+    vi.useFakeTimers();
+    const insert = vi.fn();
+    handFiles("t2", [new File(["x"], "a.png")]);
+    const hook = renderHook(() => useHandedFiles("t2", insert));
+    hook.unmount();
+    act(() => {
+      vi.runAllTimers();
+    });
+    expect(insert).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 });

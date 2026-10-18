@@ -77,3 +77,10 @@ describe("ReviewPanel feedback draft", () => {
     expect(screen.getByRole("textbox", { name: "Message" })).toHaveValue("typed just now");
   });
 });
+
+describe("ReviewPanel dropped files", () => {
+  it("takes files dropped on its card, since it stands in for the reply box", () => {
+    setup();
+    expect(screen.getByRole("textbox", { name: "Message" }).closest("[data-handed-to]")).toHaveAttribute("data-handed-to", "c1");
+  });
+});

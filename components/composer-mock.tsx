@@ -6,8 +6,8 @@ import type { ComposerHandle } from "./Composer";
 
 const ComposerMock = forwardRef<
   ComposerHandle,
-  { initial?: string; placeholder?: string; autoFocus?: boolean; onSubmit: () => void; onSubmitAlt?: () => void; onChange?: (markdown: string) => void; actions?: ReactNode }
->(function ComposerMock({ initial, placeholder, autoFocus, onSubmit, onSubmitAlt, onChange, actions }, ref) {
+  { initial?: string; placeholder?: string; autoFocus?: boolean; onSubmit: () => void; onSubmitAlt?: () => void; onChange?: (markdown: string) => void; actions?: ReactNode; dropTarget?: string }
+>(function ComposerMock({ initial, placeholder, autoFocus, onSubmit, onSubmitAlt, onChange, actions, dropTarget }, ref) {
   const box = useRef<HTMLTextAreaElement>(null);
   useImperativeHandle(ref, () => ({
     focus: () => box.current?.focus(),
@@ -22,7 +22,8 @@ const ComposerMock = forwardRef<
     isEmpty: () => !box.current?.value.trim(),
   }));
   return (
-    <div>
+    // data-handed-to: the target whose dropped files this composer takes (lib/file-drop.ts).
+    <div data-handed-to={dropTarget}>
       <textarea
         ref={box}
         aria-label="Message"

@@ -23,7 +23,7 @@ export function useFileDrop(onDrop: (spot: DropSpot, files: File[]) => void) {
       if (!carriesFiles(e.dataTransfer)) return;
       e.preventDefault();
       const next = dropSpotAt(e.target);
-      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+      (e.dataTransfer as DataTransfer).dropEffect = "copy";
       show(next.kind === "composer" ? null : next);
     };
     const leave = (e: DragEvent) => {
@@ -72,6 +72,8 @@ export function useFileDrop(onDrop: (spot: DropSpot, files: File[]) => void) {
 
 // A composer's side: the files handed to target (lib/file-drop.ts), now if they're already waiting
 // (the thread just opened) and whenever more arrive. target is undefined until the editor is ready.
+// The files already waiting go in on the next task, not in the effect: TipTap's React node views
+// call flushSync, which React refuses while it's still committing.
 export function useHandedFiles(target: string | undefined, insert: (files: File[]) => void) {
   const take = useEffectEvent(() => {
     if (!target) return;
@@ -79,7 +81,11 @@ export function useHandedFiles(target: string | undefined, insert: (files: File[
     if (files.length) insert(files);
   });
   useEffect(() => {
-    take();
-    return onHandedFiles(take);
+    const waiting = setTimeout(take, 0);
+    const off = onHandedFiles(take);
+    return () => {
+      clearTimeout(waiting);
+      off();
+    };
   }, [target]);
 }
