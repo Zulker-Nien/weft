@@ -65,6 +65,17 @@ describe("wrapping up", () => {
     expect(card("c1")).toMatchObject({ column: "done", archived: true, wrappingUp: false });
   });
 
+  it("keeps a wrap-up that ends in Review on the board, so a commit or push it couldn't make isn't filed away", async () => {
+    addCard({ id: "c1", column: "done" });
+    runner.queueMessages("c1", ["/weft:done"]);
+    runner.archiveWhenIdle("c1");
+    await flush();
+    lastQuery().emit(success("Committed, but the push was rejected.\nBOARD STATUS: column=review | stage=Cleaning up | remaining=push by hand"));
+    await flush();
+    expect(card("c1")).toMatchObject({ column: "review", archived: false, wrappingUp: false });
+    expect(shownColumn(card("c1"))).toBe("review");
+  });
+
   it("a plain message isn't wrapping up, and a needs-you card stays in Needs you", () => {
     addCard({ id: "c1" });
     runner.sendMessage("c1", "build it");

@@ -1,5 +1,6 @@
 // Thread-item types (what the chat panel shows, and the agent's questions).
 
+import type { EditPreview } from "./edit-preview";
 import type { SecretAsk } from "./vault-view";
 
 // A question the agent asked with its AskUserQuestion tool.
@@ -38,6 +39,13 @@ export type ThreadItem =
       // URLs of images the tool returned, like a screenshot.
       images?: string[];
       isError?: boolean;
+      // The path the tool read or edited, relative to the card folder when inside it. Set by
+      // lib/runner-turn.ts at tool_use time so the thread can render a clickable file link.
+      file?: string;
+      // The diff of an Edit/Write/MultiEdit/NotebookEdit call, computed before the edit runs (so
+      // Write's diff is against the file on disk, not the new content). components/EditDiff.tsx
+      // renders it inline instead of the raw result.
+      edit?: EditPreview;
       // An mcp__secrets__ask_add call: the thread shows an input for this key in its place (lib/vault-view.ts).
       ask?: SecretAsk;
     }

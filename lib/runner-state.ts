@@ -6,6 +6,7 @@ import type { EditPreview } from "./edit-preview";
 import { allowedFolders, keepAliveMinutes } from "./settings";
 import type { BoardStatus } from "./status";
 import { getCard, updateCard } from "./store";
+import { hasLiveTasks } from "./task-ledger";
 import type { Backend, CacheState, Card, Effort, PermissionMode, PromptReason, Question } from "./types";
 import { globalSingleton } from "./global-singleton";
 import { effortFor, modelOn } from "./new-thread";
@@ -212,7 +213,7 @@ export function scheduleIdle(session: Session) {
 
 function trimIdle() {
   const idle = [...sessions.entries()]
-    .filter(([, s]) => !s.busy && !s.spec.copilot && s.pending.length === 0 && !s.ended)
+    .filter(([cardId, s]) => !s.busy && !s.spec.copilot && s.pending.length === 0 && !s.ended && !hasLiveTasks(cardId))
     .sort(([, a], [, b]) => (a.lastUsed ?? 0) - (b.lastUsed ?? 0));
   const toClose = new Set(idleToClose(idle.map(([, s]) => s), MAX_IDLE_SESSIONS));
   for (const [cardId, s] of idle) {
@@ -224,6 +225,11 @@ function trimIdle() {
 
 function closeWhenIdle(cardId: string, session: Session) {
   if (sessions.get(cardId) !== session || session.busy) return;
+  // Closing it would end the subagents and commands running in its process group: check again later.
+  if (hasLiveTasks(cardId)) {
+    scheduleIdle(session);
+    return;
+  }
   sessions.delete(cardId);
   session.inbox.close();
   // If the CLI doesn't exit on its own once its input ends, end it.

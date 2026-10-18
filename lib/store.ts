@@ -10,6 +10,7 @@ import type { Card, ThreadItem } from "./types";
 import { globalSingleton } from "./global-singleton";
 import { normalizeTags } from "./tags";
 import { compareCardOrder, ordersForSlot } from "./card-order";
+import { orphanTasks } from "./tasks";
 
 // The app was called Threadboard and kept its data in ~/.threadboard. Move that folder to
 // ~/.weft the first time, unless ~/.weft already exists. If the move fails, keep using the old one.
@@ -49,6 +50,8 @@ function loadState(): State {
       // A card can't still be live after a restart: its CLI process is gone.
       card.warm = false;
       delete card.wrappingUp;
+      // Its subagents ran in that CLI's process group, so they ended with it.
+      card.tasks = orphanTasks(card.tasks, Date.now()) ?? card.tasks;
       if (card.column === "running" || card.pending) {
         card.column = "review";
         card.pending = null;

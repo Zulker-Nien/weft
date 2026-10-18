@@ -25,6 +25,7 @@ import { weftMcpServers } from "./weft-mcp";
 import { promptsBuild, weftSystemPrompt } from "./weft-prompts";
 import { CODEX_CODE, driveCodex } from "./codex-runner";
 import { getCard, updateCard } from "./store";
+import { loseTasks } from "./task-ledger";
 import * as turnRules from "./turn";
 import type { Backend, Card } from "./types";
 
@@ -275,6 +276,7 @@ function wrapUp(session: Session) {
   sessions.delete(cardId);
   const latest = getCard(cardId);
   if (!latest) return;
+  loseTasks(cardId);
   const live = latest.column === "running" || Boolean(latest.pending);
   // The CLI ended mid-turn, so whatever was queued after that turn doesn't run.
   if (live) queued.delete(cardId);

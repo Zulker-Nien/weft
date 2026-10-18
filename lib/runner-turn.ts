@@ -1,9 +1,13 @@
 import type { ModelUsage, SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import path from "node:path";
+import { recordLimit } from "./activity";
 import { publish } from "./bus";
-import { firstLine, shortToolName, summarizeInput, toolAction } from "./format";
 import { runsOn } from "./cli-defaults";
+import { editPreview } from "./edit-preview";
+import { firstLine, shortToolName, summarizeInput, toolAction } from "./format";
 import { changedLines, gitBranch } from "./git-stats";
 import { showAfterTurn } from "./show";
+import { recordLimits } from "./limit-history";
 import { isNotLoggedInError, isRateLimitError } from "./login";
 import { editedPath, touchFile } from "./overlap";
 import { hitRateLimit } from "./rate-limit";
@@ -13,6 +17,7 @@ import { handleTaskEvent } from "./runner-tasks";
 import { restoreDoneOverride } from "./runner";
 import { withRedacted } from "./secret-run";
 import { secretAskOf } from "./vault-view";
+import { recordTask } from "./task-ledger";
 import { extractStatus, type BoardStatus } from "./status";
 import { appendThread, getCard, getThread, replaceThreadItem } from "./store";
 import { adoptLocalMedia, liveToolResult, type ToolResult } from "./thread-media";
@@ -26,6 +31,7 @@ import type { CardStats } from "./types";
 export function handle(id: string, session: Session, msg: SDKMessage): void | Promise<void> {
   switch (msg.type) {
     case "system":
+      recordTask(id, msg);
       if (msg.subtype === "init") {
         safeUpdate(id, { sessionId: msg.session_id });
         const card = getCard(id);
@@ -67,10 +73,14 @@ export function handle(id: string, session: Session, msg: SDKMessage): void | Pr
 }
 
 function handleRateLimit(id: string, info: Extract<SDKMessage, { type: "rate_limit_event" }>["rate_limit_info"]) {
+  // A refused request is a limit hit, for the limit badges and the wefter card's chart.
+  const kind = info.rateLimitType === "five_hour" ? "five_hour" : info.rateLimitType?.startsWith("seven_day") ? "seven_day" : null;
+  const card = getCard(id);
+  if (info.status === "rejected" && kind && card) recordLimit(kind, Date.now(), card, info.resetsAt);
   const window = eventWindow(info);
   if (!window) return;
-  if (info.rateLimitType === "five_hour") updateStats(id, { fiveHour: window });
-  else if (info.rateLimitType === "seven_day") updateStats(id, { sevenDay: window });
+  if (info.rateLimitType === "five_hour") updateLimits(id, { fiveHour: window });
+  else if (info.rateLimitType === "seven_day") updateLimits(id, { sevenDay: window });
 }
 
 // The CLI's guess at your next message, for the reply box's placeholder and Tab.
@@ -105,7 +115,22 @@ function handleAssistant(id: string, session: Session, msg: Extract<SDKMessage, 
       if (block.name === "mcp__browser__open_url") session.openedPane = true;
       recordEdit(id, block.name, input);
       const ask = secretAskOf(block.name, input, session.spec.cwd);
-      const index = appendThread(id, { kind: "tool", id: block.id, name: block.name, summary, action, at: Date.now(), ...(ask && { ask }) });
+      // The diff (when the tool edits a file) and the path it touches, so the thread can show
+      // a clickable file link and an inline diff instead of just the tool's raw result. Computed
+      // at tool_use time, so Write's diff is against the file on disk. A throw here would still
+      // drop the call's preview, so guard: the thread falls back to the raw result.
+      const fileEdit = readFileEdit(block.name, input, session.spec.cwd);
+      const index = appendThread(id, {
+        kind: "tool",
+        id: block.id,
+        name: block.name,
+        summary,
+        action,
+        at: Date.now(),
+        ...(ask && { ask }),
+        ...(fileEdit.file && { file: fileEdit.file }),
+        ...(fileEdit.edit && { edit: fileEdit.edit }),
+      });
       session.toolIndex.set(block.id, index);
       safeUpdate(id, { lastLine: `${shortToolName(block.name)} ${summary}`.trim() });
     }
@@ -121,6 +146,38 @@ function recordEdit(id: string, toolName: string, input: Record<string, unknown>
   if (!path) return;
   const touched = touchFile(getCard(id)?.touchedFiles, path);
   if (touched) safeUpdate(id, { touchedFiles: touched });
+}
+
+// The path a tool call names (Read/Edit/Write/MultiEdit/NotebookEdit) and the EditPreview, when
+// the call edits a file. Used by the thread to render a clickable file link and an inline diff
+// instead of the raw tool result. Paths are returned relative to the card's folder when they
+// sit inside it (so the editor opens the same path), absolute when they don't. Wrapped in a
+// try/catch: a throw here (a bad path, fs error) drops the preview but never breaks the turn.
+const FILE_TOOLS = new Set(["Read", "Edit", "Write", "MultiEdit", "NotebookEdit"]);
+function readFileEdit(toolName: string, input: Record<string, unknown>, cwd: string): { file?: string; edit?: ReturnType<typeof editPreview> } {
+  if (!FILE_TOOLS.has(toolName)) return {};
+  const raw = typeof input.file_path === "string" ? input.file_path : typeof input.notebook_path === "string" ? input.notebook_path : "";
+  if (!raw) return {};
+  const file = relativize(raw, cwd);
+  let edit: ReturnType<typeof editPreview> = undefined;
+  try {
+    edit = editPreview(toolName, input, cwd);
+  } catch {
+    // The diff is decoration; a thrown preview (bad path, fs read) must not drop the tool call.
+  }
+  return { file, ...(edit && { edit }) };
+}
+
+// A path relative to `cwd` when it sits inside, absolute otherwise. Empty when neither can be done.
+function relativize(given: string, cwd: string): string {
+  try {
+    const abs = path.resolve(cwd, given);
+    const rel = path.relative(cwd, abs);
+    if (rel && !rel.startsWith("..") && !path.isAbsolute(rel)) return rel;
+    return abs;
+  } catch {
+    return given;
+  }
 }
 
 // Tool results fill in the tool items the assistant message added. A card that has used vault secrets gets
@@ -191,14 +248,20 @@ function handleResult(id: string, session: Session, msg: Extract<SDKMessage, { t
   finishResult(id, status, stopped, isError);
 }
 
+// A wrap-up (/done, or a move to Done's automations) that has run its last turn files the card away.
+// A stopped or failed one isn't, nor one that ended in Review (it couldn't commit, push or deploy, and
+// says what's left); a starred card stays on the board too.
+function settleWrapUp(id: string, status: BoardStatus | undefined, failed: boolean) {
+  if (!archiveAfter.has(id) || !(failed || (!queued.has(id) && status?.column !== "needs_you"))) return;
+  archiveAfter.delete(id);
+  const unfinished = failed || status?.column === "review";
+  safeUpdate(id, unfinished ? { wrappingUp: false } : { column: "done", archived: !getCard(id)?.starred, wrappingUp: false });
+}
+
 // The bookkeeping around archiveAfter and the queued-turn handoff.
 function finishResult(id: string, status: BoardStatus | undefined, stopped: boolean, isError: boolean) {
   const failed = stopped || isError;
-  if (archiveAfter.has(id) && (failed || (!queued.has(id) && status?.column !== "needs_you"))) {
-    archiveAfter.delete(id);
-    // A stopped or failed wrap-up isn't filed away; a starred card stays on the board too.
-    safeUpdate(id, failed ? { wrappingUp: false } : { column: "done", archived: !getCard(id)?.starred, wrappingUp: false });
-  }
+  settleWrapUp(id, status, failed);
   // Whether the wrap-up succeeded, failed, or was stopped: the /weft:done turn is over, so the model's
   // and effort's snapshot (if a Done move applied one) is no longer needed. Safe on a card that was
   // moved to Done by a /weft:done the user typed themselves, where there's no snapshot.
@@ -227,8 +290,14 @@ async function refreshLimits(id: string, session: Session) {
     const usage = await session.query?.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true });
     const limits = usage?.rate_limits;
     if (!limits) return;
-    updateStats(id, { fiveHour: usageWindow(limits.five_hour), sevenDay: usageWindow(limits.seven_day) });
+    updateLimits(id, { fiveHour: usageWindow(limits.five_hour), sevenDay: usageWindow(limits.seven_day) });
   } catch {}
+}
+
+// The card's latest windows, and a sample in the history behind the burndown chart (lib/limit-history.ts).
+function updateLimits(id: string, patch: Pick<CardStats, "fiveHour" | "sevenDay">) {
+  updateStats(id, patch);
+  recordLimits(getCard(id)?.backend ?? "claude", patch);
 }
 
 function updateStats(id: string, patch: Partial<CardStats>) {

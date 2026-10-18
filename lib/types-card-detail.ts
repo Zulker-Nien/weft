@@ -4,6 +4,7 @@
 
 import type { Backend, CardStats, Column, PendingPermission, ReviewPlan, ScheduledMessage } from "./types-card";
 import type { Effort } from "./types-settings";
+import type { CardTask } from "./tasks";
 import type { CardShareMode } from "./share-types";
 export type { CardStats, Column };
 
@@ -103,6 +104,8 @@ export interface Card {
   // carry-on turns in a row (your own message resets it), so a turn that keeps getting cut off stops after a few.
   interrupted?: boolean;
   resumes?: number;
+  // Its subagents and background commands, running and recently ended (lib/tasks.ts).
+  tasks?: CardTask[];
   // Its share link as last read from Supabase (lib/card-share.ts), so the Share dialog draws at once and refreshes after.
   share?: CardShareMemo;
   createdAt: number;

@@ -16,6 +16,7 @@ import { archiveAfter, close, errorText, hooks, isBusy, queued, safeUpdate, sess
 import { panePage } from "./pane-page";
 import { skillInvocation } from "./skills";
 import { appendThread, foldThread, getCard, getThread, updateCard } from "./store";
+import { takeTaskNote } from "./task-ledger";
 import type { Card, PermissionMode } from "./types";
 
 // One Agent SDK query() per thread: what the board and the API call to send, stop, queue and answer.
@@ -77,7 +78,8 @@ export function sendMessage(cardId: string, text: string, { echo = true, cli = t
   session.turnSeq = (session.turnSeq ?? 0) + 1;
   // puku doesn't run .claude/skills as slash commands, so a /skill message goes as the skill's instructions.
   const forCli = card.backend === "puku" ? skillInvocation(cli, card.cwd, { weft: false }) : cli;
-  session.inbox.push(`${session.preamble ?? ""}${forCli}`, promptId);
+  // Ahead of it, a note about subagents its CLI lost since the last message (lib/tasks.ts taskNote).
+  session.inbox.push(`${session.preamble ?? ""}${takeTaskNote(cardId)}${forCli}`, promptId);
   keepSessionId(cardId, session);
   session.preamble = undefined;
   if (!session.spec.copilot) showStarter(cardId, card.title, text).catch(() => {});
