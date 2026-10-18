@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { api } from "./client";
 import { readViewPrefs, writeViewPrefs } from "./view-prefs";
-import type { SortKey } from "./board-view";
+import { NO_REVIEW_FILTER, type ReviewFilter, type ReviewFilterKey, type SortKey } from "./board-view";
 
 // The board's project filter and sort order, persisted to a cookie (lib/view-prefs.ts). The cookie
 // is read on every (re)connect, not at init, so the server-rendered shell stays cookie-free and the
@@ -18,6 +18,9 @@ export interface BoardViewDeps {
 export function useBoardView({ select, setWebBrowserOpen }: BoardViewDeps) {
   const [project, setProject] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>("newest");
+  // Review's Errors and Restart chips; kept for this session only, off again after a reload.
+  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>(NO_REVIEW_FILTER);
+  const toggleReviewFilter = useCallback((key: ReviewFilterKey) => setReviewFilter((f) => ({ ...f, [key]: !f[key] })), []);
 
   // Reads the cookie once per call. Called from the board's event-stream (re)connect so the saved
   // project and sort come back without blocking the first paint.
@@ -52,7 +55,7 @@ export function useBoardView({ select, setWebBrowserOpen }: BoardViewDeps) {
     [project],
   );
 
-  return { project, sort, chooseProject, chooseSort, loadFromPrefs };
+  return { project, sort, chooseProject, chooseSort, loadFromPrefs, reviewFilter, toggleReviewFilter };
 }
 
 const VALID_SORTS: ReadonlySet<SortKey> = new Set(["newest", "active", "oldest"]);

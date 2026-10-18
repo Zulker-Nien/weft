@@ -18,6 +18,46 @@ export interface BoardView {
   query: string;
   sort: SortKey;
   showArchived: boolean;
+  // The Review column's quick filters; unset (the web board) leaves Review whole.
+  reviewFilter?: ReviewFilter;
+}
+
+// Review's two strict chips: Errors keeps cards whose turn ended in an error, Restart keeps cards that hit
+// the 5-hour session limit. Both on keeps either kind.
+export interface ReviewFilter {
+  errors: boolean;
+  restart: boolean;
+}
+export type ReviewFilterKey = keyof ReviewFilter;
+export const NO_REVIEW_FILTER: ReviewFilter = { errors: false, restart: false };
+
+// A thread error ("error: Claude Code process exited with code 1") or a build error the turn reported.
+export function cardLooksLikeError(card: Card): boolean {
+  return /^\s*(error:|build error\b)/i.test(card.lastLine ?? "");
+}
+
+// "You've hit your session limit · resets 10:40pm (Asia/Bangkok)": a turn cut off by the 5-hour cap.
+export function cardLooksLikeSessionLimit(card: Card): boolean {
+  return /hit your session limit\s*·\s*resets/i.test(card.lastLine ?? "");
+}
+
+const REVIEW_MATCHERS: Record<ReviewFilterKey, (card: Card) => boolean> = {
+  errors: cardLooksLikeError,
+  restart: cardLooksLikeSessionLimit,
+};
+
+// Which Review cards the chips let through: every card with no chip on, else those matching any chip that is.
+export function reviewKeeps(filter: ReviewFilter = NO_REVIEW_FILTER): (card: Card) => boolean {
+  const on = (Object.keys(REVIEW_MATCHERS) as ReviewFilterKey[]).filter((k) => filter[k]);
+  return (card) => !on.length || on.some((k) => REVIEW_MATCHERS[k](card));
+}
+
+// How many of these cards each chip matches, for the count on an active chip.
+export function reviewFilterCounts(cards: Card[]): Record<ReviewFilterKey, number> {
+  return {
+    errors: cards.filter(cardLooksLikeError).length,
+    restart: cards.filter(cardLooksLikeSessionLimit).length,
+  };
 }
 
 // When a card's thread last moved. A card picked up from Claude Code carries its session's last message
@@ -75,12 +115,15 @@ export function groupByColumn(cards: Card[], view: BoardView, rootOf: (cwd: stri
       .toLowerCase()
       .includes(haystack);
   };
+  const keepReview = reviewKeeps(view.reviewFilter);
   const groups = new Map<Column, Card[]>(COLUMNS.map((c) => [c.id, []]));
   for (const card of cards) {
     if (view.project && rootOf(card.cwd) !== view.project) continue;
     if (card.archived && !view.showArchived) continue;
     if (!cardMatches(card)) continue;
-    groups.get(shownColumn(card))?.push(card);
+    const column = shownColumn(card);
+    if (column === "review" && !keepReview(card)) continue;
+    groups.get(column)?.push(card);
   }
   for (const [column, list] of groups) list.sort(column === "backlog" ? backlogSorter(view) : SORTERS[view.sort]);
   return groups;

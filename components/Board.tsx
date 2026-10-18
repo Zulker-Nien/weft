@@ -15,6 +15,7 @@ import { onOpenFile } from "@/lib/open-file";
 import {
   cardChangeEffects,
   groupByColumn,
+  reviewFilterCounts,
   hitPlanLimit,
   latestLimits,
   SORTERS,
@@ -230,7 +231,7 @@ export default function Board() {
   // Drag/drop, tag, and the "skip my own move's chime" ref (used by useBoardEvents below).
   const { ownMoves, move, drop, reorder, tagCard } = useBoardCardActions({ cards, setCards, setDragOver, notify });
   // Project filter and sort, persisted to a cookie.
-  const { project, sort, chooseProject, chooseSort, loadFromPrefs } = useBoardView({ select, setWebBrowserOpen });
+  const { project, sort, chooseProject, chooseSort, loadFromPrefs, reviewFilter, toggleReviewFilter } = useBoardView({ select, setWebBrowserOpen });
   // Archive, unarchive, focus the next card, and the last batch (for Z / Undo).
   const { archiveTarget, archiveCards, toggleArchive, unarchive, lastArchived } = useBoardArchive({
     cards,
@@ -422,8 +423,8 @@ export default function Board() {
   const expandedColumns = expanded.view === view ? expanded.columns : [];
 
   const byColumn = useMemo(
-    () => groupByColumn(filterCards(cards, railFilter), { project, query, sort, showArchived }, rootOf),
-    [cards, railFilter, project, query, sort, showArchived, rootOf],
+    () => groupByColumn(filterCards(cards, railFilter), { project, query, sort, showArchived, reviewFilter }, rootOf),
+    [cards, railFilter, project, query, sort, showArchived, reviewFilter, rootOf],
   );
   const archivedCount = cards.filter((c) => c.archived && (!project || rootOf(c.cwd) === project)).length;
   // The Done cards on screen that Shift+E and "Archive all" file away.
@@ -753,6 +754,7 @@ export default function Board() {
                     : undefined
                 }
                 onReviewAll={column.id === "review" ? reviewAll : undefined}
+                reviewFilter={column.id === "review" ? { on: reviewFilter, counts: reviewFilterCounts(list), toggle: toggleReviewFilter } : undefined}
                 onAddBacklog={() => openNew()}
                 // Backlog's sprints, Save as sprint and Archive all act on the unarchived cards it shows.
                 backlog={column.id === "backlog" ? { cards: list.filter((c) => !c.archived), allCards: cards, onRestore: unarchive, toast: setToast, notify,
