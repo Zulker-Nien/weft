@@ -1,5 +1,6 @@
 import os from "node:os";
 import { reapStrayClis } from "./cli-reaper";
+import { startWorkerReaper } from "./worker-reaper";
 import { startSessionSync } from "./import";
 import { startSearchIndex } from "./search";
 import { boardDigest, lastSeen, rememberSeen, snapshot, withDigest } from "./copilot-digest";
@@ -7,12 +8,14 @@ import { startHookListener } from "./github-hooks";
 import { startVercelListener } from "./vercel-hooks";
 import { startWebhookRelay } from "./webhook-forward";
 import { startAccountCloudSync } from "./cloud-sync-start";
+import { startLeagueSync } from "./league-sync";
 import { startIssueSync } from "./github-issues";
 import { startPukuTrial } from "./puku-trial";
 import { endSession, ensureSpare, retryPukuWithTrial, sendUserMessage, warmUp } from "./runner";
 import { resumeInterrupted } from "./resume";
 import { startScheduler } from "./scheduler";
 import { chipCardId, startSuggestRefresh } from "./copilot-suggest";
+import type { CopilotPersona } from "./copilot-personas";
 import { modelFor } from "./new-thread";
 import { copilotModel, defaultPermissionMode, listProjects } from "./settings";
 import { clearThread, createCard, getCard, listCards, updateCard } from "./store";
@@ -74,6 +77,19 @@ export async function resetCopilot() {
   return card;
 }
 
+// Makes the copilot another persona (lib/copilot-personas.ts). Its CLI reads the persona's prompt only when it
+// starts, so this starts a new chat; the old persona's conversation isn't kept.
+export async function setCopilotPersona(persona: CopilotPersona) {
+  ensureCopilot();
+  updateCard(COPILOT_ID, { persona: persona === "wingman" ? undefined : persona });
+  return resetCopilot();
+}
+
+// Every project folder and card folder Weft knows: where the reapers may end orphans.
+function weftFolders() {
+  return [...new Set([...listProjects().map((p) => p.path), ...listCards().map((c) => c.cwd)].filter(Boolean))];
+}
+
 const g = globalThis as unknown as { __threadboardPrewarmed?: boolean };
 
 // Once per server start: open the copilot's CLI and a spare in the most recent project, so the
@@ -82,8 +98,9 @@ export function prewarm() {
   if (g.__threadboardPrewarmed) return;
   g.__threadboardPrewarmed = true;
   // End the thread CLIs a server that died without cleaning up left orphaned (lib/cli-reaper.ts).
-  const folders = [...new Set([...listProjects().map((p) => p.path), ...listCards().map((c) => c.cwd)].filter(Boolean))];
-  reapStrayClis(folders).catch((err: unknown) => console.error("[weft] stray CLI check failed:", err));
+  reapStrayClis(weftFolders()).catch((err: unknown) => console.error("[weft] stray CLI check failed:", err));
+  // And, every few minutes, the vitest workers a killed test run left under PID 1 (lib/worker-reaper.ts).
+  startWorkerReaper(weftFolders);
   // Pick up the user's existing Claude Code sessions as cards, and keep them in sync.
   startSessionSync();
   startSearchIndex();
@@ -99,6 +116,8 @@ export function prewarm() {
   startWebhookRelay();
   // Upload the cards and threads of the folders that opted in to your workspace (lib/cloud-sync.ts).
   startAccountCloudSync();
+  // Post your week to your league while you are signed in to Weft (lib/league-sync.ts).
+  startLeagueSync();
   // Keep Weft's Puku trial token fresh, and give puku threads waiting on a login the trial when you sign in to Weft.
   startPukuTrial(() => void retryPukuWithTrial());
   // Keep the copilot's board-made chips fresh as cards move (lib/copilot-suggest.ts).

@@ -32,10 +32,6 @@ export function columnMinWidth(state: LaneState): number {
   return state === "open" || state === "peek" ? 120 : 170;
 }
 
-// The copilot's picture: the hovercaddy cockpit from the driver's seat, the copilot beside you.
-// `face` is where the copilot's face sits in it, for the avatar crop.
-export const COCKPIT = { src: "/copilots/wingman.jpg", face: "90% 36%" } as const;
-
 export interface LaneDigest {
   // Cards waiting on you, newest first.
   needsYou: Card[];

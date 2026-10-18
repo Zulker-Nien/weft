@@ -3,11 +3,13 @@
 // The copilot lane's peek state: the 236px digest column with a quick-ask box; it closes itself
 // 6s after the mouse leaves.
 import { useEffect, useState } from "react";
-import { COCKPIT, laneDigest } from "@/lib/copilot-lane";
+import { laneDigest } from "@/lib/copilot-lane";
+import type { PersonaInfo } from "@/lib/copilot-personas";
 import type { Card } from "@/lib/types";
 
 export default function Peek(props: {
   cards: Card[];
+  persona: PersonaInfo;
   items: Parameters<typeof laneDigest>[1];
   error: string | null;
   onHide: () => void;
@@ -54,14 +56,14 @@ export default function Peek(props: {
             onClick={props.onOpen}
             className="rounded-lg border border-line bg-card px-2.5 py-1.5 text-left text-[12px] leading-snug text-muted hover:border-line-strong"
           >
-            <span className="font-semibold text-ink">Copilot:</span> {digest.lastReply}
+            <span className="font-semibold text-ink">{props.persona.name}:</span> {digest.lastReply}
           </button>
         )}
       </div>
       <button
         onClick={props.onOpen}
         className="relative mt-auto h-[150px] shrink-0 overflow-hidden rounded-lg border border-line-strong text-left"
-        style={{ background: `url(${COCKPIT.src}) 78% 38% / 260%` }}
+        style={{ background: `url(${props.persona.picture.src}) ${props.persona.picture.peek}` }}
       >
         <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent px-2.5 pb-1.5 pt-5 text-[11.5px] font-semibold text-white">
           Open the cockpit

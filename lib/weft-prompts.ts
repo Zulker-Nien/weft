@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { COPILOT_PROMPT } from "./board-tools";
+import { PERSONA_PROMPTS, personaOf } from "./copilot-personas";
 import { BROWSER_PROMPT } from "./browser-tools";
 import { RESTART_PROMPT } from "./env";
 import { REVIEW_PROMPT } from "./review";
@@ -20,6 +21,7 @@ export const WEFT_PINNED_PROMPTS = {
   WEFT_SOUL_PROMPT,
   BROWSER_PROMPT,
   COPILOT_PROMPT,
+  COPILOT_PERSONA_PROMPTS: PERSONA_PROMPTS,
   SECRETS_PROMPT,
   WEBHOOKS_PROMPT,
   RESTART_PROMPT,
@@ -43,17 +45,17 @@ export function promptsBuild() {
   return `${PINNED}:${sha(`${threadPrompt()}\n${subagentModel()}`)}`;
 }
 
-export type PromptSpec = { backend: Backend; copilot?: boolean };
+export type PromptSpec = { backend: Backend; copilot?: boolean; persona?: string };
 
 const built = new Map<string, string>();
 
 // Weft's part of the system prompt. Puku's gateway drops it, so a puku session sends it in its first message (lib/puku-context.ts).
 export function weftSystemPrompt(spec: PromptSpec): string {
-  const key = `${promptsBuild()}|${spec.copilot ? "copilot" : spec.backend}`;
+  const key = `${promptsBuild()}|${spec.copilot ? `copilot:${personaOf(spec.persona).id}` : spec.backend}`;
   const cached = built.get(key);
   if (cached !== undefined) return cached;
   const parts = spec.copilot
-    ? [WEFT_SOUL_PROMPT, BROWSER_PROMPT, COPILOT_PROMPT]
+    ? [WEFT_SOUL_PROMPT, BROWSER_PROMPT, COPILOT_PROMPT, personaOf(spec.persona).prompt].filter(Boolean)
     : [WEFT_SOUL_PROMPT, BROWSER_PROMPT, SECRETS_PROMPT, WEBHOOKS_PROMPT, RESTART_PROMPT, subagentPrompt(subagentModel(), spec.backend), threadPrompt(), REVIEW_PROMPT];
   // A settings change makes a new key; the old prompts are of no further use.
   if (built.size >= 8) built.clear();

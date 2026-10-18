@@ -1,13 +1,15 @@
 "use client";
 
 import { api } from "@/lib/client";
-import { COCKPIT, LANE_WIDTH, type LaneState } from "@/lib/copilot-lane";
+import { LANE_WIDTH, type LaneState } from "@/lib/copilot-lane";
+import { personaOf } from "@/lib/copilot-personas";
 import { isLive } from "@/lib/format";
 import { COPILOT_ID, type Card } from "@/lib/types";
 import { useCopilotThread } from "@/lib/use-copilot-thread";
 import CopilotEmpty from "./CopilotEmpty";
 import CopilotHider, { Avatar } from "./CopilotHider";
 import CopilotPeek from "./CopilotPeek";
+import CopilotPersonaMenu from "./CopilotPersonaMenu";
 import CrashGuard from "./CrashGuard";
 import Icon, { Spinner } from "./Icon";
 import ThreadView from "./ThreadView";
@@ -40,8 +42,9 @@ export default function CopilotLane(props: {
   onOpen: () => void;
   toggleTip: string;
 }) {
-  const { card, items, streaming, error, fail, send, newChat, resetting } = useCopilotThread();
+  const { card, items, streaming, error, fail, send, newChat, setPersona, resetting } = useCopilotThread();
   const live = card ? isLive(card) : false;
+  const persona = personaOf(card?.persona);
 
   if (props.state === "hidden") {
     return (
@@ -66,9 +69,9 @@ export default function CopilotLane(props: {
 
   const header = (
     <header className="relative flex shrink-0 items-center gap-2 px-2.5 py-2">
-      <Avatar size={isOpen ? 30 : 26} />
+      <Avatar size={isOpen ? 30 : 26} picture={persona.picture} />
       <div className="min-w-0 flex-1 leading-tight">
-        <div className="text-[13px] font-semibold text-ink">Copilot</div>
+        <CopilotPersonaMenu persona={card?.persona} busy={!card || resetting} onPick={(p) => void setPersona(p).catch(fail)} />
         <Status card={card} />
       </div>
       {isOpen && live && (
@@ -110,6 +113,7 @@ export default function CopilotLane(props: {
         {header}
         <CopilotPeek
           cards={props.cards}
+          persona={persona}
           items={items}
           error={error}
           onHide={props.onHide}
@@ -142,7 +146,7 @@ export default function CopilotLane(props: {
         <div
           aria-hidden="true"
           className="absolute inset-0"
-          style={{ background: `url(${COCKPIT.src}) 75% 30% / cover` }}
+          style={{ background: `url(${persona.picture.src}) ${persona.picture.frame}` }}
         />
         <div
           aria-hidden="true"

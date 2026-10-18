@@ -7,12 +7,14 @@ const copilot = vi.fn<() => Promise<{ card: Card }>>();
 const thread = vi.fn<(id: string) => Promise<{ items: ThreadItem[] }>>();
 const send = vi.fn<(id: string, text: string) => Promise<void>>();
 const resetCopilot = vi.fn<() => Promise<{ card: Card }>>();
+const copilotPersona = vi.fn<(persona: string) => Promise<{ card: Card }>>();
 vi.mock("./client", () => ({
   api: {
     copilot: () => copilot(),
     thread: (id: string) => thread(id),
     send: (id: string, text: string) => send(id, text),
     resetCopilot: () => resetCopilot(),
+    copilotPersona: (persona: string) => copilotPersona(persona),
   },
   // The real merge keeps live items past the snapshot; enough here to tell merge from replace.
   mergeThread: (items: ThreadItem[], live: ThreadItem[]) => [...items, ...live.slice(items.length)],
@@ -112,6 +114,18 @@ describe("useCopilotThread", () => {
     expect(result.current.items).toEqual([]);
     expect(result.current.streaming).toBe("");
     expect(result.current.card?.column).toBe("backlog");
+    expect(result.current.resetting).toBe(false);
+  });
+
+  it("switches persona as a new chat, and lets go of the lock when it fails", async () => {
+    copilotPersona.mockResolvedValueOnce({ card: pilot({ persona: "founder" }) }).mockRejectedValueOnce(new Error("down"));
+    const { result } = renderHook(() => useCopilotThread());
+    act(() => stream.onEvent({ type: "delta", cardId: "copilot", text: "partial" }));
+    await act(() => result.current.setPersona("founder"));
+    expect(copilotPersona).toHaveBeenCalledWith("founder");
+    expect(result.current.card?.persona).toBe("founder");
+    expect(result.current.streaming).toBe("");
+    await act(() => expect(result.current.setPersona("captain")).rejects.toThrow("down"));
     expect(result.current.resetting).toBe(false);
   });
 

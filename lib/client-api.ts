@@ -9,6 +9,7 @@ import type { CardShareState, CardShareUpdate } from "./share-types";
 import type { GithubStatus } from "./github-view";
 import type { MediaKind } from "./media";
 import type { BillingClientView } from "./client-bridge";
+import type { CopilotPersona } from "./copilot-personas";
 import type {
   AccountProvider,
   AccountView,
@@ -201,6 +202,8 @@ export const api = {
     call<{ status: DevServerStatus }>("POST", `/api/cards/${id}/dev`, { action }),
   copilot: () => call<{ card: Card }>("GET", "/api/copilot"),
   resetCopilot: () => call<{ card: Card }>("POST", "/api/copilot/reset"),
+  // Switching persona starts a new chat (lib/copilot.ts setCopilotPersona).
+  copilotPersona: (persona: CopilotPersona) => call<{ card: Card }>("POST", "/api/copilot/persona", { persona }),
   copilotSuggestions: () => call<{ chips: { text: string; cardId?: string; project?: string; covers?: string[] }[]; covers: string[] }>("GET", "/api/copilot/suggestions"),
   copilotChipClicked: (text: string) => call<{ ok: true }>("POST", "/api/copilot/suggestions", { text }),
   // Restart when idle (lib/restart-when-idle.ts): nothing new starts, and Weft restarts once the running turns end.

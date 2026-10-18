@@ -28,7 +28,9 @@ vi.mock("./github-hooks", () => ({ startHookListener: vi.fn() }));
 vi.mock("./vercel-hooks", () => ({ startVercelListener: vi.fn() }));
 vi.mock("./webhook-forward", () => ({ startWebhookRelay: vi.fn() }));
 vi.mock("./cloud-sync-start", () => ({ startAccountCloudSync: vi.fn() }));
+vi.mock("./league-sync", () => ({ startLeagueSync: vi.fn() }));
 vi.mock("./cli-reaper", () => ({ reapStrayClis: vi.fn(() => Promise.resolve([])) }));
+vi.mock("./worker-reaper", () => ({ startWorkerReaper: vi.fn() }));
 vi.mock("./settings", () => ({
   listProjects: vi.fn(() => db.projects),
   defaultPermissionMode: () => "auto",
@@ -49,7 +51,7 @@ const { startScheduler } = await import("./scheduler");
 const { resumeInterrupted } = await import("./resume");
 const { startIssueSync } = await import("./github-issues");
 const { lastSeen } = await import("./copilot-digest");
-const { ensureCopilot, sendToCopilot, resetCopilot, prewarm } = await import("./copilot");
+const { ensureCopilot, sendToCopilot, resetCopilot, setCopilotPersona, prewarm } = await import("./copilot");
 
 const g = globalThis as unknown as { __threadboardPrewarmed?: boolean; __weftCopilotSeen?: unknown };
 const card = (id: string, over: Partial<Card> = {}) => {
@@ -165,6 +167,21 @@ describe("resetCopilot", () => {
     const c = await resetCopilot();
     expect(store.createCard).toHaveBeenCalledOnce();
     expect(c.column).toBe("backlog");
+  });
+});
+
+describe("setCopilotPersona", () => {
+  it("puts the persona on the card and starts a new chat on it", async () => {
+    card(COPILOT_ID, { role: "copilot", sessionId: "s1" });
+    const c = await setCopilotPersona("founder");
+    expect(c).toMatchObject({ persona: "founder", sessionId: undefined, column: "backlog" });
+    expect(runner.endSession).toHaveBeenCalledWith(COPILOT_ID);
+    expect(runner.warmUp).toHaveBeenCalledWith(COPILOT_ID);
+  });
+
+  it("stores Wingman, the default, as no persona", async () => {
+    card(COPILOT_ID, { role: "copilot", persona: "captain" });
+    expect((await setCopilotPersona("wingman")).persona).toBeUndefined();
   });
 });
 

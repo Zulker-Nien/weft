@@ -24,6 +24,12 @@ describe("specFor", () => {
     expect(spec.cwd).toBe("/Users/dev/weft");
   });
 
+  it("carries the copilot's persona, and no other card's", () => {
+    const base: Card = { id: "c1", title: "T", prompt: "", cwd: "/", backend: "claude", permissionMode: "default", column: "backlog", createdAt: 0, updatedAt: 0, persona: "captain" };
+    expect(specFor({ ...base, role: "copilot" })).toMatchObject({ copilot: true, persona: "captain" });
+    expect(specFor(base).persona).toBeUndefined();
+  });
+
   it("drops the read scope when the card has none", () => {
     const card: Card = {
       id: "c1",

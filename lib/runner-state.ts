@@ -2,6 +2,7 @@ import type { PermissionResult, Query, SDKUserMessage } from "@anthropic-ai/clau
 import { messageContent } from "./attachments";
 import type { BoardActions } from "./board-tools";
 import type { CliProcess } from "./cli-process";
+import type { CopilotPersona } from "./copilot-personas";
 import type { EditPreview } from "./edit-preview";
 import { allowedFolders, keepAliveMinutes } from "./settings";
 import type { BoardStatus } from "./status";
@@ -79,6 +80,8 @@ export interface Spec {
   // additionalDirectories so the CLI's working-directory restriction lets the thread read there.
   readScope?: string[];
   copilot: boolean;
+  // The copilot's persona, whose prompt joins its system prompt (lib/copilot-personas.ts).
+  persona?: CopilotPersona;
 }
 
 export interface Session {
@@ -189,6 +192,7 @@ export function specFor(card: Card): Spec {
     effort: effortFor(card.backend, card.effort),
     sessionId: card.sessionId,
     copilot: card.role === "copilot",
+    persona: card.role === "copilot" ? card.persona : undefined,
     readScope: readScopeFor(card),
   };
 }

@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { api, mergeThread } from "./client";
+import type { CopilotPersona } from "./copilot-personas";
 import { useBoardEvents } from "./use-events";
 import { COPILOT_ID, type Card, type ThreadItem } from "./types";
 
@@ -76,5 +77,18 @@ export function useCopilotThread() {
     }
   }, []);
 
-  return { card, items, streaming, error, fail, send, newChat, resetting };
+  // Another persona is a new chat on its prompt (lib/copilot.ts setCopilotPersona), so it shares the reset's lock.
+  const setPersona = useCallback(async (persona: CopilotPersona) => {
+    setItems([]);
+    setStreaming("");
+    setResetting(true);
+    try {
+      const { card } = await api.copilotPersona(persona);
+      setCard(card);
+    } finally {
+      setResetting(false);
+    }
+  }, []);
+
+  return { card, items, streaming, error, fail, send, newChat, setPersona, resetting };
 }

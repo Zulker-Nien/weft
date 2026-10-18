@@ -5,6 +5,7 @@
 import type { Backend, CardStats, Column, PendingPermission, ReviewPlan, ScheduledMessage } from "./types-card";
 import type { Effort } from "./types-settings";
 import type { CardTask } from "./tasks";
+import type { CopilotPersona } from "./copilot-personas";
 import type { CardShareMode } from "./share-types";
 export type { CardStats, Column };
 
@@ -50,6 +51,8 @@ export interface Card {
   pending?: PendingPermission | null;
   // The copilot is a thread too, but it lives in its own window instead of on the board.
   role?: "copilot";
+  // Which copilot it is (lib/copilot-personas.ts); none means Wingman. Only on the copilot card.
+  persona?: CopilotPersona;
   // A CLI process is open for this thread, so a reply starts right away.
   warm?: boolean;
   // From the thread's own BOARD STATUS line (see lib/status.ts).

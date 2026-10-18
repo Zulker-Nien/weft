@@ -1,16 +1,18 @@
 "use client";
 
-// The copilot lane's hidden state: the 36px pill on the right edge, and the cockpit avatar the
+// The copilot lane's hidden state: the 36px pill on the right edge, and the persona's avatar the
 // header shares with it.
-import { COCKPIT, laneDigest } from "@/lib/copilot-lane";
+import { laneDigest } from "@/lib/copilot-lane";
+import { personaOf, type PersonaInfo } from "@/lib/copilot-personas";
 import type { Card } from "@/lib/types";
 
-export function Avatar({ size }: { size: number }) {
+// The persona's face, cropped from its picture (Wingman's: the hovercaddy cockpit, the copilot beside you).
+export function Avatar({ size, picture }: { size: number; picture: PersonaInfo["picture"] }) {
   return (
     <span
       aria-hidden="true"
       className="shrink-0 rounded-full border-2 border-accent"
-      style={{ width: size, height: size, background: `url(${COCKPIT.src}) ${COCKPIT.face} / 520%` }}
+      style={{ width: size, height: size, background: `url(${picture.src}) ${picture.avatar}` }}
     />
   );
 }
@@ -29,6 +31,7 @@ export default function CopilotHider(props: {
   const digest = laneDigest(props.cards, props.items);
   const waiting = digest.needsYou.length;
   const news = waiting + digest.finished;
+  const persona = personaOf(props.card?.persona);
 
   return (
     <div
@@ -41,12 +44,12 @@ export default function CopilotHider(props: {
           props.onOpen();
         }
       }}
-      title={`Open the copilot — ${props.toggleTip}`}
+      title={`Open the copilot (${persona.name}) — ${props.toggleTip}`}
       aria-label={`Open the copilot${news > 0 ? ` (${news} new)` : ""}`}
       className="group flex h-full cursor-pointer flex-col items-center gap-2 px-1 py-3 hover:bg-sunken/80 focus:bg-sunken/80 focus:outline-none"
     >
       <div className="relative">
-        <Avatar size={26} />
+        <Avatar size={26} picture={persona.picture} />
         {waiting > 0 && (
           <span
             aria-hidden="true"
