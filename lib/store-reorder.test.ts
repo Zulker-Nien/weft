@@ -44,7 +44,7 @@ describe("store cards order", () => {
   it("backfillOrder stamps missing orders from createdAt", async () => {
     const store = await load();
     // addCards an old-style card without an order; listCards triggers backfill.
-    store.addCards([{ ...input(), id: "x", column: "backlog", createdAt: 42, updatedAt: 42 }]);
+    store.addCards([{ ...input({ pictures: 0 }), id: "x", column: "backlog", createdAt: 42, updatedAt: 42 }]);
     // First list triggers the backfill; second list is the saved shape.
     store.listCards();
     expect(store.getCard("x")?.order).toBe(42);
@@ -78,6 +78,22 @@ describe("store reorder", () => {
     expect(order("a")).toBeGreaterThan(order("b"));
   });
 
+  it("uses the current order when a card is reordered more than once", async () => {
+    const store = await load();
+    for (const [id, order] of [["a", 100], ["b", 200], ["c", 300], ["d", 400]] as const) {
+      store.createCard(input({ title: id, order }), id);
+    }
+
+    store.reorderCard("d", "b");
+    store.reorderCard("c", "d");
+
+    const ordered = ["a", "b", "c", "d"]
+      .map((id) => store.getCard(id)!)
+      .sort((a, b) => (a.order as number) - (b.order as number))
+      .map((card) => card.id);
+    expect(ordered).toEqual(["a", "c", "d", "b"]);
+  });
+
   it("renumbers the column when the gap collapses", async () => {
     const store = await load();
     const a = store.createCard(input({ title: "a" }), "a");
@@ -90,6 +106,26 @@ describe("store reorder", () => {
     const oa = order("a");
     const ob = order("b");
     expect(Math.abs(oa - ob)).toBeGreaterThanOrEqual(1024);
+  });
+
+  it("publishes the full column after a collapsed gap is renumbered", async () => {
+    const store = await load();
+    for (const [id, order] of [["a", 100], ["b", 101], ["c", 300], ["d", 400]] as const) {
+      store.createCard(input({ title: id, order }), id);
+    }
+    const { subscribe } = await import("./bus");
+    const events: string[] = [];
+    const off = subscribe((event) => {
+      if (event.type === "card") events.push(event.card.id);
+    });
+
+    try {
+      store.reorderCard("d", "b");
+    } finally {
+      off();
+    }
+
+    expect(events).toEqual(["a", "d", "b", "c"]);
   });
 
   it("ignores cards in other columns when picking the slot", async () => {

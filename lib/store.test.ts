@@ -31,9 +31,9 @@ afterEach(() => {
 describe("store cards", () => {
   it("creates a backlog card, saves it, and lists newest-updated first", async () => {
     const store = await load();
-    const a = store.createCard(input({ title: "a" }), "a");
+    const a = store.createCard(input({ title: "a", pictures: 0 }), "a");
     expect(a.column).toBe("backlog");
-    store.createCard(input({ title: "b" }), "b");
+    store.createCard(input({ title: "b", pictures: 0 }), "b");
     await new Promise((r) => setTimeout(r, 5));
     store.updateCard("a", { title: "a2" });
     expect(store.listCards().map((c) => c.id)).toEqual(["a", "b"]);
@@ -124,7 +124,7 @@ describe("store cards", () => {
 
   it("addCards saves many at once", async () => {
     const store = await load();
-    const mk = (id: string) => ({ ...input(), id, column: "done", createdAt: 1, updatedAt: 1 }) as Card;
+    const mk = (id: string) => ({ ...input({ pictures: 0 }), id, column: "done", createdAt: 1, updatedAt: 1 }) as Card;
     store.addCards([mk("1"), mk("2")]);
     expect(store.listCards()).toHaveLength(2);
   });

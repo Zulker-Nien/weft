@@ -9,6 +9,7 @@ import { foldFrom } from "./edit-last";
 import type { Card, ThreadItem } from "./types";
 import { globalSingleton } from "./global-singleton";
 import { normalizeTags } from "./tags";
+import { compareCardOrder, ordersForSlot } from "./card-order";
 
 // The app was called Threadboard and kept its data in ~/.threadboard. Move that folder to
 // ~/.weft the first time, unless ~/.weft already exists. If the move fails, keep using the old one.
@@ -191,9 +192,6 @@ export function updateCard(id: string, patch: Partial<Card>): Card {
   return card;
 }
 
-// Order for new cards. Half-step between neighbors; renumber the column when the gap closes.
-export const ORDER_STEP = 1024;
-
 // Backfill order on any card that doesn't have it. Runs once on first listCards after load.
 const orderBackfillOnce = globalThis as unknown as { __weftOrderBackfill?: boolean };
 export function backfillOrder() {
@@ -214,41 +212,25 @@ export function backfillOrder() {
 export function reorderCard(id: string, beforeId: string | null): Card {
   const card = state().cards.get(id);
   if (!card) throw new Error(`No card ${id}`);
-  // Siblings in the same column, ordered by the chosen sort (createdAt) so the formula below
-  // is stable regardless of the card's current order.
+  // A reorder must build on saved order so a later drag doesn't jump to the creation sequence.
   const siblings = [...state().cards.values()]
     .filter((c) => c.column === card.column && c.id !== id)
-    .sort((a, b) => a.createdAt - b.createdAt);
+    .sort(compareCardOrder);
   // The new position of `card` in `siblings`. beforeId === null puts it at the end.
-  const beforeIndex = beforeId === null ? siblings.length : Math.max(0, siblings.findIndex((c) => c.id === beforeId));
-  // prev = sibling just before the slot, next = sibling just after. The card's new order
-  // is the midpoint; if the gap has collapsed (rare with ORDER_STEP), renumber the whole
-  // column and try again.
-  const before = beforeIndex;
-  const prevSibling = before > 0 ? siblings[before - 1] : undefined;
-  const nextSibling = before < siblings.length ? siblings[before] : undefined;
-  const prev = prevSibling?.order;
-  const next = nextSibling?.order;
-  let newOrder: number;
-  if (prev === undefined && next === undefined) newOrder = ORDER_STEP;
-  else if (prev === undefined) newOrder = (next as number) - ORDER_STEP;
-  else if (next === undefined) newOrder = prev + ORDER_STEP;
-  else {
-    const gap = next - prev;
-    if (gap >= 2) newOrder = prev + Math.floor(gap / 2);
-    else {
-      // Gap collapsed; renumber and retry.
-      const ordered = [card, ...siblings].sort((a, b) => a.createdAt - b.createdAt);
-      for (let i = 0; i < ordered.length; i++) {
-        const c = ordered[i] as Card;
-        c.order = (i + 1) * ORDER_STEP;
-      }
-      newOrder = card.order as number;
-    }
+  if (beforeId === id) return card;
+  const beforeIndex = beforeId === null ? siblings.length : siblings.findIndex((c) => c.id === beforeId);
+  if (beforeIndex < 0) throw new Error("The target card must be in the same column.");
+  // Share the slot and gap math with the optimistic board update.
+  const orderChanges = ordersForSlot(siblings, id, beforeIndex);
+  for (const [changedId, order] of orderChanges) {
+    const changedCard = state().cards.get(changedId);
+    if (changedCard) changedCard.order = order;
   }
-  card.order = newOrder;
   saveBoard();
-  publish({ type: "card", card });
+  for (const changedId of orderChanges.keys()) {
+    const changedCard = state().cards.get(changedId);
+    if (changedCard) publish({ type: "card", card: changedCard });
+  }
   return card;
 }
 

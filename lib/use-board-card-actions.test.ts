@@ -132,6 +132,42 @@ describe("useBoardCardActions", () => {
     expect(moved.order!).toBeGreaterThan(last.order!);
   });
 
+  it("reorder after a middle sibling anchors before the following card", () => {
+    const cards = [
+      card({ id: "a", column: "backlog", order: 100 }),
+      card({ id: "b", column: "backlog", order: 200 }),
+      card({ id: "c", column: "backlog", order: 300 }),
+      card({ id: "d", column: "backlog", order: 400 }),
+    ];
+    const { result, setCards } = makeActions(cards);
+    act(() => result.current.reorder("a", "b", false));
+
+    expect(apiReorder).toHaveBeenCalledWith("a", "c");
+    const updater = setCards.mock.calls[0]![0];
+    const next = updater(cards);
+    const moved = next.find((c) => c.id === "a")!;
+    expect(moved.order!).toBeGreaterThan(200);
+    expect(moved.order!).toBeLessThan(300);
+  });
+
+  it("optimistically renumbers the same slot when the neighbor gap is closed", () => {
+    const cards = [
+      card({ id: "a", column: "backlog", order: 100 }),
+      card({ id: "b", column: "backlog", order: 101 }),
+      card({ id: "c", column: "backlog", order: 300 }),
+      card({ id: "d", column: "backlog", order: 400 }),
+    ];
+    const { result, setCards } = makeActions(cards);
+    act(() => result.current.reorder("d", "b", true));
+
+    expect(apiReorder).toHaveBeenCalledWith("d", "b");
+    const updater = setCards.mock.calls[0]![0];
+    const next = updater(cards);
+    const ordered = next.toSorted((a, b) => a.order! - b.order!).map((c) => c.id);
+    expect(ordered).toEqual(["a", "d", "b", "c"]);
+    expect(next.map((c) => c.order)).toEqual([1024, 3072, 4096, 2048]);
+  });
+
   it("reorder is a no-op for an unknown card", () => {
     const { result, setCards } = makeActions([card({ id: "a", column: "backlog" })]);
     act(() => result.current.reorder("ghost", "a", true));
