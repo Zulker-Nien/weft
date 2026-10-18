@@ -57,6 +57,7 @@ import FilterBox from "./FilterBox";
 import { NO_DRAG } from "@/lib/no-drag";
 import { filterHasFocus as filterHasFocusImpl, focusFilter as focusFilterImpl, jumpToNeedsYou as jumpToNeedsYouImpl, moveFocus as moveFocusImpl, openFocused as openFocusedImpl } from "@/lib/board-focus";
 import { announce, showPage, without } from "@/lib/board-helpers";
+import { cardHandlers } from "@/lib/card-handlers";
 import BoardHeader from "./BoardHeader";
 import BoardColumn, { COLUMN_LIMIT } from "./BoardColumn";
 import BoardToast from "./BoardToast";
@@ -608,6 +609,8 @@ export default function Board() {
     toast: setToast,
     notify,
   });
+  const onTag = (tag: string) => setRailFilter((f) => toggleTag(f, tag));
+  const cardCtx = { openCard, resume, onCardMenu, toggleStar, toggleArchive, onTag, notify };
 
   // "Switch all to <other CLI>" on the Running and Needs you columns. Idle cards flip right
   // away; busy ones come back in `pending` and the modal polls for them.
@@ -725,14 +728,7 @@ export default function Board() {
                     lastOpen={card.id === lastOpenId}
                     unseen={unseen.has(card.id)}
                     alsoHere={busyHere(cards, card)}
-                    onOpen={() => openCard(card)}
-                    onAnswer={(allow) => void api.answer(card.id, allow, undefined, card.pending?.id).catch(notify)}
-                    onStop={() => void api.stop(card.id).catch(notify)}
-                    onResume={(how) => resume(card.id, how)}
-                    onContextMenu={(e) => void onCardMenu(card, e)}
-                    onStar={() => toggleStar(card)}
-                    onTag={(tag) => setRailFilter((f) => toggleTag(f, tag))}
-                    onArchive={() => toggleArchive(card)}
+                    {...cardHandlers(card, cardCtx)}
                   />
                 )}
                 onDragOver={(e) => {

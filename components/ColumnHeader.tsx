@@ -84,7 +84,7 @@ export default function ColumnHeader({
         </span>
         {done && toArchive > 0 && (
           <Tip text={archiveTip} className="inline-flex">
-            <button onClick={onArchiveAll} className="rounded p-0.5 hover:bg-hover hover:text-ink" aria-label={`Archive all ${toArchive} in Done`}>
+            <button onClick={onArchiveAll} className="rounded p-0.5 text-muted hover:bg-hover hover:text-ink" aria-label={`Archive all ${toArchive} in Done`}>
               <Icon name="archive" size={13} />
             </button>
           </Tip>

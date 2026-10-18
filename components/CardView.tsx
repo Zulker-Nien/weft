@@ -111,7 +111,7 @@ export default function CardView({
   onStar?: () => void;
   // A click on one of its tag pills: the board filters to that tag.
   onTag?: (tag: string) => void;
-  // Backlog and Done cards get a one-click archive (Board.tsx → lib/use-board-archive.ts); archived cards unarchive.
+  // Backlog and Done cards get a one-click archive (Board.tsx → lib/card-handlers.ts); archived cards unarchive.
   onArchive?: () => void;
   // Other busy cards in this folder (lib/overlap.ts busyHere); flagged only while this one is busy too.
   alsoHere?: Card[];
