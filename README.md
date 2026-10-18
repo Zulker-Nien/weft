@@ -514,6 +514,10 @@ off). Hover it for today's numbers; click it for your **Wefter Profile**:
   that builder's week (XP, cards shipped, streak, level, the badges they earned since Monday) and opens their
   `weft.zip/@username`. Only those numbers and your name go up, never prompts, code or project names. New accounts
   join the current week's Cotton league the day they sign up.
+- **League emails.** Weft emails you about your league: a welcome on day one with who's in it and the rules, a
+  Thursday and a Sunday nudge only when a move is in play ("27 XP from moving up", "9 XP keeps you in Wool"), and
+  Monday's results (moved up, held, or moved down, with last week's podium). One email a day at most; every one has a
+  one-click unsubscribe.
 
 Everything comes from `~/.weft/activity.jsonl`, an append-only log the board writes as cards change
 (`lib/activity.ts`). The first time, it fills itself from your existing cards, imported Claude Code sessions

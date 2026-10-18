@@ -276,7 +276,9 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `Done` **Tokens and plan-limit hits** — the Wefter Profile's 30-day token chart with 5-hour and weekly limit hits, read incrementally from every Claude Code and puku-cli transcript, plus the ⏳ Hit the ceiling and 🗓️ Ran the week dry badges (`lib/usage.ts`, `lib/usage-scan.ts`, `components/LoomUsage.tsx`).
 - `Done` **Production-ready tree** — per-project testing, security, observability, docs and delivery checks read from the repo, each with "Set it up" to start a card (`lib/project-checks.ts`, `lib/project-badges.ts`).
 - `Done` **Leagues** — weekly leagues of up to 30 by XP, top 7 up and bottom 5 down, with each builder's week (shipped, streak, level, badges) and a link to their `weft.zip/@username` (`lib/league*.ts`, `components/LeagueTab.tsx`, docs/architecture/gamification.md).
-- `P2` **League results** — a Monday toast "You moved up to Linen" and last week's final table.
+- `Done` **League emails** — a welcome on day one, Thursday and Sunday nudges when a move is in play, Monday's results; one-click unsubscribe (`lib/league-mail*.ts`, `app/api/league/emails`, docs/architecture/gamification.md).
+- `P2` **League results** — a Monday toast "You moved up to Linen" and last week's final table in the app (the email already says it).
+- `P3` **`weft://league` opens the League tab** — today the emails' button only brings Weft forward.
 - `P2` **Daily quests** — three small goals a day ("Ship 3 cards", "Clear Needs you") with bonus XP.
 - `P2` **Weekly recap** — on Monday the browser pane opens "Your week in Weft": shipped, projects, streak, new badges.
 - `P2` **What you build** — Haiku tags each shipped card with a domain (Payments, AI agents, Decks) for the builder card.
