@@ -9,6 +9,10 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 ## [Unreleased]
 
 ### Added
+
+- **Continue in new card.** A thread whose prompt cache has gone cold shows a "stale cache" tag above its reply box with a **Continue in new card** button: Haiku summarizes the thread and a new card starts in the same folder and CLI with the summary, the files it touched and the message typed in the box (`lib/handoff.ts`).
+
+- The project bar's More menu has **Clone from GitHub…**: type `owner/name` or a github.com URL and it clones into `~/dev` and selects the project.
 - **Confetti for achievements.** A new badge or level opens a popup with a burst of confetti instead of a toast: one badge gets the stage, several share a list, and **See your profile** opens the Badges tab (`components/AchievementPopup.tsx`, `components/Confetti.tsx`, `lib/confetti.ts`).
 
 - **League emails.** A welcome on the day you join a league, a Thursday and a Sunday nudge when a move is in play, and Monday's results, from a daily Vercel cron at 13:00 UTC; at most one a day, each sent once (`league_emails`), with one-click unsubscribe (`profiles.league_emails`) (`lib/league-mail*.ts`, `app/api/league/{emails,open,unsubscribe}`, `supabase/migrations/20261017171804_league_emails.sql`).
@@ -67,6 +71,7 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Changed
 
+- **No delete before the first turn.** The thread header's trash button stays hidden until the card has finished a full turn (or holds an idle saved session, like an imported one), so a stray click can't delete a thread that's still starting (`hasFinishedTurn` in `components/CardActions.tsx`).
 - **Rail drawers slide out from under the board.** Clicking 🏷, 🔐, 🪝, ▲, Supabase, Cloudflare, BlastCP, GitHub or 🖥 Services now pulls its drawer out from beneath the board, which moves over and lies on it as a sheet with a rounded, shadowed left edge; closing slides the drawer back under. Pin now means Esc leaves it out (`lib/use-slide-out.ts`, `.board-sheet` in `app/globals.css`).
 
 - **Card titles aren't cut at four words.** Haiku names a card in 3 to 6 words, and a title over six words that you didn't type (a thread's `create_card` title, an old one clipped with "…") is rewritten by Haiku after the card's next turn instead of being clipped (`lib/retitle.ts`, `lib/format.ts`).
