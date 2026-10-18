@@ -16,7 +16,12 @@ vi.mock("./Composer", () => import("./composer-mock"));
 type Props = Parameters<typeof ReplyBox>[0];
 
 // A puku thread: its send-later times (in 1 hour, tomorrow morning) don't depend on plan resets.
-const later = (scheduled: ScheduledMessage[] = []) => ({ backend: "puku" as const, scheduled }) as Props["sendLater"];
+const later = (scheduled: ScheduledMessage[] = []) => ({ backend: "puku" as const, resets: {}, scheduled }) as Props["sendLater"];
+// Send later lives in the send button's ▾ menu.
+async function openLater() {
+  await userEvent.click(screen.getByRole("button", { name: "More ways to send" }));
+  await userEvent.click(screen.getByRole("menuitem", { name: /Send later/ }));
+}
 
 function setup(props: Partial<Props> = {}) {
   const onSend = vi.fn<Props["onSend"]>(() => Promise.resolve());
@@ -119,7 +124,8 @@ describe("ReplyBox", () => {
       const calls: string[] = [];
       onStop.mockImplementation(() => (calls.push("stop"), Promise.resolve()));
       onSend.mockImplementation((text) => (calls.push(`send ${text}`), Promise.resolve()));
-      await userEvent.click(screen.getByRole("button", { name: "Send now" }));
+      await userEvent.click(screen.getByRole("button", { name: "More ways to send" }));
+      await userEvent.click(screen.getByRole("menuitem", { name: "Send now (stops the turn)" }));
       expect(calls).toEqual(["stop", "send urgent"]);
     });
 
@@ -146,9 +152,10 @@ describe("ReplyBox", () => {
       expect(await screen.findByText(/no promise/)).toBeInTheDocument();
     });
 
-    it("the placeholder says the next message waits", () => {
+    it("the chip says the next message waits", () => {
       const { box } = setup({ live: true });
-      expect(box).toHaveAttribute("placeholder", expect.stringMatching(/send when this turn is done/));
+      expect(screen.getByText("Queue · after this turn")).toBeInTheDocument();
+      expect(box).toHaveAttribute("placeholder", "Write the next message");
     });
   });
 
@@ -168,7 +175,8 @@ describe("ReplyBox", () => {
       await userEvent.type(box, "{ArrowUp}");
       expect(box).toHaveValue("make it blue");
       expect(onEditing).toHaveBeenLastCalledWith(true);
-      expect(screen.getByText(/Enter replaces the reply below · Esc cancels · 2 file edits stay/)).toBeInTheDocument();
+      expect(screen.getByText("Replace last message · 2 file edits stay · Esc")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Replace" })).toBeInTheDocument();
       await userEvent.clear(box);
       await userEvent.type(box, "make it red{Enter}");
       expect(edit.onEdit).toHaveBeenCalledWith("make it red");
@@ -188,18 +196,20 @@ describe("ReplyBox", () => {
       window.removeEventListener("keydown", outside);
       expect(box).toHaveValue("");
       expect(outside).not.toHaveBeenCalledWith(expect.objectContaining({ key: "Escape" }));
-      expect(screen.queryByText(/Editing/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Replace last message/)).not.toBeInTheDocument();
       expect(edit.onEdit).not.toHaveBeenCalled();
     });
 
     it("says a running turn stops, and a thread that can't rewind sends a copy", async () => {
       const first = setup({ editLast: editLast(), live: true });
       await userEvent.type(first.box, "{ArrowUp}");
-      expect(screen.getByText(/Enter stops this turn and replaces it/)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Replace" })).toBeInTheDocument();
+      expect(screen.getByText(/Replace last message/)).toBeInTheDocument();
       cleanup();
       const second = setup({ editLast: editLast({ canRewind: false }) });
       await userEvent.type(second.box, "{ArrowUp}");
-      expect(screen.getByText(/this thread can't rewind, so it sends as a new message/)).toBeInTheDocument();
+      expect(screen.getByText(/this thread can't rewind/)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Send copy" })).toBeInTheDocument();
     });
 
     it("an emptied box cancels, a failed edit keeps the text, and a queued message comes back first", async () => {
@@ -244,29 +254,30 @@ describe("ReplyBox", () => {
 
     it("isn't offered while the thread works", async () => {
       const { box } = setup({ suggestion: "run the tests", live: true });
-      expect(box).toHaveAttribute("placeholder", expect.stringMatching(/send when this turn is done/));
+      expect(box).toHaveAttribute("placeholder", "Write the next message");
       box.focus();
       await userEvent.keyboard("{Tab}");
       expect(box).toHaveValue("");
     });
   });
 
-  it("idle, there's no Stop or Send now", () => {
+  it("idle, there's no Stop or menu (nothing to send now or later)", () => {
     setup();
     expect(screen.queryByRole("button", { name: "Stop the current turn" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Send now" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "More ways to send" })).not.toBeInTheDocument();
   });
 
   describe("send later", () => {
-    it("is only offered where sendLater is given", () => {
-      setup();
-      expect(screen.queryByRole("button", { name: "Send later" })).not.toBeInTheDocument();
+    it("is only offered where sendLater is given", async () => {
+      setup({ live: true });
+      await userEvent.click(screen.getByRole("button", { name: "More ways to send" }));
+      expect(screen.queryByRole("menuitem", { name: /Send later/ })).not.toBeInTheDocument();
     });
 
     it("schedules the message for the picked time and empties the box", async () => {
       const { onSend, box } = setup({ sendLater: later() });
       await userEvent.type(box, "Morning report");
-      await userEvent.click(screen.getByRole("button", { name: "Send later" }));
+      await openLater();
       await userEvent.click(screen.getByRole("button", { name: /In 1 hour/ }));
       expect(api.schedule).toHaveBeenCalledWith("c1", "Morning report", expect.any(Number));
       expect(onSend).not.toHaveBeenCalled();
@@ -275,7 +286,7 @@ describe("ReplyBox", () => {
 
     it("won't schedule an empty box", async () => {
       setup({ sendLater: later() });
-      await userEvent.click(screen.getByRole("button", { name: "Send later" }));
+      await openLater();
       await userEvent.click(screen.getByRole("button", { name: /In 1 hour/ }));
       expect(api.schedule).not.toHaveBeenCalled();
       expect(screen.getByText("Write a message first.")).toBeInTheDocument();

@@ -2,6 +2,7 @@
 // with the Tab cue. Pure, so a test can pin the rules.
 export function replyPlaceholder(live: boolean, suggestion: string | undefined, fallback: string, question: boolean): string {
   if (question) return "Type your own answer, or a note on your pick. Enter answers.";
-  if (live) return "Working. Write the next message and it'll send when this turn is done.";
+  // The chip already says it queues (lib/reply-mode.ts).
+  if (live) return "Write the next message";
   return suggestion ? `${suggestion}  ⇥ Tab` : fallback;
 }

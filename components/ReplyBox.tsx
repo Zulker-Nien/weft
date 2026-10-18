@@ -10,12 +10,13 @@ import { useReplyKeys } from "@/lib/use-reply-keys";
 import { useReplySchedule } from "@/lib/use-reply-schedule";
 import { useReplyContinue } from "@/lib/use-reply-continue";
 import { useNow } from "@/lib/use-now";
-import type { Backend, ScheduledMessage } from "@/lib/types";
+import { replyBoxMode, type ReplyAction } from "@/lib/reply-mode";
+import type { Backend, CacheState, LimitWindow, ScheduledMessage } from "@/lib/types";
 import Composer, { type ComposerHandle } from "./Composer";
 import QuestionForm, { type QuestionFormHandle, type QuestionProps } from "./QuestionForm";
 import ReplyBoxActions from "./ReplyBoxActions";
-import { EditingNote, ReplyQueue } from "./ReplyQueue";
-import StaleCache, { type StaleProps } from "./StaleCache";
+import { ModeChip, modeBorder } from "./ReplyModeChip";
+import { ReplyQueue } from "./ReplyQueue";
 
 // Board threads can take a message to send at a set time; the copilot can't, so it leaves this out.
 // resets are the plan's next 5-hour and weekly resets, the default times on a Claude thread.
@@ -24,6 +25,10 @@ type SendLater = { backend: Backend; resets: PlanResets; scheduled: ScheduledMes
 // Your last sent message, for ↑ to edit (board threads only). canRewind: Enter replaces it and its
 // turn; otherwise the edit goes out as a new message. fileEdits: what its turn changed on disk, which stays.
 type EditLast = { text: string; canRewind: boolean; fileEdits: number; onEdit: (text: string) => Promise<void> };
+
+// The prompt cache gone cold, and the way to carry the work into a new card (lib/handoff.ts): onContinue starts it
+// with what's typed in the box and resolves to its title.
+export type StaleProps = { cache: CacheState; onContinue: (message: string) => Promise<string> };
 
 // A thread's reply box: the same composer as a new thread (Markdown, pasted images and videos,
 // dictation), sized for a reply. Enter sends; Shift+Enter starts a new line. A message starting with "!"
@@ -37,6 +42,8 @@ export default function ReplyBox({
   sendLater,
   status,
   stale,
+  cutOff = false,
+  fiveHour,
   autoFocus,
   editLast,
   onEditing,
@@ -53,6 +60,10 @@ export default function ReplyBox({
   sendLater?: SendLater;
   status?: ReactNode;
   stale?: StaleProps;
+  // The last turn stopped short (lib/reply-mode.ts turnCutOff), so Continue is offered.
+  cutOff?: boolean;
+  // The plan's 5-hour window on this thread; when it's used up, Enter schedules for its reset.
+  fiveHour?: LimitWindow;
   autoFocus?: boolean;
   editLast?: EditLast;
   onEditing?: (editing: boolean) => void;
@@ -63,6 +74,8 @@ export default function ReplyBox({
 }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // "Started ‘…’" once the box handed its work to a new card.
+  const [note, setNote] = useState<string | null>(null);
   // Messages written while the thread was working; they go out together once the turn ends.
   const [queue, setQueue] = useState<string[]>([]);
   // Held while you edit a message pulled back out of the queue (or after a queued send failed).
@@ -85,7 +98,7 @@ export default function ReplyBox({
       posthog.capture("thread_reply_sent", { reply_type: "message" });
     }
   };
-  const { initial, save: saveDraft, shell } = useReplyDraft(cardId, onShell, clearError);
+  const { initial, save: saveDraft, shell, empty } = useReplyDraft(cardId, onShell, clearError);
 
   // The turn ended and nothing is being edited: what was queued leaves the queue as one message.
   // Moved during render, in the same pass that sees the turn end, so it can't be picked up twice.
@@ -233,8 +246,24 @@ export default function ReplyBox({
     else void submit(now);
   }
 
+  // Continue in new card: a summary, the touched files and what's typed here go to a fresh card (lib/handoff.ts).
+  async function handOff() {
+    if (!stale || sending) return;
+    setSending(true);
+    try {
+      const title = await stale.onContinue(composer.current?.readText() ?? "");
+      composer.current?.clear();
+      saveDraft("", true);
+      setNote(`Started “${title}”`);
+    } catch (err) {
+      setErrorWrap(err);
+    } finally {
+      setSending(false);
+    }
+  }
+
   // Continue: the literal word "continue" through the same onSend path as a typed message.
-  const { canContinue, sendContinue } = useReplyContinue({
+  const { sendContinue } = useReplyContinue({
     live,
     question: Boolean(question),
     shell,
@@ -267,6 +296,39 @@ export default function ReplyBox({
   });
 
   const scheduled = sendLater?.scheduled ?? [];
+  const { view, resetAt } = replyBoxMode({
+    live,
+    question: Boolean(question),
+    shell,
+    editing,
+    editLast,
+    empty,
+    cwd,
+    cache: stale?.cache,
+    fiveHour,
+    sendLater: sendLater && { planReset: sendLater.resets.fiveHour },
+    cutOff,
+    now,
+  });
+
+  // What the primary or a menu item does (lib/reply-mode.ts names them).
+  function onAction(action: ReplyAction) {
+    setNote(null);
+    if (action === "continue") sendContinue();
+    else if (action === "handoff") void handOff();
+    else if (action === "later") setLaterOpen(true);
+    else if (action === "schedule") {
+      if (resetAt) void scheduleAt(resetAt);
+    } else send(action === "sendNow");
+  }
+
+  // Enter does what the primary says, except start a new card from an empty box: that takes a click.
+  function onEnter() {
+    if (view.primary.action === "handoff" && empty) {
+      setNote(null);
+      setError("Write a message first, or click New card.");
+    } else onAction(view.primary.action);
+  }
 
   return (
     <div className="border-t border-line p-3" onKeyDownCapture={onKeyDownCapture} onKeyDown={onKeyDown}>
@@ -283,18 +345,6 @@ export default function ReplyBox({
         onSendNow={(i) => void sendQueuedNow(i)}
         onRemove={(i) => setQueue((q) => q.filter((_, j) => j !== i))}
       />
-      {editing && editLast && <EditingNote {...editLast} live={live} />}
-      {stale && !live && (
-        <StaleCache
-          {...stale}
-          onContinue={async (): Promise<string> => {
-            const title = await stale.onContinue(composer.current?.readText() ?? "");
-            composer.current?.clear();
-            saveDraft("", true);
-            return title;
-          }}
-        />
-      )}
       <Composer
         ref={composer}
         variant="reply"
@@ -303,30 +353,29 @@ export default function ReplyBox({
         initial={initial}
         autoFocus={autoFocus}
         placeholder={replyPlaceholder(live, suggestion, placeholder, Boolean(question))}
-        onSubmit={() => send()}
+        onSubmit={onEnter}
         onChange={saveDraft}
         sizeClass="min-h-[44px] max-h-[40vh]"
-        className={shell ? "border-warn! focus-within:border-warn!" : ""}
+        className={modeBorder(view.tone)}
+        header={view.chip && <ModeChip tone={view.tone} text={view.chip} />}
         actions={
           <ReplyBoxActions
+            view={view}
             live={live}
-            question={Boolean(question)}
             sending={sending}
-            shell={shell}
             sendLater={sendLater ? { backend: sendLater.backend, resets: sendLater.resets } : undefined}
             laterOpen={laterOpen}
             setLaterOpen={setLaterOpen}
             now={now}
             onPick={(at) => void scheduleAt(at)}
-            onSend={(now) => send(now)}
+            onAction={onAction}
             onStop={onStop}
             onStopError={setErrorWrap}
-            onContinue={sendContinue}
-            showContinue={canContinue}
           />
         }
       />
       {status && <div className="mt-1.5 px-1">{status}</div>}
+      {note && <p className="mt-1.5 text-[12px] text-muted">{note}</p>}
       {error && <p className="mt-1.5 text-[12px] text-danger">{error}</p>}
     </div>
   );

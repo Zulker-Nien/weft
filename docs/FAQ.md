@@ -375,7 +375,8 @@ Accounts shows each CLI's login status.
 - Markdown, formatted as you type (the Markdown button shows the raw text the agent gets).
 - Paste or drop images and videos where you want them; images reach the agent as image blocks at that spot.
 - Dictate with the mic (whisper.cpp, on this Mac).
-- **Send later** (⌥↵): hold a reply until the 5-hour limit resets, the weekly reset, an hour from now, tomorrow morning
+- The send button names what Enter does (Send, Queue, Answer, Run, Replace, New card), and its ▾ holds the rest.
+- **Send later** (⌥↵, or the ▾ menu): hold a reply until the 5-hour limit resets, the weekly reset, an hour from now, tomorrow morning
   or any time. Weft sends it even with the thread closed.
 - **↑** in an empty box edits your last message: the turn rewinds to before it and your new text goes out.
 - **`!command`** runs a shell command in the card's folder right away, even mid-turn; its output goes to the thread

@@ -100,6 +100,9 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   `lib/question-preview.ts`: a thread's AskUserQuestion, asked the Claude Code way above the reply box, whose composer is its
   one input (own answer or a note, sent as `annotations`); option previews open in the card's browser pane; text typed on the
   Submit tab goes with the answers as a note on all of them (`buildReply`'s `general`).
+- `lib/reply-mode.ts` + `components/ReplyButtons.tsx` + `components/ReplyModeChip.tsx`: the reply box is in one mode at a time
+  (Send, Queue, Answer, Run, Replace, New card when the cache is cold, Send at the reset when the 5-hour window is used up), named on a
+  chip in the box and on its primary, with the rest in a ▾ menu and ■ Stop in its own slot (docs/architecture/composer.md).
 - `components/SettingsDialog.tsx` + `lib/settings-nav.ts`: Settings, full window over a scene, six pages down the left (General, Models,
   Threads, Automations, Shortcuts, Accounts); Models holds every model pick, new threads' through `components/NewThreadDefaults.tsx`;
   the four rows (NewThreadDefaults, SubagentPicker, CopilotPicker, DonePicker) share `components/Pickers.tsx`
@@ -281,6 +284,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - `desktop-shell.md` — `electron/` itself: main, preload, tray, dock, `weft://` links, the start screen, the terminal drawer.
   - `threads-and-sessions.md` — the runner: one Agent SDK `query()` per Claude Code/puku thread, the Codex runner, sessions, queues, rewind, warm spares.
   - `thread-guards.md` — what `guardedCli()` strips and hooks: secret/restart/git/check/route-import/claim guards, per-CLI limits.
+  - `composer.md` — the reply box's modes: `lib/reply-mode.ts`'s table of chip, primary and ▾ menu per state, and what's still planned (one dock for every ask, one server-side queue).
   - `questions.md` — a thread's AskUserQuestion end to end: the panel above the reply box, keys, previews in the pane, answers and `annotations` back to the CLI.
   - `subagents.md` — how threads delegate to subagents and how Settings → Models picks their model.
   - `account.md` — the optional Weft account (Supabase Auth, PKCE, `weft://account-callback`, `~/.weft/account.json` in the Keychain).

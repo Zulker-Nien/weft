@@ -77,6 +77,7 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Changed
 
+- **No Delete before the first full turn.** The trash button in a thread's header stays hidden until the card has finished a turn (or is an idle saved session), so a thread that is still starting can't be deleted by a stray click (`hasFinishedTurn` in `components/CardActions.tsx`).
 - **No delete before the first turn.** The thread header's trash button stays hidden until the card has finished a full turn (or holds an idle saved session, like an imported one), so a stray click can't delete a thread that's still starting (`hasFinishedTurn` in `components/CardActions.tsx`).
 - **Rail drawers slide out from under the board.** Clicking 🏷, 🔐, 🪝, ▲, Supabase, Cloudflare, BlastCP, GitHub or 🖥 Services now pulls its drawer out from beneath the board, which moves over and lies on it as a sheet with a rounded, shadowed left edge; closing slides the drawer back under. Pin now means Esc leaves it out (`lib/use-slide-out.ts`, `.board-sheet` in `app/globals.css`).
 

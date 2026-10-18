@@ -41,6 +41,8 @@ const Composer = forwardRef<
     onChange?: (markdown: string) => void;
     // Buttons at the right end of the bottom bar, such as Send.
     actions?: ReactNode;
+    // A line at the top inside the frame, such as the reply box's mode chip.
+    header?: ReactNode;
     // The editing area's height, e.g. "min-h-[260px] max-h-[55vh]".
     sizeClass: string;
     // Classes for the outer frame, e.g. "flex-1" to fill a dialog.
@@ -51,7 +53,7 @@ const Composer = forwardRef<
     dropTarget?: string;
   }
 >(function Composer(
-  { initial = "", placeholder, autoFocus, variant, onSubmit, onSubmitAlt, onChange, actions, sizeClass, className = "", cwd, dropTarget },
+  { initial = "", placeholder, autoFocus, variant, onSubmit, onSubmitAlt, onChange, actions, header, sizeClass, className = "", cwd, dropTarget },
   ref,
 ) {
   const [source, setSource] = useState<string | null>(null);
@@ -243,6 +245,8 @@ const Composer = forwardRef<
           onHover={setActiveSkill}
         />
       )}
+
+      {header}
 
       {showFormat && editor && source === null && (
         <div className="flex shrink-0 items-center border-b border-line px-1.5 py-1">

@@ -6,6 +6,7 @@
 // folder grants and "!" commands only where the Mac itself runs the card.
 import type { ReactNode } from "react";
 import type { PlanResets } from "@/lib/schedule";
+import { turnCutOff } from "@/lib/reply-mode";
 import { useThreadTransport } from "@/lib/thread-transport";
 import type { Card } from "@/lib/types";
 import CrashGuard from "./CrashGuard";
@@ -80,6 +81,7 @@ export function ThreadReply({ card, show, live, placeholder, question, schedulin
       sendLater={scheduling && { backend: card.backend, resets: scheduling.resets, scheduled: card.scheduled ?? [] }}
       status={status}
       stale={cache && handoff ? { cache, onContinue: (message) => handoff(card.id, message) } : undefined}
+      cutOff={turnCutOff(card)} fiveHour={card.stats?.fiveHour}
       editLast={editLast} onEditing={onEditing}
       onSend={onSend} onShell={shell && ((command) => shell(card.id, command))} onStop={() => transport.stop(card.id)} />
   );
