@@ -120,3 +120,12 @@ describe("toAnnounce", () => {
     expect(toAnnounce(prev, [b("x", true), b("y", true)], 2).text).toBe("🏅 2 badges unlocked: 🏅 x, 🏅 y");
   });
 });
+
+describe("limit badges", () => {
+  it("unlock with the first hit of each window", () => {
+    const list = byId(badges(facts({ limitHits: [{ at: 5, kind: "five_hour" }, { at: 9, kind: "five_hour" }] })));
+    expect(list.get("limit-5h")).toMatchObject({ unlocked: true, at: 5 });
+    expect(list.get("limit-7d")).toMatchObject({ unlocked: false, at: undefined });
+    expect(byId(badges(facts({ limitHits: [{ at: 7, kind: "seven_day" }] }))).get("limit-7d")).toMatchObject({ unlocked: true, at: 7 });
+  });
+});

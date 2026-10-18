@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  activeDays, addDays, cloth, dayKey, eventXp, levelFor, MAX_FREEZES, records, streakOf, tallyDays, weekOf, weekXp,
+  activeDays, addDays, cloth, dayKey, eventXp, levelFor, MAX_FREEZES, records, streakOf, tallyDays, weekOf, weekShipped, weekXp,
   type ActivityEvent,
 } from "./game";
 
@@ -143,5 +143,14 @@ describe("records and weekXp", () => {
       ["2026-10-11", { cards: 0, turns: 0, done: 0, xp: 5 }],
     ]);
     expect(weekXp(days, "2026-10-11")).toBe(15);
+  });
+
+  it("counts this week's shipped cards up to today", () => {
+    const days = new Map([
+      ["2026-10-04", { cards: 0, turns: 0, done: 9, xp: 0 }],
+      ["2026-10-05", { cards: 0, turns: 0, done: 2, xp: 0 }],
+      ["2026-10-11", { cards: 0, turns: 0, done: 1, xp: 0 }],
+    ]);
+    expect(weekShipped(days, "2026-10-11")).toBe(3);
   });
 });

@@ -2,7 +2,7 @@
 // all worked out from the activity log (lib/activity.ts). Pure, so the client can import the types
 // and tests can pin every rule; lib/game-server.ts puts it together on the server.
 
-export type ActivityKind = "created" | "start" | "turn" | "done" | "quality";
+export type ActivityKind = "created" | "start" | "turn" | "done" | "quality" | "limit";
 
 // One thing that happened, a line of ~/.weft/activity.jsonl.
 export interface ActivityEvent {
@@ -23,6 +23,8 @@ export interface ActivityEvent {
   coverage?: number;
   // created and done: the card's title, for the craft attribute and refactor badges.
   title?: string;
+  // limit: which plan window a Weft thread ran out of (lib/usage.ts).
+  limit?: "five_hour" | "seven_day";
 }
 
 // Shipping is worth the most, so starting cards for the sake of it doesn't pay.
@@ -117,7 +119,7 @@ export function tallyDays(events: ActivityEvent[], rootOf: (cwd: string) => stri
   const score = qualityAt(events);
   const days = new Map<string, DayTally>();
   for (const e of events) {
-    if (e.kind === "quality" || e.kind === "start") continue;
+    if (e.kind === "quality" || e.kind === "start" || e.kind === "limit") continue;
     const key = dayKey(e.at);
     const day = days.get(key) ?? emptyDay();
     if (e.kind === "created") day.cards += 1;
@@ -234,11 +236,16 @@ export function records(events: ActivityEvent[], days: Map<string, DayTally>): R
   };
 }
 
-// XP earned this week so far: the score a league would rank you by.
-export function weekXp(days: Map<string, DayTally>, today: string): number {
+function weekSum(days: Map<string, DayTally>, today: string, key: "xp" | "done"): number {
   const monday = weekOf(today);
-  return [...days].filter(([day]) => day >= monday && day <= today).reduce((n, [, d]) => n + d.xp, 0);
+  return [...days].filter(([day]) => day >= monday && day <= today).reduce((n, [, d]) => n + d[key], 0);
 }
 
-// The league ladder, lowest first. Leagues need accounts; until then the dialog shows it locked.
+// XP earned this week so far: the score your league ranks you by.
+export const weekXp = (days: Map<string, DayTally>, today: string) => weekSum(days, today, "xp");
+
+// Cards shipped this week so far, shown beside your XP in the league.
+export const weekShipped = (days: Map<string, DayTally>, today: string) => weekSum(days, today, "done");
+
+// The league ladder, lowest first (lib/league.ts, supabase/migrations/20261017162000_leagues.sql).
 export const LEAGUES = ["Cotton", "Linen", "Wool", "Silk", "Cashmere", "Gold Thread"] as const;

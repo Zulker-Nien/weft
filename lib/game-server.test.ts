@@ -28,6 +28,13 @@ vi.mock("./activity", () => ({
   record: vi.fn((e: Omit<ActivityEvent, "id">) => log.push({ ...e, id: `r${log.length}` })),
 }));
 vi.mock("./store", () => ({ listCards: () => board.cards }));
+vi.mock("./usage-scan", () => ({
+  scanUsage: vi.fn(() => Promise.reject(new Error("unreadable"))),
+  transcriptUsage: () => ({
+    tokens: new Map([["2026-10-11", [1000, 200]]]),
+    hits: [{ at: new Date(2026, 9, 11, 9).getTime(), kind: "five_hour", reset: "2pm" }],
+  }),
+}));
 vi.mock("./quality", () => ({ projectRoot: (cwd: string) => cwd }));
 vi.mock("./import", () => ({ sessionFiles: () => new Map() }));
 vi.mock("./craft", () => ({ scanCraft: vi.fn(() => Promise.reject(new Error("unreadable"))), craftHabits: () => new Map() }));
@@ -108,6 +115,20 @@ describe("gameState", () => {
 
     // The light request now uses what's cached.
     expect(gameState({ now: NOW }).projects).toHaveLength(3);
+  });
+
+  it("charts the transcripts' tokens and every limit hit, counting a window once", () => {
+    log.push(
+      { id: "l1", kind: "limit", at: new Date(2026, 9, 11, 10).getTime(), limit: "five_hour" },
+      { id: "l2", kind: "limit", at: NOW - 3 * DAY, limit: "seven_day" },
+      { id: "l3", kind: "limit", at: NOW },
+    );
+    const game = gameState({ now: NOW });
+    expect(game.usage).toHaveLength(30);
+    expect(game.usage.at(-1)).toEqual({ day: "2026-10-11", input: 1000, output: 200, fiveHour: 1, sevenDay: 0 });
+    expect(game.usage.at(-4)).toMatchObject({ sevenDay: 1 });
+    expect(game.limitHits).toEqual({ fiveHour: 1, sevenDay: 1 });
+    expect(game.badges.filter((b) => b.id.startsWith("limit-")).map((b) => [b.id, b.unlocked])).toEqual([["limit-5h", true], ["limit-7d", true]]);
   });
 
   it("falls back to the system user name", () => {

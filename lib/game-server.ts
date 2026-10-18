@@ -5,7 +5,7 @@ import path from "node:path";
 import { readActivity, record, trackActivity } from "./activity";
 import { craftHabits, scanCraft } from "./craft";
 import {
-  activeDays, cloth, dayKey, LEAGUES, levelFor, records, streakOf, tallyDays, weekXp,
+  activeDays, cloth, dayKey, LEAGUES, levelFor, records, streakOf, tallyDays, weekShipped, weekXp,
   type DayTally, type Level, type Records, type Stitch, type Streak,
 } from "./game";
 import { attributes, classFor, stackSkills, type Attribute, type Skill } from "./game-attributes";
@@ -17,6 +17,8 @@ import { sessionFiles } from "./import";
 import { checkProject, detectStack } from "./project-checks";
 import { projectRoot } from "./quality";
 import { listCards } from "./store";
+import { distinctHits, usageDays, type LimitHit, type UsageDay } from "./usage";
+import { scanUsage, transcriptUsage } from "./usage-scan";
 
 // Puts the game together for /api/game: the activity log, the board's cards and the projects'
 // production-ready trees. Measuring a project reads its files, so reports are cached for a while and
@@ -27,6 +29,7 @@ export interface GameState {
   xp: number;
   level: Level;
   weekXp: number;
+  weekShipped: number;
   streak: Streak;
   today: DayTally;
   cloth: Stitch[];
@@ -39,6 +42,9 @@ export interface GameState {
   // The root of the project in view, when it was measured.
   inView: string | null;
   leagues: readonly string[];
+  // The last 30 days' tokens and limit hits, for the wefter card's chart, and every hit's count.
+  usage: UsageDay[];
+  limitHits: { fiveHour: number; sevenDay: number };
   // Your GitHub profile, added by /api/game when gh is signed in.
   github?: GithubProfile | null;
 }
@@ -121,6 +127,11 @@ export function gameState({ cwd, full, now = Date.now() }: { cwd?: string | null
   const cards = listCards().filter((c) => c.role !== "copilot");
   // Craft reads what the last scan found; the scan catches up in the background.
   void scanCraft(cards, sessionFiles()).catch(() => {});
+  // So does usage: every transcript's tokens and limit hits, plus the hits Weft's threads logged live.
+  void scanUsage(now).catch(() => {});
+  const scanned = transcriptUsage();
+  const live = events.flatMap((e): LimitHit[] => (e.kind === "limit" && e.limit ? [{ at: e.at, kind: e.limit }] : []));
+  const hits = distinctHits([...scanned.hits, ...live]);
   const inView = cwd ? rootOf(cwd) : null;
   const projects = full
     ? rootsToMeasure(cards, inView, now).map((root) => measure(root, now))
@@ -144,15 +155,19 @@ export function gameState({ cwd, full, now = Date.now() }: { cwd?: string | null
     projectCount: busyRoots.length,
     refactors: events.filter((e) => e.kind === "done" && isRefactor(e.title)).length,
     climbed: coverageClimbed(events),
+    limitHits: hits,
   };
   return {
     name: userName(),
     xp,
     level: levelFor(xp),
     weekXp: weekXp(days, today),
+    weekShipped: weekShipped(days, today),
     streak,
     today: days.get(today) ?? { cards: 0, turns: 0, done: 0, xp: 0 },
     cloth: cloth(days, streak.frozen, today),
+    usage: usageDays(scanned.tokens, hits, today),
+    limitHits: { fiveHour: hits.filter((h) => h.kind === "five_hour").length, sevenDay: hits.filter((h) => h.kind === "seven_day").length },
     records: recs,
     attributes: attrs,
     className: classFor(attrs),

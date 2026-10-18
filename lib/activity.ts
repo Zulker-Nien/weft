@@ -86,6 +86,16 @@ export function record(event: Omit<ActivityEvent, "id">) {
   append([{ ...event, id: randomUUID() }]);
 }
 
+// A plan limit a Weft thread ran into. One event per window when its reset is known, so every
+// rejected request of a busy hour logs it once; lib/usage.ts distinctHits folds the rest.
+export function recordLimit(limit: "five_hour" | "seven_day", at: number, card?: { id: string; cwd: string }, resetsAt?: number) {
+  try {
+    append([{ id: resetsAt ? `limit:${limit}:${resetsAt}` : randomUUID(), at, kind: "limit", limit, card: card?.id, cwd: card?.cwd }]);
+  } catch (err) {
+    console.warn("Couldn't write the activity log", err);
+  }
+}
+
 // What one card change means for the log.
 export function changeEvents(prev: { column: Column; turns: number } | undefined, card: Card, running: number, now: number): ActivityEvent[] {
   if (!prev) return backfillEvents([card]);

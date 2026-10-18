@@ -10,7 +10,7 @@ const board: { cards: Card[] } = { cards: [] };
 vi.mock("./store", () => ({ DATA_DIR: dir, listCards: () => board.cards }));
 
 const { publish } = await import("./bus");
-const { ACTIVITY_FILE, append, backfillEvents, changeEvents, readActivity, record, trackActivity } = await import("./activity");
+const { ACTIVITY_FILE, append, backfillEvents, changeEvents, readActivity, record, recordLimit, trackActivity } = await import("./activity");
 
 function card(overrides: Partial<Card> = {}): Card {
   return {
@@ -120,5 +120,30 @@ describe("trackActivity", () => {
     readActivity();
     publish({ type: "card", card: card({ id: "early" }) });
     expect(readActivity().map((e) => e.id)).not.toContain("created:early");
+  });
+});
+
+describe("recordLimit", () => {
+  it("logs a limit hit once per window reset", () => {
+    readActivity();
+    recordLimit("five_hour", 5, { id: "c1", cwd: "/repo" }, 300);
+    recordLimit("five_hour", 6, { id: "c2", cwd: "/repo" }, 300);
+    recordLimit("seven_day", 7);
+    expect(readActivity().map((e) => [e.id.startsWith("limit:") ? e.id : "uuid", e.kind, e.limit, e.card])).toEqual([
+      ["limit:five_hour:300", "limit", "five_hour", "c1"],
+      ["uuid", "limit", "seven_day", undefined],
+    ]);
+  });
+
+  it("keeps going when the log can't be written", () => {
+    readActivity();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const write = vi.spyOn(fs, "appendFileSync").mockImplementation(() => {
+      throw new Error("disk full");
+    });
+    recordLimit("five_hour", 5);
+    expect(warn).toHaveBeenCalled();
+    write.mockRestore();
+    warn.mockRestore();
   });
 });
