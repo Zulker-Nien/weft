@@ -23,9 +23,10 @@
     "typecheck": "node scripts/one-at-a-time.mjs typecheck 'next typegen && tsc --noEmit'",
     "test": "node scripts/run-tests.mjs",
     "prepare": "git config core.hooksPath .githooks || true",
-    "app": "THREADBOARD_DIST=.next-app next build && THREADBOARD_DIST=.next-app THREADBOARD_PROD=1 electron .",
-    "dist": "THREADBOARD_DIST=.next-dist THREADBOARD_STANDALONE=1 next build && node scripts/prepare-standalone.mjs .next-dist && node scripts/bundle-toolchain.mjs && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --dir",
-    "dist:release": "THREADBOARD_DIST=.next-dist THREADBOARD_STANDALONE=1 next build && node scripts/prepare-standalone.mjs .next-dist && node scripts/bundle-toolchain.mjs && electron-builder --mac --publish never",
+    "app": "WEFT_DIST=.next-app next build && WEFT_DIST=.next-app WEFT_PROD=1 electron .",
+    "dist": "WEFT_DIST=.next-dist WEFT_STANDALONE=1 next build && node scripts/prepare-standalone.mjs .next-dist && node scripts/bundle-toolchain.mjs && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --dir",
+    "dist:remote": "scripts/package-remote.sh",
+    "dist:release": "WEFT_DIST=.next-dist WEFT_STANDALONE=1 next build && node scripts/prepare-standalone.mjs .next-dist && node scripts/bundle-toolchain.mjs && electron-builder --mac --publish never",
     "coverage": "node scripts/run-tests.mjs --coverage",
     "postinstall": "chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null || true; node scripts/patch-next-hmr.mjs",
     "resend": "node scripts/resend-domain.mjs"

@@ -9,7 +9,7 @@ reads `~/.weft`, starts Claude Code and terminal shells, and answers only on 127
 | Where | What | How it gets there |
 | --- | --- | --- |
 | `Resources/app.asar` | `electron/` and the main process's only packages: `libsodium-wrappers` (the 🔐 vault) and `node-pty` (the terminal; its darwin prebuild unpacked beside the asar so the native module loads) | `build.files` in `package.json`; every other `node_modules` folder stays out |
-| `Resources/server` | The Next.js standalone server, run by Weft Helper as Node (`electron/server.cjs`), with only the packages it imports, mostly the Agent SDK's Claude Code binary (~240 MB) | `next build` with `THREADBOARD_STANDALONE=1`, then `scripts/prepare-standalone.mjs` |
+| `Resources/server` | The Next.js standalone server, run by Weft Helper as Node (`electron/server.cjs`), with only the packages it imports, mostly the Agent SDK's Claude Code binary (~240 MB) | `next build` with `WEFT_STANDALONE=1`, then `scripts/prepare-standalone.mjs` |
 | `Resources/toolchain` | The toolchain, below | `scripts/bundle-toolchain.mjs` |
 | `Resources/plugin` | Weft's own skills | `extraResources` |
 
@@ -52,6 +52,15 @@ Local `pnpm dist` stays an unsigned `--dir` build (`CSC_IDENTITY_AUTO_DISCOVERY=
 keychain gets picked up by accident). A local signed dmg is `NODE_ENV=production pnpm dist:release`: it signs with
 the Developer ID in your keychain and skips notarization without the `APPLE_API_*` variables, so Gatekeeper on
 another Mac asks before the first open.
+
+### Building on the minis (`pnpm dist:remote`)
+
+`scripts/package-remote.sh` runs the heavy part off this Mac: it picks m1mini, else m2mini (SSH reachable, 12 GB free;
+`--host` forces one), rsyncs the working tree to `~/dev/weft-build`, runs `pnpm install`, the standalone `next build`,
+`prepare-standalone` and `bundle-toolchain` there, and rsyncs `.next-dist` and `.toolchain-dist` back. electron-builder
+then packs and signs here with the Flexbike Developer ID (`WEFT_SIGN_IDENTITY`, default `Flexbike, Inc. (H78XB55WG8)`),
+because the private key lives only in this Mac's keychain. It notarizes when the `APPLE_API_*` variables are set.
+`--check` only tests the builder and the identity; `--no-sign` packs unsigned.
 
 ### Secrets
 

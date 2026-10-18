@@ -8,13 +8,21 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ## [Unreleased]
 
+### Added
+- Continue is back in the reply box beside Done, whenever the thread is idle, and ⌘⇧↵ sends it (it was ⌘. before).
+- Renamed the last "threadboard" names to Weft: the write header is `x-weft-token` (the launch token is accepted in its place), the env vars are `WEFT_*`, and the desktop bridge is `window.weft`. Old `~/.threadboard` data is still moved to `~/.weft`.
+
+- `pnpm dist:remote` (`scripts/package-remote.sh`): builds the standalone app on m1mini or m2mini over the LAN, then packs and signs here with the Flexbike Developer ID (`--check` tests the builder and identity first).
+
 ### Security
 
 - A webhook relay delivery can no longer climb out of its target's path (`..`, `%2e%2e`) to another local route, and the relay drops `x-threadboard` from a stranger's request. Account, settings and services reads need a per-launch token the board window adds itself (`electron/api-token.cjs`). `weft://` links only act from a page under `~/.weft`, not any `file:` page.
 
 ### Added
 
-- Threads ask the CLI for a 1-hour prompt cache (CLAUDE_CODE_PROMPT_CACHE_TTL), so a short break no longer re-sends the whole thread. When it does go cold, the reply box names the cost (threads over 30k tokens only), keeps Send as the primary and moves the new-card hand-off into the ▾ menu; an idle reply box also has a Done button that sends /weft:done here.
+- Threads ask the CLI for a 1-hour prompt cache (CLAUDE_CODE_PROMPT_CACHE_TTL), so a short break no longer re-sends the whole thread.
+- **Send fresh** replaces "Continue in new card": a cold thread over 30k tokens sends your message to a new session in the same card, started from a brief (a Haiku summary written ahead of time, what's still open, and the diff of this thread's own edits) instead of re-sending the history; "Send with full history" is in the ▾ menu, and a divider in the thread shows the brief.
+- An idle reply box has a **Done** button that sends /weft:done (fresh when the cache is cold).
 
 - Stop is faster: it SIGTERMs the commands a thread is running at once, and ends the CLI after 1.5s (was 5s) if the interrupt is ignored.
 - **Errors and Restart errors filters on the Review column.** Two chips in its header, each on its own: Errors keeps cards whose last line is a thread or build error, Restart errors keeps cards that hit the 5-hour session limit. An active chip shows its count; both off after a reload (`components/ReviewFilterChips.tsx`, `lib/board-view.ts`).
