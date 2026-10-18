@@ -1,5 +1,5 @@
-// The share gate's submit for a mini app's link (app/api/a/[id]/unlock), the same steps as a card's
-// (app/api/s/[id]/unlock, which moves onto this once the pentest's F-6 change there is committed).
+// The share gate's submit, for any link: a card's (app/api/s/[id]/unlock) and a mini app's (app/api/a/[id]/unlock),
+// which each pass their own table's row and visit log as the UnlockTarget.
 // The body matches what ShareGateForm posts (@aimhuge/share/client): a JSON object with EITHER `password` (a password
 // gate) or `email` (an email gate). On success it grants the gate pass; on a bad mode for the body it answers 400.
 // The rate limit per (ip, share_id) lives in Supabase (lib/share-unlock-rate) so it survives redeploys and

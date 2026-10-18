@@ -54,11 +54,56 @@ On weft.zip, `app/a/[id]/page.tsx` runs the gate (`lib/app-share-access.ts`, the
 `lib/share-access.ts`) and draws `components/share-view/SharedApp.tsx`: a thin header and the page full-window. A blob is
 framed from `app/api/a/[id]/page`, which serves only the blob the row names, sandboxed and with key-shaped text masked
 (`lib/share-page-serve.ts`, shared with the card's page route). The email and password gates post to
-`app/api/a/[id]/unlock` (`lib/share-unlock.ts`: the same rate limit, pass cookie and off-Vercel refusal as a card's).
+`app/api/a/[id]/unlock` (`lib/share-unlock.ts`, the one rate limit, pass cookie and off-Vercel refusal that a card's unlock route uses too).
 
 Schema: `supabase/migrations/20261018150000_app_shares.sql`. `cloud_app_shares` is one row per (workspace, sharer, app);
 members read it without `password_hash`, only the sharer writes, and the database fills `created_by`.
 `cloud_app_share_visits` holds who got through an email gate, readable by the sharer only.
+
+## Data apps: a folder, an env, reads
+
+A data app holds a folder: `~/.weft/apps/<slug>/` with its page (`index.html`) and a manifest (`weft-app.json`), saved as a
+mini app like any page. The manifest names the project folder it reads (whose 🔐 vault and Supabase link it uses), the
+one vault environment it asks for, and its reads by name:
+
+```json
+{ "name": "📈 Growth", "folder": "/Users/you/dev/weft", "env": "production",
+  "supabaseUrl": "https://<ref>.supabase.co",
+  "reads": { "signups": { "supabase": "growth_signups_by_day", "args": { "days": 30 } },
+             "pageviews": { "ga4": { "dateRanges": [{ "startDate": "30daysAgo", "endDate": "today" }], "metrics": [{ "name": "screenPageViews" }] } } } }
+```
+
+- **It requests permission to an env.** The pane's preload (`electron/pane-preload.cjs`, on `file:` pages only) gives the
+  page `window.weft`: `access()`, `requestAccess()`, `revoke()` and `read(name, args?)`. `requestAccess()` is a Touch ID
+  naming the app, the project and the env and the vault names its reads need (`SUPABASE_SECRET_KEY` for a `supabase`
+  read; `GA4_PROPERTY_ID` and `GA4_SERVICE_ACCOUNT_JSON` for a `ga4` one). The grant is kept in `~/.weft/app-grants.json`,
+  keyed by the app's folder, with a hash of its manifest: change the env, the folder or a read and the app asks again.
+- **Main runs the reads** (`electron/app-data.cjs`, `electron/app-data-reads.cjs`). It answers only a pane page whose
+  top frame is a file in `~/.weft/apps/<slug>/` (real path, so no symlink or `..` out) that is saved as an app and holds
+  `weft-app.json`. The page sends a read's name and only the args its manifest declares, of the same type; it never
+  sends SQL, a URL or a function name. A `supabase` read calls that Postgres function through PostgREST with the env's
+  `SUPABASE_SECRET_KEY`; a `ga4` read signs a service-account JWT, gets a token (cached) and runs the manifest's
+  `runReport`. Rows come back capped at 5,000 rows and 2 MB, with a 15 s timeout; values stay in main.
+- **Reads are functions, reviewed in a migration.** The project's `supabase/migrations/` defines what an app may read:
+  `security definer`, `set search_path = ''`, executable by `service_role` only, so the anon and signed-in keys can't
+  call them. Weft's own are `growth_*` (`supabase/migrations/20261018054110_growth_reads.sql`).
+- **Outside Weft** (a normal browser, a weft.zip share link) `window.weft` isn't there and the page says to open it in
+  Weft on a Mac: the data never leaves the Mac it was granted on.
+
+📈 **Growth** is the first one (`~/.weft/apps/growth/`): accounts, signups and active accounts per day, weekly
+retention cohorts and the activation funnel from Weft's own Supabase (production), and page views, top pages and
+sources from GA4 once its two vault names have values.
+
+## Persisted on prod
+
+Every mini app is also a row in Weft's production Supabase, `cloud_mini_apps` (`lib/app-cloud.ts`,
+`supabase/migrations/20261018160000_cloud_mini_apps.sql`), under the signed-in account's workspace: its name, address,
+place on the rail and kind (`site`, `file` or `folder`). A file's or folder's page goes up to `weft-blobs` by content hash
+(only when it changed), and a folder app's manifest goes with it. `app/api/apps` pushes after each save, rename, move
+and remove (a remove leaves a tombstone, so it never comes back), after the response. A list pulls at most every 5
+minutes, in the background: an app this Mac lacks is written to `~/.weft/apps/<id>/` and added to the rail. Rows are the
+owner's only (a manifest names a local folder), and signed out nothing goes up. A grant never goes up: each Mac asks
+for its own Touch ID.
 
 ## Open and later
 
@@ -66,8 +111,6 @@ members read it without `password_hash`, only the sharer writes, and the databas
 - Not built: `mcp__browser__save_app` so a thread can offer its page as an app, drag to reorder (Move up/down for now),
   favicons, apps per project. A shared page's own pictures and scripts by relative path don't load remotely (only the one
   file goes up), the link doesn't follow edits until the dialog opens again, and the visits list isn't shown in the app.
-  The card's unlock route (`app/api/s/[id]/unlock`) still has its own copy of `lib/share-unlock.ts`'s steps until the
-  pentest's F-6 change there is committed.
 - Tests: `lib/mini-apps.test.ts`, `lib/mini-app-store.test.ts`, `lib/use-mini-apps.test.ts`, `app/api/apps-route.test.ts`,
   `components/AppsRail.test.tsx` (covers `SaveAppButton` too); sharing: `lib/app-share*.test.ts`, `lib/share-unlock.test.ts`,
   `lib/share-page-serve.test.ts`, `app/api/apps-share-route.test.ts`, `app/api/a/[id]/*/routes.test.ts`,
