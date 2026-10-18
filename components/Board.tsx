@@ -732,6 +732,7 @@ export default function Board() {
                     onContextMenu={(e) => void onCardMenu(card, e)}
                     onStar={() => toggleStar(card)}
                     onTag={(tag) => setRailFilter((f) => toggleTag(f, tag))}
+                    onArchive={() => toggleArchive(card)}
                   />
                 )}
                 onDragOver={(e) => {
@@ -757,6 +758,9 @@ export default function Board() {
                 }
                 onReviewAll={column.id === "review" ? reviewAll : undefined}
                 onAddBacklog={() => openNew()}
+                // Backlog's sprints, Save as sprint and Archive all act on the unarchived cards it shows.
+                backlog={column.id === "backlog" ? { cards: list.filter((c) => !c.archived), allCards: cards, onRestore: unarchive, toast: setToast, notify,
+                  onArchiveAll: () => archiveCards(list.filter((c) => !c.archived)) } : undefined}
               />
             );
           })}

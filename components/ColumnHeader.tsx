@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import type { Column } from "@/lib/types";
+import BacklogActions, { type BacklogLane } from "./BacklogActions";
 import Icon from "./Icon";
+import SprintsMenu from "./SprintsMenu";
 import { SwitchAllButton } from "./switch-all-button";
 import Tip from "./Tip";
 
-// A column's name and count. Running and Needs you get "Switch all" to move their threads to the other CLI, once a thread hit its plan limit. Review gets "Review all", which starts the commit walk-through card (lib/pile-review.ts), and "▶ Resume N" when turns there were cut off or failed (lib/card-resume.ts). Done also gets "Show N archived" and an archive-all button (Shift+E) for the cards it shows.
+// A column's name and count. Running and Needs you get "Switch all" to move their threads to the other CLI, once a thread hit its plan limit. Review gets "Review all", which starts the commit walk-through card (lib/pile-review.ts), and "▶ Resume N" when turns there were cut off or failed (lib/card-resume.ts). Done also gets "Show N archived" and an archive-all button (Shift+E) for the cards it shows. Backlog's title drops its saved sprints, and it gets Save as sprint and an archive-all that asks first (BacklogActions).
 export default function ColumnHeader({
   column,
   count,
@@ -20,6 +22,7 @@ export default function ColumnHeader({
   resumeAll,
   onSwitchAll,
   onReviewAll,
+  backlog,
 }: {
   column: { id: Column; label: string };
   count: number | null;
@@ -33,6 +36,7 @@ export default function ColumnHeader({
   resumeAll?: { count: number; run: () => void };
   onSwitchAll?: () => void | Promise<void>;
   onReviewAll?: () => Promise<void>;
+  backlog?: BacklogLane;
 }) {
   const done = column.id === "done";
   const [reviewing, setReviewing] = useState(false);
@@ -46,8 +50,8 @@ export default function ColumnHeader({
     }
   }
   return (
-    <div className="flex items-center justify-between px-3 pb-1.5 pt-2.5">
-      <h2 className={`truncate text-[12.5px] font-medium ${needsYou ? "text-warn" : "text-ink"}`}>{column.label}</h2>
+    <div className="relative flex items-center justify-between px-3 pb-1.5 pt-2.5">
+      <ColumnTitle label={column.label} needsYou={needsYou} backlog={backlog} />
       <span className="flex shrink-0 items-center gap-2 text-[11.5px] text-faint">
         {/* A column narrowed beside the open copilot lane keeps only its count and Archive all. */}
         <span className="flex items-center gap-2 @max-[230px]:hidden">
@@ -85,8 +89,15 @@ export default function ColumnHeader({
             </button>
           </Tip>
         )}
+        {backlog && <BacklogActions lane={backlog} />}
         {count}
       </span>
     </div>
   );
+}
+
+// The column's name; Backlog's is a button that drops its saved sprints.
+function ColumnTitle({ label, needsYou, backlog }: { label: string; needsYou: boolean; backlog?: BacklogLane }) {
+  if (backlog) return <SprintsMenu label={label} lane={backlog} />;
+  return <h2 className={`truncate text-[12.5px] font-medium ${needsYou ? "text-warn" : "text-ink"}`}>{label}</h2>;
 }

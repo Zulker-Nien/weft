@@ -111,7 +111,7 @@ export default function CardView({
   onStar?: () => void;
   // A click on one of its tag pills: the board filters to that tag.
   onTag?: (tag: string) => void;
-  // Done cards get a one-click archive (Board.tsx → lib/board-view.ts); archived cards unarchive.
+  // Backlog and Done cards get a one-click archive (Board.tsx → lib/use-board-archive.ts); archived cards unarchive.
   onArchive?: () => void;
   // Other busy cards in this folder (lib/overlap.ts busyHere); flagged only while this one is busy too.
   alsoHere?: Card[];
@@ -219,7 +219,7 @@ function CardActions({ card, readOnly, onResume, onStar, onArchive, onStop }: { 
     <div className="flex shrink-0 items-center">
       <ContinueButton card={card} onResume={onResume} />
       {!copilot && <StarButton variant="card" starred={Boolean(card.starred)} onClick={onStar} />}
-      {(card.column === "done" || card.archived) && <ArchiveButton archived={Boolean(card.archived)} onClick={onArchive} />}
+      {(card.column === "done" || card.column === "backlog" || card.archived) && <ArchiveButton archived={Boolean(card.archived)} onClick={onArchive} />}
       {isLive(card) && <StopButton onClick={onStop} />}
     </div>
   );

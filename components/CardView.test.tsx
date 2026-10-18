@@ -197,7 +197,14 @@ describe("CardView archive", () => {
     expect(onOpen).not.toHaveBeenCalled();
   });
 
-  it("cards outside Done don't get an Archive button", () => {
+  it("a Backlog card has an Archive button too", async () => {
+    const onArchive = vi.fn();
+    renderCard({ column: "backlog" }, { onArchive });
+    await userEvent.click(screen.getByRole("button", { name: "Archive" }));
+    expect(onArchive).toHaveBeenCalledOnce();
+  });
+
+  it("cards outside Backlog and Done don't get an Archive button", () => {
     renderCard({ column: "review" }, { onArchive: vi.fn() });
     expect(screen.queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
   });
@@ -252,6 +259,12 @@ describe("CardView tags and issue", () => {
     await userEvent.click(screen.getByRole("button", { name: "bug" }));
     expect(onTag).toHaveBeenCalledWith("bug");
     expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it("counts its running subagents in the footer", () => {
+    const task = (id: string, status: "running" | "completed") => ({ id, kind: "agent" as const, description: `Audit ${id}`, status, startedAt: 0 });
+    renderCard({ tasks: [task("a", "running"), task("b", "running"), task("c", "completed")] });
+    expect(screen.getByText("⑂2")).toBeInTheDocument();
   });
 
   it("links the card's GitHub issue", () => {

@@ -10,6 +10,7 @@ import type { Card, Column } from "@/lib/types";
 import type { LaneState } from "@/lib/copilot-lane";
 import { columnMinWidth } from "@/lib/copilot-lane";
 import { busyHere } from "@/lib/overlap";
+import type { BacklogLane } from "./BacklogActions";
 import Icon from "./Icon";
 import ColumnHeader from "./ColumnHeader";
 import ColumnPlaceholder from "./ColumnPlaceholder";
@@ -52,6 +53,8 @@ export interface BoardColumnProps {
   onSwitchAll?: () => void | Promise<void>;
   onReviewAll?: () => Promise<void>;
   onAddBacklog: () => void;
+  // Backlog only: its sprints, Save as sprint and Archive all.
+  backlog?: BacklogLane;
 }
 
 export default function BoardColumn({
@@ -80,6 +83,7 @@ export default function BoardColumn({
   onSwitchAll,
   onReviewAll,
   onAddBacklog,
+  backlog,
 }: BoardColumnProps) {
   const style: CSSProperties = { minWidth: columnMinWidth(laneState) };
   // Which backlog card the drop indicator is on, and on which side. null when no card is hovered.
@@ -113,6 +117,7 @@ export default function BoardColumn({
         resumeAll={resumeAll}
         onSwitchAll={onSwitchAll}
         onReviewAll={onReviewAll}
+        backlog={backlog}
       />
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
         {shown.map((card) => (
