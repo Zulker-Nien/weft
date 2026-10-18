@@ -11,6 +11,7 @@ import { type Card, type Column } from "./types";
 import { LIVE_LINES, g, liveCards, type Tail } from "./import-state";
 import { openSessions } from "./import-ps";
 import { parseTitle, readTail, sessionFiles, sessionMode } from "./import";
+import { importsSession, welcomeOrAdopt } from "./welcome";
 
 const RECENT_MS = 3 * 24 * 60 * 60_000;
 // A session mid-turn counts as running if it changed this recently, even when no open app shows it.
@@ -53,9 +54,13 @@ export interface SyncResult {
   sessions: number;
   added: number;
   updated: number;
+  // A new install whose welcome isn't answered yet: no cards are added until it is (lib/welcome.ts).
+  waiting?: boolean;
 }
 
-async function runSync(): Promise<SyncResult> {
+// What the sessions say right now: cards for sessions not on the board yet (every session with `all`),
+// and the changes to the cards that are. Nothing is applied here.
+async function scanSessions(all = false): Promise<{ sessions: number; fresh: Card[]; patches: [string, Partial<Card>][] }> {
   const [sessions, open] = await Promise.all([
     listSessions({ includeProgrammatic: false, limit: 10_000 }),
     openSessions(),
@@ -63,36 +68,64 @@ async function runSync(): Promise<SyncResult> {
   const files = sessionFiles();
   const cards = indexCards();
   const dismissed = new Set(dismissedSessions());
-  const added: Card[] = [];
-  let updated = 0;
+  const fresh: Card[] = [];
+  const patches: [string, Partial<Card>][] = [];
 
   for (const session of sessions) {
-    if (dismissed.has(session.sessionId)) continue;
-    // Sessions in temporary folders are tooling runs (tests, subagents), not the user's threads.
-    if (TEMP_DIRS.some((dir) => (session.cwd ?? "").startsWith(dir))) continue;
-    const tail = readSessionTail(files, session.sessionId);
-    const activity = tail?.at || session.createdAt || session.lastModified;
-    const { title, stage } = parseTitle(session.customTitle || session.summary || session.firstPrompt || "Untitled thread");
-    const openElsewhere = open.ids.has(session.sessionId);
-    const live = liveColumn(session.sessionId, tail, open);
-    const file = files.get(session.sessionId);
-    const existing = cards.get(session.sessionId);
-
-    if (!existing) {
-      added.push(newCardFromSession(session, { title, stage, activity, openElsewhere, live, file, tail }));
-      continue;
-    }
-    // Weft's own cards, and cards that continued a session as a copy, don't follow the original.
-    if (existing.source !== "claude-code" || existing.forkedFrom === session.sessionId) continue;
-    const patch = patchForExisting(existing, { title, stage, activity, openElsewhere, live, tail });
-    if (Object.keys(patch).length) {
-      updateCard(existing.id, patch);
-      updated += 1;
-    }
+    const { kind, card, patch } = classifySession(session, { files, open, cards, dismissed, all });
+    if (kind === "fresh" && card) fresh.push(card);
+    else if (kind === "patch" && card && patch) patches.push([card.id, patch]);
   }
+  return { sessions: sessions.length, fresh, patches };
+}
 
+type SessionInfo = ReturnType<typeof listSessions> extends Promise<infer R> ? R extends Array<infer S> ? S : never : never;
+interface ClassifyContext {
+  files: Map<string, string>;
+  open: Awaited<ReturnType<typeof openSessions>>;
+  cards: Map<string, Card>;
+  dismissed: Set<string>;
+  all: boolean;
+}
+
+// One session's verdict: a new card, a patch to an existing card, or a skip. Lifted out of scanSessions
+// to keep the loop small and the rule for each kind (tooling, dismissed, ours, forked) easy to read.
+function classifySession(
+  session: SessionInfo,
+  { files, open, cards, dismissed, all }: ClassifyContext,
+): { kind: "fresh" | "patch" | "skip"; card?: Card; patch?: Partial<Card> } {
+  if (dismissed.has(session.sessionId)) return { kind: "skip" };
+  // Sessions in temporary folders are tooling runs (tests, subagents), not the user's threads.
+  if (TEMP_DIRS.some((dir) => (session.cwd ?? "").startsWith(dir))) return { kind: "skip" };
+  const tail = readSessionTail(files, session.sessionId);
+  const activity = tail?.at || session.createdAt || session.lastModified;
+  const { title, stage } = parseTitle(session.customTitle || session.summary || session.firstPrompt || "Untitled thread");
+  const openElsewhere = open.ids.has(session.sessionId);
+  const live = liveColumn(session.sessionId, tail, open);
+  const file = files.get(session.sessionId);
+  const existing = cards.get(session.sessionId);
+  if (!existing || all) {
+    return { kind: "fresh", card: newCardFromSession(session, { title, stage, activity, openElsewhere, live, file, tail }) };
+  }
+  // Weft's own cards, and cards that continued a session as a copy, don't follow the original.
+  if (existing.source !== "claude-code" || existing.forkedFrom === session.sessionId) return { kind: "skip" };
+  const patch = patchForExisting(existing, { title, stage, activity, openElsewhere, live, tail });
+  return Object.keys(patch).length ? { kind: "patch", card: existing, patch } : { kind: "skip" };
+}
+
+async function runSync(): Promise<SyncResult> {
+  const { sessions, fresh, patches } = await scanSessions();
+  for (const [id, patch] of patches) updateCard(id, patch);
+  const w = welcomeOrAdopt();
+  const added = fresh.filter((c) => importsSession(w, c.cwd, c.lastActivity ?? c.createdAt));
   if (added.length) addCards(added);
-  return { sessions: sessions.length, added: added.length, updated };
+  return { sessions, added: added.length, updated: patches.length, ...(w ? {} : { waiting: true }) };
+}
+
+// The cards the sync would add if nothing held it back, for the welcome's preview (lib/welcome-preview.ts);
+// with `all`, a card for every session, on the board or not, for replaying the welcome.
+export async function sessionsToImport({ all = false } = {}): Promise<Card[]> {
+  return (await scanSessions(all)).fresh;
 }
 
 function indexCards(): Map<string, Card> {

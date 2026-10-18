@@ -67,4 +67,4 @@ export async function loadTranscript(card: Card) {
 
 export { isOpenElsewhere, releaseSession } from "./import-ps";
 export { lastPermissionMode, parseTitle, readTail, sessionFiles } from "./import-files";
-export { startSessionSync, syncSessions, type SyncResult } from "./import-sync";
+export { sessionsToImport, startSessionSync, syncSessions, type SyncResult } from "./import-sync";

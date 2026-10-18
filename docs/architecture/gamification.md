@@ -121,3 +121,29 @@ gameState() ── lib/league.ts leagueEntry() ──> { week, xp, shipped, stre
   `weft.zip/@username` link (docs/architecture/profiles.md).
 - **Small leagues.** With few accounts each tier holds one league, so a winner who moves up can find themselves alone; a lone
   builder doesn't move up again until someone joins.
+
+### League emails
+
+```
+Vercel cron 13:00 UTC ──> /api/league/emails (Bearer CRON_SECRET)
+  └─ lib/league-mail-send.ts runLeagueMails: league_weeks (this week, last week) + profiles + league_emails, service key
+       └─ lib/league-mail.ts planLeagueMails ──> at most one email per builder
+            └─ lib/league-mail-copy.ts (subject, text, Salt Flats HTML) ──> claim in league_emails ──> Resend
+```
+
+- **The series.** `welcome` any day to an account under 3 days old, once ever; `midweek` on Thursday and `final` on
+  Sunday, only when a move is in play (in the up or down zone, or within `REACH_XP`, about six shipped cards, of the
+  up zone; never alone in a league); `results` on Monday about the week that ended, skipped for 0 XP and no move.
+  When several apply: results, then welcome, then the nudge.
+- **Why 13:00 UTC.** Every time zone has finished Sunday by then (UTC-12 at 12:00), so Monday's results don't move
+  after they're sent. Days are UTC; the Mac's own Monday can sit a day off, which only shifts who's counted near midnight.
+  The move rule is `moveOf`, a copy of `private.league_tier_for`, so the email names the league the builder's next post lands in.
+- **Once each.** `league_emails (user_id, kind, week)` is claimed before the send (a 409 means another run has it)
+  and deleted if Resend refuses, so the next day's run retries. RLS on, no policies: only the service key touches it.
+- **Unsubscribe.** `profiles.league_emails` (default true). Every email carries `List-Unsubscribe` +
+  `List-Unsubscribe-Post` (RFC 8058 one-click) and a footer link to `/api/league/unsubscribe?u=…&t=…`, an HMAC of the
+  user id under `LEAGUE_EMAIL_SECRET`. GET shows a button (so link scanners don't unsubscribe anyone); POST turns it off.
+- **The button** goes to `/api/league/open`, a 302 to `weft://league`, since mail apps drop custom-scheme links.
+- **Setup.** On the deployment: `CRON_SECRET`, `LEAGUE_EMAIL_SECRET`, `SUPABASE_SECRET_KEY`, `RESEND_API_KEY`. Missing
+  any, the route sends nothing (401 or 503). Resend's per-second limit is kept by `SEND_GAP_MS` between sends.
+- **Preview.** Each kind rendered with sample data: `~/.weft/show/league-emails/index.html`.
