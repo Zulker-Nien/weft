@@ -1,6 +1,12 @@
 // The board's terminal: real shells on a pty (node-pty), driven over IPC by components/TerminalDrawer.tsx.
 // A shell outlives the drawer and a page reload: opening one again by id reattaches and replays what it
 // printed since, so closing the drawer never loses a running command. Restart kills it for a fresh one.
+//
+// The IPC handlers are gated to the board window (isBoard), and each session is owned by the
+// webContents that opened it: writes, resizes and kills from any other webContents are dropped.
+// That's the M-3 narrowing — without it, two renderers (a future copilot thread, a pasted page in
+// the pane, an extension of the renderer surface) could race for the same shell id and each one
+// would drain output or kill the other's session.
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -22,11 +28,30 @@ function loadPty() {
   return pty;
 }
 
-function registerTerminal(ipcMain) {
-  const sessions = new Map(); // id -> { proc, sender, replay, cwd }
+// Pure helper extracted from registerTerminal so the ownership / isBoard logic can be unit-tested
+// without spinning up node-pty. The session table is just a Map; the only state we look at is
+// `ownerId` (a webContents.id) and `sender.id` (a webContents.id). `isBoard(sender)` decides
+// whether the message even came from the right window in the first place.
+function sessionFor(sessions, isBoard, sender, id) {
+  if (!sender) return null;
+  if (!isBoard(sender)) return null;
+  const session = sessions.get(id);
+  if (!session) return null;
+  if (session.ownerId !== sender.id) return null;
+  return session;
+}
+
+function registerTerminal(ipcMain, { isBoard }) {
+  // id -> { proc, ownerId, replay, cwd }. ownerId is the webContents.id of the renderer that
+  // opened the shell; writes, resizes and kills from a different webContents are dropped.
+  const sessions = new Map();
 
   function send(session, channel, ...args) {
-    if (session.sender && !session.sender.isDestroyed()) session.sender.send(channel, ...args);
+    // Output always goes to the owner. If the owner has gone away (closed the page) we just stop
+    // sending — the session keeps running so a reattach picks it up.
+    if (!session.ownerId) return;
+    const wc = require("electron").webContents.fromId(session.ownerId);
+    if (wc && !wc.isDestroyed()) wc.send(channel, ...args);
   }
 
   function spawn(id, cwd, cols, rows) {
@@ -39,7 +64,7 @@ function registerTerminal(ipcMain) {
       cwd: dir,
       env: { ...process.env, TERM: "xterm-256color", COLORTERM: "truecolor", TERM_PROGRAM: "Weft" },
     });
-    const session = { proc, sender: null, replay: "", cwd: dir };
+    const session = { proc, ownerId: null, replay: "", cwd: dir };
     proc.onData((data) => {
       session.replay = (session.replay + data).slice(-REPLAY_LIMIT);
       send(session, "terminal:data", id, data);
@@ -55,23 +80,31 @@ function registerTerminal(ipcMain) {
 
   // Starts the shell, or reattaches to the one already running under this id.
   ipcMain.handle("terminal:open", (e, id, cwd, cols, rows) => {
+    if (!isBoard(e.sender)) return { error: "Terminal only answers the board window." };
     try {
       let session = sessions.get(id);
       const reattached = Boolean(session);
       if (!session) session = spawn(id, cwd, cols, rows);
-      session.sender = e.sender;
+      // Take over ownership: the latest board view (after a reload, after a card switch) is the
+      // one that should see the output. The previous owner's writes would be silently dropped by
+      // sessionFor, so this is safe.
+      session.ownerId = e.sender.id;
       if (reattached && cols && rows) session.proc.resize(cols, rows);
       return { replay: reattached ? session.replay : "", cwd: session.cwd };
     } catch (err) {
       return { error: String(err.message || err) };
     }
   });
-  ipcMain.on("terminal:write", (_e, id, data) => sessions.get(id)?.proc.write(String(data)));
-  ipcMain.on("terminal:resize", (_e, id, cols, rows) => {
-    if (cols > 0 && rows > 0) sessions.get(id)?.proc.resize(cols, rows);
+  ipcMain.on("terminal:write", (e, id, data) => {
+    const session = sessionFor(sessions, isBoard, e.sender, id);
+    if (session) session.proc.write(String(data));
   });
-  ipcMain.on("terminal:kill", (_e, id) => {
-    const session = sessions.get(id);
+  ipcMain.on("terminal:resize", (e, id, cols, rows) => {
+    const session = sessionFor(sessions, isBoard, e.sender, id);
+    if (session && cols > 0 && rows > 0) session.proc.resize(cols, rows);
+  });
+  ipcMain.on("terminal:kill", (e, id) => {
+    const session = sessionFor(sessions, isBoard, e.sender, id);
     if (!session) return;
     sessions.delete(id);
     session.proc.kill();
@@ -83,4 +116,4 @@ function registerTerminal(ipcMain) {
   };
 }
 
-module.exports = { registerTerminal };
+module.exports = { registerTerminal, sessionFor };

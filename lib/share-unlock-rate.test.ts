@@ -1,6 +1,6 @@
 // lib/share-unlock-rate.ts: the per-(ip_hash, share_id) bucket that replaces the in-memory rate
 // limit at app/api/s/[id]/unlock. The helper is small enough to cover here: window reset, bump,
-// over-the-limit denial, and the fail-open behavior on a Supabase error.
+// over-the-limit denial, the race the single round trip closes, and fail-open on a Supabase error.
 import { describe, expect, it } from "vitest";
 import { checkAndRecord, hashIp, RATE_MAX, RATE_WINDOW_MS } from "./share-unlock-rate";
 
@@ -9,60 +9,34 @@ interface RowState {
   first_at: string;
 }
 
+interface BumpArgs {
+  p_ip_hash: string;
+  p_share_id: string;
+  p_now: string;
+  p_window_ms: number;
+  p_max: number;
+}
+
+// A stand-in for public.share_unlock_bump (supabase/migrations/20261018045842_share_unlock_bump.sql):
+// the same window roll and capped bump, applied in one step per call the way the row lock serializes
+// them. `from()` throws, so a regression back to a select + update fails every test here.
 function makeService(rows: Map<string, RowState>) {
-  const keyOf = (ipHash: string, shareId: string) => `${ipHash}|${shareId}`;
   return {
     from(table: string) {
-      if (table !== "share_unlock_attempts") throw new Error(`unexpected table ${table}`);
-      return {
-        select() {
-          return {
-            eq(field: string, value: string) {
-              const filters: { ip_hash?: string; share_id?: string } = {};
-              filters[field as "ip_hash" | "share_id"] = value;
-              return {
-                eq(field2: string, value2: string) {
-                  filters[field2 as "ip_hash" | "share_id"] = value2;
-                  return {
-                    maybeSingle() {
-                      const row = rows.get(keyOf(filters.ip_hash ?? "", filters.share_id ?? ""));
-                      return Promise.resolve({ data: row ?? null, error: null });
-                    },
-                  };
-                },
-                maybeSingle() {
-                  const row = rows.get(keyOf(filters.ip_hash ?? "", filters.share_id ?? ""));
-                  return Promise.resolve({ data: row ?? null, error: null });
-                },
-              };
-            },
-          };
-        },
-        upsert(values: { ip_hash: string; share_id: string; count: number; first_at: string }) {
-          rows.set(keyOf(values.ip_hash, values.share_id), { count: values.count, first_at: values.first_at });
-          return Promise.resolve({ error: null });
-        },
-        update(values: { count: number }) {
-          return {
-            eq(field: string, value: string) {
-              const filters: { ip_hash?: string; share_id?: string } = {};
-              filters[field as "ip_hash" | "share_id"] = value;
-              return {
-                eq(field2: string, value2: string) {
-                  filters[field2 as "ip_hash" | "share_id"] = value2;
-                  return Promise.resolve((() => {
-                    const key = keyOf(filters.ip_hash ?? "", filters.share_id ?? "");
-                    const row = rows.get(key);
-                    if (!row) return { error: { message: "no row" } };
-                    rows.set(key, { ...row, count: values.count });
-                    return { error: null };
-                  })());
-                },
-              };
-            },
-          };
-        },
-      };
+      throw new Error(`checkAndRecord must not read or write ${table} directly`);
+    },
+    async rpc(fn: string, args: BumpArgs) {
+      if (fn !== "share_unlock_bump") throw new Error(`unexpected rpc ${fn}`);
+      await Promise.resolve();
+      const key = `${args.p_ip_hash}|${args.p_share_id}`;
+      const now = Date.parse(args.p_now);
+      const row = rows.get(key);
+      const rolled = !row || Date.parse(row.first_at) <= now - args.p_window_ms;
+      const next = rolled
+        ? { count: 1, first_at: args.p_now }
+        : { count: Math.min(row.count + 1, args.p_max + 1), first_at: row.first_at };
+      rows.set(key, next);
+      return { data: [{ allowed: next.count <= args.p_max, first_at: next.first_at }], error: null };
     },
   };
 }
@@ -108,43 +82,33 @@ describe("checkAndRecord", () => {
     expect(rows.get(`${ipHash}|${shareId}`)?.count).toBe(1);
   });
 
-  it("fails open when the read throws", async () => {
-    const service = {
-      from() {
-        return {
-          select() {
-            return {
-              eq() {
-                return {
-                  eq() {
-                    return { maybeSingle: () => Promise.resolve({ data: null, error: { message: "down" } }) };
-                  },
-                };
-              },
-            };
-          },
-        };
-      },
-    };
+  it("lets at most RATE_MAX of many concurrent attempts through", async () => {
+    const rows = new Map<string, RowState>();
+    const service = makeService(rows);
+    const verdicts = await Promise.all(
+      Array.from({ length: RATE_MAX * 3 }, () => checkAndRecord(service as never, ipHash, shareId, now)),
+    );
+    expect(verdicts.filter((v) => v.allowed)).toHaveLength(RATE_MAX);
+    expect(rows.get(`${ipHash}|${shareId}`)?.count).toBe(RATE_MAX + 1);
+  });
+
+  it("fails open when the rpc errors", async () => {
+    const service = { rpc: () => Promise.resolve({ data: null, error: { message: "down" } }) };
+    const verdict = await checkAndRecord(service as never, ipHash, shareId, now);
+    expect(verdict).toEqual({ allowed: true, windowResetAt: now + RATE_WINDOW_MS });
+  });
+
+  it("fails open when the rpc returns no row", async () => {
+    const service = { rpc: () => Promise.resolve({ data: [], error: null }) };
     const verdict = await checkAndRecord(service as never, ipHash, shareId, now);
     expect(verdict.allowed).toBe(true);
   });
 
-  it("fails open when the window-reset upsert throws", async () => {
-    const service = {
-      from() {
-        return {
-          select() {
-            return { eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }) };
-          },
-          upsert() {
-            return Promise.resolve({ error: { message: "down" } });
-          },
-        };
-      },
-    };
-    const verdict = await checkAndRecord(service as never, ipHash, shareId, now);
-    expect(verdict.allowed).toBe(true);
+  it("reads a single-object rpc result too", async () => {
+    const firstAt = new Date(now).toISOString();
+    const service = { rpc: () => Promise.resolve({ data: { allowed: false, first_at: firstAt }, error: null }) };
+    const verdict = await checkAndRecord(service as never, ipHash, shareId, now + 5);
+    expect(verdict).toEqual({ allowed: false, windowResetAt: now + RATE_WINDOW_MS });
   });
 });
 

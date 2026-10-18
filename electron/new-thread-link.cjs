@@ -4,6 +4,14 @@
 const electron = require("electron");
 const os = require("node:os");
 
+// folder= is taken from the link as is (pentest 2026-10-18, F-5). A clickjacked or hostile link can
+// make a card whose folder is, say, ~/.ssh, with a prompt of its choosing. What stops it is L-3 alone:
+// the card is made unstarted and nothing runs until the user reads it and clicks Start. Don't count on
+// the folder gate (lib/folder-guard.ts) here: it asks before a thread reaches outside the card's own
+// folder, and this link picks that folder, so files inside it read with no question. The secret guard
+// (lib/secret-guard.ts) still refuses .env files and the vault wherever the card runs. Narrowing
+// folder= to the user's known projects (settings.projects) is the follow-up if the Start click ever
+// stops being the gate.
 async function resolveFolder(url, server) {
   const explicit = url.searchParams.get("folder");
   if (explicit) return explicit;

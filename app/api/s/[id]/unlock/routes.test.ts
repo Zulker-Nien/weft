@@ -31,6 +31,7 @@ async function load() {
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.SHARE_UNLOCK_PEPPER = "pepper";
+  process.env.VERCEL = "1";
   getShareGate.mockReturnValue({
     cookieName: (id: string) => `weft_share_${id.slice(0, 4)}`,
     sign: (id: string) => `signed:${id}`,
@@ -49,6 +50,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   delete process.env.SHARE_UNLOCK_PEPPER;
+  delete process.env.VERCEL;
 });
 
 function ctx(id: string) {
@@ -60,6 +62,15 @@ function postReq(body: unknown, headers: Record<string, string> = {}): Request {
 }
 
 describe("POST /api/s/[id]/unlock", () => {
+  it("answers 503 off Vercel, where x-real-ip is caller-controlled (F-6)", async () => {
+    delete process.env.VERCEL;
+    const { POST } = await load();
+    const res = await POST(postReq({ password: "x" }, { "x-real-ip": "1.1.1.1" }), ctx("x"));
+    expect(res.status).toBe(503);
+    expect(checkAndRecord).not.toHaveBeenCalled();
+    expect(loadShare).not.toHaveBeenCalled();
+  });
+
   it("returns 429 when the shared rate limit denies the attempt", async () => {
     checkAndRecord.mockResolvedValue({ allowed: false, windowResetAt: Date.now() + 60_000 });
     const { POST } = await load();

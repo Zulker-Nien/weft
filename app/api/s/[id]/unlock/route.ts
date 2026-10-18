@@ -22,6 +22,15 @@ const NO_STORE = { "Cache-Control": "no-store" } as const;
 // attacker can pick a new value per request and slip past an in-memory rate limit. Falling back to
 // "unknown" collapses all unverified callers into one bucket — the limit still bites, just per
 // share rather than per caller.
+//
+// Off Vercel (`next dev`, a local Weft) nothing rewrites x-real-ip, so any caller can set it and get a
+// fresh bucket per request (pentest 2026-10-18, F-6). Share links always point at weft.zip, so the
+// route refuses to unlock anywhere VERCEL isn't set rather than run a rate limit it can't trust. Not
+// `isDeployed()` (lib/home.ts): WEFT_HOME=1 turns that on for a local server too.
+function onVercel(): boolean {
+  return Boolean(process.env.VERCEL);
+}
+
 function clientIp(req: Request): string {
   return req.headers.get("x-real-ip")?.trim() || "unknown";
 }
@@ -59,6 +68,7 @@ async function tryUnlockRateLimit(req: Request, id: string, env: RateEnv): Promi
 }
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  if (!onVercel()) return Response.json({ error: "Sharing isn't set up on this server." }, { status: 503, headers: NO_STORE });
   const { id } = await ctx.params;
   const blocked = await tryUnlockRateLimit(req, id, { now: Date.now(), pepper: process.env.SHARE_UNLOCK_PEPPER ?? null });
   if (blocked) return blocked;
