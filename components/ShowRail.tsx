@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { onTopTurn, pulse, scrollToTurn } from "@/lib/glance-events";
+import { onTopTurn, pulse, scrollToTurn } from "@/lib/show-events";
 import { isLive } from "@/lib/format";
-import { glanceMinis, type Dot, type Mini, type Visit } from "@/lib/glance-rail";
+import { showMinis, type Dot, type Mini, type Visit } from "@/lib/show-rail";
 import type { Card, ThreadItem } from "@/lib/types";
 import { useNow } from "@/lib/use-now";
 import Icon from "./Icon";
@@ -37,9 +37,9 @@ function Marker({ mini, onScreen }: { mini: Mini; onScreen: boolean }) {
 // The 72 px column right of the browser pane's page: one mini per turn of the open thread and per page
 // the pane showed, oldest first with the newest at the bottom, like the chat. Click a turn and the chat scrolls to it; click a page and the pane opens
 // it again too, and a turn puts the pane back on the page it showed. Scroll the chat and the turn at its top lights up here.
-// Hidden under 980 px of window, so the chat keeps its room on a 13" Air (docs/architecture/glance-rail.md).
+// Hidden under 980 px of window, so the chat keeps its room on a 13" Air (docs/architecture/show-rail.md).
 // card is the open thread (none: no rail); hidden while the New thread dialog takes its place; pageUrl is the pane's page.
-export default function GlanceRail({ card, hidden, items, pageUrl }: { card: Card | null | undefined; hidden: boolean; items: ThreadItem[]; pageUrl: string }) {
+export default function ShowRail({ card, hidden, items, pageUrl }: { card: Card | null | undefined; hidden: boolean; items: ThreadItem[]; pageUrl: string }) {
   const now = useNow();
   // The turn on top of the chat, per card, so switching cards starts with none marked.
   const [top, setTop] = useState<{ card?: string; id: string }>();
@@ -78,12 +78,12 @@ export default function GlanceRail({ card, hidden, items, pageUrl }: { card: Car
   );
 
   if (!card || hidden) return null;
-  const minis = glanceMinis(items, { live: isLive(card), now, visits: cardVisits });
+  const minis = showMinis(items, { live: isLive(card), now, visits: cardVisits });
   const onScreen = minis.find((m) => m.dot === "page" && m.url === pageUrl)?.id;
   const active = top?.card === card.id ? top.id : undefined;
   return (
-    <aside aria-label="Glance" className="flex w-[72px] shrink-0 flex-col border-l border-line bg-panel max-[979px]:hidden">
-      <div className="sticky top-0 border-b border-line py-2.5 text-center text-[10px] uppercase tracking-[0.08em] text-muted">Glance</div>
+    <aside aria-label="Show" className="flex w-[72px] shrink-0 flex-col border-l border-line bg-panel max-[979px]:hidden">
+      <div className="sticky top-0 border-b border-line py-2.5 text-center text-[10px] uppercase tracking-[0.08em] text-muted">Show</div>
       <div
         ref={list}
         onScroll={(e) => {

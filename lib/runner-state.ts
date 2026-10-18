@@ -95,7 +95,7 @@ export interface Session {
   stopping: boolean;
   // The latest BOARD STATUS line seen in the current turn.
   status?: BoardStatus;
-  // Whether the current turn opened a page in the browser pane (see lib/glance.ts).
+  // Whether the current turn opened a page in the browser pane (see lib/show.ts).
   openedPane?: boolean;
   // Counts this session's turns, so a late update page from an earlier turn is dropped.
   turnSeq?: number;

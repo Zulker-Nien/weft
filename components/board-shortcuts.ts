@@ -90,7 +90,7 @@ export function boardShortcuts(c: BoardShortcutContext): ShortcutDef[] {
     { id: "column-thread", keys: ["alt+mod+1"], description: "Toggle the thread column", group: "General", enabled: c.boardKeys && c.cardOpen, handler: () => c.toggleColumn("thread") },
     { id: "column-editor", keys: ["alt+mod+2"], description: "Toggle the editor column", group: "General", enabled: c.boardKeys && c.cardOpen, handler: () => c.toggleColumn("editor") },
     { id: "column-pane", keys: ["alt+mod+3"], description: "Toggle the browser column", group: "General", enabled: c.boardKeys && c.cardOpen, handler: () => c.toggleColumn("pane") },
-    { id: "column-glance", keys: ["alt+mod+4"], description: "Toggle the glance column", group: "General", enabled: c.boardKeys && c.cardOpen, handler: () => c.toggleColumn("glance") },
+    { id: "column-show", keys: ["alt+mod+4"], description: "Toggle the show column", group: "General", enabled: c.boardKeys && c.cardOpen, handler: () => c.toggleColumn("show") },
     {
       id: "card-down",
       keys: ["j", "ArrowDown"],

@@ -52,7 +52,7 @@ describe("kindOf / isTemp", () => {
     expect(isTemp("/tmp/weft-show/a.html")).toBe(true);
     expect(isTemp("/private/tmp/a.html")).toBe(true);
     expect(isTemp("/tmpfoo/a.html")).toBe(false);
-    expect(isTemp("/Users/me/.weft/glance/a.html")).toBe(false);
+    expect(isTemp("/Users/me/.weft/show/a.html")).toBe(false);
   });
 });
 
@@ -88,9 +88,9 @@ describe("createPanePages", () => {
   it("falls back to the card's last update page", () => {
     const pages = createPanePages(dataDir);
     expect(pages.fallbackUrl("card1")).toBeUndefined();
-    fs.mkdirSync(path.join(dataDir, "glance"), { recursive: true });
-    fs.writeFileSync(path.join(dataDir, "glance", "card1.html"), "<p>update</p>");
-    expect(pages.fallbackUrl("card1")).toBe(pathToFileURL(path.join(dataDir, "glance", "card1.html")).href);
+    fs.mkdirSync(path.join(dataDir, "show"), { recursive: true });
+    fs.writeFileSync(path.join(dataDir, "show", "card1.html"), "<p>update</p>");
+    expect(pages.fallbackUrl("card1")).toBe(pathToFileURL(path.join(dataDir, "show", "card1.html")).href);
   });
 
   it("never recorded: restores the last page the card's thread opened, and records it", () => {

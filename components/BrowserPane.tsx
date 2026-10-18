@@ -30,7 +30,7 @@ export default function BrowserPane({
   onWidth: (width: number) => void;
   // Beside an open card this closes the card too: the card and its browser are one window.
   onClose: () => void;
-  // The glance rail (components/GlanceRail.tsx), right of the page; the native view keeps clear of it.
+  // The show rail (components/ShowRail.tsx), right of the page; the native view keeps clear of it.
   rail?: ReactNode;
   // The open card's share, star and archive (components/PaneCardMarks.tsx), right of the zoom.
   actions?: ReactNode;

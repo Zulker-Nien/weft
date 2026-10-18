@@ -6,7 +6,7 @@
 //   node scripts/webp-backfill.mjs --rewrite  with Weft quit: point board.json and threads/ at the .webp files,
 //                                             then delete each original nothing else mentions
 //
-// Originals that ~/.claude/projects transcripts, pages, show/, glance/ or the sync outbox still mention stay, so a
+// Originals that ~/.claude/projects transcripts, pages, show/ or the sync outbox still mention stay, so a
 // resumed session or an old page keeps working. The server keeps the board and threads in memory and writes them
 // back, so --rewrite refuses while Weft runs.
 import { execFileSync } from "node:child_process";
@@ -93,7 +93,7 @@ function rewrite() {
   }
   // Names still mentioned outside Weft's own records keep their original.
   const kept = new Set();
-  const sources = [path.join(os.homedir(), ".claude", "projects"), ...["pages", "show", "glance", "done-docs", "library", "sync-outbox.jsonl"].map((p) => path.join(DATA, p))];
+  const sources = [path.join(os.homedir(), ".claude", "projects"), ...["pages", "show", "done-docs", "library", "sync-outbox.jsonl"].map((p) => path.join(DATA, p))];
   // grep, not a read of every file: ~/.claude/projects runs to gigabytes.
   for (const name of mentioned(sources.filter((p) => fs.existsSync(p)))) if (renames.has(name)) kept.add(name);
   let removed = 0;

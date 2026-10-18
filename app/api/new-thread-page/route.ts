@@ -1,4 +1,4 @@
-import { newThreadUrl } from "@/lib/glance";
+import { newThreadUrl } from "@/lib/show";
 import { fail, guard } from "@/lib/guard";
 
 // The splash page the browser pane shows beside the New thread dialog.

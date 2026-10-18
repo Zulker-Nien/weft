@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { ASSETS } from "@/lib/glance";
+import { ASSETS } from "@/lib/show";
 import { guard } from "@/lib/guard";
 import { sceneOf } from "@/lib/theme";
 

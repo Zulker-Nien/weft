@@ -50,7 +50,7 @@ hue (`tagHue`).
 
 ## Auto tags
 
-The retitle step after each turn (`retitleAfterTurn` in `lib/glance.ts`, rules and prompts in `lib/retitle.ts`)
+The retitle step after each turn (`retitleAfterTurn` in `lib/show.ts`, rules and prompts in `lib/retitle.ts`)
 makes one Haiku call that returns the title, the tags, or both, whichever the card needs (`nameNeeds`).
 
 - It tags a card only when it has no tags and you haven't set (or cleared) them yourself: `shouldTag` skips

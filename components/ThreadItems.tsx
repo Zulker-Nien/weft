@@ -2,7 +2,7 @@
 
 import { memo, useRef, useState } from "react";
 import { describeToolRun, shortToolName, toolAction } from "@/lib/format";
-import { turnId } from "@/lib/glance-rail";
+import { turnId } from "@/lib/show-rail";
 import { toolSizeLabel, useToolResult } from "@/lib/use-tool-result";
 import type { ThreadItem } from "@/lib/types";
 import CrashGuard from "./CrashGuard";
@@ -273,7 +273,7 @@ export function ThreadEntries({
             )}
           </CrashGuard>
         );
-        // data-turn ties the row to its mini in the glance rail (lib/glance-rail.ts).
+        // data-turn ties the row to its mini in the show rail (lib/show-rail.ts).
         const mark =
           editFrom === undefined || entry.key < editFrom
             ? ""

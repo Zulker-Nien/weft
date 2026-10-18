@@ -15,7 +15,7 @@ hands the request to `askUser` (`lib/runner-ask.ts:79`), which:
 - pulls `questions` out of the tool input via `readQuestions` (`lib/turn.ts:11`)
   and stores them on a `Pending` (`session.pending`)
 - writes one HTML page with the options' previews to
-  `~/.weft/glance/<card>-question.html` via `writeQuestionPreview`
+  `~/.weft/show/<card>-question.html` via `writeQuestionPreview`
   (`lib/question-preview.ts:54`) and attaches its `file://` URL
 - finds a folder outside the card's project that any of the questions name, via
   `suggestReadScope` (`lib/read-scope.ts:102`); it lands on the `pending` as
@@ -54,7 +54,7 @@ fresh.
   (←/→, ↑/↓, space, 1-9); modifiers (⌘, Ctrl, Alt, Shift) leave the key to the
   box
 - `lib/question-preview.ts` — the per-question-set HTML preview page; written
-  to `~/.weft/glance/<cardId>-question.html` and opened in the card's browser
+  to `~/.weft/show/<cardId>-question.html` and opened in the card's browser
   pane at `#<question>-<option>` as the highlight moves
 - `lib/read-scope.ts` — `suggestReadScope`: picks a directory outside the
   project that a question names, so the form can offer a "Read from <path>"
@@ -207,7 +207,7 @@ A trailing hint under the form spells out the keys for the shown question
 `readQuestions` keeps an option's `preview` when it's a non-empty trimmed
 string. When at least one option has a preview,
 `writeQuestionPreview(cardId, questions)` writes one HTML page to
-`~/.weft/glance/<cardId>-question.html` with one `<section id="<q>-<o>">` per
+`~/.weft/show/<cardId>-question.html` with one `<section id="<q>-<o>">` per
 option. The page's hash listener (`lib/question-preview.ts:42-49`) shows the
 section matching `location.hash`; sections for options without a preview
 say "No preview for this option." instead.

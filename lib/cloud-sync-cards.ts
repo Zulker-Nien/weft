@@ -1,5 +1,5 @@
 // The cloud_cards rows a flush uploads (lib/cloud-sync.ts), thumbnails included. After each turn
-// lib/glance.ts saves the pane's capture as an attachment and sets `card.thumb` to its
+// lib/show.ts saves the pane's capture as an attachment and sets `card.thumb` to its
 // `/api/attachments/<name>` URL (or the latest thread image, lib/card-pictures.ts). Neither resolves off
 // this Mac, so the file goes up as a blob and the row's copy of the card carries the ref instead; the
 // local card keeps its own value. The share viewer shows this capture when the pane is on localhost,

@@ -3,7 +3,7 @@ import { publish } from "./bus";
 import { firstLine, shortToolName, summarizeInput, toolAction } from "./format";
 import { runsOn } from "./cli-defaults";
 import { changedLines, gitBranch } from "./git-stats";
-import { glanceAfterTurn } from "./glance";
+import { showAfterTurn } from "./show";
 import { isNotLoggedInError, isRateLimitError } from "./login";
 import { editedPath, touchFile } from "./overlap";
 import { hitRateLimit } from "./rate-limit";
@@ -186,7 +186,7 @@ function handleResult(id: string, session: Session, msg: Extract<SDKMessage, { t
     ...(status ? { stage: status.stage, remaining: status.remaining } : {}),
   });
   scheduleIdle(session);
-  if (!session.spec.copilot) glanceAfter(id, session, { reply: summary, isError, stopped });
+  if (!session.spec.copilot) showAfter(id, session, { reply: summary, isError, stopped });
   finishResult(id, status, stopped, isError);
 }
 
@@ -212,12 +212,12 @@ function finishResult(id: string, status: BoardStatus | undefined, stopped: bool
   if (!queued.has(id)) setTimeout(() => hooks.sendHeld(id), 0);
 }
 
-// A teammate's update page for the pane when the turn showed nothing (lib/glance.ts), written in the background.
-function glanceAfter(id: string, session: Session, turn: { reply: string; isError: boolean; stopped: boolean }) {
+// A teammate's update page for the pane when the turn showed nothing (lib/show.ts), written in the background.
+function showAfter(id: string, session: Session, turn: { reply: string; isError: boolean; stopped: boolean }) {
   const ask = getThread(id).findLast((item) => item.kind === "user");
   const seq = session.turnSeq;
   const turnInfo = { ...turn, ask: ask?.kind === "user" ? ask.text : "", openedPane: Boolean(session.openedPane) };
-  glanceAfterTurn(id, turnInfo, () => session.turnSeq === seq && !session.busy).catch(() => {});
+  showAfterTurn(id, turnInfo, () => session.turnSeq === seq && !session.busy).catch(() => {});
 }
 
 // The plan's 5-hour and weekly usage, asked of the CLI so it shows before any rate-limit event.
@@ -247,4 +247,4 @@ function turnStats(id: string, session: Session, modelUsage: Record<string, Mode
 
 // Every function here, for the session fingerprint (BUILD in lib/runner-session.ts): changing any of them
 // replaces idle sessions started by the old code.
-export const TURN_CODE = [handle, handleRateLimit, handleSuggestion, handleAssistant, recordEdit, handleToolResults, storeToolResults, handleResult, finishResult, glanceAfter, refreshLimits, updateStats, turnStats];
+export const TURN_CODE = [handle, handleRateLimit, handleSuggestion, handleAssistant, recordEdit, handleToolResults, storeToolResults, handleResult, finishResult, showAfter, refreshLimits, updateStats, turnStats];

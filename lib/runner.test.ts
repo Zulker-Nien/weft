@@ -21,7 +21,7 @@ vi.mock("./login", async () => (await import("./runner.harness")).loginMock(h));
 vi.mock("./question-preview", () => ({
   writeQuestionPreview: vi.fn((cardId: string, questions: { options: { preview?: string }[] }[]) => {
     if (cardId === "broken") throw new Error("EACCES");
-    return questions.some((q) => q.options.some((o) => o.preview)) ? `file:///glance/${cardId}-question.html` : undefined;
+    return questions.some((q) => q.options.some((o) => o.preview)) ? `file:///show/${cardId}-question.html` : undefined;
   }),
 }));
 vi.mock("./automations", async (importOriginal) => ({
@@ -376,7 +376,7 @@ describe("permissions", () => {
     const q = await send("c1");
     const input = { questions: [{ question: "Which?", options: [{ label: "A", preview: "+--+" }, { label: "B" }] }] };
     const first = ask(q, "AskUserQuestion", input);
-    expect(card("c1").pending?.previewUrl).toBe("file:///glance/c1-question.html");
+    expect(card("c1").pending?.previewUrl).toBe("file:///show/c1-question.html");
     runner.answerPermission("c1", true, { "Which?": "A" }, undefined, { annotations: { "Which?": { notes: "but small", preview: "+--+" } } });
     await expect(first.promise).resolves.toEqual({
       behavior: "allow",

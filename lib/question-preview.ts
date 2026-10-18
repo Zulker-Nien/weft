@@ -7,7 +7,7 @@ import type { Question } from "./types";
 // beside the options; Weft shows it in the card's browser pane: one page per question set, which the
 // board opens at #<question>-<option> as you move through the options.
 
-const DIR = path.join(DATA_DIR, "glance");
+const DIR = path.join(DATA_DIR, "show");
 
 const escape = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c);
 

@@ -2,32 +2,32 @@
 import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { onScrollToTurn, reportTopTurn } from "@/lib/glance-events";
+import { onScrollToTurn, reportTopTurn } from "@/lib/show-events";
 import type { Card, ThreadItem } from "@/lib/types";
-import GlanceRail from "./GlanceRail";
+import ShowRail from "./ShowRail";
 
 afterEach(cleanup);
 
 const at = Date.now();
 const card = { id: "c1", column: "review" } as Card;
 const items: ThreadItem[] = [
-  { kind: "user", text: "add a glance rail", at },
+  { kind: "user", text: "add a show rail", at },
   { kind: "assistant", text: "On it.", at },
   { kind: "result", text: "", isError: false, at },
 ];
 
-describe("GlanceRail", () => {
+describe("ShowRail", () => {
   it("draws nothing with no card open, or while hidden", () => {
-    const { container, rerender } = render(<GlanceRail card={null} hidden={false} items={items} pageUrl="" />);
+    const { container, rerender } = render(<ShowRail card={null} hidden={false} items={items} pageUrl="" />);
     expect(container.innerHTML).toBe("");
-    rerender(<GlanceRail card={card} hidden items={items} pageUrl="" />);
+    rerender(<ShowRail card={card} hidden items={items} pageUrl="" />);
     expect(container.innerHTML).toBe("");
   });
 
   it("draws one mini per turn, newest at the bottom, with its dot and time", () => {
-    render(<GlanceRail card={card} hidden={false} items={items} pageUrl="" />);
+    render(<ShowRail card={card} hidden={false} items={items} pageUrl="" />);
     const minis = screen.getAllByRole("button");
-    expect(minis.map((m) => m.textContent)).toEqual(["add a glance railjust now", "On it.just now"]);
+    expect(minis.map((m) => m.textContent)).toEqual(["add a show railjust now", "On it.just now"]);
     expect(screen.getByLabelText("Finished")).toBeTruthy();
     expect(screen.getByLabelText("You")).toBeTruthy();
   });
@@ -35,10 +35,10 @@ describe("GlanceRail", () => {
   it("asks the chat to scroll to a clicked turn and marks it active", async () => {
     const scrolled = vi.fn();
     const off = onScrollToTurn(scrolled);
-    render(<GlanceRail card={card} hidden={false} items={items} pageUrl="" />);
-    await userEvent.click(screen.getByTitle("add a glance rail"));
+    render(<ShowRail card={card} hidden={false} items={items} pageUrl="" />);
+    await userEvent.click(screen.getByTitle("add a show rail"));
     expect(scrolled).toHaveBeenCalledWith("t0");
-    expect(screen.getByTitle("add a glance rail").getAttribute("aria-current")).toBe("true");
+    expect(screen.getByTitle("add a show rail").getAttribute("aria-current")).toBe("true");
     off();
   });
 
@@ -48,7 +48,7 @@ describe("GlanceRail", () => {
     const scrolled = vi.fn();
     const off = onScrollToTurn(scrolled);
     const withPage: ThreadItem[] = [...items.slice(0, 2), { kind: "tool", id: "o", name: "mcp__browser__open_url", summary: "http://localhost:3000/a", at }];
-    render(<GlanceRail card={card} hidden={false} items={withPage} pageUrl="http://localhost:3000/b" />);
+    render(<ShowRail card={card} hidden={false} items={withPage} pageUrl="http://localhost:3000/b" />);
     await userEvent.click(screen.getByTitle("http://localhost:3000/a"));
     expect(open).toHaveBeenCalledWith("http://localhost:3000/a");
     expect(scrolled).toHaveBeenCalledWith("t1");
@@ -60,7 +60,7 @@ describe("GlanceRail", () => {
 
   it("adds a page you open by hand, but not the card's first page or one the rail reopened", () => {
     const other = { id: "c2", column: "review" } as Card;
-    const view = (c: Card, url: string) => <GlanceRail card={c} hidden={false} items={items} pageUrl={url} />;
+    const view = (c: Card, url: string) => <ShowRail card={c} hidden={false} items={items} pageUrl={url} />;
     const { rerender } = render(view(other, "http://first.test/"));
     expect(screen.queryByLabelText("Page")).toBeNull();
     rerender(view(other, "http://second.test/"));
@@ -71,7 +71,7 @@ describe("GlanceRail", () => {
   });
 
   it("marks the turn the chat reports at its top", async () => {
-    render(<GlanceRail card={card} hidden={false} items={items} pageUrl="" />);
+    render(<ShowRail card={card} hidden={false} items={items} pageUrl="" />);
     await act(() => {
       reportTopTurn("t1");
       return Promise.resolve();

@@ -14,7 +14,7 @@ vi.mock("@/lib/repos", () => ({
 }));
 vi.mock("@/lib/skills", () => ({ listSkills: vi.fn(() => [{ name: "weft:done", description: "d", source: "weft" }]) }));
 vi.mock("@/lib/quality", () => ({ measureQuality: vi.fn(() => ({ score: 90, root: "/dev/app" })) }));
-vi.mock("@/lib/glance", () => ({ newThreadUrl: vi.fn(() => "file:///pages/new-thread.html") }));
+vi.mock("@/lib/show", () => ({ newThreadUrl: vi.fn(() => "file:///pages/new-thread.html") }));
 vi.mock("@/lib/settings", () => ({
   listProjects: vi.fn(() => []),
   touchProject: vi.fn(),
@@ -24,7 +24,7 @@ vi.mock("@/lib/settings", () => ({
 const repos = await import("@/lib/repos");
 const skills = await import("@/lib/skills");
 const quality = await import("@/lib/quality");
-const glance = await import("@/lib/glance");
+const show = await import("@/lib/show");
 const settings = await import("@/lib/settings");
 
 const reposRoute = await import("./repos/route");
@@ -77,7 +77,7 @@ describe("guard", () => {
   it("POST /new-thread-page rejects a foreign host and a missing x-threadboard header", () => {
     expect(newThreadPageRoute.POST(req("/new-thread-page", { method: "POST", headers: { host: "evil.com", "x-threadboard": "1" } })).status).toBe(403);
     expect(newThreadPageRoute.POST(req("/new-thread-page", { method: "POST", headers: READ })).status).toBe(403);
-    expect(glance.newThreadUrl).not.toHaveBeenCalled();
+    expect(show.newThreadUrl).not.toHaveBeenCalled();
   });
 });
 
@@ -159,7 +159,7 @@ describe("POST /new-thread-page", () => {
   });
 
   it("400s when the page can't be written", async () => {
-    vi.mocked(glance.newThreadUrl).mockImplementationOnce(() => {
+    vi.mocked(show.newThreadUrl).mockImplementationOnce(() => {
       throw new Error("ENOSPC");
     });
     const res = newThreadPageRoute.POST(req("/new-thread-page", { method: "POST" }));

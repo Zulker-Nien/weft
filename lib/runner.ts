@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { randomUUID } from "node:crypto";
 import { isDoneCommand, skillsForPrompt } from "./automations";
 import { lastSent } from "./edit-last";
-import { showStarter } from "./glance";
+import { showStarter } from "./show";
 import { isOpenElsewhere } from "./import";
 import { holdForRestart } from "./restart-when-idle";
 import { sessionRewindPoint } from "./rewind";

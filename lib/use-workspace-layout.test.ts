@@ -29,7 +29,7 @@ describe("useWorkspaceLayout", () => {
   });
 
   it("loads a stored layout on mount", async () => {
-    setStored({ open: { thread: true, editor: true, pane: false, glance: true }, width: { thread: 500 } });
+    setStored({ open: { thread: true, editor: true, pane: false, show: true }, width: { thread: 500 } });
     const { useWorkspaceLayout: use } = await import("./use-workspace-layout");
     const { result } = renderHook(() => use());
     expect(result.current.layout.open.editor).toBe(true);
@@ -48,10 +48,10 @@ describe("useWorkspaceLayout", () => {
   it("toggle closes an open column and persists the change", async () => {
     const { useWorkspaceLayout: use } = await import("./use-workspace-layout");
     const { result } = renderHook(() => use());
-    act(() => result.current.toggle("glance"));
-    expect(result.current.layout.open.glance).toBe(false);
+    act(() => result.current.toggle("show"));
+    expect(result.current.layout.open.show).toBe(false);
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as SerializedLayout;
-    expect(stored.open.glance).toBe(false);
+    expect(stored.open.show).toBe(false);
   });
 
   it("toggle reopens a closed column", async () => {
@@ -62,11 +62,11 @@ describe("useWorkspaceLayout", () => {
   });
 
   it("toggle refuses to close the last open column", async () => {
-    setStored({ open: { thread: false, editor: false, pane: false, glance: true }, width: {} });
+    setStored({ open: { thread: false, editor: false, pane: false, show: true }, width: {} });
     const { useWorkspaceLayout: use } = await import("./use-workspace-layout");
     const { result } = renderHook(() => use());
-    act(() => result.current.toggle("glance"));
-    expect(result.current.layout.open.glance).toBe(true);
+    act(() => result.current.toggle("show"));
+    expect(result.current.layout.open.show).toBe(true);
   });
 
   it("setOpen applies and persists", async () => {
@@ -74,8 +74,8 @@ describe("useWorkspaceLayout", () => {
     const { result } = renderHook(() => use());
     act(() => result.current.setOpen("editor", true));
     expect(result.current.layout.open.editor).toBe(true);
-    act(() => result.current.setOpen("glance", false));
-    expect(result.current.layout.open.glance).toBe(false);
+    act(() => result.current.setOpen("show", false));
+    expect(result.current.layout.open.show).toBe(false);
   });
 
   it("dragDivider updates the non-fill side's width", async () => {
@@ -100,19 +100,19 @@ describe("useWorkspaceLayout", () => {
   });
 
   it("fitToContainer shrinks the layout to the container", async () => {
-    // editor is closed in the default layout, so the fixed columns are thread + glance. With pane
+    // editor is closed in the default layout, so the fixed columns are thread + show. With pane
     // as the fill, the target is containerWidth - MIN_WIDTH.pane.
-    setStored({ open: DEFAULT_LAYOUT.open, width: { thread: 1000, editor: 1000, pane: 1000, glance: 200 } });
+    setStored({ open: DEFAULT_LAYOUT.open, width: { thread: 1000, editor: 1000, pane: 1000, show: 200 } });
     const { useWorkspaceLayout: use } = await import("./use-workspace-layout");
     const { result } = renderHook(() => use());
     act(() => result.current.fitToContainer(700));
-    // Sum of the fixed columns (thread + glance) should equal 700 - MIN_WIDTH.pane(280) = 420.
-    const fixed = result.current.layout.width.thread + result.current.layout.width.glance;
+    // Sum of the fixed columns (thread + show) should equal 700 - MIN_WIDTH.pane(280) = 420.
+    const fixed = result.current.layout.width.thread + result.current.layout.width.show;
     expect(fixed).toBeCloseTo(420, 1);
   });
 
   it("reset returns to the default layout and persists it", async () => {
-    setStored({ open: { thread: false, editor: true, pane: false, glance: false }, width: { thread: 9999, editor: 9999, pane: 9999, glance: 9999 } });
+    setStored({ open: { thread: false, editor: true, pane: false, show: false }, width: { thread: 9999, editor: 9999, pane: 9999, show: 9999 } });
     const { useWorkspaceLayout: use } = await import("./use-workspace-layout");
     const { result } = renderHook(() => use());
     act(() => result.current.reset());

@@ -2,7 +2,7 @@ import { MEDIA_REF, mediaKind, mediaUrl } from "./media";
 import type { Card, ThreadItem } from "./types";
 
 // The pictures a card shows as its thumbnail: images in its thread (a screenshot a tool took, one the
-// agent posted, one you pasted) and a capture of its browser pane page after each turn (lib/glance.ts).
+// agent posted, one you pasted) and a capture of its browser pane page after each turn (lib/show.ts).
 
 // The board URLs of the images in one thread item, in order.
 export function itemPictures(item: ThreadItem): string[] {

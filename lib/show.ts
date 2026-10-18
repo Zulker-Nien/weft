@@ -14,13 +14,13 @@ import type { Card } from "./types";
 const MAX_REPLY_CHARS = 12_000;
 const MAX_ASK_CHARS = 2_000;
 
-const DIR = path.join(DATA_DIR, "glance");
+const DIR = path.join(DATA_DIR, "show");
 
-export function glanceFile(cardId: string) {
+export function showFile(cardId: string) {
   return path.join(DIR, `${cardId}.html`);
 }
 
-export function glancePrompt(ask: string, reply: string) {
+export function showPrompt(ask: string, reply: string) {
   return `You're a teammate on this build (product manager, engineer or designer: pick whichever lens fits this turn best) writing a one-screen update page for the person driving it. Answer: How's it going? What did we just do, and why does it matter? What should we do next? Have a point of view, be specific, make it visual (a progress bar, a before→after, a mini diagram, a next-step you'd bet on). Not a changelog. Only claim what the reply supports. One self-contained HTML file, inline CSS, no JS, fits ~400px wide. Output only HTML.
 
 The user asked: ${JSON.stringify(clip(ask, MAX_ASK_CHARS))}
@@ -42,7 +42,7 @@ export function extractHtml(text: string): string | undefined {
 
 // After a turn: write a page unless the thread already showed one, or the pane shows a live app.
 // No pane url means no desktop shell to show it in.
-export function shouldWriteGlance(turn: { openedPane: boolean; isError: boolean; stopped: boolean; paneUrl?: string }) {
+export function shouldWriteShow(turn: { openedPane: boolean; isError: boolean; stopped: boolean; paneUrl?: string }) {
   if (turn.openedPane || turn.isError || turn.stopped || turn.paneUrl === undefined) return false;
   return !/^https?:/i.test(turn.paneUrl);
 }
@@ -154,7 +154,7 @@ ${ask === undefined ? "" : `<div class="ask">${escape(clip(ask, MAX_ASK_CHARS))}
 
 function write(cardId: string, html: string) {
   fs.mkdirSync(DIR, { recursive: true });
-  const file = glanceFile(cardId);
+  const file = showFile(cardId);
   fs.writeFileSync(file, html);
   return file;
 }
@@ -177,13 +177,13 @@ export async function showStarter(cardId: string, title: string, ask: string) {
 }
 
 // After a turn ends, off the reply's path. `isCurrent` drops the page if a newer turn started meanwhile.
-export async function glanceAfterTurn(
+export async function showAfterTurn(
   cardId: string,
   turn: { ask: string; reply: string; openedPane: boolean; isError: boolean; stopped: boolean },
   isCurrent: () => boolean,
 ) {
-  if (turn.reply.trim() && shouldWriteGlance({ ...turn, paneUrl: await paneUrl(cardId) })) {
-    await writeGlance(cardId, turn.ask, turn.reply, isCurrent).catch(() => {});
+  if (turn.reply.trim() && shouldWriteShow({ ...turn, paneUrl: await paneUrl(cardId) })) {
+    await writeShow(cardId, turn.ask, turn.reply, isCurrent).catch(() => {});
   }
   retitleAfterTurn(cardId, turn);
   await pictureAfterTurn(cardId, isCurrent);
@@ -239,8 +239,8 @@ async function pictureAfterTurn(cardId: string, isCurrent: () => boolean) {
   decorateCard(cardId, { thumb: (await saveImageData(jpg, "pane.jpg", "image/jpeg")).url });
 }
 
-async function writeGlance(cardId: string, ask: string, reply: string, isCurrent: () => boolean) {
-  const html = extractHtml(await complete(glancePrompt(ask, reply)));
+async function writeShow(cardId: string, ask: string, reply: string, isCurrent: () => boolean) {
+  const html = extractHtml(await complete(showPrompt(ask, reply)));
   if (!html || !isCurrent()) return;
   await openInPane(`file://${write(cardId, html)}`, cardId);
 }

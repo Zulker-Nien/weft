@@ -327,7 +327,7 @@ function createBrowserPane({ getWindow, getAppView, token, onContents, pages, on
     const routes = {
       "POST /browser/open": (body) => open(body.url, body.key),
       "POST /browser/text": (body) => pageText(body.key),
-      // What a card's browser shows, "" when it has no page yet (see lib/glance.ts).
+      // What a card's browser shows, "" when it has no page yet (see lib/show.ts).
       "POST /browser/url": (body) => ({ url: views.get(body.key)?.webContents.getURL() || "" }),
       "POST /browser/screenshot": (body) => screenshot(body.key, body.highlight),
       "POST /browser/thumb": (body) => thumbnail(body.key),

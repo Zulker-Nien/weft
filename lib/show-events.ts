@@ -1,8 +1,8 @@
-// The glance rail and the chat talk with two window events, since both live in the board's own page:
-// glance:scroll-to (a mini was clicked: the chat scrolls to that turn) and glance:pulse (the chat
-// scrolled on its own: the rail lights up the turn now at its top). Turn ids are lib/glance-rail.ts turnId().
-const SCROLL_TO = "glance:scroll-to";
-const PULSE = "glance:pulse";
+// The show rail and the chat talk with two window events, since both live in the board's own page:
+// show:scroll-to (a mini was clicked: the chat scrolls to that turn) and show:pulse (the chat
+// scrolled on its own: the rail lights up the turn now at its top). Turn ids are lib/show-rail.ts turnId().
+const SCROLL_TO = "show:scroll-to";
+const PULSE = "show:pulse";
 
 function listen(name: string, fn: (id: string) => void) {
   const handler = (e: Event) => fn(String((e as CustomEvent).detail));

@@ -1,4 +1,4 @@
-// The glance rail beside the browser pane's page (components/GlanceRail.tsx): one mini per turn of
+// The show rail beside the browser pane's page (components/ShowRail.tsx): one mini per turn of
 // the open thread, and one per page the pane showed, oldest first like the chat. A pure projection of the thread's
 // items and the pages visited this session; nothing is stored.
 import { clip, shortToolName, timeAgo } from "./format";
@@ -43,7 +43,7 @@ function toolLine(tool: Tool) {
   return clip(name, MAX_COMMAND);
 }
 
-// "glance-rail/index.html#live" for a local page, "localhost:3000/settings" for a site.
+// "show-rail/index.html#live" for a local page, "localhost:3000/settings" for a site.
 export function pageLabel(url: string) {
   try {
     const u = new URL(url);
@@ -85,7 +85,7 @@ function userText(text: string) {
 }
 
 // live: the thread's newest turn is still running, or waiting on the user. visits: pages opened by hand, oldest first.
-export function glanceMinis(items: readonly ThreadItem[], { live = false, now = Date.now(), visits = [] as readonly Visit[] } = {}): Mini[] {
+export function showMinis(items: readonly ThreadItem[], { live = false, now = Date.now(), visits = [] as readonly Visit[] } = {}): Mini[] {
   const minis: Mini[] = [];
   let turn: Turn | undefined;
   let lastTurn: string | undefined;

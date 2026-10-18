@@ -1,6 +1,6 @@
 # The editor column
 
-An open card is four columns side by side: **thread · editor · pane · glance**. The editor opens files from
+An open card is four columns side by side: **thread · editor · pane · show**. The editor opens files from
 the card's folder: code in CodeMirror 6, markdown in a TipTap editor that edits the rendered document, and a
 **Changes** view of the file against git HEAD. The thread shows each Edit/Write's diff on its own row, and any
 file path in the thread opens the file in the editor.
@@ -8,7 +8,7 @@ file path in the thread opens the file in the editor.
 ## Four columns
 
 - `lib/workspace-layout.ts` is the pure model: `COLUMNS` in order, `open` and `width` per column, `MIN_WIDTH`,
-  and the **fill** column (pane, else editor, else thread, else glance) that takes what's left while the others keep
+  and the **fill** column (pane, else editor, else thread, else show) that takes what's left while the others keep
   their widths. `dragDivider` moves the divider between two neighbours, changing whichever of them isn't the fill
   column (it grows as the divider moves away from it) and clamping to the minimum widths; `fitToWidth` shrinks the fixed columns when the window is narrow;
   `toggleColumn` never closes the last open column.
@@ -19,9 +19,9 @@ file path in the thread opens the file in the editor.
   column's icon in place of each closed column; click the strip to reopen it. The closed editor gets no strip while the
   thread shows: `components/EditorToggle.tsx`, the ✏︎ beside the thread's X, opens and closes it instead. While a divider drags, the native browser
   view is hidden (it would swallow the pointer), the same way `BrowserPane`'s own resize handle used to work.
-- ⌥⌘1–4 toggle the thread, editor, browser and glance columns while a card is open (`components/board-shortcuts.ts`).
+- ⌥⌘1–4 toggle the thread, editor, browser and show columns while a card is open (`components/board-shortcuts.ts`).
 - The pane's × now closes the pane column. The card closes from the thread header's ×, the backdrop or Escape.
-- The glance rail is its own column now; `BrowserPane` still takes a `rail` prop for the board's pane without a card.
+- The show rail is its own column now; `BrowserPane` still takes a `rail` prop for the board's pane without a card.
 
 ## Opening a file
 

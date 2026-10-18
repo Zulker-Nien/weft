@@ -147,7 +147,7 @@ function command(port) {
         HOSTNAME: "127.0.0.1",
         // Weft's own skills (plugin/ in the repo), shipped next to the server; see lib/skills.ts.
         WEFT_PLUGIN_DIR: path.join(process.resourcesPath, "plugin"),
-        // The splash's art, inside app.asar; the browser pane (Electron) reads file:// from there. See lib/glance.ts.
+        // The splash's art, inside app.asar; the browser pane (Electron) reads file:// from there. See lib/show.ts.
         WEFT_ASSETS_DIR: path.join(__dirname, "assets"),
       },
     };

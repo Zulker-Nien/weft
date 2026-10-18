@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { onScrollToTurn, onTopTurn, pulse, reportTopTurn, scrollToTurn, topmostTurn, turnRow } from "./glance-events";
+import { onScrollToTurn, onTopTurn, pulse, reportTopTurn, scrollToTurn, topmostTurn, turnRow } from "./show-events";
 
 const box = (top: number, bottom: number) => () => ({ top, bottom }) as DOMRect;
 
-describe("glance events", () => {
+describe("show events", () => {
   afterEach(() => {
     document.body.innerHTML = "";
   });

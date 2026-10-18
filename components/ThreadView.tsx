@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "@/lib/client";
 import { isLive } from "@/lib/format";
-import { onScrollToTurn, pulse, reportTopTurn, topmostTurn, turnRow, PULSE_MS } from "@/lib/glance-events";
+import { onScrollToTurn, pulse, reportTopTurn, topmostTurn, turnRow, PULSE_MS } from "@/lib/show-events";
 import type { PlanResets } from "@/lib/schedule";
 import { THREAD_PAGE_SIZE } from "@/lib/cloud-sync-types";
 import { applyThreadEvent, mergeOlderPage, pageThread, type ThreadPage } from "@/lib/thread-page";
@@ -138,7 +138,7 @@ export default function ThreadView({
     return () => el.removeEventListener("load", follow, true);
   }, []);
 
-  // The glance rail (components/GlanceRail.tsx): a clicked mini scrolls here, and a scroll of our own
+  // The show rail (components/ShowRail.tsx): a clicked mini scrolls here, and a scroll of our own
   // tells the rail which turn is now on top, at most once per 80 ms. A rail-driven scroll doesn't echo back.
   const railScroll = useRef(0);
   const reportTimer = useRef<ReturnType<typeof setTimeout>>(undefined);

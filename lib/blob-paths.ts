@@ -12,7 +12,7 @@ import { MEDIA_REF, extensionOf } from "./media";
 
 // Per-extension mime override for the upload's content-type, since the mime table in
 // lib/attachments.ts has video and audio types we don't accept on this store. The list here
-// matches what the outbox might actually upload: images, the HTML pages from lib/glance.ts,
+// matches what the outbox might actually upload: images, the HTML pages from lib/show.ts,
 // SVGs, and PDFs.
 const BLOB_MIME: Record<string, string> = {
   png: "image/png",

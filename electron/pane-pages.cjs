@@ -90,8 +90,8 @@ function createPanePages(dataDir) {
 
   // If that fails (a dev server that isn't running, a file that's gone): the card's last update page.
   function fallbackUrl(cardId) {
-    const glance = path.join(dataDir, "glance", `${cardId}.html`);
-    return fs.existsSync(glance) ? pathToFileURL(glance).href : undefined;
+    const show = path.join(dataDir, "show", `${cardId}.html`);
+    return fs.existsSync(show) ? pathToFileURL(show).href : undefined;
   }
 
   return { record, restoreUrl, fallbackUrl, get: (cardId) => pages[cardId] };

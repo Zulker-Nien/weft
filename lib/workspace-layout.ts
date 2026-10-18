@@ -1,16 +1,16 @@
-// The four-column workspace for an open card: thread | editor | pane | glance, in that left-to-right
+// The four-column workspace for an open card: thread | editor | pane | show, in that left-to-right
 // order. A layout remembers which columns are open and how wide each is. One column at a time is
 // "the fill" — the one with no fixed width, which takes whatever space is left after the others and
 // (when the window narrows) keeps its own min by shrinking the fixed columns instead.
 
 // Order matters: it is the order the columns render in, left to right.
-export const COLUMNS = ["thread", "editor", "pane", "glance"] as const;
+export const COLUMNS = ["thread", "editor", "pane", "show"] as const;
 export type ColumnId = (typeof COLUMNS)[number];
 
 // The fill column preference, highest first: pane (the agent's main canvas) wins, then editor, then
-// thread, then glance. The fill is the open column that takes leftover space when the window is
+// thread, then show. The fill is the open column that takes leftover space when the window is
 // wider than the sum of the others.
-export const FILL_PREFERENCE: readonly ColumnId[] = ["pane", "editor", "thread", "glance"];
+export const FILL_PREFERENCE: readonly ColumnId[] = ["pane", "editor", "thread", "show"];
 
 export interface Layout {
   open: Record<ColumnId, boolean>;
@@ -21,27 +21,27 @@ export const MIN_WIDTH: Record<ColumnId, number> = {
   thread: 320,
   editor: 300,
   pane: 280,
-  glance: 56,
+  show: 56,
 };
 
-// Open by default for thread, pane and glance; editor closed. Widths picked to feel like the old
+// Open by default for thread, pane and show; editor closed. Widths picked to feel like the old
 // single-window layout (a ~440 px thread, a ~480 px editor when the user opens it, a pane that
-// claims the rest, and a 72 px glance rail).
+// claims the rest, and a 72 px show rail).
 export const DEFAULT_LAYOUT: Layout = {
-  open: { thread: true, editor: false, pane: true, glance: true },
-  width: { thread: 440, editor: 480, pane: 600, glance: 72 },
+  open: { thread: true, editor: false, pane: true, show: true },
+  width: { thread: 440, editor: 480, pane: 600, show: 72 },
 };
 
-// The column that takes the leftover space. Preference order: pane, editor, thread, glance — so the
+// The column that takes the leftover space. Preference order: pane, editor, thread, show — so the
 // pane (the agent's main canvas) is normally the flex one and small columns stay fixed. When the
 // preferred column is closed, the next open one becomes the fill.
 export function fillColumn(layout: Layout): ColumnId {
   for (const id of FILL_PREFERENCE) {
     if (layout.open[id]) return id;
   }
-  // No column open: clamp the toggleColumn guarantee; treat glance as the implicit fill so widths
+  // No column open: clamp the toggleColumn guarantee; treat show as the implicit fill so widths
   // can still resolve. The UI shouldn't let this happen.
-  return "glance";
+  return "show";
 }
 
 function clamp(value: number, min: number, max: number): number {

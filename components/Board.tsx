@@ -82,9 +82,9 @@ const NewCardDialog = guarded(() => import("./NewCardDialog"), { what: "New thre
 const SettingsDialog = guarded(() => import("./SettingsDialog"), { what: "settings", className: "fixed left-4 top-16 z-50" });
 const ShortcutsDialog = guarded(() => import("./ShortcutsDialog"), { what: "shortcuts sheet", className: "fixed left-4 top-16 z-50" });
 const TerminalDrawer = guarded(() => import("./TerminalDrawer"), { what: "terminal", className: "m-3" });
-const GlanceRail = guarded(() => import("./GlanceRail"), { what: "glance rail", className: "w-[72px] shrink-0" });
+const ShowRail = guarded(() => import("./ShowRail"), { what: "show rail", className: "w-[72px] shrink-0" });
 const ThreadPanel = guarded(() => import("./ThreadPanel"), { what: "thread", className: "m-3 w-[360px] self-start" });
-// The four-column workspace that holds the thread + editor + pane + glance when a card is open.
+// The four-column workspace that holds the thread + editor + pane + show when a card is open.
 const CardWorkspace = guarded(() => import("./CardWorkspace"), { what: "card workspace", className: "flex-1 min-w-0" });
 // The code/markdown editor column, in its own CrashGuard so a broken editor leaves the thread and the pane.
 const EditorColumn = guarded(() => import("./EditorColumn"), { what: "editor column" });
@@ -773,7 +773,7 @@ export default function Board() {
         {showNew ? (
           <NewCardDialog cards={cards} home={home} defaultCwd={newCwd ?? project ?? undefined} recentCwd={[...cards].sort((a, b) => b.updatedAt - a.updatedAt).find((c) => c.cwd !== home)?.cwd} onClose={() => setShowNew(false)} onCreate={create} />
         ) : selected ? (
-          // The four-column workspace for an open card: thread | editor | pane | glance, in order.
+          // The four-column workspace for an open card: thread | editor | pane | show, in order.
           // The columns remember which are open and how wide each is (lib/use-workspace-layout.ts);
           // closing the last open column is a no-op so the card always has at least its thread.
           <CardWorkspace
@@ -843,7 +843,7 @@ export default function Board() {
                   actions={<PaneCardMarks card={selected} onShare={() => shareCard(selected)} onStar={() => toggleStar(selected)} onArchive={() => toggleArchive(selected)} />}
                 />
               ),
-              glance: <GlanceRail card={selected} hidden={false} items={thread} pageUrl={browser.url} />,
+              show: <ShowRail card={selected} hidden={false} items={thread} pageUrl={browser.url} />,
             }}
           />
         ) : null}
@@ -861,7 +861,7 @@ export default function Board() {
               onWidth={setBrowserWidth}
               onClose={selected ? () => select(null) : toggleBrowser}
               expanded={false}
-              rail={<GlanceRail card={selected} hidden={false} items={thread} pageUrl={browser.url} />}
+              rail={<ShowRail card={selected} hidden={false} items={thread} pageUrl={browser.url} />}
             />
           );
         })()}

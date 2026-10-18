@@ -1,6 +1,6 @@
 "use client";
 
-// The four-column workspace for an open card: thread | editor | pane | glance, with drag dividers
+// The four-column workspace for an open card: thread | editor | pane | show, with drag dividers
 // between neighbours and 18px closed slivers you can click to reopen (none for the editor while the
 // thread shows: its header's ✏︎ opens it). The workspace state
 // (which columns are open, how wide each is) lives in lib/use-workspace-layout.ts, which CardWorkspace
@@ -16,21 +16,21 @@ const COLUMN_ICON: Record<ColumnId, IconName> = {
   thread: "sparkles", // The thread panel's main action is the conversation
   editor: "pencil",
   pane: "globe",
-  glance: "eye",
+  show: "eye",
 };
 
 const COLUMN_LABEL: Record<ColumnId, string> = {
   thread: "Thread",
   editor: "Editor",
   pane: "Pane",
-  glance: "Glance",
+  show: "Show",
 };
 
 const COLUMN_ARIA: Record<ColumnId, string> = {
   thread: "Open thread column",
   editor: "Open editor column",
   pane: "Open browser column",
-  glance: "Open glance column",
+  show: "Open show column",
 };
 
 export interface CardWorkspace {

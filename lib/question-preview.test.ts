@@ -66,7 +66,7 @@ describe("previewPage", () => {
 });
 
 // writeQuestionPreview reads DATA_DIR at import time (lib/store.ts). Stub the env and reload the module
-// (after mocking ./store) so the file lands in a temp dir, the same way lib/glance.test.ts does.
+// (after mocking ./store) so the file lands in a temp dir, the same way lib/show.test.ts does.
 describe("writeQuestionPreview", () => {
   let dataDir: string;
   let prepped: typeof import("./question-preview");
@@ -84,19 +84,19 @@ describe("writeQuestionPreview", () => {
     fs.rmSync(dataDir, { recursive: true, force: true });
   });
   beforeEach(() => {
-    fs.rmSync(path.join(dataDir, "glance"), { recursive: true, force: true });
+    fs.rmSync(path.join(dataDir, "show"), { recursive: true, force: true });
   });
 
   it("returns undefined without previews, and writes nothing", () => {
     expect(prepped.writeQuestionPreview("c1", [q("Q", [opt("A")])])).toBeUndefined();
-    expect(fs.existsSync(path.join(dataDir, "glance"))).toBe(false);
+    expect(fs.existsSync(path.join(dataDir, "show"))).toBe(false);
   });
 
   it("writes a file URL with one section per option when at least one option has a preview", () => {
     const questions: Question[] = [q("Q", [opt("A", { preview: "+A+" }), opt("B")])];
     const url = prepped.writeQuestionPreview("c1", questions);
-    expect(url).toBe(`file://${path.join(dataDir, "glance", "c1-question.html")}`);
-    const html = fs.readFileSync(path.join(dataDir, "glance", "c1-question.html"), "utf8");
+    expect(url).toBe(`file://${path.join(dataDir, "show", "c1-question.html")}`);
+    const html = fs.readFileSync(path.join(dataDir, "show", "c1-question.html"), "utf8");
     expect(html).toContain('id="0-0"');
     expect(html).toContain('id="0-1"');
     expect(html).toContain("+A+");

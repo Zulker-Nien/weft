@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { glanceMinis as oldestFirst, pageLabel, plain, turnId } from "./glance-rail";
+import { showMinis as oldestFirst, pageLabel, plain, turnId } from "./show-rail";
 import type { ThreadItem } from "./types";
 
 const NOW = 1_000_000_000;
@@ -8,10 +8,10 @@ const say = (text: string, at = NOW): ThreadItem => ({ kind: "assistant", text, 
 const tool = (name: string, summary: string, isError = false): ThreadItem => ({ kind: "tool", id: name, name, summary, at: NOW, isError });
 const result = (isError = false): ThreadItem => ({ kind: "result", text: "", isError, at: NOW });
 // Most cases read newest first, the way they're easiest to check.
-const glanceMinis = (...args: Parameters<typeof oldestFirst>) => oldestFirst(...args).reverse();
-const minis = (items: ThreadItem[], live = false) => glanceMinis(items, { live, now: NOW });
+const showMinis = (...args: Parameters<typeof oldestFirst>) => oldestFirst(...args).reverse();
+const minis = (items: ThreadItem[], live = false) => showMinis(items, { live, now: NOW });
 
-describe("glanceMinis", () => {
+describe("showMinis", () => {
   it("runs oldest first, like the chat", () => {
     expect(oldestFirst([user("hi"), say("hello")], { now: NOW }).map((m) => m.text)).toEqual(["hi", "hello"]);
   });
@@ -55,7 +55,7 @@ describe("glanceMinis", () => {
 
   it("names a Bash-only turn by its command, cut to 24 characters", () => {
     expect(minis([tool("Bash", "pnpm test"), result()])[0]!.text).toBe("Bash · pnpm test");
-    expect(minis([tool("Bash", "pnpm vitest run lib/glance-rail.test.ts")])[0]!.text).toBe("Bash · pnpm vitest run lib/gla…");
+    expect(minis([tool("Bash", "pnpm vitest run lib/show-rail.test.ts")])[0]!.text).toBe("Bash · pnpm vitest run lib/sho…");
   });
 
   it("names an Edit or Write-only turn by its file", () => {
@@ -65,7 +65,7 @@ describe("glanceMinis", () => {
 
   it("names a Read or Grep-only turn by its file or pattern", () => {
     expect(minis([tool("Read", "/Users/me/dev/weft/lib/foo.ts")])[0]!.text).toBe("Read · lib/foo.ts");
-    expect(minis([tool("Grep", "glanceMinis")])[0]!.text).toBe("Grep · glanceMinis");
+    expect(minis([tool("Grep", "showMinis")])[0]!.text).toBe("Grep · showMinis");
     expect(minis([tool("mcp__browser__click", "x")])[0]!.text).toBe("browser click");
   });
 
@@ -111,7 +111,7 @@ describe("browser history", () => {
   });
 
   it("slots pages you opened by hand in by time, after the turn before them", () => {
-    const out = glanceMinis([user("go", NOW), say("hi", NOW + 10), result(), user("next", NOW + 100)], {
+    const out = showMinis([user("go", NOW), say("hi", NOW + 10), result(), user("next", NOW + 100)], {
       now: NOW + 200,
       visits: [
         { url: "http://a.test/one", at: NOW + 50 },
@@ -128,7 +128,7 @@ describe("browser history", () => {
   });
 
   it("drops a page that's already the latest one, whoever opened it", () => {
-    const out = glanceMinis([say("a", NOW), open("http://a.test/", NOW + 1), open("http://a.test/", NOW + 2)], {
+    const out = showMinis([say("a", NOW), open("http://a.test/", NOW + 1), open("http://a.test/", NOW + 2)], {
       now: NOW,
       visits: [{ url: "http://a.test/", at: NOW + 3 }, { url: "http://b.test/", at: NOW - 5 }],
     });
@@ -139,7 +139,7 @@ describe("browser history", () => {
   });
 
   it("gives each turn and message the page on screen then: a turn its own last page, else the one before", () => {
-    const out = glanceMinis(
+    const out = showMinis(
       [user("one", NOW), say("a", NOW + 1), open("http://a.test/", NOW + 2), open("http://b.test/", NOW + 3), user("two", NOW + 10), say("b", NOW + 11), result()],
       { now: NOW, visits: [{ url: "http://c.test/", at: NOW + 12 }] },
     );
@@ -153,7 +153,7 @@ describe("browser history", () => {
 
   it("adds the page on screen as you sent a message, and sends its dot there", () => {
     const sent = (text: string, page: string, at: number): ThreadItem => ({ kind: "user", text, at, page });
-    const out = glanceMinis([sent("one", "http://a.test/", NOW), say("a", NOW + 1), result(), sent("two", "http://a.test/", NOW + 5), say("b", NOW + 6), sent("three", "http://b.test/#s2", NOW + 9)], { now: NOW });
+    const out = showMinis([sent("one", "http://a.test/", NOW), say("a", NOW + 1), result(), sent("two", "http://a.test/", NOW + 5), say("b", NOW + 6), sent("three", "http://b.test/#s2", NOW + 9)], { now: NOW });
     expect(out.map((m) => [m.text, m.url, m.turn])).toEqual([
       ["three", "http://b.test/#s2", undefined],
       ["b.test#s2", "http://b.test/#s2", "t4"],

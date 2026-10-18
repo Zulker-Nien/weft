@@ -149,7 +149,7 @@ A native `WebContentsView` overlaid on the board. Lazily created on first
 - `setActive(key)` calls `restore(key)` when the card opens with a blank browser (after a restart):
   `restoreUrl()` gives the saved copy or the url, or (never recorded) the last
   `mcp__browser__open_url` in `threads/<card>.json`; if that fails to load, `fallbackUrl()` gives
-  `~/.weft/glance/<card>.html`. Nothing is restored at startup.
+  `~/.weft/show/<card>.html`. Nothing is restored at startup.
 - `electron/pane-error.cjs` + `pane-error.html`: Chromium paints a failed main-frame load as a blank white page, so a
   stopped dev server left cards empty. `watchLoadFailures(wc, { back })` (wired where each card's view is made in
   `browser-pane.cjs`) catches `did-fail-load` and loads `pane-error.html` with everything in its query string:
