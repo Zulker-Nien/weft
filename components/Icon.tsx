@@ -119,6 +119,12 @@ const PATHS = {
       <circle cx="12" cy="12" r="3" />
     </>
   ),
+  dice: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M8 8h.01M16 8h.01M12 12h.01M8 16h.01M16 16h.01" />
+    </>
+  ),
   copy: (
     <>
       <rect x="9" y="9" width="12" height="12" rx="2" />

@@ -93,7 +93,7 @@ rail's badge counts the top bar's project only.
   Add button (also Shift+`S` and the palette's "Add a secret": `addSecret()` in `lib/use-vault.ts` opens the drawer and the drawer's `onSecretAsk` taker opens the form on the first vault shown, once it has loaded) (name, environment and a hidden value, typed into the board and sent once to main, so projects
   with no `.env` file get a vault too), ✎ / Change Value… / Fill in for a new value, with the environments left open (`Editing.from` is where it started: tick others to save it there too, untick `from` to move it, the old copy removed after the new one is written; a blank moves with no value; `saveLabel` says Save, Move to … or Save to N environments), Copy to <project> in the right-click
   menu (one item per other project, since menus have no submenus; main decrypts and re-encrypts across, so
-  the value never reaches the board), an Import button, a Vercel diff ("2 not on preview"), and, once teams arrive, members and the event log.
+  the value never reaches the board), a 🎲 in the form's value field (`components/SecretValueField.tsx`) that fills in `randomSecret()` from `lib/random-secret.ts` (40 letters and digits from `crypto.getRandomValues`, rejection-sampled), an Import button, a Vercel diff ("2 not on preview"), and, once teams arrive, members and the event log.
 - **Revealing or copying a value asks for Touch ID** (`systemPreferences.promptTouchID`); the drawer
   locks again after a few idle minutes.
 - **The vault's IPC bridge goes only to the board window**, never to browser-pane pages

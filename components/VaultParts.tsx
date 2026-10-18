@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   ENVIRONMENTS,
   filterOptions,
@@ -17,6 +16,7 @@ import {
   type VaultSummary,
 } from "@/lib/vault-view";
 import Icon from "./Icon";
+import { SecretValueField } from "./SecretValueField";
 
 // The pieces of the 🔐 drawer (components/VaultDrawer.tsx): the form that types a secret in, the project
 // filter, and the .env import's preview. A secret's row is components/SecretRow.tsx.
@@ -103,7 +103,6 @@ export function SecretForm({
   onSave: () => void;
   onCancel: () => void;
 }) {
-  const [show, setShow] = useState(false);
   const name = editing.name.trim();
   const badName = name !== "" && !validName(name);
   // A blank needs only a name; a real value still needs the value typed in. The button label
@@ -133,29 +132,13 @@ export function SecretForm({
       />
       {badName && <p className="-mt-1 text-[10.5px] leading-snug text-warn">Letters, digits and _, not starting with a digit.</p>}
       <EnvironmentPicker value={editing.environments} onChange={(environments) => onChange({ ...editing, environments })} />
-      <div className="relative">
-        <input
-          type={show ? "text" : "password"}
-          value={editing.value}
-          onChange={(e) => onChange({ ...editing, value: e.target.value })}
-          autoFocus={editing.fixed || editing.name !== ""}
-          placeholder={editing.fixed ? "New value" : "Value"}
-          aria-label="Value"
-          data-secret
-          spellCheck={false}
-          autoComplete="off"
-          className={`${field} pr-6 font-mono`}
-        />
-        <button
-          type="button"
-          onClick={() => setShow(!show)}
-          aria-label={show ? "Hide value" : "Show value"}
-          title={show ? "Hide" : "Show"}
-          className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted hover:text-ink"
-        >
-          <Icon name="eye" size={12} />
-        </button>
-      </div>
+      <SecretValueField
+        value={editing.value}
+        fixed={editing.fixed}
+        autoFocus={editing.fixed || editing.name !== ""}
+        className={field}
+        onChange={(value) => onChange({ ...editing, value })}
+      />
       <div className="flex gap-1.5">
         <button type="submit" disabled={!ready} className={`flex-1 rounded-md px-2 py-1 text-[12px] font-medium text-on-accent disabled:opacity-50 ${blank ? "bg-warn" : "bg-accent"}`}>
           {saveLabel(editing, canBlank)}
