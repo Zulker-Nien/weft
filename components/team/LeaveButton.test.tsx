@@ -3,17 +3,17 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LeaveButton } from "./LeaveButton";
-import type { TeamClientActions } from "@/lib/team-types";
+import type { TeamActionResult, TeamClientActions, TeamRole } from "@/lib/team-types";
 import "../test-utils";
 
 function makeActions(): TeamClientActions & {
-  remove: ReturnType<typeof vi.fn>;
+  remove: ReturnType<typeof vi.fn<(userId: string) => Promise<TeamActionResult>>>;
 } {
   return {
-    invite: vi.fn().mockResolvedValue({ ok: true }),
-    changeRole: vi.fn().mockResolvedValue({ ok: true }),
-    remove: vi.fn().mockResolvedValue({ ok: true, message: "Left." }),
-    revoke: vi.fn().mockResolvedValue({ ok: true }),
+    invite: vi.fn<(email: string, role: TeamRole) => Promise<TeamActionResult>>().mockResolvedValue({ ok: true }),
+    changeRole: vi.fn<(userId: string, role: TeamRole) => Promise<TeamActionResult>>().mockResolvedValue({ ok: true }),
+    remove: vi.fn<(userId: string) => Promise<TeamActionResult>>().mockResolvedValue({ ok: true, message: "Left." }),
+    revoke: vi.fn<(inviteId: string) => Promise<TeamActionResult>>().mockResolvedValue({ ok: true }),
   };
 }
 

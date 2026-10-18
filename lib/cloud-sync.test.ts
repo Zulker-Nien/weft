@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import type { BoardEvent, Card, ThreadItem } from "./types";
 import type { BlobStore, CloudCardRow, CloudThreadItemRow, CloudToolOutputRow, OutboxEntry } from "./cloud-sync-types";
 
@@ -92,7 +92,7 @@ let now = 1000;
 const NOW = () => now;
 let dir: string;
 let stop: (() => void) | null = null;
-let warnSpy: ReturnType<typeof vi.spyOn>;
+let warnSpy: MockInstance<typeof console.warn>;
 let fakeClient: ReturnType<typeof makeClient>;
 let clientProvider: () => ReturnType<typeof makeClient> | null = () => fakeClient;
 
