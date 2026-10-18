@@ -110,6 +110,12 @@ same time; Next.js allows one dev server per project folder.
 On launch and every minute after, Weft picks up your Claude Code sessions (the ones
 `claude --resume` and the Claude app list) as cards, read-only from `~/.claude/projects`:
 
+- **First launch asks first.** A welcome shows the Wefter Profile your sessions make and where it came from
+  (**Opt out** keeps your history off your XP and streaks), then your projects with their session counts,
+  worktree, scratch and temp folders unticked; **Start fresh** brings in none of the old ones. No cards are
+  added until you answer. A board that already had cards is left as it was. Settings → General changes either
+  answer later and replays the welcome (`lib/welcome.ts`, `components/WelcomeDialog.tsx`).
+
 - A title like "GOING DEEPER - Weft desktop app" becomes the card "Weft desktop app" with stage
   "Going deeper". DONE threads go to Done; other status words, and threads active in the last three
   days, go to Review; the rest go to Done. Their folders fill the projects bar.
@@ -163,10 +169,12 @@ The new-thread dialog (⌘N) and every card's reply box use the same editor:
   thread from cache at about a tenth of the price. After it, the chip reads `cache:cold 120k`: your
   next message sends the whole thread again at full price, which uses more of the 5-hour limit. For a
   new topic, a fresh card is cheaper.
-- **Limits burndown.** Hover over the status strip's `5hr` / `7d` to see the week so far: the weekly
-  limit left in red, the 5-hour one in green, red lines where either ran out, and green lines at the
-  5-hour resets (light), the next one (strong) and the weekly reset (strongest), with an even-pace line
-  to the weekly reset. Weft keeps a sample each time a thread's limits change, in `~/.weft/limits.jsonl`.
+- **Limits chart.** Hover over the status strip's `5hr` / `7d` to see the week, from one weekly reset
+  to the next: the 5-hour limit left as 168 green hour bars on the left axis, and the weekly limit left as
+  7 see-through red day bars in front on the right axis, their tops burning down hour by hour. Red lines
+  mark where a limit was hit; green lines mark the 5-hour resets (light), the next one (strong) and the
+  weekly reset (strongest). Hours inside a 5-hour window with nothing logged are hatched. Weft asks each
+  thread's CLI for its limits after a turn (at most every 5 minutes) and keeps the changes in `~/.weft/limits.jsonl`.
 - **Suggested next message.** After a turn, a Claude thread's reply box shows the CLI's guess at what
   you'll say next as its placeholder (as the Claude CLI does). Tab in the empty box fills it in to edit
   or send; it never sends on its own. It rides the turn's prompt cache, so it costs next to nothing,
@@ -474,7 +482,7 @@ answer the thread through `weft://reply` links. It starts a sprint's cards, or a
 ## Progress: streaks, badges and your wefter card
 
 Beside the code quality badge, **🔥 25 · Lv 15** is your streak and level (Settings → General → Show progress turns it
-off). Hover it for today's numbers; click it for **Your loom**:
+off). Hover it for today's numbers; click it for your **Wefter Profile**:
 
 - **XP and levels.** Starting a card earns 2 XP, a turn 1, and taking a card to Done 10, or 15 when its
   project's quality checklist scores 80+. Shipping pays more than starting, and healthy code pays more than
@@ -601,8 +609,12 @@ outputs stay on your Mac. It reads what sync uploads, so the dialog turns sync o
 An address that already has a Weft account joins the workspace at once; one that doesn't gets an email inviting them to sign
 up and join. Only owners and admins invite; a teammate sees the link and the list.
 
-Every account has a public profile at `weft.zip/@username` (your GitHub login): picture, name, a GitHub link, when you
-joined, and the threads you've shared publicly. It never shows your email or workspace. More in
+Every account has a public profile at `weft.zip/@username` (your GitHub login): your Wefter Profile for anyone to see.
+Your picture in a ring that fills toward your next level, your class, your GitHub bio and facts, this week's league
+and rank, XP, cards shipped, streak, badges, the builder card's attributes and skills, the activity cloth, tokens
+used in the last 30 days and your records, plus the mini apps and threads you've shared publicly. Your Mac posts the
+card every 10 minutes while you're signed in (`lib/profile-card.ts`). It never shows your email, workspace, projects
+or folders. More in
 [docs/architecture/profiles.md](docs/architecture/profiles.md).
 
 ## Secrets vault
@@ -618,6 +630,8 @@ four characters showing.
   The ✎ on a row, or **Change Value…** in its right-click menu, gives a secret a new value; a name still
   missing one gets a visible **Fill in** button (and **Fill In Value…** in the menu) with the hint a thread
   added under the name. Blanks sort first within each environment so the ones to fill in sit at the top.
+  The 🎲 beside the value field fills in a random 40-character string (letters and digits) for a value you make
+  up yourself, like a `CRON_SECRET` or a signing secret.
 - **Copy to <project>** in a secret's right-click menu copies it into another project's vault inside Electron
   main, so the value never reaches the board; a name still missing its value goes over as missing.
 
