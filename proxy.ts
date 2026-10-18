@@ -25,5 +25,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // The weft.zip pages that read the session: sign-in, the workspace's team page and invite links.
-  matcher: ["/login", "/app", "/team", "/invite/:token*", "/:orgSlug/team/:path*", "/:orgSlug/billing/:path*"],
+  // /s/:path* is included so a private share's redirect-to-login sees the visitor's cookie state.
+  matcher: ["/login", "/app", "/team", "/invite/:token*", "/:orgSlug/team/:path*", "/:orgSlug/billing/:path*", "/s/:path*"],
 };

@@ -62,6 +62,45 @@ describe("startup screen", () => {
     expect(contents.scripts).toEqual(['showError("The board didn\'t load (ERR_FAILED).")']);
   });
 
+  it("retries a dropped connection every 0.5s for ~10s before showing the error", async () => {
+    vi.useFakeTimers();
+    try {
+      const { contents, screen } = setup("http://127.0.0.1:3000/");
+      screen.watch(contents);
+      const refused = () => contents.emit("did-fail-load", {}, -102, "ERR_CONNECTION_REFUSED", "http://127.0.0.1:3000/", true);
+      for (let i = 1; i <= 20; i++) {
+        refused();
+        await vi.advanceTimersByTimeAsync(500);
+        expect(contents.loadURL).toHaveBeenCalledTimes(i);
+      }
+      expect(contents.loadURL).toHaveBeenLastCalledWith("http://127.0.0.1:3000/");
+      expect(contents.scripts).toEqual([]);
+      refused();
+      await vi.advanceTimersByTimeAsync(500);
+      expect(contents.loadURL).toHaveBeenCalledTimes(20);
+      expect(contents.scripts).toEqual(['showError("The board didn\'t load (ERR_CONNECTION_REFUSED).")']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("starts the retry count over after the board loads", async () => {
+    vi.useFakeTimers();
+    try {
+      const { contents, screen } = setup("http://127.0.0.1:3000/");
+      screen.watch(contents);
+      const dropped = () => contents.emit("did-fail-load", {}, -324, "ERR_EMPTY_RESPONSE", "http://127.0.0.1:3000/", true);
+      for (let i = 0; i < 20; i++) dropped();
+      contents.emit("did-finish-load");
+      dropped();
+      await vi.advanceTimersByTimeAsync(500);
+      expect(contents.loadURL).toHaveBeenCalledTimes(21);
+      expect(contents.scripts).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("shows a crashed renderer, not a clean exit", async () => {
     const { contents, screen } = setup("http://127.0.0.1:3000/");
     screen.watch(contents);

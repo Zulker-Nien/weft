@@ -177,7 +177,7 @@ function createMenus({ APP_NAME, ASSETS, COPILOT_SHORTCUT, mac, pane, getWin, ge
       const items = [];
       if (params.linkURL && /^https?:/i.test(params.linkURL)) {
         items.push(
-          { label: "Open Link in Browser Pane", click: () => pane.open(params.linkURL).catch(() => {}) },
+          { label: "Open Link in Browser Pane", click: () => pane.open(params.linkURL, undefined, false, { fromBoard: true }).catch(() => {}) },
           { label: "Open Link in Default Browser", click: () => shell.openExternal(params.linkURL) },
           { label: "Copy Link", click: () => clipboard.writeText(params.linkURL) },
           { type: "separator" },

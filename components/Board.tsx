@@ -660,7 +660,7 @@ export default function Board() {
           <FilterBox
             query={query}
             onQuery={setQuery}
-            matches={query.trim() ? topMatches(byColumn, FILTER_MATCHES) : []}
+            matches={query.trim() ? topMatches(byColumn, FILTER_MATCHES, query) : []}
             onOpen={openCard}
             onSearchAll={() => openPalette(query)}
           />

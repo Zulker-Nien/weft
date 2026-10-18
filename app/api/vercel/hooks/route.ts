@@ -7,6 +7,7 @@ import { fail, guard } from "@/lib/guard";
 
 async function folderOf(req: Request) {
   const body = (await req.json()) as Record<string, unknown>;
+  if (typeof body.folder !== "string") throw new Error("Provide a folder.");
   return resolveFolder(body.folder);
 }
 

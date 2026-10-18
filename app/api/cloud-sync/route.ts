@@ -24,6 +24,7 @@ export async function POST(req: Request) {
       syncNow();
       return Response.json({ status: cloudSyncStatus() });
     }
+    if (!("folder" in body)) return Response.json({ error: "Provide a folder or { sync: true }." }, { status: 400 });
     const folder = resolveFolder(body.folder);
     const on = body.on !== false;
     setSyncFolder(folder, on);
