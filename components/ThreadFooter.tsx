@@ -71,12 +71,15 @@ export function ThreadReply({ card, show, live, placeholder, question, schedulin
 }): ReactNode {
   const transport = useThreadTransport();
   const { shell } = transport;
+  const { handoff } = transport;
+  const cache = card.stats?.cache;
   const status = <StatusStrip stats={card.stats} cwd={card.cwd} backend={card.backend} />;
   if (!show) return <div className="shrink-0 border-t border-line px-4 py-1.5">{status}</div>;
   return (
     <ReplyBox key={card.id} question={question} cardId={card.id} cwd={card.cwd} live={live} placeholder={placeholder} suggestion={card.suggestion}
       sendLater={scheduling && { backend: card.backend, resets: scheduling.resets, scheduled: card.scheduled ?? [] }}
       status={status}
+      stale={cache && handoff ? { cache, onContinue: (message) => handoff(card.id, message) } : undefined}
       editLast={editLast} onEditing={onEditing}
       onSend={onSend} onShell={shell && ((command) => shell(card.id, command))} onStop={() => transport.stop(card.id)} />
   );

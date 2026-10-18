@@ -189,6 +189,8 @@ export const api = {
   stopTask: (id: string, taskId: string) => call<{ ok: true }>("POST", `/api/cards/${id}/tasks/${encodeURIComponent(taskId)}/stop`),
   // "!" in the reply box: runs a shell command in the card's folder (lib/shell.ts).
   shell: (id: string, command: string) => call<{ ok: true }>("POST", `/api/cards/${id}/shell`, { command }),
+  // "Continue in new card" on a cold-cache card: a summary, its touched files and `message` start a new card (lib/handoff.ts).
+  handoff: (id: string, message: string) => call<{ card: Card }>("POST", `/api/cards/${id}/handoff`, { message }),
   // Stops the Claude CLI that has a picked-up session open in another app.
   release: (id: string) => call<{ stopped: number }>("POST", `/api/cards/${id}/release`),
   // Flips a card's CLI, or with model picks one of its models (same CLI: no new session). replay=true re-sends the last user message (the rate-limit escape hatch).

@@ -15,6 +15,7 @@ import Composer, { type ComposerHandle } from "./Composer";
 import QuestionForm, { type QuestionFormHandle, type QuestionProps } from "./QuestionForm";
 import ReplyBoxActions from "./ReplyBoxActions";
 import { EditingNote, ReplyQueue } from "./ReplyQueue";
+import StaleCache, { type StaleProps } from "./StaleCache";
 
 // Board threads can take a message to send at a set time; the copilot can't, so it leaves this out.
 // resets are the plan's next 5-hour and weekly resets, the default times on a Claude thread.
@@ -35,6 +36,7 @@ export default function ReplyBox({
   suggestion,
   sendLater,
   status,
+  stale,
   autoFocus,
   editLast,
   onEditing,
@@ -50,6 +52,7 @@ export default function ReplyBox({
   suggestion?: string;
   sendLater?: SendLater;
   status?: ReactNode;
+  stale?: StaleProps;
   autoFocus?: boolean;
   editLast?: EditLast;
   onEditing?: (editing: boolean) => void;
@@ -281,6 +284,17 @@ export default function ReplyBox({
         onRemove={(i) => setQueue((q) => q.filter((_, j) => j !== i))}
       />
       {editing && editLast && <EditingNote {...editLast} live={live} />}
+      {stale && !live && (
+        <StaleCache
+          {...stale}
+          onContinue={async (): Promise<string> => {
+            const title = await stale.onContinue(composer.current?.readText() ?? "");
+            composer.current?.clear();
+            saveDraft("", true);
+            return title;
+          }}
+        />
+      )}
       <Composer
         ref={composer}
         variant="reply"

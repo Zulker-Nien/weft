@@ -28,6 +28,8 @@ export interface ThreadTransport {
   // Only where the Mac itself runs the card:
   shell?: (cardId: string, command: string) => Promise<void>;
   editLast?: (cardId: string, text: string) => Promise<void>;
+  // Summarizes the card and starts a new one with the summary, its touched files and the typed message.
+  handoff?: (cardId: string, message: string) => Promise<string>;
   // An outside-folder prompt's "This card" (and the question form's /add-dir); "always" adds it to every card.
   grantFolder?: (cardId: string, directory: string, scope: "card" | "always") => Promise<void>;
   waitPermission?: (cardId: string, pendingId: string) => Promise<void>;
@@ -67,6 +69,7 @@ export const localTransport: ThreadTransport = {
   stop: (cardId) => api.stop(cardId).then(() => {}),
   shell: (cardId, command) => api.shell(cardId, command).then(() => {}),
   editLast: (cardId, text) => api.editLast(cardId, text).then(() => {}),
+  handoff: (cardId, message) => api.handoff(cardId, message).then((r) => r.card.title),
   grantFolder: (cardId, directory, scope) => (scope === "always" ? api.allowFolder(directory) : api.setReadScope(cardId, directory)).then(() => {}),
   waitPermission: (cardId, pendingId) => api.waitPermission(cardId, pendingId).then(() => {}),
   stopTask: (cardId, taskId) => api.stopTask(cardId, taskId).then(() => {}),
