@@ -4,6 +4,7 @@
 // is set when the form is open in this vault: at the top when adding, in place of the row when changing one.
 
 import { keyLabel } from "@/lib/hotkeys";
+import { searchSecrets } from "@/lib/vault-search";
 import { environmentsOf, groupSecrets, nudgeText, secretKey, type VaultSecret, type VaultSummary } from "@/lib/vault-view";
 import type { RowAction } from "./SecretRow";
 import type { Editing } from "./VaultParts";
@@ -15,6 +16,7 @@ export function VaultSection({
   vault: v,
   editing,
   form,
+  query,
   revealed,
   onAdd,
   onImport,
@@ -24,6 +26,8 @@ export function VaultSection({
   vault: VaultSummary;
   editing: Editing | null;
   form: React.ReactNode;
+  // The drawer's search box; the section lists only the secrets that match it.
+  query: string;
   revealed: Map<string, string>;
   onAdd: () => void;
   onImport: () => void;
@@ -58,7 +62,7 @@ export function VaultSection({
         </button>
       )}
       {v.secrets.length === 0 && !v.nudge && !editing && <Note>No secrets yet. Add one, or import this project&apos;s .env files.</Note>}
-      {groupSecrets(v.secrets).map((group) => (
+      {groupSecrets(searchSecrets(v.secrets, query)).map((group) => (
         <div key={group.id}>
           <h4 className="px-1.5 pb-0.5 pt-2 text-[10.5px] font-semibold uppercase tracking-wider text-faint">{group.label}</h4>
           {group.secrets.map((s) =>

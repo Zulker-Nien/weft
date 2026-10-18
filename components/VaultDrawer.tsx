@@ -10,12 +10,15 @@ import {
   type VaultBridge,
   type VaultFilterPick,
   type VaultOverview,
+  type VaultSummary,
 } from "@/lib/vault-view";
-import { useVaultActions } from "@/lib/use-vault-actions";
+import { useVaultActions, type VaultActions } from "@/lib/use-vault-actions";
+import { vaultsWithMatches } from "@/lib/vault-search";
 import Icon from "./Icon";
 import RemoveSecretDialog from "./RemoveSecretDialog";
 import { type RowAction } from "./SecretRow";
 import { ImportPreview, Note, ProjectFilter, SecretForm } from "./VaultParts";
+import VaultSearch from "./VaultSearch";
 import { VaultSection, newSecret } from "./VaultSection";
 
 // The 🔐 drawer's body (docs/architecture/secrets.md): every project's vault (filtered to the top bar's
@@ -48,6 +51,7 @@ export default function VaultDrawer({
   notify: (err: unknown) => void;
 }) {
   const [pick, setPick] = useState<VaultFilterPick | null>(null);
+  const [query, setQuery] = useState("");
   const actions = useVaultActions(bridge, overview, reload, notify);
 
   const lock = () => actions.lock();
@@ -69,9 +73,10 @@ export default function VaultDrawer({
   if (note || !overview) return <Note>{note}</Note>;
   const all = overview.vaults;
   const filter = vaultFilter(project, pick);
-  const shown = filterVaults(all, filter);
+  const inProject = filterVaults(all, filter);
+  const shown = vaultsWithMatches(inProject, query, actions.editing?.vault ?? null);
   // The select names a vault by its first folder, so a second clone of the same repo still selects it.
-  const filterValue = (filter && shown[0]?.folder) || "";
+  const filterValue = (filter && inProject[0]?.folder) || "";
 
   if (actions.importing) {
     const importing = actions.importing;
@@ -94,8 +99,49 @@ export default function VaultDrawer({
     <SecretForm editing={editing} busy={actions.busy} canBlank={Boolean(bridge.addBlank)} onChange={actions.setEditing} onSave={() => { void actions.save(editing); }} onCancel={() => { actions.setEditing(null); }} />
   );
 
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <RemoveFor actions={actions} />
+      <ProjectFilter vaults={all} value={filterValue} picked={pick?.top === project} onPick={(folder) => setPick({ top: project, folder })} />
+      <VaultSearch query={query} onQuery={setQuery} />
+      <VaultList shown={shown} query={query} form={form} actions={actions} />
+    </div>
+  );
+}
+
+// The scrolling list under the filters: each shown vault's section, a note when the search matches nothing, and Lock now.
+function VaultList({ shown, query, form, actions }: { shown: VaultSummary[]; query: string; form: React.ReactNode; actions: VaultActions }) {
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+      {query.trim() && !shown.length && <Note>No secrets match “{query.trim()}”.</Note>}
+      {shown.map((v) => (
+        <VaultSection
+          key={v.id}
+          vault={v}
+          editing={actions.editing?.vault === v.id ? actions.editing : null}
+          form={form}
+          query={query}
+          revealed={actions.revealed}
+          onAdd={() => actions.setEditing(newSecret(v))}
+          onImport={() => void actions.startImport(v)}
+          onAct={(s, action: RowAction) => void actions.act(v, s, action)}
+          onMenu={(s, e) => void actions.menu(v, s, e)}
+        />
+      ))}
+      {actions.unlocked && (
+        <button onClick={() => actions.lock()} className="mx-1 mt-3 flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted hover:bg-sunken hover:text-ink">
+          <Icon name="lock" size={11} /> Lock now
+        </button>
+      )}
+    </div>
+  );
+}
+
+// The Remove dialog, open while actions.removing names a secret.
+function RemoveFor({ actions }: { actions: VaultActions }) {
   const removing = actions.removing;
-  const remove = removing && (
+  if (!removing) return null;
+  return (
     <RemoveSecretDialog
       name={removing.s.name}
       environments={environmentsOf(removing.v.secrets, removing.s.name)}
@@ -104,32 +150,5 @@ export default function VaultDrawer({
       onRemove={(environments) => void actions.removeFromVault(removing.v.id, removing.s.name, environments)}
       onClose={() => actions.setRemoving(null)}
     />
-  );
-
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      {remove}
-      <ProjectFilter vaults={all} value={filterValue} picked={pick?.top === project} onPick={(folder) => setPick({ top: project, folder })} />
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-        {shown.map((v) => (
-          <VaultSection
-            key={v.id}
-            vault={v}
-            editing={actions.editing?.vault === v.id ? actions.editing : null}
-            form={form}
-            revealed={actions.revealed}
-            onAdd={() => actions.setEditing(newSecret(v))}
-            onImport={() => void actions.startImport(v)}
-            onAct={(s, action: RowAction) => void actions.act(v, s, action)}
-            onMenu={(s, e) => void actions.menu(v, s, e)}
-          />
-        ))}
-        {actions.unlocked && (
-          <button onClick={lock} className="mx-1 mt-3 flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted hover:bg-sunken hover:text-ink">
-            <Icon name="lock" size={11} /> Lock now
-          </button>
-        )}
-      </div>
-    </div>
   );
 }

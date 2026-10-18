@@ -84,7 +84,9 @@ The vault is a 🔐 icon on the left rail (`SideRail` in `components/LibraryRail
 divider. It adds no new row: its count badge carries the nudges ("3 missing", or a dot when `.env.local`
 holds values not yet imported). It opens the same drawer the library uses (sliding out from under the board, which
 lies on it as a sheet), with every board project's vault. A project filter at its top follows the top bar's project;
-picking another there holds until the top bar's project changes (`vaultFilter` in `lib/vault-view.ts`). The
+picking another there holds until the top bar's project changes (`vaultFilter` in `lib/vault-view.ts`). Under it a
+search box (`components/VaultSearch.tsx`, `lib/vault-search.ts`) keeps the secrets whose name or blank hint holds every
+word typed, and hides the projects with no match; Escape clears it. The
 rail's badge counts the top bar's project only.
 
 - **The drawer**: names grouped by environment (development / preview / production), masked tails, an
