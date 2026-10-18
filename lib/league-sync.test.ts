@@ -3,10 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LeagueEntry } from "./league";
 
 const account = vi.hoisted(() => ({ client: vi.fn() }));
+const profileCardSync = vi.hoisted(() => ({ sync: vi.fn() }));
 vi.mock("./account", () => ({ accountClient: account.client }));
 vi.mock("./game-server", () => ({
   gameState: vi.fn(() => ({ weekXp: 50, weekShipped: 2, streak: { current: 3 }, level: { level: 4 }, badges: [] })),
 }));
+vi.mock("./profile-card-sync", () => ({ syncProfileCard: profileCardSync.sync }));
 
 const { FIRST_SYNC_MS, leagueView, NOT_DEPLOYED, startLeagueSync, SYNC_MS, syncWeek } = await import("./league-sync");
 
@@ -30,6 +32,7 @@ function fake({ session = true, submitError = null as string | null, submitCode 
 
 beforeEach(() => {
   vi.clearAllMocks();
+  profileCardSync.sync.mockResolvedValue(false);
   delete (globalThis as Record<string, unknown>).__weftLeagueSync;
 });
 afterEach(() => vi.useRealTimers());
@@ -110,7 +113,10 @@ describe("startLeagueSync", () => {
     vi.useFakeTimers();
     const { client, rpc } = fake();
     const stop = startLeagueSync({ client: () => client, entry: () => ENTRY });
-    expect(startLeagueSync({ client: () => client, entry: () => ENTRY })).toBeTypeOf("function");
+    // A second call while the first is alive returns a no-op (it doesn't push more timers).
+    const second = startLeagueSync({ client: () => client, entry: () => ENTRY });
+    expect(typeof second).toBe("function");
+    second();
     await vi.advanceTimersByTimeAsync(FIRST_SYNC_MS);
     expect(rpc).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(SYNC_MS);
@@ -136,6 +142,29 @@ describe("startLeagueSync", () => {
     const stop = startLeagueSync({ client: () => fake({ submitError: "missing", submitCode: "PGRST202" }).client, entry: () => ENTRY });
     await vi.advanceTimersByTimeAsync(FIRST_SYNC_MS);
     expect(warn).not.toHaveBeenCalled();
+    stop();
+    warn.mockRestore();
+  });
+
+  it("calls syncProfileCard in the timer tick (using the deps client)", async () => {
+    vi.useFakeTimers();
+    const { client } = fake();
+    const stop = startLeagueSync({ client: () => client, entry: () => ENTRY });
+    await vi.advanceTimersByTimeAsync(FIRST_SYNC_MS);
+    // The deps client was the one passed in.
+    const arg = profileCardSync.sync.mock.calls[0]![0] as { client: () => SupabaseClient | null };
+    expect(arg.client()).toBe(client);
+    stop();
+  });
+
+  it("catches and warns on a syncProfileCard rejection", async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    profileCardSync.sync.mockRejectedValueOnce(new Error("card down"));
+    const { client } = fake();
+    const stop = startLeagueSync({ client: () => client, entry: () => ENTRY });
+    await vi.advanceTimersByTimeAsync(FIRST_SYNC_MS);
+    expect(warn).toHaveBeenCalledWith("[weft] profile card sync failed:", expect.any(Error));
     stop();
     warn.mockRestore();
   });

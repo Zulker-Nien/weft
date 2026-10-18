@@ -119,6 +119,15 @@ describe("toAnnounce", () => {
     expect(many.next).toEqual({ badges: ["a", "w", "x", "y", "z"], level: 4 });
     expect(toAnnounce(prev, [b("x", true), b("y", true)], 2).text).toBe("🏅 2 badges unlocked: 🏅 x, 🏅 y");
   });
+
+  it("hands back the fresh badges and the new level for the popup", () => {
+    const prev = { badges: ["a"], level: 3 };
+    expect(toAnnounce(null, [b("a", true)], 3)).toMatchObject({ fresh: [], levelUp: null });
+    const got = toAnnounce(prev, [b("a", true), b("x", true), b("y", false)], 4);
+    expect(got.fresh.map((x) => x.id)).toEqual(["x"]);
+    expect(got.levelUp).toBe(4);
+    expect(toAnnounce(prev, [b("a", true)], 3)).toMatchObject({ fresh: [], levelUp: null });
+  });
 });
 
 describe("limit badges", () => {
