@@ -11,6 +11,7 @@ describe("migratePrompt", () => {
     expect(p).toContain(`1. trial (written by "Puku trial", card c1)`);
     expect(p).toContain("2. relays\n");
     expect(p).toContain("nothing touches the database until I say so");
+    expect(p).toContain("ask me with AskUserQuestion, so I get buttons");
     expect(p).not.toContain("Applied under another version");
   });
 

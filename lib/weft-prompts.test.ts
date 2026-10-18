@@ -31,6 +31,8 @@ describe("weftSystemPrompt", () => {
       "browser pane",
       "mcp__secrets__ask_add",
       "mcp__webhooks__add_blank",
+      "apply it yourself in the same turn",
+      "AskUserQuestion tool",
       "mcp__board__restart_weft_when_idle",
       "Use subagents",
       "BOARD STATUS",
@@ -64,6 +66,12 @@ describe("weftSystemPrompt", () => {
   it("a puku thread's subagent part leaves out the Claude model picker", () => {
     expect(prompts.weftSystemPrompt({ backend: "claude" })).toContain("When unsure, pick sonnet");
     expect(prompts.weftSystemPrompt({ backend: "puku" })).not.toContain("When unsure, pick sonnet");
+  });
+
+  it("a Codex thread gets the migrations rule but not the buttons one", () => {
+    const text = prompts.weftSystemPrompt({ backend: "codex" });
+    expect(text).toContain(prompts.WEFT_PINNED_PROMPTS.MIGRATIONS_PROMPT);
+    expect(text).not.toContain(prompts.WEFT_PINNED_PROMPTS.ASK_BUTTONS_PROMPT);
   });
 
   it("is memoized per build key, and follows a settings change", () => {
@@ -105,6 +113,8 @@ describe("promptsBuild", () => {
     ["./board-tools", "COPILOT_PROMPT"],
     ["./secret-tools", "SECRETS_PROMPT"],
     ["./webhook-tools", "WEBHOOKS_PROMPT"],
+    ["./decisions-prompt", "MIGRATIONS_PROMPT"],
+    ["./decisions-prompt", "ASK_BUTTONS_PROMPT"],
     ["./env", "RESTART_PROMPT"],
     ["./settings", "DEFAULT_THREAD_PROMPT"],
     ["./review", "REVIEW_PROMPT"],

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { COPILOT_PROMPT } from "./board-tools";
 import { PERSONA_PROMPTS, personaOf } from "./copilot-personas";
 import { BROWSER_PROMPT } from "./browser-tools";
+import { ASK_BUTTONS_PROMPT, decisionsPrompt, MIGRATIONS_PROMPT } from "./decisions-prompt";
 import { RESTART_PROMPT } from "./env";
 import { REVIEW_PROMPT } from "./review";
 import { SECRETS_PROMPT } from "./secret-tools";
@@ -24,6 +25,8 @@ export const WEFT_PINNED_PROMPTS = {
   COPILOT_PERSONA_PROMPTS: PERSONA_PROMPTS,
   SECRETS_PROMPT,
   WEBHOOKS_PROMPT,
+  MIGRATIONS_PROMPT,
+  ASK_BUTTONS_PROMPT,
   RESTART_PROMPT,
   DEFAULT_THREAD_PROMPT,
   REVIEW_PROMPT,
@@ -56,7 +59,7 @@ export function weftSystemPrompt(spec: PromptSpec): string {
   if (cached !== undefined) return cached;
   const parts = spec.copilot
     ? [WEFT_SOUL_PROMPT, BROWSER_PROMPT, COPILOT_PROMPT, personaOf(spec.persona).prompt].filter(Boolean)
-    : [WEFT_SOUL_PROMPT, BROWSER_PROMPT, SECRETS_PROMPT, WEBHOOKS_PROMPT, RESTART_PROMPT, subagentPrompt(subagentModel(), spec.backend), threadPrompt(), REVIEW_PROMPT];
+    : [WEFT_SOUL_PROMPT, BROWSER_PROMPT, SECRETS_PROMPT, WEBHOOKS_PROMPT, decisionsPrompt(spec.backend), RESTART_PROMPT, subagentPrompt(subagentModel(), spec.backend), threadPrompt(), REVIEW_PROMPT];
   // A settings change makes a new key; the old prompts are of no further use.
   if (built.size >= 8) built.clear();
   const text = parts.join("\n\n");

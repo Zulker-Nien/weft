@@ -70,8 +70,14 @@ applied and reports it as `drift` (`{ name, local, remote }`); the line reads "â
 When anything is pending or drifted, **Migrate** sits at the end of the line (`migrationLine().fix`). It starts a card in
 the folder (`lib/supabase-migrate.ts`, through the rail's `onStartCard`, Board's `improveQuality`) whose prompt lists the
 pending migrations with the card that wrote each, and the drifted files. The card reads the history and the live schema,
-writes a page with a risk badge per migration, and on your OK applies them oldest first (the MCP, or `supabase db push`
-for a CLI link), then `git mv`s each local file to the version Supabase recorded, so the two histories match.
+writes a page with a risk badge per migration, asks for your OK with AskUserQuestion buttons, and on it applies them
+oldest first (the MCP, or `supabase db push` for a CLI link), then `git mv`s each local file to the version Supabase
+recorded, so the two histories match.
+
+Migrate is for what's left over. A thread that writes a migration applies it itself in the same turn, the same way
+(apply, `git mv` to the stamped version, advisors), and asks first, with buttons, only when it drops or rewrites data:
+`MIGRATIONS_PROMPT` and `ASK_BUTTONS_PROMPT` in `lib/decisions-prompt.ts`, in every thread's system prompt (Codex,
+which has no AskUserQuestion, gets the first only).
 
 ## Next
 
