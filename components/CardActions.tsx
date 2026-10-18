@@ -44,6 +44,12 @@ export function CardMarks({ card, live, onShare, onStar, onArchive }: CardMarkPr
   );
 }
 
+// Delete waits for the thread's first full turn: before then it's a stray click away from losing a thread that's
+// still starting. A counted turn, or a saved session that isn't running (imported, Codex), counts as one.
+export function hasFinishedTurn(card: Card, live: boolean): boolean {
+  return Boolean(card.turns) || (Boolean(card.sessionId) && !live);
+}
+
 export default function CardActions({ onSend, onDelete, marksInPane = false, ...marks }: CardMarkProps & {
   onSend: (text: string) => Promise<void>;
   onDelete: () => void;
@@ -55,7 +61,7 @@ export default function CardActions({ onSend, onDelete, marksInPane = false, ...
     <>
       <CrashGuard inline what="skill menu"><SkillMenu cwd={card.cwd} disabled={live} onRun={(skill) => onSend(`/${skill}`)} /></CrashGuard>
       {!marksInPane && <CardMarks {...marks} />}
-      <button
+      {hasFinishedTurn(card, live) && <button
         onClick={() => {
           if (window.confirm(`Delete “${card.title}”? Its CLI transcript stays on disk.`)) onDelete();
         }}
@@ -64,7 +70,7 @@ export default function CardActions({ onSend, onDelete, marksInPane = false, ...
         className="rounded-md p-1.5 text-muted hover:bg-sunken hover:text-danger"
       >
         <Icon name="trash" size={15} />
-      </button>
+      </button>}
     </>
   );
 }
