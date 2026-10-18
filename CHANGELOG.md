@@ -10,6 +10,7 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Added
 
+- **Errors and Restart errors filters on the Review column.** Two chips in its header, each on its own: Errors keeps cards whose last line is a thread or build error, Restart errors keeps cards that hit the 5-hour session limit. An active chip shows its count; both off after a reload (`components/ReviewFilterChips.tsx`, `lib/board-view.ts`).
 - **The reply box's button says what Enter does.** One mode at a time, named on a chip in the box and on the primary: Send, Queue (while a turn runs), Answer, Run (a `!` command, in green with the folder), Replace (after ↑, in amber with the file edits that stay) or Send copy. Send now, Send later and Continue here moved into a ▾ beside it; ■ Stop keeps its own slot. The default follows the thread: **New card** when the prompt cache is cold (the stale-cache row above the box is gone; **Send here** is in the ▾), **Send at <reset>** when the 5-hour window is used up, and **Continue** only after a turn that stopped short (`lib/reply-mode.ts`, `components/ReplyButtons.tsx`, `components/ReplyModeChip.tsx`).
 
 - **🏆 Leagues in the header.** A chip beside the streak shows your league and rank ("🏆 Linen #1") and opens every league: click any tier, Cotton to Gold Thread, to see its leagues this week and who's in them (`components/LeaguesDialog.tsx`, the `league_browse` RPC). The profile's League tab keeps just your own league.
@@ -56,6 +57,7 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Fixed
 
+- The "+N/-N" counter's **Review N cards** button can be clicked: its bubble stays open while the mouse crosses into it (`Tip`'s new `interactive` mode) instead of closing the moment you leave the counter.
 - A multi-select question's `[ ]` no longer wraps into "[" over "]", and the board footer's limits line no longer peeks out under an open card.
 
 - **"Review all" and "Resume N" stay once the board loads.** Backlog's column appears after the cards load and narrows every column below 230px, where the header hid all its actions. Narrow columns now keep them as icons (✓, ▶ N) and hide the row only under 150px, beside the open copilot lane (`components/ColumnHeader.tsx`).
