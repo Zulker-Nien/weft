@@ -20,6 +20,8 @@ export default function ReplyBoxActions({
   onSend,
   onStop,
   onStopError,
+  onContinue,
+  showContinue = false,
 }: {
   live: boolean;
   question: boolean;
@@ -34,6 +36,13 @@ export default function ReplyBoxActions({
   onSend: (now: boolean) => void;
   onStop: () => Promise<void>;
   onStopError: (err: unknown) => void;
+  // Sends the word "continue" through the same path as a typed message — matches the card-level ▶
+  // (lib/resume-actions.ts via api.send(id, "continue")). ReplyBox wires this to the same `onSend(text)`
+  // Send uses; ReplyButtons only shows the button while the parent opts in.
+  onContinue: () => void;
+  // Hidden by default: ReplyBox only opts in when the thread is idle, no question is waiting, the box
+  // isn't a "!" shell command, and we're not editing the last message.
+  showContinue?: boolean;
 }) {
   return (
     <>
@@ -63,6 +72,8 @@ export default function ReplyBoxActions({
           })();
         }}
         onSend={onSend}
+        onContinue={onContinue}
+        showContinue={showContinue}
       />
     </>
   );

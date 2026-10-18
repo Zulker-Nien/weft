@@ -2,17 +2,22 @@
 
 // The open card's thread on weft.zip: the desktop's own message, tool-run and Markdown components
 // (ThreadEntries), so a thread reads here the way it does on the Mac, oldest first with "Ran 3
-// commands" folded. Read-only: a reply typed here can't reach the Mac that runs the card yet.
+// commands" folded. A reply typed here reaches the Mac that owns the card (lib/cloud-inbox.ts);
+// cards a teammate's Mac owns stay read-only here, since only the account's own Mac obeys.
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import type { CloudCommandRow } from "@/lib/cloud-commands";
+import type { CloudCardRow } from "@/lib/cloud-sync-types";
 import { folderName } from "@/lib/format";
 import { cardTags } from "@/lib/rail-view";
 import type { Card } from "@/lib/types";
+import { canReply, cardReplies } from "@/lib/web-commands";
 import { chronological, rewriteBlobRefs, seqOf, type WebBoardThread } from "@/lib/web-board";
 import BackendBadge from "../BackendBadge";
 import CardProgress, { showsCardProgress } from "../CardProgress";
 import Icon from "../Icon";
 import TagPill from "../TagPill";
 import { groupThread, ThreadEntries } from "../ThreadItems";
+import { WebReplyBox } from "./WebReplyBox";
 
 // How close to the bottom still counts as "following" the thread, in px.
 const FOLLOW_SLACK = 80;
@@ -20,23 +25,35 @@ const FOLLOW_SLACK = 80;
 export function WebThreadPanel({
   card,
   ownerDevice,
+  cardRow,
   window: thread,
   blobUrls,
+  commands,
+  userId,
   onClose,
   onLoadOlder,
+  onSendReply,
+  onDropCommand,
 }: {
   card: Card;
   ownerDevice: string;
+  cardRow: CloudCardRow;
   window: WebBoardThread;
   blobUrls: Record<string, string>;
+  commands: CloudCommandRow[];
+  userId: string;
   onClose: () => void;
   onLoadOlder: () => void;
+  onSendReply: (text: string) => Promise<string | null>;
+  onDropCommand: (id: string) => void;
 }) {
   const entries = useMemo(() => groupThread(rewriteBlobRefs(chronological(thread.items), blobUrls)), [thread.items, blobUrls]);
   const scroller = useRef<HTMLDivElement>(null);
   const following = useRef(true);
   // The newest item's seq: it changes when the thread grows, not when "Load earlier" adds above.
   const newest = thread.items[0] ? seqOf(thread.items[0]) : undefined;
+  const replies = useMemo(() => cardReplies(commands, card.id), [commands, card.id]);
+  const replyAllowed = canReply(cardRow, userId);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -97,9 +114,7 @@ export function WebThreadPanel({
           {entries.length === 0 && <p className="py-6 text-center text-[12.5px] text-faint">Nothing in this thread has synced yet.</p>}
           <ThreadEntries entries={entries} live={card.column === "running"} streaming="" cardId={card.id} />
         </div>
-        <footer className="shrink-0 border-t border-line px-4 py-2 text-[11.5px] text-faint">
-          Read-only: reply to this thread in Weft on {ownerDevice}.
-        </footer>
+        <WebReplyBox card={card} canReply={replyAllowed} replies={replies} onSend={onSendReply} onDrop={onDropCommand} />
       </aside>
     </>
   );

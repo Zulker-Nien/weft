@@ -132,7 +132,19 @@ export function WebBoard({ orgId, orgSlug, userId, initialCommands, initialCards
         {composing && <WebNewCardDialog targets={targets} defaultFolder={project} onSend={board.startCard} onClose={() => setComposing(false)} />}
 
         {active && board.thread && (
-          <WebThreadPanel card={active.card} ownerDevice={active.owner_device} window={board.thread} blobUrls={board.blobUrls} onClose={board.closeCard} onLoadOlder={() => void board.loadOlder()} />
+          <WebThreadPanel
+            card={active.card}
+            ownerDevice={active.owner_device}
+            cardRow={active}
+            window={board.thread}
+            blobUrls={board.blobUrls}
+            commands={board.commands}
+            userId={userId}
+            onClose={board.closeCard}
+            onLoadOlder={() => void board.loadOlder()}
+            onSendReply={(text) => board.sendReply(active, text)}
+            onDropCommand={(id) => void board.dropCommand(id)}
+          />
         )}
       </div>
     </ToolResultSourceContext.Provider>

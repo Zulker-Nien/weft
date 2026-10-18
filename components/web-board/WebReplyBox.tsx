@@ -3,11 +3,14 @@
 // The open card's reply box on weft.zip, where the desktop's sits under the thread. What you send is a `reply`
 // command for the Mac that runs the card (lib/cloud-inbox.ts), which sends it as if typed there: now, or after the
 // turn that's running. Under the box, each reply still on its way (or refused) and what the Mac has queued for the
-// turn's end. A card a teammate runs can't be answered from here, since only its own account's Mac obeys.
+// turn's end. A card a teammate runs can't be answered from here, since only its own account's Mac obeys. The
+// Continue button sends the word "continue" through the same path; it mirrors the desktop's ▶ button, which
+// the Mac receives and routes like any other reply (lib/resume-actions.ts).
 import { useState } from "react";
 import { commandText, type CloudCommandRow } from "@/lib/cloud-commands";
 import type { Card } from "@/lib/types";
 import { replyNote } from "@/lib/web-commands";
+import Icon from "@/components/Icon";
 
 export function WebReplyBox({
   card,
@@ -40,6 +43,15 @@ export function WebReplyBox({
     setSending(false);
     setError(failed);
     if (!failed) setText("");
+  };
+  // Continue: send "continue" through the same path. The Mac treats it as a fresh user message, which
+  // the desktop's ▶ already does (lib/resume-actions.ts). Disabled while a reply is in flight, like Send.
+  const sendContinue = async () => {
+    if (sending) return;
+    setSending(true);
+    const failed = await onSend("continue");
+    setSending(false);
+    setError(failed);
   };
   const queued = (card.scheduled ?? []).filter((m) => m.afterTurn);
 
@@ -86,6 +98,16 @@ export function WebReplyBox({
           }}
           className="min-h-[2.5rem] flex-1 resize-none bg-transparent text-[13px] text-ink placeholder:text-faint focus:outline-none"
         />
+        <button
+          type="button"
+          onClick={() => void sendContinue()}
+          disabled={sending}
+          aria-label="Continue"
+          title="Continue: send “continue” so the thread keeps going"
+          className="flex shrink-0 items-center gap-1 rounded-md border border-line-strong px-2.5 py-1 text-[12.5px] text-ink hover:bg-sunken disabled:opacity-40"
+        >
+          <Icon name="play" size={11} /> Continue
+        </button>
         <button type="submit" disabled={!text.trim() || sending} className="rounded-md bg-accent px-3 py-1 text-[12.5px] font-medium text-white disabled:opacity-40">
           {sending ? "Sending…" : "Send"}
         </button>

@@ -47,7 +47,8 @@ describe("WebBoard thread panel", () => {
     expect(text.indexOf("please list files")).toBeLessThan(text.indexOf(run));
     expect(text.indexOf(run)).toBeLessThan(text.indexOf("All"));
     expect(within(dialog).getByText("done").tagName).toBe("STRONG");
-    expect(within(dialog).getByText(/Read-only/)).toBeInTheDocument();
+    // The reply box is wired in now (lib/cloud-commands); the test's card is u1's, so the textarea shows.
+    expect(within(dialog).getByRole("textbox", { name: "Reply" })).toBeInTheDocument();
   });
 
   it("says so when nothing has synced for the open card", async () => {

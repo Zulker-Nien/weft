@@ -2,11 +2,12 @@
 
 // Under the header: the threads you asked your Mac to start that haven't turned up as cards yet, or failed.
 // A pending or claimed one can be taken back; a failed one is cleared. Done ones are gone: the card is the answer.
+// Replies are not here: they live under their card's reply box (WebThreadPanel), so one panel per reply.
 import { isOpenCommand, type CloudCommandRow } from "@/lib/cloud-commands";
-import { commandLine } from "@/lib/web-commands";
+import { boardCommands, commandLine } from "@/lib/web-commands";
 
 export function WebCommandStrip({ commands, onDrop }: { commands: CloudCommandRow[]; onDrop: (id: string) => void }) {
-  const shown = commands.filter((c) => isOpenCommand(c) || c.status === "failed");
+  const shown = boardCommands(commands).filter((c) => isOpenCommand(c) || c.status === "failed");
   if (!shown.length) return null;
   return (
     <ul className="mx-3 mt-2 flex shrink-0 flex-col gap-1" aria-label="Threads sent to your Mac">

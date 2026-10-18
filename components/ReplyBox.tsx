@@ -7,6 +7,7 @@ import { replyPlaceholder } from "@/lib/reply-placeholder";
 import { useReplyDraft } from "@/lib/use-reply-draft";
 import { useReplyKeys } from "@/lib/use-reply-keys";
 import { useReplySchedule } from "@/lib/use-reply-schedule";
+import { useReplyContinue } from "@/lib/use-reply-continue";
 import { useNow } from "@/lib/use-now";
 import type { Backend, ScheduledMessage } from "@/lib/types";
 import Composer, { type ComposerHandle } from "./Composer";
@@ -221,6 +222,16 @@ export default function ReplyBox({
     else void submit(now);
   }
 
+  // Continue: the literal word "continue" through the same onSend path as a typed message.
+  const { canContinue, sendContinue } = useReplyContinue({
+    live,
+    question: Boolean(question),
+    shell,
+    editing,
+    onSend,
+    setError: setErrorWrap,
+  });
+
   const { scheduleAt, unschedule, takeBackScheduled } = useReplySchedule(cardId, composer, saveDraft, setErrorWrap);
   const { onKeyDownCapture, onKeyDown } = useReplyKeys({
     composer,
@@ -285,6 +296,8 @@ export default function ReplyBox({
             onSend={(now) => send(now)}
             onStop={onStop}
             onStopError={setErrorWrap}
+            onContinue={sendContinue}
+            showContinue={canContinue}
           />
         }
       />

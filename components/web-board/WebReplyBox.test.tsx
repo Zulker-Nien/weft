@@ -88,4 +88,21 @@ describe("the web reply box", () => {
     expect(within(dialog).queryByRole("textbox", { name: "Reply" })).toBeNull();
     expect(within(dialog).getByText(/teammate's Mac/)).toBeInTheDocument();
   });
+
+  describe("Continue", () => {
+    it("sends the word 'continue' through the same path, like the desktop's ▶", async () => {
+      const dialog = await board();
+      fireEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
+      await waitFor(() => expect(mockState.inserts).toHaveLength(1));
+      expect(mockState.inserts[0]).toEqual({
+        table: "cloud_commands",
+        row: { org_id: "o1", kind: "reply", target_device: "mac-1", folder: "/Users/me/dev/app", payload: { cardId: "c1", text: "continue" } },
+      });
+    });
+
+    it("is hidden on a card a teammate's Mac runs", async () => {
+      const dialog = await board({ owner: "u2" });
+      expect(within(dialog).queryByRole("button", { name: "Continue" })).toBeNull();
+    });
+  });
 });
