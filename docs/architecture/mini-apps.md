@@ -78,6 +78,9 @@ one vault environment it asks for, and its reads by name:
   naming the app, the project and the env and the vault names its reads need (`SUPABASE_SECRET_KEY` for a `supabase`
   read; `GA4_PROPERTY_ID` and `GA4_SERVICE_ACCOUNT_JSON` for a `ga4` one). The grant is kept in `~/.weft/app-grants.json`,
   keyed by the app's folder, with a hash of its manifest: change the env, the folder or a read and the app asks again.
+  Call it `window.weft` or give it another name (`const bridge = window.weft`), never a top-level `const weft`: the
+  contextBridge makes `window.weft` a non-configurable global, so that binding is a redeclaration and the browser
+  refuses the whole script, leaving a page with no grant bar and no data (jsdom doesn't, so a test there won't catch it).
 - **Main runs the reads** (`electron/app-data.cjs`; which frame may ask in `electron/app-data-frame.cjs`, grants in
   `electron/app-data-grants.cjs`, the two read kinds in `electron/app-data-reads.cjs`). It answers only the main frame
   of a pane page (`event.sender.mainFrame`) that is a file directly in one app's folder, `~/.weft/apps/<slug>/` (real
@@ -116,6 +119,11 @@ for its own Touch ID.
 ## Open and later
 
 - A tile opens its page through the board's `showPage` (`lib/board-helpers.ts`): the board's own pane, `"board"` key.
+  With no card open that pane sits left of the columns, between the rail and the board, and a second click on the lit
+  tile closes it (`components/AppsRail.tsx` `activate`). `components/StandaloneBrowserPane.tsx` slides it in and out: a
+  flex row, so the pane stretches to full height (as a block it shrank to its toolbar and the page measured 0 px tall,
+  which the shell hides), and while it slides in BrowserPane is `obscured`, because CSS can't clip the native page.
+  Its resize divider is its right edge.
 - Not built: `mcp__browser__save_app` so a thread can offer its page as an app, drag to reorder (Move up/down for now),
   favicons, apps per project. Data apps: revoking from the tile's menu (the page's Revoke for now), a data app's own
   files beyond `index.html` going up to prod, a move pushing every app's new place (only the moved one's for now),
