@@ -52,7 +52,8 @@ also lets My mini apps mark the shared ones. Removing an app deletes its share r
 
 On weft.zip, `app/a/[id]/page.tsx` runs the gate (`lib/app-share-access.ts`, the same `gateVerdict` as a card's link in
 `lib/share-access.ts`) and draws `components/share-view/SharedApp.tsx`: a thin header and the page full-window. A blob is
-framed from `app/api/a/[id]/page`, which serves only the blob the row names, sandboxed and with key-shaped text masked
+framed from `app/api/a/[id]/page`, which serves only the blob the row names (for a `folder` row, the file its `files` map
+names as `page`, the entry), sandboxed and with key-shaped text masked
 (`lib/share-page-serve.ts`, shared with the card's page route). The email and password gates post to
 `app/api/a/[id]/unlock` (`lib/share-unlock.ts`, the one rate limit, pass cookie and off-Vercel refusal that a card's unlock route uses too).
 
@@ -124,6 +125,8 @@ for its own Touch ID.
   flex row, so the pane stretches to full height (as a block it shrank to its toolbar and the page measured 0 px tall,
   which the shell hides), and while it slides in BrowserPane is `obscured`, because CSS can't clip the native page.
   Its resize divider is its right edge.
+- Next, as a design for review: React folder apps bundled by Weft and served from weft.zip, with declared reads and
+  cloud secrets; full Next.js apps on Weft-hosted Workers when one needs server code (mini-app-hosting.md).
 - Not built: `mcp__browser__save_app` so a thread can offer its page as an app, drag to reorder (Move up/down for now),
   favicons, apps per project. Data apps: revoking from the tile's menu (the page's Revoke for now), a data app's own
   files beyond `index.html` going up to prod, a move pushing every app's new place (only the moved one's for now),
