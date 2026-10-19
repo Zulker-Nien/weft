@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { openFile } from "@/lib/open-file";
 import type { EditPreview } from "@/lib/edit-preview";
 import type { PendingPermission, PromptReason } from "@/lib/types";
@@ -11,6 +11,8 @@ import { Spinner } from "./Icon";
 // The body of a permission prompt: first why it came up (a symbol-claim clash, or the card's permission
 // mode), then the change. A held Edit or Write reads as a change: who asks, the file, the
 // symbols it touches, +added −removed and a short diff with real line breaks (lib/edit-preview.ts).
+// A plan (ExitPlanMode) renders as a one-line link to a pane page (lib/plan-preview.ts); the user reads
+// the plan in the browser pane where it has room, while Allow / Deny stay in the thread.
 // Any other tool, or Raw, shows the tool's input as JSON.
 
 // A claim's symbol as the prompt shows it: `Board/useEffect#3` reads `Board › useEffect #3`.
@@ -47,6 +49,7 @@ const PRE = "max-h-36 overflow-auto rounded bg-panel/70 px-2 py-1.5 font-mono te
 export default function PermissionInput({
   input,
   edit,
+  previewUrl,
   askedBy,
   why,
 }: {
@@ -54,12 +57,48 @@ export default function PermissionInput({
   // Why the prompt came up (lib/claims.ts clashWhy, lib/runner-ask.ts modeWhy).
   why?: PromptReason;
   edit?: EditPreview;
+  // The plan page (lib/plan-preview.ts); shown as a clickable link and opened in the card's pane.
+  previewUrl?: string;
   // The asking card's title, its one-line intent.
   askedBy?: string;
 }) {
   const [raw, setRaw] = useState(false);
   const cardId = useFileLink();
+  // Open the plan in the pane as soon as the prompt lands; a click re-opens it at the same place.
+  const bridge = typeof window !== "undefined" ? window.weft : undefined;
+  useEffect(() => {
+    if (previewUrl && bridge && cardId) void bridge.browser.open(previewUrl, cardId).catch(() => {});
+  }, [previewUrl, bridge, cardId]);
   const reason = why && <Reason why={why} />;
+  if (previewUrl && !edit) {
+    const open = () => {
+      if (cardId) void bridge?.browser.open(previewUrl, cardId).catch(() => {});
+    };
+    return (
+      <div className="mt-1.5 flex flex-col gap-1">
+        {reason}
+        <div className="flex items-center gap-2 text-[12px] text-muted">
+          <span>Plan opened in the pane — read it there, then Allow or Deny below.</span>
+          <button
+            type="button"
+            onClick={open}
+            className="shrink-0 cursor-pointer font-medium text-accent hover:underline"
+          >
+            Show in pane
+          </button>
+          <button
+            type="button"
+            onClick={() => setRaw((r) => !r)}
+            aria-pressed={raw}
+            className="shrink-0 rounded px-1 text-[11px] text-faint hover:bg-sunken hover:text-ink"
+          >
+            Raw
+          </button>
+        </div>
+        {raw ? <pre className={`whitespace-pre-wrap text-muted ${PRE}`}>{JSON.stringify(input, null, 2)}</pre> : null}
+      </div>
+    );
+  }
   if (!edit)
     return (
       <div className="mt-1.5 flex flex-col gap-1">

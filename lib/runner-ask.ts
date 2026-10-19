@@ -3,6 +3,7 @@ import type { PermissionResult } from "@anthropic-ai/claude-agent-sdk";
 import { describeBoardTool } from "./board-tools";
 import { editPreview } from "./edit-preview";
 import { shortToolName, summarizeInput } from "./format";
+import { isPlanTool, writePlanPreview } from "./plan-preview";
 import { writeQuestionPreview } from "./question-preview";
 import { suggestReadScope } from "./read-scope";
 import { safeUpdate, sessions, type Pending, type Session } from "./runner-state";
@@ -98,19 +99,21 @@ export function askUser(
 ): Promise<PermissionResult> {
   return new Promise((resolve) => {
     const questions = toolName === "AskUserQuestion" ? readQuestions(input) : undefined;
-    const summary = summarizeInput(input);
-    const label = questions
-      ? questions.map((q) => q.question).join(" ")
-      : (title ??
-        describeBoardTool(toolName, input) ??
-        (summary ? `${shortToolName(toolName)}: ${summary}` : shortToolName(toolName)));
+    const plan = !questions && isPlanTool(toolName);
+    const label = pendingLabel({ questions, plan, title, toolName, input });
     const id = randomUUID();
     const index = appendThread(cardId, { kind: "permission", id, toolName, title: label, at: Date.now() });
     // The first question that names a folder outside the project wins; more buttons would be noise.
     const readScope = questions ? questions.map((q) => suggestReadScope(q.question, session.spec.cwd)).find((s) => s !== undefined) : claim.folder;
-    const previewUrl = questions ? questionPreview(cardId, questions) : undefined;
-    const edit = questions ? undefined : editPreview(toolName, input, session.spec.cwd, claim.symbols);
-    const why = questions ? undefined : (claim.why ?? modeWhy(session.spec.permissionMode, toolName));
+    // Plans (ExitPlanMode) live in their own page in the browser pane (lib/plan-preview.ts), so a long
+    // Markdown plan doesn't get dumped into the inline prompt as raw JSON.
+    const previewUrl = questions
+      ? questionPreview(cardId, questions)
+      : plan
+        ? writePlanPreview(cardId, toolName, input)
+        : undefined;
+    const edit = questions || plan ? undefined : editPreview(toolName, input, session.spec.cwd, claim.symbols);
+    const why = questions || plan ? undefined : (claim.why ?? modeWhy(session.spec.permissionMode, toolName));
     const p: Pending = { id, index, toolName, title: label, input, questions, readScope, previewUrl, edit, why, resolve };
     session.pending.push(p);
     if (session.pending.length === 1) {
@@ -151,4 +154,13 @@ function questionPreview(cardId: string, questions: NonNullable<Pending["questio
 export function modeWhy(mode: PermissionMode, toolName: string): PromptReason {
   const option = MODE_OPTIONS.find((m) => m.id === mode);
   return { category: "mode", detail: `${option ? option.label : "This card"} asks before ${shortToolName(toolName)}` };
+}
+
+// The one-line title the thread shows above the prompt: a question's joined questions, "Plan ready for
+// review" for ExitPlanMode, else the call's title, board-tool description or tool+summary.
+function pendingLabel({ questions, plan, title, toolName, input }: { questions: Pending["questions"]; plan: boolean; title?: string; toolName: string; input: Record<string, unknown> }): string {
+  if (questions) return questions.map((q) => q.question).join(" ");
+  if (plan) return "Plan ready for review";
+  const summary = summarizeInput(input);
+  return title ?? describeBoardTool(toolName, input) ?? (summary ? `${shortToolName(toolName)}: ${summary}` : shortToolName(toolName));
 }

@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { EditPreview } from "@/lib/edit-preview";
 import type { PendingPermission } from "@/lib/types";
+import { FileLinkContext } from "./file-link-context";
 import PermissionInput, { PermissionActions, REASONS, symbolLabel } from "./PermissionInput";
 import "./test-utils";
 
@@ -64,6 +65,21 @@ describe("PermissionInput", () => {
   it("labels nested symbols readably", () => {
     expect(symbolLabel("Board/return/div#2/main")).toBe("Board › return › div #2 › main");
     expect(symbolLabel("one")).toBe("one");
+  });
+
+  it("shows a plan as a pane link instead of raw JSON", async () => {
+    const open = vi.fn().mockResolvedValue(undefined);
+    (window as unknown as { weft?: { browser: { open: typeof open } } }).weft = { browser: { open } };
+    render(
+      <FileLinkContext.Provider value="c1">
+        <PermissionInput input={{ plan: "# Steps\n- One\n- Two" }} previewUrl="file:///show/c1-plan.html" />
+      </FileLinkContext.Provider>,
+    );
+    expect(screen.getByText("Plan opened in the pane — read it there, then Allow or Deny below.")).toBeTruthy();
+    expect(screen.queryByText(/"plan":/)).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Show in pane" }));
+    expect(open).toHaveBeenCalledWith("file:///show/c1-plan.html", "c1");
+    expect(open.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 });
 
