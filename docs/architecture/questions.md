@@ -307,3 +307,19 @@ reads them:
 Neither field is required, and `askUser` swallows a `writeQuestionPreview`
 failure (a read-only disk) so the question still reaches the user
 (`lib/runner-ask.ts:128-134`).
+
+## Plan preview (`ExitPlanMode`)
+
+The same `previewUrl` plumbing carries a thread's plan to the pane when the
+SDK calls `ExitPlanMode` (Claude Code and puku): `askUser` (`lib/runner-ask.ts`)
+detects the tool via `isPlanTool` (`lib/plan-preview.ts`), writes a self-
+contained HTML page of the plan to `~/.weft/show/<cardId>-plan.html` via
+`writePlanPreview` (a small Markdown→HTML renderer for headings, lists, code
+fences and inline emphasis — `lib/plan-preview.ts`), and attaches the `file://`
+URL to `pending.previewUrl`. The thread item is titled "Plan ready for review"
+by `pendingLabel` (`lib/runner-ask.ts`), and `components/PermissionInput.tsx`
+shows a one-line "Plan opened in the pane — read it there, then Allow or Deny
+below." with a "Show in pane" link and a Raw toggle for the JSON view. The
+pane opens the URL through `bridge.browser.open(previewUrl, cardId)` on
+mount. `lib/plan-preview.ts` mirrors `lib/question-preview.ts`; both share
+`DATA_DIR` and the `~/.weft/show/` location.
