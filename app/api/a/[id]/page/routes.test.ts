@@ -24,7 +24,7 @@ function ctx(id: string) {
   return { params: Promise.resolve({ id }) };
 }
 
-function blobShare(over: Partial<{ org_id: string; kind: string; page: string }> = {}) {
+function blobShare(over: Partial<{ org_id: string; kind: string; page: string; files: unknown }> = {}) {
   return { id: "s1", org_id: "org-1", app_id: "app-1", mode: "public", kind: "blob", page: `blob:sha256:${SHA}`, password_hash: null, has_password: false, created_by: "u1", created_at: "2026-10-18T00:00:00.000Z", updated_at: "2026-10-18T00:00:00.000Z", ...over };
 }
 
@@ -80,6 +80,21 @@ describe("GET /api/a/[id]/page", () => {
     expect(serveBlobPage).toHaveBeenCalledWith(expect.anything(), "org-1", SHA);
     expect(res.status).toBe(200);
     expect(await res.text()).toBe("page body");
+  });
+
+  it("serves a folder share's entry file from its files map", async () => {
+    const entry = "b".repeat(64);
+    appShareAccess.mockResolvedValue({ kind: "ok", share: blobShare({ kind: "folder", page: "index.html", files: { "index.html": entry, "app.js": SHA } }) });
+    expect((await get()).status).toBe(200);
+    expect(serveBlobPage).toHaveBeenCalledWith(expect.anything(), "org-1", entry);
+  });
+
+  it("returns 404 for a folder share whose entry isn't a well-formed file in its map", async () => {
+    for (const files of [null, { "app.js": SHA }, { "index.html": "short" }, { "index.html": 7 }]) {
+      appShareAccess.mockResolvedValue({ kind: "ok", share: blobShare({ kind: "folder", page: "index.html", files }) });
+      expect((await get()).status).toBe(404);
+    }
+    expect(serveBlobPage).not.toHaveBeenCalled();
   });
 
   it("passes through serveBlobPage's status when it returns an error", async () => {
