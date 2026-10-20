@@ -7,6 +7,9 @@
 
 const SECRET = "[data-secret]";
 const SECRET_ACTION = "[data-secret-action]";
+// Controls that grant a thread more power (permission answers, folder grants, the mode picker, Settings): a thread
+// clicking or typing there would approve itself, so only the user can (pentest 2026-10-20, P-1).
+const HUMAN_ONLY = "[data-human-only]";
 const REDACTED = "‹secret›";
 const HIGHLIGHT_ID = "__weft_board_highlight";
 
@@ -36,11 +39,24 @@ const scripts = {
   // Where the element's middle sits (scrolled into view), for a real mouse move.
   locate: (sel) =>
     `(() => { ${find(sel)} el.scrollIntoView({ block: "nearest" }); const r = el.getBoundingClientRect(); return { found: true, x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`,
+  // A click preflight: gate the markers, find the element's centre, and hit-test what's actually on
+  // top there. Returns ok only when the trusted click main sends will land on the selected element
+  // itself (or a descendant) — a tooltip, popover or other button layered over it would otherwise
+  // receive a trusted click the selector never named (pentest 2026-10-20, P-1). No click happens here;
+  // main sends real mouse events so the event is trusted.
   click: (sel) =>
-    `(() => { ${find(sel)} if (el.closest(${q(SECRET_ACTION)})) return { found: true, refused: true }; el.scrollIntoView({ block: "nearest" }); el.click(); return { found: true }; })()`,
+    `(() => { ${find(sel)} if (el.closest(${q(SECRET_ACTION)})) return { found: true, refused: true }; if (el.closest(${q(HUMAN_ONLY)})) return { found: true, humanOnly: true }; el.scrollIntoView({ block: "nearest" });` +
+    ` const r = el.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2;` +
+    ` const top = document.elementFromPoint(x, y);` +
+    ` if (!top || !(top === el || el.contains(top))) return { found: true, covered: true };` +
+    ` return { found: true, x, y }; })()`,
+  // Locates a field without focusing it (the trusted-focus path runs in main, so a phantom focus event
+  // can't out-think the HUMAN_ONLY gate above). Returns whether the element is an editable field.
+  isField: (sel) =>
+    `(() => { ${find(sel)} if (el.closest(${q(HUMAN_ONLY)})) return { found: true, humanOnly: true }; if (!el.matches("input, textarea, [contenteditable]:not([contenteditable='false'])")) return { found: true, refused: true }; return { found: true }; })()`,
   // Focuses a field and selects what's in it, so the typing that follows replaces it.
   focusField: (sel) =>
-    `(() => { ${find(sel)} if (!el.matches("input, textarea, [contenteditable]:not([contenteditable='false'])")) return { found: true, refused: true }; el.focus(); if (typeof el.select === "function") el.select(); else document.execCommand("selectAll"); return { found: true }; })()`,
+    `(() => { ${find(sel)} if (el.closest(${q(HUMAN_ONLY)})) return { found: true, humanOnly: true }; if (!el.matches("input, textarea, [contenteditable]:not([contenteditable='false'])")) return { found: true, refused: true }; el.focus(); if (typeof el.select === "function") el.select(); else document.execCommand("selectAll"); return { found: true }; })()`,
   // The element's visible text with every data-secret value inside the page cut out.
   read: (sel) =>
     `(() => { const el = ${sel ? `document.querySelector(${q(sel)})` : "document.body"}; if (!el) return { found: false };` +
@@ -68,6 +84,14 @@ function createBoardView({ board }) {
     return new Error(`No element on the board matches ${selector}`);
   }
 
+  function humanOnly(selector) {
+    return new Error(`${selector} answers a permission, grants access or changes settings; only you can do that, so ask the user.`);
+  }
+
+  function covered(selector) {
+    return new Error(`Something is on top of ${selector} at its centre; ask the user to close it or click it themselves.`);
+  }
+
   async function screenshot(highlight) {
     const wc = contents();
     const sel = selectorArg(highlight, false);
@@ -89,9 +113,26 @@ function createBoardView({ board }) {
 
   async function click(selector) {
     const sel = selectorArg(selector);
-    const r = await contents().executeJavaScript(scripts.click(sel));
+    const wc = contents();
+    // Page-side gate first: any element under a data-human-only or data-secret-action marker is
+    // refused. The markers cover permission answers, folder Allow/Always, the mode picker, Settings,
+    // the question form, the reply box, and the secret reveal/copy buttons. The preflight also
+    // runs elementFromPoint at the selected element's centre and refuses unless the hit test is
+    // the selected element or one of its descendants: an overlapping tooltip, popover or layered
+    // button would otherwise receive the trusted click the selector never named.
+    const r = await wc.executeJavaScript(scripts.click(sel));
     if (!r.found) throw miss(sel);
+    if (r.humanOnly) throw humanOnly(sel);
     if (r.refused) throw new Error(`${sel} reveals or copies a secret value; only you can click that (with Touch ID).`);
+    if (r.covered) throw covered(sel);
+    // Real, trusted mouse events. element.click() inside executeJavaScript would be untrusted and any
+    // allow handler that gates on `e.isTrusted` would still let it through (pentest 2026-10-20, P-1).
+    const zoom = wc.getZoomFactor();
+    const x = Math.round(r.x * zoom);
+    const y = Math.round(r.y * zoom);
+    wc.sendInputEvent({ type: "mouseMove", x, y });
+    wc.sendInputEvent({ type: "mouseDown", x, y, button: "left", clickCount: 1 });
+    wc.sendInputEvent({ type: "mouseUp", x, y, button: "left", clickCount: 1 });
     return { clicked: sel };
   }
 
@@ -113,6 +154,7 @@ function createBoardView({ board }) {
     const wc = contents();
     const r = await wc.executeJavaScript(scripts.focusField(sel));
     if (!r.found) throw miss(sel);
+    if (r.humanOnly) throw humanOnly(sel);
     if (r.refused) throw new Error(`${sel} isn't a text field.`);
     await wc.insertText(String(text ?? ""));
     return { typed: sel };
@@ -139,4 +181,4 @@ function boardViewRoutes(view) {
   };
 }
 
-module.exports = { createBoardView, boardViewRoutes, scripts, OPERATIONS, BLANK_SECRETS_CSS, REDACTED };
+module.exports = { createBoardView, boardViewRoutes, scripts, OPERATIONS, BLANK_SECRETS_CSS, REDACTED, HUMAN_ONLY };

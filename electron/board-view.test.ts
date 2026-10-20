@@ -42,6 +42,27 @@ beforeEach(() => {
   view = createBoardView({ board: () => wc });
 });
 
+// happy-dom has no layout: every element reports a zero rect and elementFromPoint would always hit
+// the topmost node in the document, so the click preflight's hit test can't work. Give each element
+// its own 40×20 rect at a distinct offset and install an elementFromPoint that returns the deepest
+// element whose rect contains the point, like a browser. Call this from a describe's beforeEach,
+// after it has set the HTML. Returns the elements it laid out.
+function stubHitTesting() {
+  const els = Array.from(document.querySelectorAll("*"));
+  els.forEach((el, i) => {
+    el.getBoundingClientRect = () => ({ left: i * 50, top: 0, width: 40, height: 20 }) as DOMRect;
+  });
+  (document as unknown as { elementFromPoint?: unknown }).elementFromPoint = (x: number, y: number) => {
+    let hit: Element | null = null;
+    for (const el of els) {
+      const r = el.getBoundingClientRect();
+      if (x >= r.left && x < r.left + r.width && y >= r.top && y < r.top + r.height) hit = el;
+    }
+    return hit ?? document.body;
+  };
+  return els;
+}
+
 describe("the operation allowlist", () => {
   it("serves exactly screenshot, click, hover, type and read, nothing that runs JS", () => {
     expect(OPERATIONS).toEqual(["screenshot", "click", "hover", "type", "read"]);
@@ -92,6 +113,7 @@ describe("secret values", () => {
     document.body.innerHTML = `<section id="drawer"><span>API_KEY</span><div data-secret>sk-live-123</div>
       <input id="value" data-secret value="typed-secret"><p id="echo">copy of sk-live-123 here</p>
       <button id="reveal" data-secret-action="eye"><i id="eye">eye</i></button><button id="copy" data-secret-action="copy">copy</button></section>`;
+    stubHitTesting();
   });
 
   it("read cuts every data-secret value out of the text, wherever it shows up", async () => {
@@ -131,17 +153,74 @@ describe("secret values", () => {
   });
 });
 
+describe("human-only controls", () => {
+  beforeEach(() => {
+    document.body.innerHTML = `<div data-human-only id="ask"><span>Allow Bash?</span><button id="allow"><i id="tick">ok</i></button><input id="note"></div>
+      <button id="move">Move</button><input id="search">`;
+    stubHitTesting();
+  });
+
+  it("won't click a permission answer, or anything inside it", async () => {
+    const clicked = vi.fn();
+    document.getElementById("allow")!.addEventListener("click", clicked);
+    await expect(view.click("#allow")).rejects.toThrow(/only you can do that/);
+    await expect(view.click("#tick")).rejects.toThrow(/only you can do that/);
+    expect(clicked).not.toHaveBeenCalled();
+  });
+
+  it("won't type into a field inside it", async () => {
+    await expect(view.type("#note", "yes")).rejects.toThrow(/only you can do that/);
+    expect(wc.insertText).not.toHaveBeenCalled();
+  });
+
+  it("still reads it, and still drives the rest of the board", async () => {
+    expect((await view.read("#ask")).text).toContain("Allow Bash?");
+    await expect(view.click("#move")).resolves.toEqual({ clicked: "#move" });
+    await expect(view.type("#search", "x")).resolves.toEqual({ typed: "#search" });
+  });
+});
+
 describe("operations", () => {
   beforeEach(() => {
     document.body.innerHTML = `<button id="go">Go</button><input id="name"><div id="note" contenteditable>hi</div><div id="plain">text</div>`;
+    stubHitTesting();
   });
 
-  it("click clicks the element, and a miss is an error naming the selector", async () => {
+  it("click sends trusted mouse events at the element's middle, and a miss is an error naming the selector", async () => {
     const clicked = vi.fn();
     document.getElementById("go")!.addEventListener("click", clicked);
+    const go = document.getElementById("go")!;
+    // The stub gave it its own rect; pin it so the assertion is precise.
+    go.getBoundingClientRect = () => ({ left: 0, top: 0, width: 40, height: 20 }) as DOMRect;
     expect(await view.click("#go")).toEqual({ clicked: "#go" });
-    expect(clicked).toHaveBeenCalledOnce();
+    // The handler is wired through Electron's sendInputEvent, not element.click().
+    expect(wc.sendInputEvent).toHaveBeenCalledWith({ type: "mouseMove", x: 25, y: 13 });
+    expect(wc.sendInputEvent).toHaveBeenCalledWith(expect.objectContaining({ type: "mouseDown", button: "left" }));
+    expect(wc.sendInputEvent).toHaveBeenCalledWith(expect.objectContaining({ type: "mouseUp", button: "left" }));
+    // No element.click() in the page script, so the DOM click handler never fires (no double-fire).
+    expect(clicked).not.toHaveBeenCalled();
     await expect(view.click("#nope")).rejects.toThrow("No element on the board matches #nope");
+  });
+
+  it("click refuses when something is layered on top of the element's centre", async () => {
+    const go = document.getElementById("go")!;
+    const name = document.getElementById("name")!;
+    go.getBoundingClientRect = () => ({ left: 0, top: 0, width: 40, height: 20 }) as DOMRect;
+    name.getBoundingClientRect = () => ({ left: 0, top: 0, width: 40, height: 20 }) as DOMRect;
+    // elementFromPoint at go's centre returns #name: a layered element blocks the trusted click.
+    (document as unknown as { elementFromPoint?: unknown }).elementFromPoint = () => name;
+    await expect(view.click("#go")).rejects.toThrow(/on top of/);
+    expect(wc.sendInputEvent).not.toHaveBeenCalled();
+  });
+
+  it("click accepts a descendant of the selected element as the on-top element", async () => {
+    document.body.innerHTML = `<button id="outer"><span id="inner">Go</span></button>`;
+    const outer = document.getElementById("outer")!;
+    const inner = document.getElementById("inner")!;
+    outer.getBoundingClientRect = () => ({ left: 0, top: 0, width: 40, height: 20 }) as DOMRect;
+    inner.getBoundingClientRect = () => ({ left: 10, top: 5, width: 20, height: 10 }) as DOMRect;
+    (document as unknown as { elementFromPoint?: unknown }).elementFromPoint = () => inner;
+    expect(await view.click("#outer")).toEqual({ clicked: "#outer" });
   });
 
   it("hover moves the real mouse to the element's middle, scaled by the zoom", async () => {
