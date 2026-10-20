@@ -1,46 +1,12 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { ACCOUNT_EVENT } from "./auth/hooks";
-import type { TeamSnapshot } from "./team-types";
-
-// The hook talks to /api/account/team directly, not through the typed `api` client, because we need
-// to discriminate on 401/404/502. Mocking global.fetch keeps the test honest about the headers and
-// the URL the hook actually uses.
-
-const fetchMock = vi.fn<typeof fetch>();
-
-function jsonResponse(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
-}
-
-const team: TeamSnapshot = {
-  user: { id: "u1", email: "ada@b.co", name: "Ada", avatar: null },
-  org: { id: "o1", slug: "acme", name: "Acme" },
-  role: "owner",
-  orgs: [{ id: "o1", slug: "acme", name: "Acme" }],
-  canManage: true,
-  members: [],
-  pending: [],
-  projects: [],
-  roleOptions: [],
-  roleLabels: { owner: "Owner", admin: "Admin", member: "Member" },
-};
+import { fetchMock, jsonResponse, stubTeamFetch, team } from "./use-team.harness";
 
 const { clearTeamCache, prefetchTeam, useTeam, useTeamPrefetch } = await import("./use-team");
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  clearTeamCache();
-  fetchMock.mockResolvedValue(jsonResponse(200, team));
-  // happy-dom doesn't ship a default fetch; the tests install one for the duration of the suite.
-  vi.stubGlobal("fetch", fetchMock);
-});
-
-afterEach(() => {
-  cleanup();
-  vi.unstubAllGlobals();
-});
+stubTeamFetch(clearTeamCache);
 
 describe("prefetchTeam", () => {
   it("opens already loaded after a prefetch, then checks again in the background", async () => {
@@ -253,29 +219,6 @@ describe("useTeam", () => {
       ]);
     });
 
-    it("createTeam posts the name, returns the slug and forgets the cached teams", async () => {
-      const { result } = renderHook(() => useTeam("acme"));
-      await waitFor(() => expect(result.current.state.kind).toBe("ok"));
-      fetchMock.mockImplementation((_url, init) =>
-        Promise.resolve(init?.method === "POST" ? jsonResponse(200, { ok: true, slug: "new-co" }) : jsonResponse(200, team)),
-      );
-      const out = await act(() => result.current.actions.createTeam("New Co"));
-      expect(out).toEqual({ ok: true, message: undefined, slug: "new-co" });
-      const post = fetchMock.mock.calls.find(([, i]) => i?.method === "POST");
-      expect(post?.[1]?.body).toBe(JSON.stringify({ action: "create", name: "New Co" }));
-      const before = fetchMock.mock.calls.length;
-      renderHook(() => useTeam("acme-2"));
-      await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(before));
-    });
-
-    it("createTeam works with no team loaded and keeps the cache on failure", async () => {
-      fetchMock.mockResolvedValueOnce(jsonResponse(401, { error: "signed-out" }));
-      const { result } = renderHook(() => useTeam());
-      await waitFor(() => expect(result.current.state.kind).toBe("signed-out"));
-      fetchMock.mockResolvedValueOnce(jsonResponse(200, { ok: false, message: "Name taken." }));
-      expect(await act(() => result.current.actions.createTeam("X"))).toEqual({ ok: false, message: "Name taken." });
-    });
-
     it("returns a friendly message and skips the network when no team is loaded", async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse(401, { error: "signed-out" }));
       const { result } = renderHook(() => useTeam());
@@ -284,6 +227,13 @@ describe("useTeam", () => {
       const out = await act(() => result.current.actions.invite("a@b.co", "member"));
       expect(out).toEqual({ ok: false, message: "Load a workspace first." });
       expect(fetchMock).toHaveBeenCalledTimes(calls);
+    });
+
+    it("says weft.zip may be behind when it refuses the body", async () => {
+      const { result } = renderHook(() => useTeam("acme"));
+      await waitFor(() => expect(result.current.state.kind).toBe("ok"));
+      fetchMock.mockResolvedValueOnce(jsonResponse(400, { error: "bad-request" }));
+      expect((await act(() => result.current.actions.renameTeam("acme", "X"))).message).toMatch(/may not have this Weft's latest version/);
     });
 
     it("maps action responses through 401, 404, 502 and a fetch throw", async () => {
@@ -301,6 +251,9 @@ describe("useTeam", () => {
 
       fetchMock.mockRejectedValueOnce(new Error("down"));
       expect(await act(() => result.current.actions.invite("a@b.co", "member"))).toEqual({ ok: false, message: "Couldn't reach weft.zip." });
+
+      fetchMock.mockResolvedValueOnce(jsonResponse(500, { error: "boom" }));
+      expect(await act(() => result.current.actions.invite("a@b.co", "member"))).toEqual({ ok: false, message: "boom" });
 
       fetchMock.mockResolvedValueOnce(new Response("not json", { status: 500 }));
       expect(await act(() => result.current.actions.invite("a@b.co", "member"))).toEqual({ ok: false, message: "Team API answered 500." });

@@ -12,6 +12,8 @@ vi.mock("@/lib/team-remote", () => ({ forwardTeam }));
 // passes, only that the route reaches forwardTeam with it.
 const { accountClient } = vi.hoisted(() => ({ accountClient: vi.fn() }));
 vi.mock("@/lib/account", () => ({ accountClient }));
+const { forgetSyncOrg } = vi.hoisted(() => ({ forgetSyncOrg: vi.fn() }));
+vi.mock("@/lib/cloud-sync", () => ({ forgetSyncOrg }));
 
 const route = await import("./route");
 
@@ -108,5 +110,16 @@ describe("POST /api/account/team", () => {
     const down = await post({});
     expect(down.status).toBe(400);
     expect(await down.json()).toEqual({ error: "offline" });
+  });
+
+  it("forgets this Mac's sync team after a delete went through, and only then", async () => {
+    forwardTeam.mockResolvedValue({ status: 200, json: { ok: true } });
+    await post({ org: "acme", action: "rename", name: "B" });
+    expect(forgetSyncOrg).not.toHaveBeenCalled();
+    forwardTeam.mockResolvedValueOnce({ status: 400, json: { error: "bad-request" } });
+    await post({ org: "acme", action: "delete", confirm: "Acme" });
+    expect(forgetSyncOrg).not.toHaveBeenCalled();
+    await post({ org: "acme", action: "delete", confirm: "Acme" });
+    expect(forgetSyncOrg).toHaveBeenCalledTimes(1);
   });
 });

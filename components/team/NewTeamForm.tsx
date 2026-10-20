@@ -1,54 +1,73 @@
 "use client";
 
-// "+ New team" in the switcher: a name field, then actions.createTeam; on success the caller switches to the
-// new workspace's slug.
+// A team's name field with a submit and Cancel, inline in Settings → Teams' list: "New team" at its foot
+// (NewTeamForm: actions.createTeam, then the caller switches to the new workspace's slug) and the pencil on a
+// team you own (TeamNameForm with actions.renameTeam).
 import { useState, useTransition, type SubmitEvent } from "react";
-import type { TeamClientActions } from "@/lib/team-types";
+import { TEAM_NAME_MAX, type NewTeamResult, type TeamClientActions } from "@/lib/team-types";
 
-export function NewTeamForm({
-  actions,
-  onCreated,
+export function TeamNameForm({
+  initial = "",
+  submitLabel,
+  busyLabel,
+  failed,
+  submit,
+  onDone,
   onCancel,
 }: {
-  actions: TeamClientActions;
-  onCreated: (slug: string) => void;
+  initial?: string;
+  submitLabel: string;
+  busyLabel: string;
+  // What to say when the answer has no message of its own.
+  failed: string;
+  submit: (name: string) => Promise<NewTeamResult>;
+  onDone: (result: NewTeamResult) => void;
   onCancel: () => void;
 }) {
-  const [name, setName] = useState("");
+  const [name, setName] = useState(initial);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const trimmed = name.trim();
 
-  function submit(e: SubmitEvent) {
+  function send(e: SubmitEvent) {
     e.preventDefault();
-    const trimmed = name.trim();
     if (!trimmed) return;
+    if (trimmed === initial) {
+      onCancel();
+      return;
+    }
     startTransition(async () => {
-      const result = await actions.createTeam(trimmed);
-      if (result.ok && result.slug) onCreated(result.slug);
-      else setError(result.message ?? "Couldn't create the team.");
+      const result = await submit(trimmed);
+      if (result.ok) onDone(result);
+      else setError(result.message ?? failed);
     });
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-1" noValidate>
+    <form onSubmit={send} className="flex min-w-0 flex-col gap-1" noValidate>
       <div className="flex items-center gap-2">
         <input
           aria-label="Team name"
           autoFocus
+          onFocus={(e) => e.currentTarget.select()}
           value={name}
+          maxLength={TEAM_NAME_MAX}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Escape") onCancel();
+            if (e.key === "Escape") {
+              e.stopPropagation();
+              onCancel();
+            }
           }}
           placeholder="Team name"
-          className="w-40 rounded-md border border-line-strong bg-canvas px-2 py-1 text-[12.5px] text-ink outline-none focus:border-accent"
+          className="w-48 min-w-0 rounded-md border border-line-strong bg-canvas px-2 py-1 text-[12.5px] text-ink outline-none focus:border-accent"
         />
         <button
           type="submit"
-          disabled={pending || !name.trim()}
+          disabled={pending || !trimmed}
           className="rounded-md border border-line-strong px-2.5 py-1 text-[12.5px] text-ink hover:bg-sunken disabled:opacity-50"
         >
-          {pending ? "Creating…" : "Create"}
+          {pending ? busyLabel : submitLabel}
         </button>
         <button type="button" onClick={onCancel} className="text-[12.5px] text-muted hover:text-ink">
           Cancel
@@ -60,5 +79,27 @@ export function NewTeamForm({
         </p>
       ) : null}
     </form>
+  );
+}
+
+export function NewTeamForm({
+  actions,
+  onCreated,
+  onCancel,
+}: {
+  actions: TeamClientActions;
+  onCreated: (slug: string) => void;
+  onCancel: () => void;
+}) {
+  return (
+    <TeamNameForm
+      submitLabel="Create"
+      busyLabel="Creating…"
+      failed="Couldn't create the team."
+      // A yes without a slug leaves nothing to switch to, so it reads as a failure.
+      submit={(name) => actions.createTeam(name).then((r) => (r.ok && !r.slug ? { ...r, ok: false } : r))}
+      onDone={(r) => onCreated(r.slug ?? "")}
+      onCancel={onCancel}
+    />
   );
 }

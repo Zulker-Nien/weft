@@ -10,7 +10,8 @@
 import "server-only";
 import type { Org, OrgRole } from "@aimhuge/teams";
 import { inviteHtmlFor } from "./invite-email";
-import { ORG_ROLES, assignableRoles, createInvite, isPlausibleEmail, listUserOrgs, normalizeEmail, revokeInvite, roleDescription, roleLabel, setCurrentOrg } from "@aimhuge/teams";
+import { ROLE_DESCRIPTIONS } from "./team-types";
+import { ORG_ROLES, assignableRoles, createInvite, isPlausibleEmail, listUserOrgs, normalizeEmail, revokeInvite, roleLabel, setCurrentOrg } from "@aimhuge/teams";
 import type { InviteEmailTransport } from "@aimhuge/teams";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { notFound, redirect } from "next/navigation";
@@ -159,10 +160,10 @@ export interface RoleOption {
   description: string;
 }
 
-export const ALL_ROLES: RoleOption[] = ORG_ROLES.map((role) => ({ role, label: roleLabel(role), description: roleDescription(role) }));
+export const ALL_ROLES: RoleOption[] = ORG_ROLES.map((role) => ({ role, label: roleLabel(role), description: ROLE_DESCRIPTIONS[role] }));
 
 export function roleOptions(actor: OrgRole): RoleOption[] {
-  return assignableRoles(actor).map((role) => ({ role, label: roleLabel(role), description: roleDescription(role) }));
+  return assignableRoles(actor).map((role) => ({ role, label: roleLabel(role), description: ROLE_DESCRIPTIONS[role] }));
 }
 
 // The mailer an invite action hands to the package. Resend REST, RESEND_API_KEY. The from address is

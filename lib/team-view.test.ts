@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { orgLabel, readSavedOrg, saveOrg, stillListed, TEAM_ORG_KEY, unlinkedRepos } from "./team-view";
-
-const labels = { owner: "Owner", admin: "Admin", member: "Member" };
+import { readSavedOrg, saveOrg, stillListed, TEAM_ORG_KEY, unlinkedRepos } from "./team-view";
 
 afterEach(() => {
   window.localStorage.clear();
@@ -37,13 +35,6 @@ describe("stillListed", () => {
     expect(stillListed(undefined, orgs)).toBe(true);
     expect(stillListed("acme", orgs)).toBe(true);
     expect(stillListed("gone", orgs)).toBe(false);
-  });
-});
-
-describe("orgLabel", () => {
-  it("adds the role when known", () => {
-    expect(orgLabel({ id: "1", slug: "a", name: "Acme", role: "admin" }, labels)).toBe("Acme · Admin");
-    expect(orgLabel({ id: "1", slug: "a", name: "Acme" }, labels)).toBe("Acme");
   });
 });
 

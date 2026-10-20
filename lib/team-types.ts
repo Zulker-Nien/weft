@@ -46,12 +46,19 @@ export type TeamOp =
   | { org: string; action: "remove"; userId: string }
   | { org: string; action: "revoke"; inviteId: string }
   | { org: string; action: "link-project"; repo: string }
-  | { org: string; action: "unlink-project"; repo: string };
+  | { org: string; action: "unlink-project"; repo: string }
+  // Owners only; the slug stays, so links and synced boards keep working.
+  | { org: string; action: "rename"; name: string }
+  // Owners only, and only while they're in another team too; `confirm` is the team's name, typed.
+  | { org: string; action: "delete"; confirm: string };
 
 // POST /api/teams with this body makes a new workspace the caller owns (no `org`: it doesn't exist yet).
 // The answer's `slug` is the new workspace, so the page can switch to it.
 export type NewTeamOp = { action: "create"; name: string };
 export type NewTeamResult = TeamActionResult & { slug?: string };
+
+// The longest team name, for a new team and a rename alike.
+export const TEAM_NAME_MAX = 60;
 
 export type TeamActionResult = { ok: boolean; message?: string };
 
@@ -65,12 +72,23 @@ export type TeamClientActions = {
   addProject: (repo: string) => Promise<TeamActionResult>;
   removeProject: (repo: string) => Promise<TeamActionResult>;
   createTeam: (name: string) => Promise<NewTeamResult>;
+  // By slug, not the loaded team: Settings → Teams renames any team you own from its list.
+  renameTeam: (slug: string, name: string) => Promise<TeamActionResult>;
+  deleteTeam: (slug: string, confirm: string) => Promise<TeamActionResult>;
 };
 
 // "owner/name" as GitHub spells it.
 export const REPO_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 
 export const TEAM_ROLES: readonly TeamRole[] = ["owner", "admin", "member"];
+
+// What each role can do in Weft, under the invite form's role select. Weft's own words: @aimhuge/teams's
+// roleDescription is BlastCP's (posts, channels, properties).
+export const ROLE_DESCRIPTIONS: Record<TeamRole, string> = {
+  owner: "Everything, including billing, other owners and the team itself.",
+  admin: "Invite and remove people, change roles, link projects and manage billing.",
+  member: "Sees the team's projects, synced boards and people. Can't invite or change roles.",
+};
 
 export function isTeamRole(value: unknown): value is TeamRole {
   return typeof value === "string" && (TEAM_ROLES as readonly string[]).includes(value);

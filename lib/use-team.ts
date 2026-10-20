@@ -107,6 +107,8 @@ async function postOp(op: TeamOp | NewTeamOp): Promise<NewTeamResult> {
   if (res.status === 401) return { ok: false, message: "Signed out." };
   if (res.status === 502) return { ok: false, message: "Couldn't reach weft.zip." };
   if (res.status === 404) return { ok: false, message: "No workspace found." };
+  // weft.zip refused the body: most likely an action this desktop knows and the deployed Weft doesn't yet.
+  if (res.status === 400) return { ok: false, message: "weft.zip didn't accept that. It may not have this Weft's latest version yet." };
   if (!res.ok) {
     return { ok: false, message: typeof body.error === "string" ? body.error : `Team API answered ${res.status}.` };
   }
@@ -169,6 +171,14 @@ export function useTeam(org?: string): TeamHook {
     });
   };
 
+  const refreshAll = <R extends TeamActionResult>(r: R): R => {
+    if (r.ok) {
+      clearTeamCache();
+      trigger();
+    }
+    return r;
+  };
+
   const actions: TeamClientActions = {
     invite: (email, role) => onTeam((org) => ({ org, action: "invite", email, role })),
     changeRole: (userId, role) => onTeam((org) => ({ org, action: "role", userId, role })),
@@ -176,15 +186,10 @@ export function useTeam(org?: string): TeamHook {
     revoke: (inviteId) => onTeam((org) => ({ org, action: "revoke", inviteId })),
     addProject: (repo) => onTeam((org) => ({ org, action: "link-project", repo })),
     removeProject: (repo) => onTeam((org) => ({ org, action: "unlink-project", repo })),
-    // A new workspace changes every cached snapshot's `orgs` list, so forget them all before the refresh.
-    createTeam: (name) =>
-      postOp({ action: "create", name }).then((r) => {
-        if (r.ok) {
-          clearTeamCache();
-          trigger();
-        }
-        return r;
-      }),
+    // A new, renamed or deleted workspace changes every cached snapshot's `orgs` list, so forget them all before the refresh.
+    createTeam: (name) => postOp({ action: "create", name }).then(refreshAll),
+    renameTeam: (slug, name) => postOp({ org: slug, action: "rename", name }).then(refreshAll),
+    deleteTeam: (slug, confirm) => postOp({ org: slug, action: "delete", confirm }).then(refreshAll),
   };
 
   return { state, refresh, actions };

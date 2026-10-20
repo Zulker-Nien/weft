@@ -100,6 +100,21 @@ export async function removeProject(orgSlug: string, repo: string): Promise<Team
   return result;
 }
 
+// The name shows in the workspace's whole shell (sidebar, switcher), so every page under it is revalidated.
+export async function renameTeam(orgSlug: string, name: string): Promise<TeamActionResult> {
+  const ctx = await gate(orgSlug);
+  const result = await runTeamOp(ctx, { org: orgSlug, action: "rename", name: asString(name) });
+  if (result.ok) revalidatePath(`/${orgSlug}`, "layout");
+  return result;
+}
+
+export async function deleteTeam(orgSlug: string, confirm: string): Promise<TeamActionResult> {
+  const ctx = await gate(orgSlug);
+  const result = await runTeamOp(ctx, { org: orgSlug, action: "delete", confirm: asString(confirm) });
+  if (result.ok) revalidatePath(`/${orgSlug}`, "layout");
+  return result;
+}
+
 // Makes a workspace the signed-in visitor owns; the answer's slug is where the page goes next.
 export async function createTeam(name: string): Promise<NewTeamResult> {
   const user = await webUser();

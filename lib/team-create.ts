@@ -1,12 +1,12 @@
-// Make a new workspace the caller owns (POST /api/teams {action:"create"} and the createTeam server action).
+// Make a new workspace the caller owns (POST /api/teams {action:"create"} and the createTeam server action),
+// or rename one they own ({action:"rename"} through runTeamOp, and the renameTeam server action).
 // The slug mirrors private.org_slug_for in the teams migration: slugify, skip reserved names, -2, -3... on a clash.
 import "server-only";
 import { isReservedSlug, setCurrentOrg, slugify } from "@aimhuge/teams";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { NewTeamResult } from "./team-types";
+import { TEAM_NAME_MAX, type NewTeamResult, type TeamActionResult } from "./team-types";
+import type { TeamContext } from "./teams";
 import { serviceClient, type WebUser } from "./web-session";
-
-const MAX_NAME = 60;
 
 async function freeSlug(service: SupabaseClient, name: string): Promise<string> {
   const base = slugify(name).slice(0, 40).replace(/-+$/, "") || "workspace";
@@ -18,9 +18,12 @@ async function freeSlug(service: SupabaseClient, name: string): Promise<string> 
   }
 }
 
+const badName = (name: string) => name.length < 1 || name.length > TEAM_NAME_MAX;
+const NAME_RULE = `Name the team in 1 to ${TEAM_NAME_MAX} characters.`;
+
 export async function runCreateTeam(user: WebUser, nameRaw: string): Promise<NewTeamResult> {
   const name = nameRaw.trim();
-  if (name.length < 1 || name.length > MAX_NAME) return { ok: false, message: `Name the team in 1 to ${MAX_NAME} characters.` };
+  if (badName(name)) return { ok: false, message: NAME_RULE };
   const service = serviceClient();
   if (!service) return { ok: false, message: "Teams aren't set up on this Weft." };
   const slug = await freeSlug(service, name);
@@ -38,4 +41,14 @@ export async function runCreateTeam(user: WebUser, nameRaw: string): Promise<New
   }
   await setCurrentOrg(service, user.id, org.id);
   return { ok: true, message: `Created ${name}.`, slug };
+}
+
+// Only the name changes: the slug is in every link, invite and synced board, so it stays.
+export async function runRenameTeam(ctx: TeamContext, nameRaw: string): Promise<TeamActionResult> {
+  if (ctx.role !== "owner") return { ok: false, message: "Only an owner can rename the team." };
+  const name = nameRaw.trim();
+  if (badName(name)) return { ok: false, message: NAME_RULE };
+  const { error } = await ctx.service.from("orgs").update({ name }).eq("id", ctx.org.id);
+  if (error) return { ok: false, message: `Could not rename the team: ${error.message}` };
+  return { ok: true, message: `Renamed to ${name}.` };
 }

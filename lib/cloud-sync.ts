@@ -71,6 +71,12 @@ export function syncOrgId(client: SupabaseClient, userId: string): Promise<strin
   return resolveOrgId(state(), client, userId);
 }
 
+// Look the workspace up again on the next flush: the one it remembered may have just been deleted
+// (Settings → Teams, through app/api/account/team).
+export function forgetSyncOrg(): void {
+  state().orgs.clear();
+}
+
 function safeAccountClient(): SupabaseClient | null {
   try {
     return accountClient();

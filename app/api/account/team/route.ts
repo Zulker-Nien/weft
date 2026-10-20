@@ -1,6 +1,7 @@
 import { connection } from "next/server";
 import { accountClient } from "@/lib/account";
 import { fail, guard } from "@/lib/guard";
+import { forgetSyncOrg } from "@/lib/cloud-sync";
 import { forwardTeam } from "@/lib/team-remote";
 
 // The desktop's bridge to weft.zip's /api/teams (docs/architecture/teams.md). The board calls this
@@ -33,6 +34,8 @@ export async function POST(req: Request) {
     const body = (await req.json()) as unknown;
     const session = await accountClient().auth.getSession();
     const { status, json } = await forwardTeam("POST", "", body, { session, fetchFn: fetch, env: process.env });
+    // The deleted team may be the one this Mac's cards sync to: have the next flush look it up again.
+    if (status === 200 && (body as { action?: unknown } | null)?.action === "delete") forgetSyncOrg();
     return Response.json(json, { status });
   } catch (err) {
     return fail(err);

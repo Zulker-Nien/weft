@@ -28,7 +28,7 @@ vi.mock("./web-session", () => sessionMock);
 vi.mock("./team-ops", () => teamOpsMock);
 vi.mock("next/cache", () => cacheMock);
 
-import { addProject, boardShareTeam, changeMemberRole, createTeam, removeProject, inviteMember, removeMember, revokeInvite } from "./team-actions";
+import { addProject, boardShareTeam, changeMemberRole, createTeam, removeProject, inviteMember, removeMember, renameTeam, revokeInvite, deleteTeam } from "./team-actions";
 import { ORG, USER } from "./team-actions.harness";
 
 const CTX = { user: USER, org: ORG, role: "owner" as const, orgs: [ORG], service: {} as never };
@@ -163,6 +163,34 @@ describe("addProject / removeProject", () => {
   it("skips revalidation when a link fails", async () => {
     teamOpsMock.runTeamOp.mockResolvedValueOnce({ ok: false });
     await addProject("acme", "a/b");
+    expect(cacheMock.revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("renameTeam", () => {
+  it("renames through the gate and revalidates the workspace's whole shell", async () => {
+    await renameTeam("acme", "  Acme Labs ");
+    expect(teamOpsMock.runTeamOp).toHaveBeenCalledWith(CTX, { org: "acme", action: "rename", name: "Acme Labs" });
+    expect(cacheMock.revalidatePath).toHaveBeenCalledWith("/acme", "layout");
+  });
+
+  it("skips revalidation when the rename fails", async () => {
+    teamOpsMock.runTeamOp.mockResolvedValueOnce({ ok: false, message: "Only an owner can rename the team." });
+    expect(await renameTeam("acme", "X")).toEqual({ ok: false, message: "Only an owner can rename the team." });
+    expect(cacheMock.revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("deleteTeam", () => {
+  it("deletes through the gate with the typed name and revalidates the shell", async () => {
+    await deleteTeam("acme", " Acme ");
+    expect(teamOpsMock.runTeamOp).toHaveBeenCalledWith(CTX, { org: "acme", action: "delete", confirm: "Acme" });
+    expect(cacheMock.revalidatePath).toHaveBeenCalledWith("/acme", "layout");
+  });
+
+  it("skips revalidation when the delete is refused", async () => {
+    teamOpsMock.runTeamOp.mockResolvedValueOnce({ ok: false, message: "no" });
+    expect(await deleteTeam("acme", "Acme")).toEqual({ ok: false, message: "no" });
     expect(cacheMock.revalidatePath).not.toHaveBeenCalled();
   });
 });

@@ -191,6 +191,20 @@ describe("POST /api/teams project and create ops", () => {
     }
   });
 
+  it("runs rename against the body's org, and 400s without a name", async () => {
+    const op = { org: "acme", action: "rename", name: "Acme Labs" };
+    expect((await route.POST(req({ method: "POST", body: op }))).status).toBe(200);
+    expect(runTeamOp).toHaveBeenLastCalledWith(CTX, op);
+    expect((await route.POST(req({ method: "POST", body: { org: "acme", action: "rename" } }))).status).toBe(400);
+  });
+
+  it("runs delete against the body's org, and 400s without the typed name", async () => {
+    const op = { org: "acme", action: "delete", confirm: "Acme" };
+    expect((await route.POST(req({ method: "POST", body: op }))).status).toBe(200);
+    expect(runTeamOp).toHaveBeenLastCalledWith(CTX, op);
+    expect((await route.POST(req({ method: "POST", body: { org: "acme", action: "delete" } }))).status).toBe(400);
+  });
+
   it("creates a team with the bearer user alone, no org gate", async () => {
     runCreateTeam.mockResolvedValue({ ok: true, message: "Created", slug: "new" });
     const res = await route.POST(req({ method: "POST", body: { action: "create", name: "New" } }));

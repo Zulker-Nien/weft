@@ -41,4 +41,29 @@ describe("useManagedTeam", () => {
     renderHook(() => useManagedTeam());
     expect(useTeamMock).toHaveBeenLastCalledWith(undefined);
   });
+  it("says which team is on screen: the server default until you pick one", () => {
+    useTeamMock.mockImplementation((org) => (org ? hook({ kind: "loading" }) : ok("acme")));
+    const { result } = renderHook(() => useManagedTeam());
+    expect(result.current.selected).toBe("acme");
+    act(() => result.current.setOrg("weft"));
+    expect(result.current.selected).toBe("weft");
+  });
+
+  it("keeps the team you switched from while the next one loads", () => {
+    const acmeTeam = ok("acme");
+    useTeamMock.mockImplementation((org) => (org ? hook({ kind: "loading" }) : acmeTeam));
+    const { result } = renderHook(() => useManagedTeam());
+    expect(result.current.last).toBe((acmeTeam.state as { team: unknown }).team);
+    act(() => result.current.setOrg("weft"));
+    expect(result.current.state.kind).toBe("loading");
+    expect(result.current.last).toBe((acmeTeam.state as { team: unknown }).team);
+  });
+
+  it("has nothing to keep before any team has loaded", () => {
+    useTeamMock.mockReturnValue(hook({ kind: "loading" }));
+    const { result } = renderHook(() => useManagedTeam());
+    act(() => result.current.setOrg("weft"));
+    expect(result.current.last).toBeNull();
+    expect(result.current.selected).toBe("weft");
+  });
 });

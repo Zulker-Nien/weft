@@ -31,6 +31,13 @@ describe("NewTeamForm", () => {
     expect(onCreated).not.toHaveBeenCalled();
   });
 
+  it("reads a yes without a slug as a failure, since there's nothing to switch to", async () => {
+    const { onCreated } = setup({ ok: true, message: "Odd." });
+    await userEvent.type(screen.getByLabelText("Team name"), "X{Enter}");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Odd.");
+    expect(onCreated).not.toHaveBeenCalled();
+  });
+
   it("falls back to a default message", async () => {
     setup({ ok: false });
     await userEvent.type(screen.getByLabelText("Team name"), "X{Enter}");

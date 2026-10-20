@@ -292,4 +292,16 @@ describe("cloudSyncStatus / syncNow / queueFolder", () => {
     // The other folder wasn't on the outbox and its row never went up.
     expect(rows.some((r) => r.card_id === "b")).toBe(false);
   });
+
+  it("forgetSyncOrg makes the next flush look the workspace up again (after a team is deleted)", async () => {
+    cardInStore("a");
+    await start();
+    publish({ type: "card", card: cards.get("a")! });
+    for (let i = 0; i < 20; i++) await vi.advanceTimersByTimeAsync(0);
+    rowsByTable.org_memberships = [{ org_id: "o2" }];
+    (await import("./cloud-sync")).forgetSyncOrg();
+    publish({ type: "card", card: cards.get("a")! });
+    for (let i = 0; i < 20; i++) await vi.advanceTimersByTimeAsync(0);
+    expect((allRows("cloud_cards") as { org_id: string }[]).map((r) => r.org_id)).toEqual(["o1", "o2"]);
+  });
 });

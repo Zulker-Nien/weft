@@ -1,4 +1,4 @@
-import type { TeamOrg, TeamRole } from "./team-types";
+import type { TeamOrg } from "./team-types";
 
 // Which workspace Settings → Team opens on: the one you last picked, kept in localStorage between opens.
 export const TEAM_ORG_KEY = "weft-team-org";
@@ -24,11 +24,6 @@ export function saveOrg(slug: string | undefined): void {
 // A remembered slug the account no longer has (left the team, team deleted) falls back to the server default.
 export function stillListed(slug: string | undefined, orgs: TeamOrg[]): boolean {
   return !slug || orgs.some((o) => o.slug === slug);
-}
-
-// "Acme (Owner)" for the switcher's options.
-export function orgLabel(org: TeamOrg, roleLabels: Record<TeamRole, string>): string {
-  return org.role ? `${org.name} · ${roleLabels[org.role]}` : org.name;
 }
 
 // The repos of the board's projects that aren't linked to the team yet, sorted.

@@ -11,6 +11,8 @@ import "server-only";
 import { listOrgMembers, listPendingInvites, roleAtLeast, roleCan, roleLabel } from "@aimhuge/teams";
 import type { TeamContext } from "./teams";
 import { createInvite, inviteMailer, isPlausibleEmail, normalizeEmail, revokeInvite as revokeInviteRow, roleOptions } from "./teams";
+import { runRenameTeam } from "./team-create";
+import { runDeleteTeam } from "./team-delete";
 import { listTeamProjects, runLinkProject, runUnlinkProject } from "./team-projects";
 import type { TeamActionResult, TeamInvite, TeamMember, TeamOp, TeamOrg, TeamSnapshot, TeamUser } from "./team-types";
 
@@ -277,6 +279,10 @@ export async function runTeamOp(ctx: TeamContext, op: TeamOp): Promise<TeamActio
       return runLinkProject(ctx, op.repo);
     case "unlink-project":
       return runUnlinkProject(ctx, op.repo);
+    case "rename":
+      return runRenameTeam(ctx, op.name);
+    case "delete":
+      return runDeleteTeam(ctx, op.confirm);
     default: {
       // Unreachable as long as TeamOp's union covers every action the
       // route parses; if a new variant is added without a runner, this

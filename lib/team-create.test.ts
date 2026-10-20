@@ -9,7 +9,8 @@ const sessionMock = vi.hoisted(() => ({ serviceClient: vi.fn() }));
 vi.mock("@aimhuge/teams", () => teamsMock);
 vi.mock("./web-session", () => sessionMock);
 
-import { runCreateTeam } from "./team-create";
+import { runCreateTeam, runRenameTeam } from "./team-create";
+import type { TeamContext } from "./teams";
 import { USER } from "./team-ops.harness";
 
 type Opts = { taken?: string[]; orgError?: string; memberError?: string };
@@ -87,5 +88,42 @@ describe("runCreateTeam", () => {
     expect(await runCreateTeam(USER, "Acme")).toEqual({ ok: false, message: "Could not create team: nope" });
     expect(s.deletes).toEqual(["orgs"]);
     expect(teamsMock.setCurrentOrg).not.toHaveBeenCalled();
+  });
+});
+
+function renameCtx(role: string, error?: string) {
+  const eq = vi.fn(() => Promise.resolve({ error: error ? { message: error } : null }));
+  const update = vi.fn(() => ({ eq }));
+  const from = vi.fn(() => ({ update }));
+  const ctx = { role, org: { id: "o1", slug: "acme", name: "Acme" }, service: { from } } as unknown as TeamContext;
+  return { ctx, from, update, eq };
+}
+
+describe("runRenameTeam", () => {
+  it("renames the org by id, trimmed, and keeps its slug", async () => {
+    const r = renameCtx("owner");
+    expect(await runRenameTeam(r.ctx, "  Acme Labs ")).toEqual({ ok: true, message: "Renamed to Acme Labs." });
+    expect(r.from).toHaveBeenCalledWith("orgs");
+    expect(r.update).toHaveBeenCalledWith({ name: "Acme Labs" });
+    expect(r.eq).toHaveBeenCalledWith("id", "o1");
+  });
+
+  it("is for owners only", async () => {
+    for (const role of ["admin", "member"]) {
+      const r = renameCtx(role);
+      expect(await runRenameTeam(r.ctx, "X")).toEqual({ ok: false, message: "Only an owner can rename the team." });
+      expect(r.from).not.toHaveBeenCalled();
+    }
+  });
+
+  it("rejects an empty or over-long name", async () => {
+    const r = renameCtx("owner");
+    expect((await runRenameTeam(r.ctx, "  ")).ok).toBe(false);
+    expect((await runRenameTeam(r.ctx, "x".repeat(61))).message).toBe("Name the team in 1 to 60 characters.");
+    expect(r.from).not.toHaveBeenCalled();
+  });
+
+  it("reports an update error", async () => {
+    expect(await runRenameTeam(renameCtx("owner", "denied").ctx, "Acme Labs")).toEqual({ ok: false, message: "Could not rename the team: denied" });
   });
 });

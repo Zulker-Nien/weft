@@ -36,6 +36,8 @@ function makeActions(): TeamClientActions & {
     addProject: vi.fn<(repo: string) => Promise<TeamActionResult>>().mockResolvedValue({ ok: true }),
     removeProject: vi.fn<(repo: string) => Promise<TeamActionResult>>().mockResolvedValue({ ok: true }),
     createTeam: vi.fn<(name: string) => Promise<TeamActionResult & { slug?: string }>>().mockResolvedValue({ ok: true }),
+    renameTeam: vi.fn().mockResolvedValue({ ok: true }),
+    deleteTeam: vi.fn().mockResolvedValue({ ok: true }),
   };
 }
 

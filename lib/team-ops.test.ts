@@ -17,7 +17,6 @@ const teamsMock = vi.hoisted(() => ({
   roleCan: vi.fn(),
   roleAtLeast: vi.fn(),
   roleLabel: vi.fn(),
-  roleDescription: vi.fn(),
   assignableRoles: vi.fn(),
 }));
 
@@ -39,6 +38,10 @@ const projectsMock = vi.hoisted(() => ({
   runUnlinkProject: vi.fn(),
 }));
 vi.mock("./team-projects", () => projectsMock);
+const createMock = vi.hoisted(() => ({ runRenameTeam: vi.fn() }));
+vi.mock("./team-create", () => createMock);
+const deleteMock = vi.hoisted(() => ({ runDeleteTeam: vi.fn() }));
+vi.mock("./team-delete", () => deleteMock);
 
 import { runInvite, runTeamOp, teamSnapshot } from "./team-ops";
 import { ORG, USER, actorAtLeast, makeService } from "./team-ops.harness";
@@ -56,7 +59,6 @@ beforeEach(() => {
   teamsMock.roleCan.mockImplementation((role: string, perm: string) => role !== "member" && perm === "members.manage");
   teamsMock.roleAtLeast.mockImplementation((actor: string, target: string) => actorAtLeast(actor, target));
   teamsMock.roleLabel.mockImplementation((r: string) => r.charAt(0).toUpperCase() + r.slice(1));
-  teamsMock.roleDescription.mockImplementation((r: string) => `${r} desc`);
   teamsMock.assignableRoles.mockImplementation((r: string) => (r === "owner" ? ["owner", "admin", "member"] : r === "admin" ? ["admin", "member"] : []));
   teamsMock.listOrgMembers.mockResolvedValue([]);
   teamsMock.listPendingInvites.mockResolvedValue([]);
@@ -213,6 +215,18 @@ describe("runTeamOp projects", () => {
     expect(projectsMock.runLinkProject).toHaveBeenCalledWith(CTX, "a/b");
     expect(await runTeamOp(CTX, { org: "acme", action: "unlink-project", repo: "a/b" })).toEqual({ ok: true, message: "x" });
     expect(projectsMock.runUnlinkProject).toHaveBeenCalledWith(CTX, "a/b");
+  });
+
+  it("dispatches rename", async () => {
+    createMock.runRenameTeam.mockResolvedValue({ ok: true, message: "Renamed to B." });
+    expect(await runTeamOp(CTX, { org: "acme", action: "rename", name: "B" })).toEqual({ ok: true, message: "Renamed to B." });
+    expect(createMock.runRenameTeam).toHaveBeenCalledWith(CTX, "B");
+  });
+
+  it("dispatches delete", async () => {
+    deleteMock.runDeleteTeam.mockResolvedValue({ ok: true, message: "Deleted Acme." });
+    expect(await runTeamOp(CTX, { org: "acme", action: "delete", confirm: "Acme" })).toEqual({ ok: true, message: "Deleted Acme." });
+    expect(deleteMock.runDeleteTeam).toHaveBeenCalledWith(CTX, "Acme");
   });
 });
 

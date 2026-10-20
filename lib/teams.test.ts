@@ -12,7 +12,6 @@ const teamsMock = vi.hoisted(() => ({
   roleAtLeast: vi.fn(),
   // ALL_ROLES is built as lib/teams.ts loads, so these need their implementations before the import.
   roleLabel: vi.fn((r: string) => r.charAt(0).toUpperCase() + r.slice(1)),
-  roleDescription: vi.fn((r: string) => `${r} desc`),
   assignableRoles: vi.fn(),
   isPlausibleEmail: vi.fn(),
   normalizeEmail: vi.fn(),
@@ -80,7 +79,6 @@ beforeEach(() => {
   teamsMock.isPlausibleEmail.mockImplementation((s: string) => /.+@.+\..+/.test(s));
   teamsMock.isSuperAdmin.mockReturnValue(false);
   teamsMock.roleLabel.mockImplementation((r: string) => r.charAt(0).toUpperCase() + r.slice(1));
-  teamsMock.roleDescription.mockImplementation((r: string) => `${r} desc`);
   teamsMock.assignableRoles.mockImplementation((r: string) => (r === "owner" ? ["owner", "admin", "member"] : r === "admin" ? ["admin", "member"] : []));
   teamsMock.listUserOrgs.mockResolvedValue([{ org: ORG, role: "admin" }]);
   teamsMock.setCurrentOrg.mockResolvedValue(undefined);

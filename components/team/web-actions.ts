@@ -18,6 +18,8 @@ import {
   createTeam as serverCreateTeam,
   removeMember as serverRemoveMember,
   removeProject as serverRemoveProject,
+  renameTeam as serverRenameTeam,
+  deleteTeam as serverDeleteTeam,
   revokeInvite as serverRevokeInvite,
 } from "@/lib/team-actions";
 
@@ -50,6 +52,12 @@ export function webTeamActions(orgSlug: string): TeamClientActions {
     // The result's slug is the new workspace; the caller navigates to /<slug>/team.
     async createTeam(name: string): Promise<NewTeamResult> {
       return serverCreateTeam(name);
+    },
+    async renameTeam(slug: string, name: string): Promise<TeamActionResult> {
+      return serverRenameTeam(slug, name);
+    },
+    async deleteTeam(slug: string, confirm: string): Promise<TeamActionResult> {
+      return serverDeleteTeam(slug, confirm);
     },
   };
 }

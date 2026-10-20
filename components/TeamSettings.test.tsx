@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TeamClientActions, TeamSnapshot } from "@/lib/team-types";
@@ -9,7 +9,7 @@ import TeamSettings from "./TeamSettings";
 
 const useTeamMock = vi.hoisted(() => vi.fn<(_org?: string) => TeamHook>());
 
-vi.mock("@/lib/use-team", () => ({ useTeam: useTeamMock }));
+vi.mock("@/lib/use-team", () => ({ useTeam: useTeamMock, prefetchTeam: vi.fn() }));
 vi.mock("@/lib/use-board-repos", () => ({ useBoardRepos: () => ["aimhuge/weft", "aimhuge/other"] }));
 vi.mock("./team/ProjectPeople", () => ({ ProjectPeople: () => null }));
 
@@ -48,12 +48,14 @@ function actions(): TeamClientActions {
     addProject: vi.fn().mockResolvedValue({ ok: true, message: "ok" }),
     removeProject: vi.fn().mockResolvedValue({ ok: true, message: "ok" }),
     createTeam: vi.fn().mockResolvedValue({ ok: true, message: "ok" }),
+    renameTeam: vi.fn().mockResolvedValue({ ok: true }),
+    deleteTeam: vi.fn().mockResolvedValue({ ok: true }),
   };
 }
 
-// The dialog page header ("Team / Your Weft workspace and the people in
-// it.") lives in lib/settings-nav.ts and is rendered by SettingsDialog,
-// not here. TeamSettings just feeds useTeam(org) into the cards below it.
+// The dialog page header ("Teams / Every Weft team you're in…") lives in
+// lib/settings-nav.ts and is rendered by SettingsDialog, not here. TeamSettings
+// just feeds useTeam(org) into the cards below it.
 function setHook(state: TeamHookState) {
   useTeamMock.mockReturnValue({ state, refresh: vi.fn(), actions: actions() });
 }
@@ -67,7 +69,7 @@ describe("TeamSettings", () => {
   it("shows a loading line while the team is loading", () => {
     setHook({ kind: "loading" });
     render(<TeamSettings />);
-    expect(screen.getByText(/Loading your team/)).toBeInTheDocument();
+    expect(screen.getByText(/Loading your teams/)).toBeInTheDocument();
   });
 
   it("shows the signed-out hint and a sign-in hint pointing at Accounts", () => {
@@ -89,17 +91,16 @@ describe("TeamSettings", () => {
   it("renders the workspace, roster, invite form, pending invites, and Open on weft.zip", () => {
     setHook({ kind: "ok", team });
     render(<TeamSettings />);
-    // The name shows in the header and again as the switcher's current option.
-    expect(screen.getByText("Team: Acme")).toBeInTheDocument();
+    // The picked team heads its own sections, below the list of every team.
+    expect(screen.getByRole("heading", { name: "Acme" })).toBeInTheDocument();
     expect(screen.getByText("Ada")).toBeInTheDocument();
     expect(screen.getByText("grace@b.co")).toBeInTheDocument();
     expect(screen.getByText("linus@b.co")).toBeInTheDocument();
     // The invite form, the pending list, the Open-on-weft.zip link.
     expect(screen.getByRole("button", { name: "Send invite" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open on weft.zip" })).toBeInTheDocument();
-    // The header says your role as a pill and counts the people, not "you're a owner".
-    expect(screen.queryByText(/you're a/)).not.toBeInTheDocument();
-    expect(screen.getByText(/invited/)).toBeInTheDocument();
+    // The heading counts the people, the invites and the projects.
+    expect(screen.getByText("2 members · 1 invited · 1 project")).toBeInTheDocument();
   });
 
   it("hides the invite form and pending list when the user can't manage", () => {
@@ -119,22 +120,62 @@ describe("TeamSettings", () => {
     expect(screen.queryByRole("button", { name: "Leave workspace" })).not.toBeInTheDocument();
   });
 
-  it("always says which team you're managing, with your role, and shows the switcher even with one team", () => {
+  it("lists your teams and offers New team even when you're in one", () => {
     setHook({ kind: "ok", team: { ...team, orgs: [acme] } });
     render(<TeamSettings />);
-    expect(screen.getByText("Team: Acme")).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Switch team" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "+ New team" })).toBeInTheDocument();
+    expect(screen.getByText("Your teams · 1")).toBeInTheDocument();
+    expect(within(screen.getByRole("list", { name: "Your teams" })).getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "New team" })).toBeInTheDocument();
   });
 
   it("lists every team with your role and remembers the pick", async () => {
     setHook({ kind: "ok", team });
     render(<TeamSettings />);
-    expect(screen.getByRole("option", { name: "✓ Acme · Owner" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Weft Co · Member" })).toBeInTheDocument();
-    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Switch team" }), "weft");
+    expect(screen.getByText("Your teams · 2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { current: true })).toHaveTextContent("Acme");
+    await userEvent.click(screen.getByRole("button", { name: "Weft Co" }));
     expect(window.localStorage.getItem("weft-team-org")).toBe("weft");
     expect(useTeamMock).toHaveBeenLastCalledWith("weft");
+  });
+
+  it("keeps the list up while the picked team loads, then shows it", async () => {
+    let weftState: TeamHookState = { kind: "loading" };
+    useTeamMock.mockImplementation((org) => ({
+      state: org === "weft" ? weftState : { kind: "ok", team },
+      refresh: vi.fn(),
+      actions: actions(),
+    }));
+    const { rerender } = render(<TeamSettings />);
+    await userEvent.click(screen.getByRole("button", { name: "Weft Co" }));
+    expect(screen.getByText("Loading Weft Co")).toBeInTheDocument();
+    expect(screen.getByRole("button", { current: true })).toHaveTextContent("Weft Co");
+    expect(screen.queryByRole("heading", { name: "Acme" })).not.toBeInTheDocument();
+    weftState = { kind: "ok", team: { ...team, org: weft, role: "member", canManage: false } };
+    rerender(<TeamSettings />);
+    expect(screen.getByRole("heading", { name: "Weft Co" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Leave workspace" })).toBeInTheDocument();
+  });
+
+  it("keeps the list up when the picked team fails to load, with Try again", async () => {
+    const refresh = vi.fn();
+    useTeamMock.mockImplementation((org) => ({
+      state: org === "weft" ? { kind: "error", message: "offline" } : { kind: "ok", team },
+      refresh,
+      actions: actions(),
+    }));
+    render(<TeamSettings />);
+    await userEvent.click(screen.getByRole("button", { name: "Weft Co" }));
+    expect(screen.getByText(/offline/)).toBeInTheDocument();
+    expect(screen.getByText("Your teams · 2")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it("describes the invite roles in Weft's words, not the package's", () => {
+    setHook({ kind: "ok", team });
+    render(<TeamSettings />);
+    expect(screen.getByText(/Sees the team's projects, synced boards and people/)).toBeInTheDocument();
+    expect(screen.queryByText("View and publish.")).not.toBeInTheDocument();
   });
 
   it("opens on the remembered team, and falls back to the default when it's no longer listed", async () => {

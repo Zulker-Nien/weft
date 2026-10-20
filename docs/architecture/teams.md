@@ -75,8 +75,19 @@ a gate (/s, /a, /u) call `connection()` themselves (`lib/prerender-check.ts` fla
 
 ## In the desktop's Settings
 
-Settings → Team (`components/TeamSettings.tsx`) shows the same roster, invite form and pending invites inside the
-app. The desktop has neither weft.zip's cookie nor the service key, so it goes through weft.zip's JSON API:
+Settings → Teams (`components/TeamSettings.tsx`) opens on **Your teams** (`components/team/TeamList.tsx`), every
+workspace you're in with your role, and below it the one you picked (`components/team/TeamPanel.tsx`): the same
+projects, roster, invite form and pending invites as weft.zip. `lib/use-managed-team.ts` remembers the pick and keeps
+the team you switched from while the next one loads, so the list never blinks; hovering a row prefetches it. A team you own has a pencil that
+renames it in place: `{ action: "rename" }` through `runTeamOp` to `runRenameTeam` (`lib/team-create.ts`), owners only,
+1 to 60 characters, name only (the slug is in every link and synced board, so it stays). Its trash deletes it:
+`{ action: "delete", confirm: <name> }` to `runDeleteTeam` (`lib/team-delete.ts`), which needs an owner who is in
+another team too (nobody is left with none), the name typed exactly, and no paid plan still billing (cancel it in
+Billing first; deleting the row wouldn't stop Stripe). Every table under `orgs` cascades: memberships, invites,
+projects, synced cards and commands, mini apps, share links, billing rows. The desktop's forwarder then calls
+`forgetSyncOrg()` (`lib/cloud-sync.ts`), since the deleted team may be the one this Mac's cards sync to. The
+invite form's role descriptions are `ROLE_DESCRIPTIONS` in `lib/team-types.ts`, not the package's (BlastCP's).
+The desktop has neither weft.zip's cookie nor the service key, so it goes through weft.zip's JSON API:
 
 ```
 board ── useTeam() ──▶ /api/account/team (local, guarded) ──Bearer <desktop JWT>──▶ weft.zip /api/teams ──▶ Supabase

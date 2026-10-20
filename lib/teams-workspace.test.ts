@@ -12,7 +12,6 @@ const teamsMock = vi.hoisted(() => ({
   roleAtLeast: vi.fn(),
   // ALL_ROLES is built as lib/teams.ts loads, so these need their implementations before the import.
   roleLabel: vi.fn((r: string) => r.charAt(0).toUpperCase() + r.slice(1)),
-  roleDescription: vi.fn((r: string) => `${r} desc`),
   assignableRoles: vi.fn(),
   isPlausibleEmail: vi.fn(),
   normalizeEmail: vi.fn(),
@@ -44,6 +43,7 @@ vi.mock("./web-session", () => ({
 }));
 vi.mock("next/navigation", () => navMock);
 
+import { ROLE_DESCRIPTIONS } from "./team-types";
 import { ALL_ROLES, currentWorkspaceFor, currentWorkspaceSlug, inviteMailer, roleOptions, setActiveWorkspace } from "./teams";
 
 const USER = { id: "u1", email: "jane@example.com", name: "Jane", avatar: null };
@@ -80,7 +80,6 @@ beforeEach(() => {
   teamsMock.isPlausibleEmail.mockImplementation((s: string) => /.+@.+\..+/.test(s));
   teamsMock.isSuperAdmin.mockReturnValue(false);
   teamsMock.roleLabel.mockImplementation((r: string) => r.charAt(0).toUpperCase() + r.slice(1));
-  teamsMock.roleDescription.mockImplementation((r: string) => `${r} desc`);
   teamsMock.assignableRoles.mockImplementation((r: string) => (r === "owner" ? ["owner", "admin", "member"] : r === "admin" ? ["admin", "member"] : []));
   teamsMock.listUserOrgs.mockResolvedValue([{ org: ORG, role: "admin" }]);
   teamsMock.setCurrentOrg.mockResolvedValue(undefined);
@@ -196,21 +195,19 @@ describe("roleOptions", () => {
   it("returns the assignable roles for an owner (all three)", () => {
     teamsMock.assignableRoles.mockReturnValue(["owner", "admin", "member"]);
     teamsMock.roleLabel.mockImplementation((r: string) => r.charAt(0).toUpperCase() + r.slice(1));
-    teamsMock.roleDescription.mockImplementation((r: string) => `${r} desc`);
     expect(roleOptions("owner")).toEqual([
-      { role: "owner", label: "Owner", description: "owner desc" },
-      { role: "admin", label: "Admin", description: "admin desc" },
-      { role: "member", label: "Member", description: "member desc" },
+      { role: "owner", label: "Owner", description: ROLE_DESCRIPTIONS.owner },
+      { role: "admin", label: "Admin", description: ROLE_DESCRIPTIONS.admin },
+      { role: "member", label: "Member", description: ROLE_DESCRIPTIONS.member },
     ]);
   });
 
   it("returns admin+member for an admin", () => {
     teamsMock.assignableRoles.mockReturnValue(["admin", "member"]);
     teamsMock.roleLabel.mockImplementation((r: string) => r.charAt(0).toUpperCase() + r.slice(1));
-    teamsMock.roleDescription.mockImplementation((r: string) => `${r} desc`);
     expect(roleOptions("admin")).toEqual([
-      { role: "admin", label: "Admin", description: "admin desc" },
-      { role: "member", label: "Member", description: "member desc" },
+      { role: "admin", label: "Admin", description: ROLE_DESCRIPTIONS.admin },
+      { role: "member", label: "Member", description: ROLE_DESCRIPTIONS.member },
     ]);
   });
 
@@ -221,11 +218,11 @@ describe("roleOptions", () => {
 });
 
 describe("ALL_ROLES", () => {
-  it("lists every role the package ships, in order, with label and description", () => {
+  it("lists every role the package ships, in order, with its label and Weft's description", () => {
     expect(ALL_ROLES).toEqual([
-      { role: "owner", label: "Owner", description: "owner desc" },
-      { role: "admin", label: "Admin", description: "admin desc" },
-      { role: "member", label: "Member", description: "member desc" },
+      { role: "owner", label: "Owner", description: ROLE_DESCRIPTIONS.owner },
+      { role: "admin", label: "Admin", description: ROLE_DESCRIPTIONS.admin },
+      { role: "member", label: "Member", description: ROLE_DESCRIPTIONS.member },
     ]);
   });
 });

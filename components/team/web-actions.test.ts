@@ -8,6 +8,8 @@ const actions = vi.hoisted(() => ({
   removeMember: vi.fn().mockResolvedValue({ ok: true, message: "remove" }),
   removeProject: vi.fn().mockResolvedValue({ ok: true, message: "rmproj" }),
   revokeInvite: vi.fn().mockResolvedValue({ ok: true, message: "revoke" }),
+  renameTeam: vi.fn().mockResolvedValue({ ok: true, message: "renamed" }),
+  deleteTeam: vi.fn().mockResolvedValue({ ok: true, message: "deleted" }),
 }));
 vi.mock("@/lib/team-actions", () => actions);
 
@@ -33,5 +35,15 @@ describe("webTeamActions", () => {
   it("createTeam returns the new slug and takes no org", async () => {
     expect(await webTeamActions("acme").createTeam("New")).toEqual({ ok: true, slug: "new" });
     expect(actions.createTeam).toHaveBeenCalledWith("New");
+  });
+
+  it("renameTeam renames the slug it's given, not the one it closes over", async () => {
+    expect(await webTeamActions("acme").renameTeam("other", "Other Co")).toEqual({ ok: true, message: "renamed" });
+    expect(actions.renameTeam).toHaveBeenCalledWith("other", "Other Co");
+  });
+
+  it("deleteTeam deletes the slug it's given, with the typed name", async () => {
+    expect(await webTeamActions("acme").deleteTeam("other", "Other")).toEqual({ ok: true, message: "deleted" });
+    expect(actions.deleteTeam).toHaveBeenCalledWith("other", "Other");
   });
 });

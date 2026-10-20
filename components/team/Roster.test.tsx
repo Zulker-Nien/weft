@@ -50,6 +50,8 @@ function makeActions(): TeamClientActions & {
     addProject: vi.fn().mockResolvedValue({ ok: true, message: "Linked." }),
     removeProject: vi.fn().mockResolvedValue({ ok: true, message: "Unlinked." }),
     createTeam: vi.fn().mockResolvedValue({ ok: true, message: "Created." }),
+    renameTeam: vi.fn().mockResolvedValue({ ok: true }),
+    deleteTeam: vi.fn().mockResolvedValue({ ok: true }),
   };
 }
 
