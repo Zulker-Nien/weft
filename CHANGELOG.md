@@ -39,6 +39,7 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 ### Security
 
 - A webhook relay delivery can no longer climb out of its target's path (`..`, `%2e%2e`) to another local route, and the relay drops `x-threadboard` from a stranger's request. Account, settings and services reads need a per-launch token the board window adds itself (`electron/api-token.cjs`). `weft://` links only act from a page under `~/.weft`, not any `file:` page.
+- The email forwarder scrubs CR/LF/NUL from the parsed From display name, the subject, the alias and the round-tripped `X-Forwarded-*` headers (and every entry in the reply-to list), so an attacker mailing to `@weft.zip` with a crafted `From:` can't smuggle extra headers into the forwarded mail. Five new tests in `lib/email-forward.test.ts` cover the cases (pentest 2026-10-20, F-7; `lib/email-forward.ts`).
 
 ### Added
 

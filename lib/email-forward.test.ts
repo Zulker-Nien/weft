@@ -93,6 +93,21 @@ describe("parseAddress", () => {
     expect(parseAddress(" <jane@acme.test> ")).toEqual({ name: "", address: "jane@acme.test" });
     expect(parseAddress(" jane@acme.test ")).toEqual({ name: "", address: "jane@acme.test" });
   });
+
+  // Pentest 2026-10-20 F-7: an attacker controlling the From header can inject CR/LF/NUL to
+  // smuggle extra fields into the forwarded mail; parseAddress strips control bytes first,
+  // then runs the regex on the cleaned text, so the body the regex sees has no header
+  // separators in it.
+  it("strips CR/LF/NUL/other ASCII control bytes from both halves", () => {
+    expect(parseAddress("Ali\nBcc: victim@x.test <a@x.test>")).toEqual({ name: "AliBcc: victim@x.test", address: "a@x.test" });
+    expect(parseAddress("Ali\rcr <a@x.test>")).toEqual({ name: "Alicr", address: "a@x.test" });
+    expect(parseAddress("Ali\r\nSubject: pwn <a@x.test>")).toEqual({ name: "AliSubject: pwn", address: "a@x.test" });
+    expect(parseAddress("\u0000Ali\u0007 <a@x.test>")).toEqual({ name: "Ali", address: "a@x.test" });
+    // A bare address is left bare even when the controls surround it.
+    expect(parseAddress("a\r\nB: c@x.test")).toEqual({ name: "", address: "aB: c@x.test" });
+    // A control byte inside the bare-address branch can't inject — there's no name to leave.
+    expect(parseAddress("\r\nBcc: victim@x.test\r\n")).toEqual({ name: "", address: "Bcc: victim@x.test" });
+  });
 });
 
 describe("forwardMessage", () => {
@@ -126,6 +141,36 @@ describe("forwardMessage", () => {
     expect(send({ html: null, text: null, subject: "" })).toMatchObject({ text: "(no content)", subject: "(no subject)" });
     expect(send()).not.toHaveProperty("attachments");
     expect(send({}, [{ filename: "a.pdf", content: "aGk=", content_type: "application/pdf" }]).attachments).toHaveLength(1);
+  });
+
+  // Pentest 2026-10-20 F-7: a forwarded message's From display name, subject and
+  // X-Forwarded-* headers must not contain any byte an SMTP wire could split on; otherwise
+  // an attacker mailing to @weft.zip can sneak extra headers into the forwarded mail. The
+  // sender name and reply_to/aliases are also normalised so an injected address can't escape
+  // the From display-name quoting.
+  it("scrubs CR/LF/NUL from the From display name, subject and round-tripped headers", () => {
+    const out = send({
+      from: "Ali\r\nBcc: victim@x.test <a@x.test>",
+      subject: "Hello\r\nBcc: x@x.test",
+      to: ["hello@weft.zip", "evil\r\nBcc: y@y.test"],
+      reply_to: ["evil\r\n@x.test"],
+    });
+    expect(out.from).toBe('"AliBcc: victim@x.test via hello@weft.zip" <forward@weft.zip>');
+    expect(out.subject).toBe("HelloBcc: x@x.test");
+    expect(out.headers["X-Forwarded-From"]).toBe("AliBcc: victim@x.test <a@x.test>");
+    expect(out.headers["X-Forwarded-To"]).toBe("hello@weft.zip, evilBcc: y@y.test");
+    for (const value of [out.from, out.subject, out.headers["X-Forwarded-From"], out.headers["X-Forwarded-To"]]) {
+      expect(value).not.toMatch(/[\r\n\x00]/);
+    }
+    // The reply-to is parsed and trimmed: a poisoned address becomes a literal string with
+    // the controls dropped, so it no longer parses as an injected From.
+    expect(out.reply_to).toEqual(["evil@x.test"]);
+  });
+
+  it("strips header-injection characters from the alias when the mail's to is empty", () => {
+    expect(send({ to: [] }).from).toBe('"Jane Doe via forward@weft.zip" <forward@weft.zip>');
+    // The CR/LF in the alias are stripped before the From display name quotes them.
+    expect(send({ to: ["bad\r\nBcc: x@x.test"] }).from).toBe('"Jane Doe via badBcc: x@x.test" <forward@weft.zip>');
   });
 });
 

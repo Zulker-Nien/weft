@@ -90,30 +90,58 @@ export async function refusal(headers: Headers, body: string, secret: string, no
   return signatures.split(" ").some((s) => s.startsWith("v1,") && sameSignature(s.slice(3), want)) ? null : "Bad signature";
 }
 
-// `Jane Doe <jane@example.com>` is a name and an address; a bare address has no name.
+// Strips ASCII control bytes (0x00–0x1F and 0x7F) from a string so it can sit inside an RFC 5322
+// header value without smuggling extra fields (CR/LF/NUL). Used on the From display name and
+// any header we round-trip from the original message (pentest 2026-10-20, F-7).
+// The control-character class is intentional: it's the whole point of the helper.
+function stripControlBytes(text: string): string {
+  return text.replace(/[\x00-\x1F\x7F]/g, "");
+}
+
+// `Jane Doe <jane@example.com>` is a name and an address; a bare address has no name. The
+// `(.*?)` is non-greedy on purpose: a malicious or noisy input might contain a `<` in the
+// leading text and we want it to land in the bare-address branch ("name": "", address: raw)
+// rather than mis-parsing as a different address. The address half `<([^>]+)>` can't itself
+// contain `<`, so the part inside the angle brackets is safely bounded.
 export function parseAddress(raw: string): { name: string; address: string } {
-  const [, name = "", address = ""] = /^\s*"?(.*?)"?\s*<([^>]+)>\s*$/.exec(raw) ?? [];
-  return address ? { name: name.trim(), address: address.trim() } : { name: "", address: raw.trim() };
+  const stripped = stripControlBytes(raw);
+  const [, name = "", address = ""] = /^\s*"?(.*?)"?\s*<([^>]+)>\s*$/.exec(stripped) ?? [];
+  return address ? { name: name.trim(), address: address.trim() } : { name: "", address: stripped.trim() };
 }
 
 // The mail that goes on: from the forwarding address, named for the sender and the alias they wrote to, so the inbox
 // shows both at a glance; replies go to the sender (or their reply-to); the original addresses ride along as headers.
+//
+// The sender name and the round-tripped X-Forwarded-* headers are sanitised so an attacker who
+// controls the original mail's From can't smuggle extra headers (a CR/LF/NUL in the display
+// name becomes a literal space, a header value gets any control bytes dropped — pentest 2026-10-20,
+// F-7). The From display name also swaps a remaining double quote for an apostrophe as a
+// belt-and-braces measure; any control byte left after the strip is gone.
 export function forwardMessage(mail: Mail, to: string, from: string, attachments: Attachment[]): Outgoing {
   const sender = parseAddress(mail.from);
-  const alias = mail.to[0] ?? from;
+  const alias = stripControlBytes(mail.to[0] ?? from).replace(/[<>,"]/g, "");
   const name = (sender.name || sender.address).replace(/"/g, "'");
   const out: Outgoing = {
     from: `"${name} via ${alias}" <${from}>`,
     to: [to],
-    reply_to: mail.reply_to.length ? mail.reply_to : [sender.address],
-    subject: mail.subject || "(no subject)",
-    headers: { "X-Forwarded-From": mail.from, "X-Forwarded-To": mail.to.join(", ") },
+    reply_to: mail.reply_to.length ? stripControlList(mail.reply_to) : [sender.address],
+    subject: stripControlBytes(mail.subject) || "(no subject)",
+    headers: {
+      "X-Forwarded-From": stripControlBytes(mail.from),
+      "X-Forwarded-To": stripControlList(mail.to).join(", "),
+    },
   };
   if (mail.html) out.html = mail.html;
   if (mail.text) out.text = mail.text;
   if (!mail.html && !mail.text) out.text = "(no content)";
   if (attachments.length) out.attachments = attachments;
   return out;
+}
+
+// Sanitises each address in a list the same way parseAddress does on the From header. Resend
+// validates reply-to and address shapes for outgoing mail, but we don't want to bet on that.
+function stripControlList(values: string[]): string[] {
+  return values.map((v) => stripControlBytes(v));
 }
 
 export async function handle(req: Request, o: Forwarding): Promise<Response> {
