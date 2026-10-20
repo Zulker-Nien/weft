@@ -100,14 +100,20 @@ module.exports = {
   );
 }
 
-// bin/<name>: CONTENTS is Weft.app/Contents (bin → toolchain → Resources → Contents).
+// bin/<name>: CONTENTS is Weft.app/Contents on a Mac, the unpacked app folder on Linux
+// (bin → toolchain → Resources or resources → CONTENTS).
 const PRELUDE = `#!/bin/sh
 # Written by Weft's scripts/bundle-toolchain.mjs.
 TOOLCHAIN="$(cd "$(dirname "$0")/.." && pwd)"
 CONTENTS="$(cd "$TOOLCHAIN/../.." && pwd)"
 `;
-const NODE = `NODE="$CONTENTS/Frameworks/Weft Helper.app/Contents/MacOS/Weft Helper"
+const mac = process.platform === "darwin";
+const RESOURCES = mac ? "Resources" : "resources";
+const NODE = mac
+  ? `NODE="$CONTENTS/Frameworks/Weft Helper.app/Contents/MacOS/Weft Helper"
 [ -x "$NODE" ] || NODE="$CONTENTS/MacOS/Weft"
+`
+  : `NODE="$CONTENTS/weft"
 `;
 function writeWrapper(name, body) {
   fs.writeFileSync(path.join(bin, name), PRELUDE + body, { mode: 0o755 });
@@ -122,7 +128,7 @@ function writeWrappers() {
   writeWrapper("pnpx", onNode(`"$TOOLCHAIN/pnpm/bin/pnpm.cjs" dlx`));
   writeWrapper("puku-cli", onNode(`"$TOOLCHAIN/puku/node_modules/@puku/puku-cli/bin/puku-cli"`));
   // The Agent SDK's own Claude Code binary, which the Next server already ships for threads.
-  writeWrapper("claude", `exec "$CONTENTS/Resources/server/node_modules/@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/claude" "$@"\n`);
+  writeWrapper("claude", `exec "$CONTENTS/${RESOURCES}/server/node_modules/@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/claude" "$@"\n`);
 }
 
 fs.rmSync(out, { recursive: true, force: true });

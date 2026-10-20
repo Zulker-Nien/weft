@@ -45,6 +45,7 @@ tool call.
   (and fails when the section is missing);
 - `pnpm dist:release` builds the dmg and zip (`Weft-X.Y.Z-arm64.*`), signed with the Developer ID certificate,
   hardened runtime with `build/entitlements.mac.plist`, and notarized;
+- `pnpm dist:linux` (on a Linux box) builds `Weft-X.Y.Z-<arch>.AppImage` and `.deb`: unsigned, no auto-update feed yet. `bundle-toolchain.mjs` writes wrappers that find `resources/` and the `weft` binary instead of `Contents/`; `node-pty` has no Linux prebuild, so it is taken from `build/Release` after `pnpm install` compiles it;
 - checks the signature with `codesign` and Gatekeeper with `spctl`;
 - publishes a GitHub release with the dmg, the zip and `update.json`.
 
@@ -108,3 +109,14 @@ from Alex Miller's individual membership, not Flexbike Inc's.
 - The toolchain's versions are pinned in `scripts/bundle-toolchain.mjs` and move only when someone bumps them.
 - A puku trial for people without a Puku account (Weft's key behind the deployed Weft) is its own card; until it
   lands, a puku thread needs `puku-cli auth login`.
+
+## Channels (brew and apt): machinery only
+
+Nothing publishes to Homebrew or apt yet and no workflow calls these; `scripts/release-channels.mjs` builds what a
+channel needs from a release's artifacts, so turning one on is a CI step plus a repo.
+
+- `node scripts/release-channels.mjs cask <version> [dmg]` writes `dist/weft.rb`, a Homebrew cask (url from the GitHub
+  release, sha256 of the dmg). It belongs in a tap repo, `aimhuge/homebrew-weft` at `Casks/weft.rb`
+  (`brew install --cask aimhuge/weft/weft`); the release URL must be public. The official homebrew-cask needs a notarized app and notability.
+- `node scripts/release-channels.mjs apt <debDir>` makes a flat apt repo (`apt-ftparchive`, Linux) from the `.deb` files
+  `pnpm dist:linux` writes; `Release` is signed with `$WEFT_APT_GPG_KEY` when set. Host `dist/apt` on any static site (R2, Pages).
