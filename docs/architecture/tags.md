@@ -39,6 +39,10 @@ hue (`tagHue`).
 - `components/LibraryRail.tsx` (`SideRail`): the 38px rail left of the columns. ★ and 🏷 at the top; the 🔐 vault,
   ▲ Vercel, Supabase and BlastCP drawers under them, unchanged. While a card is dragged, ★ and 🏷 light up as drop
   targets.
+- `lib/use-drawer-width.ts`: every rail drawer's width. The board sheet's left edge over an open drawer is a handle:
+  drag it between 220 and 640px (always leaving 360px of window for the board), double-click for the default 272px.
+  The width sits in localStorage `weft.railDrawerWidth` and reaches `components/rail-drawer.css` as `--rail-drawer-w`,
+  so the slide-out animation follows it.
 - `components/TagsDrawer.tsx`: the 🏷 drawer, like GitHub's labels page. New tag with a colour, rename (double-click
   or ✎), recolour, delete with a confirm that says how many cards carry it, click a tag to filter the board, drop a
   card on a tag to add it. ⌘L opens it.

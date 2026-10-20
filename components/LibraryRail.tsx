@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { railPinned, setRailPinned, starredCount, toggleTag, type RailFilter, type RailPanel } from "@/lib/rail-view";
 import type { Card } from "@/lib/types";
 import { useSlideOut } from "@/lib/use-slide-out";
+import { useDrawerWidth } from "@/lib/use-drawer-width";
 import { useSuperAdminGate } from "@/lib/use-admin-gate";
 import { useVault } from "@/lib/use-vault";
 import { filterVaults, railBadge } from "@/lib/vault-view";
@@ -108,6 +109,7 @@ export default function SideRail({
   const [cardDrag, setCardDrag] = useState(false);
   // The drawer to draw: the open one, or the one sliding back under the board (DRAWER_SLIDE_MS, as in rail-drawer.css).
   const { shown, closing } = useSlideOut(open, DRAWER_SLIDE_MS);
+  const drawerWidth = useDrawerWidth();
   const router = useRouter();
   const isSuperAdmin = useSuperAdminGate();
   const vault = useVault(folders);
@@ -147,7 +149,7 @@ export default function SideRail({
 
   const drawerShell = ([icon, title, label]: readonly [React.ReactNode, string, string], body: React.ReactNode) => (
     <aside className="rail-drawer flex shrink-0 overflow-hidden bg-panel" data-drawer data-closing={closing || undefined} aria-label={label}>
-      <div className="rail-drawer-body flex w-[260px] shrink-0 flex-col">
+      <div className="rail-drawer-body flex w-[calc(var(--rail-drawer-w)-12px)] shrink-0 flex-col">
         <div className="flex items-center gap-1.5 border-b border-line px-3 py-2">
           <span className="text-[14px]" aria-hidden>
             {icon}
@@ -194,7 +196,7 @@ export default function SideRail({
   const toggle = (panel: Tool) => () => onOpen(open === panel ? null : panel);
 
   return (
-    <div className="relative flex shrink-0" data-rail>
+    <div className="relative flex shrink-0" data-rail style={{ "--rail-drawer-w": `${drawerWidth.width}px` } as React.CSSProperties}>
       <nav className="flex w-[38px] flex-col items-center gap-1 border-r border-line bg-panel pt-2" aria-label="Rail">
         <StarRailButton on={Boolean(filter.starred)} count={starred} cardDrag={cardDrag} onClick={() => onFilter({ ...filter, starred: !filter.starred })} onDropCard={onDropStar} />
         <TagsRailButton open={open === "tags"} tag={filter.tag} cardDrag={cardDrag} onOpen={(next) => onOpen(next ? "tags" : null)} />
@@ -237,6 +239,10 @@ export default function SideRail({
         </span>
       )}
       {drawer}
+      {/* The board's edge over the drawer: drag it to resize the drawer, double-click for the default width. */}
+      {drawer && !closing && (
+        <div onPointerDown={drawerWidth.startDrag} onDoubleClick={drawerWidth.reset} title="Drag to resize · double-click to reset" className="absolute inset-y-0 left-[calc(22px+var(--rail-drawer-w))] z-20 w-2 cursor-col-resize hover:bg-accent/30" aria-hidden="true" />
+      )}
     </div>
   );
 }
