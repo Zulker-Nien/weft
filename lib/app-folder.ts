@@ -136,14 +136,40 @@ export interface AppManifestUpload {
   supabaseUrl?: string;
 }
 
+// A Supabase read sends the app author's own SUPABASE_SECRET_KEY to the URL the manifest declares
+// (app/api/a/[id]/read/route.ts runSupabaseRead). A manifest-supplied URL is therefore a secret
+// exfiltration primitive unless it can only ever be a Supabase project host: a share whose author
+// sets it to an attacker's host would have weft.zip hand over that key on the first read.
+// Only an https Supabase project URL is accepted; anything else is dropped, both here (so a bad
+// value never reaches the row) and at read time (so a row written before this rule still can't
+// leak). Custom domains and self-hosted Postgres are out of scope for a read.
+const SUPABASE_HOST_RE = /^[a-z0-9][a-z0-9-]*\.supabase\.(co|in)$/i;
+
+// Whether a manifest's supabaseUrl is safe to send the author's secret to.
+export function safeSupabaseUrl(raw: unknown): string | null {
+  if (typeof raw !== "string" || !raw) return null;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:") return null;
+  // No credentials in the URL, and no port: the host must be the bare project host.
+  if (url.username || url.password || url.port) return null;
+  if (!SUPABASE_HOST_RE.test(url.hostname)) return null;
+  return url.origin;
+}
+
 export function reducedManifest(raw: unknown): AppManifestUpload {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
   const r = raw as Record<string, unknown>;
+  const supabaseUrl = safeSupabaseUrl(r.supabaseUrl);
   return {
     ...(isPlain(r.secrets) ? { secrets: r.secrets } : {}),
     ...(Array.isArray(r.public) ? { public: r.public } : {}),
     ...(isPlain(r.reads) ? { reads: r.reads } : {}),
-    ...(typeof r.supabaseUrl === "string" ? { supabaseUrl: r.supabaseUrl } : {}),
+    ...(supabaseUrl ? { supabaseUrl } : {}),
   };
 }
 

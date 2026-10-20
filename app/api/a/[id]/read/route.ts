@@ -4,6 +4,7 @@
 // the rate limit and a per-read log row cover the rest. Refusals answer { error, status }.
 import { connection } from "next/server";
 import { appShareAccess } from "@/lib/app-share-access";
+import { safeSupabaseUrl } from "@/lib/app-folder";
 import { clientIpFromHeaders, fetchLimitVerdict, insertFetchLog } from "@/lib/app-fetch-limit";
 import { AppReadError, BYTE_LIMIT, ROW_LIMIT, TIMEOUT_MS, exchangeGa4Token, upstreamMessage, withTimeout } from "@/lib/app-read-token";
 import { isConfigured as secretsConfigured } from "@/lib/app-secrets";
@@ -85,10 +86,16 @@ interface SupabaseReadInput {
 
 async function runSupabaseRead({ supabaseUrl, fn, declaredArgs, pageArgs, values }: SupabaseReadInput): Promise<unknown> {
   if (!RPC_FN_RE.test(fn)) throw new AppReadError(`Function name isn't a Postgres identifier.`, 400);
+  // The manifest's supabaseUrl decides where the author's SUPABASE_SECRET_KEY is sent, so it is
+  // checked here as well as when the manifest was reduced: a row written before that rule (or one
+  // written by any other path) must not be able to point the key at a host of its choosing.
+  // safeSupabaseUrl returns the normalised origin or null; null refuses before the secret is read.
+  const origin = safeSupabaseUrl(supabaseUrl);
+  if (!origin) throw new AppReadError("This app's supabaseUrl isn't a Supabase project URL.", 400);
   const secret = values.SUPABASE_SECRET_KEY;
   if (!secret) throw new AppReadError("SUPABASE_SECRET_KEY has no value yet.", 400);
   const cleaned = cleanArgs(declaredArgs, pageArgs);
-  const target = new URL(`/rest/v1/rpc/${fn}`, supabaseUrl);
+  const target = new URL(`/rest/v1/rpc/${fn}`, origin);
   for (const [k, v] of Object.entries(cleaned)) target.searchParams.set(k, String(v));
   const t = withTimeout(TIMEOUT_MS);
   try {

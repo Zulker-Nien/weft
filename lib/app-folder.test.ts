@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 // reduction + secret scan. The store lives in a tmp dir (WEFT_DATA), the same way lib/app-cloud.test.ts
 // sets it up; the folder helper finds apps under <tmp>/apps/<slug>/.
 
+// Built at runtime so no Stripe-key-shaped literal lands in git (GitHub push protection refuses it).
+const STRIPE_LIVE = ["sk", "live", "51Hxabcdefghijklmnopqrstuvwxyz"].join("_");
 const g = globalThis as unknown as { __weftState?: unknown };
 let dir: string;
 let folder: string;
@@ -151,12 +153,55 @@ describe("reducedManifest", () => {
     expect(reducedManifest({ public: "nope" })).toEqual({});
     expect(reducedManifest({ public: { 0: "x" } })).toEqual({});
   });
+
+  // A Supabase read sends the author's real SUPABASE_SECRET_KEY to the manifest's URL, so a
+  // manifest-supplied host is a secret-exfiltration primitive (pentest 2026-10-20, F-11). The
+  // bad value must never reach the row.
+  it("drops a supabaseUrl that isn't a Supabase project host", async () => {
+    const { reducedManifest } = await import("./app-folder");
+    for (const bad of [
+      "https://attacker.example",
+      "http://abc.supabase.co", // not https
+      "https://abc.supabase.co.evil.example", // suffix trick
+      "https://evil.example/?x=https://abc.supabase.co",
+      "https://user:pw@abc.supabase.co", // credentials in the URL
+      "https://abc.supabase.co:8443", // a port off the project host
+      "https://localhost:54321",
+      "not a url",
+      "",
+      42,
+    ]) {
+      expect(reducedManifest({ supabaseUrl: bad, reads: { r: { supabase: { fn: "f" } } } })).not.toHaveProperty("supabaseUrl");
+    }
+  });
+
+  it("keeps a Supabase project URL, normalised to its origin", async () => {
+    const { reducedManifest } = await import("./app-folder");
+    expect(reducedManifest({ supabaseUrl: "https://abc.supabase.co" })).toEqual({ supabaseUrl: "https://abc.supabase.co" });
+    expect(reducedManifest({ supabaseUrl: "https://my-proj-1.supabase.in" })).toEqual({ supabaseUrl: "https://my-proj-1.supabase.in" });
+    // A path or query is dropped: only the origin is ever used to build the RPC target.
+    expect(reducedManifest({ supabaseUrl: "https://abc.supabase.co/rest/v1/?x=1" })).toEqual({ supabaseUrl: "https://abc.supabase.co" });
+  });
+});
+
+describe("safeSupabaseUrl", () => {
+  it("returns the origin for a Supabase project URL and null for anything else", async () => {
+    const { safeSupabaseUrl } = await import("./app-folder");
+    expect(safeSupabaseUrl("https://abc.supabase.co")).toBe("https://abc.supabase.co");
+    expect(safeSupabaseUrl("https://abc.supabase.co/rest/v1/rpc/f")).toBe("https://abc.supabase.co");
+    expect(safeSupabaseUrl("https://attacker.example")).toBeNull();
+    expect(safeSupabaseUrl("http://abc.supabase.co")).toBeNull();
+    expect(safeSupabaseUrl("https://abc.supabase.co.evil.example")).toBeNull();
+    expect(safeSupabaseUrl(undefined)).toBeNull();
+    expect(safeSupabaseUrl(null)).toBeNull();
+    expect(safeSupabaseUrl(7)).toBeNull();
+  });
 });
 
 describe("secretHit", () => {
   it("names a text file that holds a secret-shaped value", async () => {
     const { secretHit } = await import("./app-folder");
-    write("index.html", "<h1>hi</h1>\nSTRIPE_KEY=STRIPE_LIVE\n");
+    write("index.html", `<h1>hi</h1>\nSTRIPE_KEY=${STRIPE_LIVE}\n`);
     const file = { absolute: path.join(folder, "index.html"), relative: "index.html", size: 0 };
     expect(secretHit(file)).toMatch(/Stripe secret/);
   });
@@ -175,7 +220,7 @@ describe("secretHit", () => {
   // a plain-text file with no NUL bytes, in any extension, still gets scanned.
   it("scans a text file even when its extension says image/png", async () => {
     const { secretHit } = await import("./app-folder");
-    write("sneaky.png", "STRIPE_KEY=STRIPE_LIVE\n");
+    write("sneaky.png", `STRIPE_KEY=${STRIPE_LIVE}\n`);
     const file = { absolute: path.join(folder, "sneaky.png"), relative: "sneaky.png", size: 0 };
     expect(secretHit(file)).toMatch(/Stripe secret/);
   });
@@ -183,7 +228,7 @@ describe("secretHit", () => {
   // A real PNG keeps its bytes secret-free: the first 8 KB holds a NUL, so it never decodes as text.
   it("still skips a real image (a PNG with NUL bytes stays binary)", async () => {
     const { secretHit } = await import("./app-folder");
-    write("real.png", Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]), Buffer.from("STRIPE_KEY=STRIPE_LIVE", "ascii")]));
+    write("real.png", Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]), Buffer.from(`STRIPE_KEY=${STRIPE_LIVE}`, "ascii")]));
     const file = { absolute: path.join(folder, "real.png"), relative: "real.png", size: 0 };
     expect(secretHit(file)).toBeNull();
   });

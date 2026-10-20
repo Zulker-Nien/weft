@@ -81,7 +81,12 @@ an app's name and link instead of a `file:///Users/...` path).
 - `cloud_app_shares` gains `owner`, `slug`, `files (jsonb path→sha256)`, `manifest (jsonb policy)`; `kind`
   can now be `'folder'` and `page` is the entry path (`index.html`). `manifest` carries the share's
   secrets + public names + reads + supabaseUrl (a reduced `weft-app.json`: `folder` and `env` are local
-  pointers that never leave the Mac).
+  pointers that never leave the Mac). `supabaseUrl` is where a Supabase read sends the author's
+  `SUPABASE_SECRET_KEY`, so it must be an `https` Supabase project URL (`<ref>.supabase.co` /
+  `.supabase.in`, no credentials, no port): `safeSupabaseUrl` in `lib/app-folder.ts` enforces it when
+  the manifest is reduced and `app/api/a/[id]/read/route.ts` enforces it again per read, so neither a
+  hand-edited manifest nor a row written before the rule can aim the key at another host (pentest
+  2026-10-20, F-11). Custom domains and self-hosted Postgres are not usable as a read host.
 - `cloud_app_secrets (share_id, name, viewer_id null=author, ciphertext)` — AES-256-GCM under
   `WEFT_MINIAPP_KEY` (a server-only key in weft.zip's Vercel env), with AAD = `shareId|name|viewerId ?? ""`
   so a row copied to another app/name/viewer fails to open. RLS on, no policies, no grants — only

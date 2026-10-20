@@ -184,6 +184,27 @@ describe("POST /api/a/[id]/read", () => {
     expect(insertFetchLog).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: "READ", host: "supabase.co", path: "/growth_overview", status: 200 }));
   });
 
+  // The author's SUPABASE_SECRET_KEY goes on the wire as a bearer, so the manifest's supabaseUrl
+  // must be a Supabase project host and nothing else (pentest 2026-10-20, F-11). A share whose
+  // manifest points elsewhere is refused before the secret is read or any request is made.
+  it("refuses a manifest supabaseUrl that isn't a Supabase host, without sending the secret", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("[]", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    createAppSecretStore.mockReturnValue({ getValues: vi.fn().mockResolvedValue({ SUPABASE_SECRET_KEY: "sb_secret_x" }) });
+
+    const { POST } = await import("./route");
+    for (const bad of ["https://attacker.example", "http://abc.supabase.co", "https://abc.supabase.co.evil.example", "https://localhost:54321"]) {
+      appShareAccess.mockResolvedValue({ kind: "ok", share: { ...SHARE, manifest: { supabaseUrl: bad, reads: { growth_overview: { supabase: { fn: "growth_overview", args: { days: "number" } } } } } } });
+      fetchMock.mockClear();
+      const res = await POST(post({ name: "growth_overview", args: { days: 7 } }), ctx("s1"));
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { error: string };
+      expect(body.error).toContain("supabaseUrl");
+      // The refusal happens before any network call, so the secret is never put on the wire.
+      expect(fetchMock).not.toHaveBeenCalled();
+    }
+  });
+
   it("drops a missing arg instead of forwarding it", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("[]", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
