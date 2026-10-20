@@ -36,8 +36,8 @@ const { default: ShareAppDialog } = await import("./ShareAppDialog");
 const BLOB_APP: MiniApp = { id: "ap1", name: "Login page", url: "file:///Users/me/dev/app/index.html", addedAt: 1 };
 const SITE_APP: MiniApp = { id: "ap2", name: "Docs", url: "https://docs.test/handbook", addedAt: 2 };
 
-const PRIVATE: AppShareState = { kind: "ok", id: null, url: null, mode: "private", hasPassword: false, shows: "blob" };
-const SHARED: AppShareState = { kind: "ok", id: "s1", url: "https://weft.zip/a/s1", mode: "email", hasPassword: false, shows: "blob" };
+const PRIVATE: AppShareState = { kind: "ok", id: null, url: null, mode: "private", hasPassword: false, shows: "blob", owner: null, slug: null, orgId: null, publicUrl: null, owners: { user: null, orgs: [] }, manifest: null };
+const SHARED: AppShareState = { kind: "ok", id: "s1", url: "https://weft.zip/a/s1", mode: "email", hasPassword: false, shows: "blob", owner: "user", slug: null, orgId: null, publicUrl: null, owners: { user: { username: "alice" }, orgs: [] }, manifest: null };
 const UNSHAREABLE: AppShareState = { kind: "unshareable", reason: "This app runs on your Mac (localhost:5173), so a weft.zip link can't reach it." };
 
 function setup(app: MiniApp, ...answers: AppShareState[]) {
@@ -56,7 +56,10 @@ beforeEach(() => {
   account.signIn.mockReset();
 });
 
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  delete (window as unknown as { weft?: unknown }).weft;
+});
 
 describe("ShareAppDialog", () => {
   it("draws the app's remembered link at once, before the server answers", () => {
@@ -184,5 +187,68 @@ describe("ShareAppDialog", () => {
     fireEvent.keyDown(window, { key: "Escape" });
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(panel).not.toHaveBeenCalled();
+  });
+
+  it("renders the owner dropdown and slug field from the state", async () => {
+    api.getShare.mockResolvedValueOnce({ ...PRIVATE, owners: { user: { username: "alice" }, orgs: [] }, slug: "growth" });
+    setup(BLOB_APP);
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Slug" })).toHaveValue("growth"));
+    expect(screen.getByRole("combobox", { name: "Owner" })).toHaveValue("user");
+  });
+
+  // When the same share id comes back with a new slug from the server (renamed upstream), the input
+  // must pick up the server's slug. Without this sync, the dialog keeps the cached memo's slug and
+  // saves the old one on commit.
+  it("syncs the slug field when the server returns a different slug for the same share id", async () => {
+    // Memo says the share id is "memo-1" with slug "old". Server says: same id, slug is now "new".
+    const app = { ...BLOB_APP, share: { id: "memo-1", mode: "private" as const, hasPassword: false } };
+    api.getShare.mockResolvedValueOnce({ ...PRIVATE, id: "memo-1", slug: "new", owners: { user: { username: "alice" }, orgs: [] } });
+    render(<ShareAppDialog app={app} onClose={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Slug" })).toHaveValue("new"));
+  });
+
+  it("saves the new slug on Enter and reloads the apps list", async () => {
+    api.getShare.mockResolvedValueOnce(PRIVATE);
+    api.setShare.mockResolvedValueOnce({ ...PRIVATE, slug: "growth", publicUrl: "https://weft.zip/@alice/apps/growth" });
+    setup(BLOB_APP);
+    const input = await screen.findByRole("textbox", { name: "Slug" });
+    fireEvent.change(input, { target: { value: "growth" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(api.setShare).toHaveBeenCalledWith("ap1", expect.objectContaining({ mode: "private", slug: "growth", owner: "user" })));
+    expect(reloadApps).toHaveBeenCalled();
+  });
+
+  it("rejects a slug that doesn't match the rule with a clear error", async () => {
+    api.getShare.mockResolvedValueOnce(PRIVATE);
+    setup(BLOB_APP);
+    const input = await screen.findByRole("textbox", { name: "Slug" });
+    fireEvent.change(input, { target: { value: "Bad Slug" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(await screen.findByRole("alert")).toHaveTextContent("1 to 40 letters");
+    expect(api.setShare).not.toHaveBeenCalled();
+  });
+
+  it("draws the Upload secrets button when the manifest declares author secrets", async () => {
+    api.getShare.mockResolvedValueOnce({ ...PRIVATE, manifest: { secrets: { STRIPE_KEY: { hosts: ["api.stripe.com"], methods: ["GET"], paths: ["/v1/charges"] } } } });
+    setup(BLOB_APP);
+    expect(await screen.findByRole("button", { name: "Upload secrets" })).toBeInTheDocument();
+  });
+
+  it("hides the Upload secrets button when the manifest has no author secrets or public names", async () => {
+    api.getShare.mockResolvedValueOnce({ ...PRIVATE, manifest: { secrets: { USER_KEY: { from: "viewer", hosts: ["api.openai.com"] } } } });
+    setup(BLOB_APP);
+    await screen.findByRole("combobox", { name: "Who can open this app" });
+    expect(screen.queryByRole("button", { name: "Upload secrets" })).not.toBeInTheDocument();
+  });
+
+  it("calls window.weft.appSecrets.push and shows the result", async () => {
+    const push = vi.fn(() => Promise.resolve({ ok: true as const, pushed: ["STRIPE_KEY", "GA4_KEY"] }));
+    (window as unknown as { weft: unknown }).weft = { appSecrets: { push } };
+    api.getShare.mockResolvedValueOnce({ ...PRIVATE, manifest: { secrets: { STRIPE_KEY: { hosts: ["api.stripe.com"], methods: ["GET"] } } } });
+    setup(BLOB_APP);
+    const button = await screen.findByRole("button", { name: "Upload secrets" });
+    fireEvent.click(button);
+    await waitFor(() => expect(push).toHaveBeenCalledWith("ap1"));
+    expect(await screen.findByText(/Uploaded STRIPE_KEY, GA4_KEY/)).toBeInTheDocument();
   });
 });

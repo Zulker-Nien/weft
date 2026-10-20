@@ -113,25 +113,41 @@ function isObjectMap(v) {
 }
 
 // The top-level fields the manifest is allowed to have. Each one short-circuits with its own
-// plain-English error so the page can show what to fix.
+// plain-English error so the page can show what to fix. Split out per-field helpers so each
+// one's complexity stays low; ESLint's complexity counts nested &&/|| on a single function.
+function requireString(parsed, field, message) {
+  if (parsed[field] === undefined) return;
+  if (typeof parsed[field] !== "string") throw err("manifest", message);
+}
+function requireOptionalString(parsed, field, message) {
+  if (parsed[field] === undefined || parsed[field] === null) return;
+  if (typeof parsed[field] !== "string") throw err("manifest", message);
+}
+function requireObjectMap(parsed, field, message) {
+  if (parsed[field] === undefined) return;
+  if (!isObjectMap(parsed[field])) throw err("manifest", message);
+}
+function requireArray(parsed, field, message) {
+  if (parsed[field] === undefined) return;
+  if (!Array.isArray(parsed[field])) throw err("manifest", message);
+}
+
 function normaliseTop(parsed) {
   if (!parsed || typeof parsed !== "object") throw err("manifest", "weft-app.json must be an object.");
   if (!parsed.name || typeof parsed.name !== "string") throw err("manifest", "weft-app.json is missing a name.");
   if (parsed.env !== undefined && !VALID_ENV.has(parsed.env)) {
     throw err("manifest", `weft-app.json's env (${parsed.env}) must be development, preview or production.`);
   }
-  if (parsed.folder !== undefined && typeof parsed.folder !== "string") {
-    throw err("manifest", "weft-app.json's folder must be a string path.");
-  }
-  if (parsed.supabaseUrl !== undefined && parsed.supabaseUrl !== null && typeof parsed.supabaseUrl !== "string") {
-    throw err("manifest", "weft-app.json's supabaseUrl must be a string.");
-  }
-  if (parsed.reads !== undefined && !isObjectMap(parsed.reads)) {
-    throw err("manifest", "weft-app.json's reads must be an object.");
-  }
+  requireString(parsed, "folder", "weft-app.json's folder must be a string path.");
+  requireOptionalString(parsed, "supabaseUrl", "weft-app.json's supabaseUrl must be a string.");
+  requireObjectMap(parsed, "reads", "weft-app.json's reads must be an object.");
+  requireObjectMap(parsed, "secrets", "weft-app.json's secrets must be an object.");
+  requireArray(parsed, "public", "weft-app.json's public must be an array of names.");
 }
 
 // Reads weft-app.json from the folder. Plain errors only: the page shows them in its UI.
+// `secrets` and `public` are forwarded as-is for app-data-fetch (parsePolicy does its own
+// validation); this loader only checks that the top-level fields are the right shape.
 function readManifest(manifestPath, folder) {
   let parsed;
   try {
@@ -142,13 +158,16 @@ function readManifest(manifestPath, folder) {
   normaliseTop(parsed);
   const reads = {};
   for (const [name, read] of Object.entries(parsed.reads ?? {})) reads[name] = normaliseRead(name, read);
-  return {
+  const out = {
     name: parsed.name,
     folder: parsed.folder ?? folder, // the project folder the manifest says; else the app folder itself.
     env: parsed.env ?? "development",
     supabaseUrl: parsed.supabaseUrl ?? null,
     reads,
   };
+  if (parsed.secrets !== undefined) out.secrets = parsed.secrets;
+  if (parsed.public !== undefined) out.public = parsed.public;
+  return out;
 }
 
 // Loads the saved app whose url lives in the same folder as the frame. apps.json is the only source

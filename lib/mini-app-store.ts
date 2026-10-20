@@ -84,6 +84,19 @@ export function rememberAppShare(id: string, share: CardShareMemo) {
   const apps = listApps();
   const had = apps.find((a) => a.id === id);
   if (!had) return;
-  if (had.share?.id === share.id && had.share.mode === share.mode && had.share.hasPassword === share.hasPassword) return;
+  if (sameShare(had.share, share)) return;
   writeApps(apps.map((a) => (a.id === id ? { ...a, share } : a)));
+}
+
+// Equal when every field lib/app-share.ts writes is the same; the memo grows over time (url, owner,
+// slug, orgId), so each new field is added here, never overwritten with undefined.
+function sameShare(a: CardShareMemo | undefined, b: CardShareMemo): boolean {
+  if (!a) return false;
+  if (a.id !== b.id || a.mode !== b.mode || a.hasPassword !== b.hasPassword) return false;
+  const aAny = a as unknown as Record<string, unknown>;
+  const bAny = b as unknown as Record<string, unknown>;
+  for (const key of ["url", "owner", "slug", "orgId"] as const) {
+    if ((aAny[key] ?? null) !== (bAny[key] ?? null)) return false;
+  }
+  return true;
 }

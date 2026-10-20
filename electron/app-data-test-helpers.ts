@@ -24,7 +24,8 @@ export function makeDataDir(): string {
 
 export const readLink = vi.fn((folder: string) => Promise.resolve(folder === "/projects/x" ? { ref: "lqjyravglujyizyqypxq" } : null));
 
-export function makeVault({ label = "you/repo", secrets = [], values = {}, confirm = true }: { label?: string; secrets?: { name: string; environment: string; missing?: boolean }[]; values?: Record<string, string>; confirm?: boolean } = {}): Vault {
+export function makeVault({ label = "you/repo", secrets = [], values = {}, confirm = true }: { label?: string; secrets?: { name: string; environment: string; missing?: boolean }[]; values?: Record<string, string>; confirm?: boolean } = {}): Vault & { blanks: Array<{ folder: string; names: string[]; environments: string[]; hint?: string }> } {
+  const blanks: Array<{ folder: string; names: string[]; environments: string[]; hint?: string }> = [];
   return {
     names: () => Promise.resolve({ label, secrets }),
     valuesFor: (_folder: string, names: string[]) => {
@@ -32,6 +33,11 @@ export function makeVault({ label = "you/repo", secrets = [], values = {}, confi
       return Promise.resolve({ label, values: Object.fromEntries([...present].map((n) => [n, values[n] as string])), missing: names.filter((n) => !present.has(n)) });
     },
     confirm: () => Promise.resolve(confirm),
+    addBlanks: (folder: string, names: string[], environments: string[], opts: { hint?: string } = {}) => {
+      blanks.push({ folder, names, environments, ...(opts.hint ? { hint: opts.hint } : {}) });
+      return Promise.resolve({ label, filled: [] });
+    },
+    blanks,
   };
 }
 

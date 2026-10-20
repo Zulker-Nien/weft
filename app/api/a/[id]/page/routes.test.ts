@@ -1,6 +1,8 @@
 // app/api/a/[id]/page/route.ts: GET /api/a/<id>/page — the iframe src for a shared mini app.
 // Gated by appShareAccess, serves only the one blob the share row names (an app link is for one
-// page, not for every file the workspace has uploaded), and the response is sandboxed.
+// page, not for every file the workspace has uploaded), and the response is sandboxed. The page
+// route injects the bridge script after <head> so the served HTML can call window.weft; the
+// folder file route injects only on HTML extensions.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { appShareAccess, serviceClient, serveBlobPage } = vi.hoisted(() => ({
@@ -25,15 +27,23 @@ function ctx(id: string) {
 }
 
 function blobShare(over: Partial<{ org_id: string; kind: string; page: string; files: unknown }> = {}) {
-  return { id: "s1", org_id: "org-1", app_id: "app-1", mode: "public", kind: "blob", page: `blob:sha256:${SHA}`, password_hash: null, has_password: false, created_by: "u1", created_at: "2026-10-18T00:00:00.000Z", updated_at: "2026-10-18T00:00:00.000Z", ...over };
+  return { id: "s1", org_id: "org-1", app_id: "app-1", mode: "public", kind: "blob", page: `blob:sha256:${SHA}`, password_hash: null, has_password: false, created_by: "u1", owner: "user", slug: "growth", files: null, manifest: null, created_at: "2026-10-18T00:00:00.000Z", updated_at: "2026-10-18T00:00:00.000Z", ...over };
 }
 
-const get = async (id = "s1") => (await load()).GET(new Request(`http://localhost/api/a/${id}/page`), ctx(id));
+const get = async (id = "s1", url = "http://localhost") => (await load()).GET(new Request(`${url}/api/a/${id}/page`), ctx(id));
+
+// A fresh response per call so the route's body read (and the test's read) don't trip on the
+// once-only body lock.
+function mockServedPage(html: string) {
+  serveBlobPage.mockImplementation(() =>
+    Promise.resolve(new Response(html, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } })),
+  );
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
   serviceClient.mockReturnValue({ from: () => ({}) });
-  serveBlobPage.mockResolvedValue(new Response("page body", { status: 200, headers: { "content-type": "text/html" } }));
+  mockServedPage("<!doctype html><html><head></head><body>page body</body></html>");
 });
 
 describe("GET /api/a/[id]/page", () => {
@@ -79,14 +89,18 @@ describe("GET /api/a/[id]/page", () => {
     const res = await get();
     expect(serveBlobPage).toHaveBeenCalledWith(expect.anything(), "org-1", SHA);
     expect(res.status).toBe(200);
-    expect(await res.text()).toBe("page body");
+    // The bridge is injected: the body now starts with <!doctype html><html><head><script>.
+    const body = await res.text();
+    expect(body).toMatch(/^<!doctype html><html><head><script>window\.weft/);
   });
 
-  it("serves a folder share's entry file from its files map", async () => {
+  it("serves a folder share's entry file from its files map and injects the bridge", async () => {
     const entry = "b".repeat(64);
     appShareAccess.mockResolvedValue({ kind: "ok", share: blobShare({ kind: "folder", page: "index.html", files: { "index.html": entry, "app.js": SHA } }) });
-    expect((await get()).status).toBe(200);
+    const r = await get();
+    expect(r.status).toBe(200);
     expect(serveBlobPage).toHaveBeenCalledWith(expect.anything(), "org-1", entry);
+    expect(await r.text()).toMatch(/^<!doctype html><html><head><script>window\.weft/);
   });
 
   it("returns 404 for a folder share whose entry isn't a well-formed file in its map", async () => {
@@ -97,9 +111,26 @@ describe("GET /api/a/[id]/page", () => {
     expect(serveBlobPage).not.toHaveBeenCalled();
   });
 
-  it("passes through serveBlobPage's status when it returns an error", async () => {
+  it("passes through serveBlobPage's status when it returns an error (no bridge injection)", async () => {
     appShareAccess.mockResolvedValue({ kind: "ok", share: blobShare() });
-    serveBlobPage.mockResolvedValue(new Response("Not found", { status: 404 }));
-    expect((await get()).status).toBe(404);
+    serveBlobPage.mockImplementation(() => Promise.resolve(new Response("Not found", { status: 404 })));
+    const res = await get();
+    expect(res.status).toBe(404);
+    expect(await res.text()).toBe("Not found");
+  });
+
+  it("uses the request URL's origin as the bridge's parent origin", async () => {
+    const share = blobShare();
+    appShareAccess.mockResolvedValue({ kind: "ok", share });
+    const res = await get("s1", "https://weft.zip");
+    expect(await res.text()).toContain('"https://weft.zip"');
+  });
+
+  it("leaves the HTML unchanged when the request has no usable origin", async () => {
+    appShareAccess.mockResolvedValue({ kind: "ok", share: blobShare() });
+    const res = await get("s1", "about:blank");
+    const body = await res.text();
+    expect(body).not.toContain("<script>window.weft");
+    expect(body).toBe("<!doctype html><html><head></head><body>page body</body></html>");
   });
 });

@@ -1,3 +1,4 @@
+import type { AppOwner } from "./app-share-types";
 import { tagHue } from "./tags";
 import type { CardShareMemo } from "./types-card-detail";
 
@@ -12,8 +13,17 @@ export interface MiniApp {
   url: string;
   addedAt: number;
   // Its share link as last read from Supabase (lib/app-share.ts), so the Share dialog and My mini apps draw at once.
-  share?: CardShareMemo;
+  share?: AppShareMemo;
 }
+
+// An app's share as last read: a card's memo plus the link's public address, weft.zip/@username/apps/<slug> or
+// weft.zip/<org-slug>/apps/<slug> (appPublicUrl in lib/app-share-types.ts), once the link has a slug.
+export type AppShareMemo = CardShareMemo & {
+  url?: string | null;
+  owner?: AppOwner | null;
+  slug?: string | null;
+  orgId?: string | null;
+};
 
 export const MAX_APP_NAME = 40;
 

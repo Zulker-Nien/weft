@@ -9,14 +9,30 @@ export type Vault = {
   names(folder: string): Promise<VaultNames>;
   valuesFor(folder: string, names: string[], env: string): Promise<VaultValues>;
   confirm(reason: string): Promise<boolean>;
+  // Adds names as blanks so the rail's count goes up; returns the label and the names that
+  // already had values (electron/vault.cjs addBlanks). Optional so a fakes-only test that
+  // never calls requestSecret can skip it.
+  addBlanks?(folder: string, names: string[], environments: string[], opts?: { source?: string; hint?: string }): Promise<{ label: string; filled: string[] }>;
 };
 export type ReadEntry = { supabase?: string; args?: Record<string, unknown>; ga4?: Record<string, unknown> };
+// One secret in the manifest. `from: "author"` (the default) is shipped with the app; `from:
+// "viewer"` is provided by whoever runs the app. The hosts/methods/paths arrays are the policy
+// gate for weft.fetch: the request is only sent when the host, method and path prefix match.
+export type ManifestSecret = {
+  from?: "author" | "viewer";
+  hosts: string[];
+  methods?: string[];
+  paths?: string[];
+};
 export type Manifest = {
   name: string;
   folder: string;
   env: "development" | "preview" | "production";
   supabaseUrl: string | null;
   reads: Record<string, ReadEntry>;
+  // Optional in older manifests (and in app-data.cjs's existing tests, which don't use fetch).
+  secrets?: Record<string, ManifestSecret>;
+  public?: string[];
 };
 export type Grant = { env: string; folder: string; needs: string[]; readsHash: string; grantedAt: string };
 export type SavedApp = { id?: string; name?: string; url: string; addedAt?: number };

@@ -60,6 +60,14 @@ same time; Next.js allows one dev server per project folder.
   reports. 📈 **Growth** is the first one: accounts, signups, active accounts, retention cohorts, activation and page
   views. Every app is also stored on prod under your account and comes back on any Mac you sign in on
   (docs/architecture/mini-apps.md).
+  A **React app** is a folder with an `App.tsx` and no `package.json`: Weft bundles it with its own React into a
+  static page on save, and the pane reloads. Shared, a folder app's link lives under its owner,
+  `weft.zip/@you/apps/<slug>` or `weft.zip/<team>/apps/<slug>`, with every file of the folder served in a sandbox. With no card
+  open, the pane opens on the left and shows the app's name instead of its `file://` path, with a Share button. An app
+  never holds a key: it writes `{{secret:NAME}}` in a `weft.fetch` request and Weft puts the value in outside the
+  browser, only for the hosts, methods and paths its `weft-app.json` allows. The value is the author's, or each viewer's
+  own (`"from": "viewer"`, asked for in Weft's own form); on weft.zip it's stored encrypted under a server-only key
+  (docs/architecture/mini-app-hosting.md).
 - **Show rail**: a 72 px column right of the page in the browser pane, one mini per turn of the open thread
   (status dot, its first words, how long ago) and per page the pane showed, newest at the bottom like the chat. Each page
   is a small picture of what the pane showed (a few-KB WebP per page in `~/.weft/shots/`). Every message keeps the page on
@@ -72,7 +80,7 @@ same time; Next.js allows one dev server per project folder.
   error page instead of a blank white one: the URL, the reason, **Try again**, **Back to the last page**, and an
   automatic reload when a local dev server comes back (`electron/pane-error.cjs`).
 - **Themes**: Settings → General (or ⌘K "Theme: …") picks System, Light or Dark, or a scene: Twin Suns,
-  Canyon, Coast Road, Neon City, Snow Pass or Salt Flats puts that picture behind the board with a palette drawn
+  Canyon, Coast Road, Neon City, Snow Pass, Cockpit or Salt Flats puts that picture behind the board with a palette drawn
   from it and clear columns. The first launch opens on Twin Suns, or Salt Flats when the Mac is in light mode
   (`lib/theme.ts`, colors in `app/globals.css`; docs/architecture/themes.md).
 - **Menu bar icon**: shows how many cards need you and lists them; click one to open it.
@@ -103,7 +111,9 @@ same time; Next.js allows one dev server per project folder.
   background, and the Weft menu offers **Restart to Update**. With threads running it asks: **Restart When Idle**
   (the default) waits for them to finish, **Restart Now** cuts them off. Weft → Check for Updates… opens the Software Update window (versions, last check, release notes, the next step). What changed is in [CHANGELOG.md](CHANGELOG.md); releasing is in docs/architecture/updates.md.
 - If the server crashes, it restarts on its own; its output is in `~/Library/Logs/Weft/server.log`
-  (Help → Open Logs Folder).
+  (Help → Open Logs Folder). If the dev server dies repeatedly (4 times in 2 minutes) while the
+  board is up, a small bar at the bottom-left offers **Restart server**, **Open logs**, and
+  **Fix with a thread** (opens a New thread dialog with the error and log tail pre-filled).
 
 ## Your existing Claude Code threads
 
@@ -306,6 +316,11 @@ keeps their file dumps out of the thread's context. Settings → Models → Use 
   the thread runs that CLI headless as the subagent (`puku-cli -p … --model opus-4.8`, or `claude -p`),
   read-only unless the task needs edits. That needs the other CLI installed and logged in.
 
+**Backup model** (`Settings → Models → Backup model`) is the model a card reruns its first message on
+when that very first turn came back an error (a rate limit, mostly). The open thread shows a banner
+with **Rerun on &lt;backup model&gt;** (or **Pick a backup model** when none is set, which jumps to
+Settings → Models) and **Delete**. "Off — no backup" hides the Rerun button entirely.
+
 Idle threads pick a change up on their next message.
 
 Weft keeps track of each thread's subagents and background commands from the events the CLI sends. A line
@@ -429,6 +444,24 @@ skill can't trigger itself. The rule's skill can be one of Weft's, one of yours 
 
 Each card's **Skills** button lists the skills its thread can run (Weft's, the project's, and
 yours) and sends the one you pick.
+
+### Skill sets
+
+Each thread gets only the skills its work needs. ✦ on the left rail shows the board's project's
+**default set**: Weft's skills, the project's own, yours in `~/.claude/skills`, and your Claude Code
+plugins (posthog alone brings 173 skills), each with a switch. A project's set starts from what its
+threads have actually run: the first time Weft sees a folder it reads that folder's transcripts in the
+background, keeps Weft's and the project's skills on, and turns off every skill of yours and every
+plugin none of them used. Until that scan lands, threads there get everything, as before.
+
+✦N in a card's header is that thread's own set (N skills its model sees). Turn one on or off there for
+that card alone; a dot marks a row that differs from the project. A CLI reads its skills as it starts, so
+a change applies from the next message (an idle CLI closes and resumes with the new set). A hidden skill
+still runs when you type `/name` or an automation runs it; a plugin turned off is gone for that thread.
+Claude Code and puku threads get the set as `skillOverrides` and `enabledPlugins` settings; Codex and
+puku get the skill list Weft writes into their first message, filtered the same way. The copilot keeps
+every skill. Cards on the project's default set still take a warm spare; a card with its own set starts
+its CLI fresh.
 
 ## Projects, filter, and sort
 
@@ -559,6 +592,11 @@ Every Weft account has a workspace. **Your team** in the account menu opens `wef
 (sign in with GitHub there once): the roster, roles (owner, admin, member), email invites and pending invites. An
 invite link joins whichever account opens it. Billing and the shared 🔐 vault hang off the same workspace
 (docs/architecture/teams.md).
+
+You can be in many teams. **Settings → Teams** lists every one with your role in it, the one you're viewing lit;
+click another to manage its projects, members and invites below the list, or **New team** to make one you own.
+The pencil beside a team you own renames it; its weft.zip address stays the same. The trash deletes it, once you
+type its name, as long as you're in another team too and it has no paid plan still running.
 
 ## Star and tags
 

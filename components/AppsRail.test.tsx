@@ -69,14 +69,14 @@ afterEach(() => {
 
 describe("AppsRail", () => {
   it("renders nothing when there are no apps", () => {
-    const { container } = render(<AppsRail onOpen={vi.fn()} notify={vi.fn()} />);
+    const { container } = render(<AppsRail onOpen={vi.fn()} onClose={vi.fn()} notify={vi.fn()} />);
     expect(container.firstChild).toBeNull();
   });
 
   it("renders a tile per app with a glyph and aria-label, and a click opens the url", async () => {
     setApps(apps);
     const onOpen = vi.fn();
-    render(<AppsRail onOpen={onOpen} notify={vi.fn()} />);
+    render(<AppsRail onOpen={onOpen} onClose={vi.fn()} notify={vi.fn()} />);
     const docs = screen.getByRole("button", { name: "Docs" });
     expect(docs).toHaveTextContent("D");
     const rocket = screen.getByRole("button", { name: "🚀 Launch" });
@@ -87,7 +87,7 @@ describe("AppsRail", () => {
 
   it("marks the active tile aria-pressed=true and the rest aria-pressed=false", () => {
     setApps(apps);
-    render(<AppsRail current="https://launch.test" onOpen={vi.fn()} notify={vi.fn()} />);
+    render(<AppsRail current="https://launch.test" onOpen={vi.fn()} onClose={vi.fn()} notify={vi.fn()} />);
     expect(screen.getByRole("button", { name: "🚀 Launch" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "Docs" })).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByRole("button", { name: "GitHub" })).toHaveAttribute("aria-pressed", "false");
@@ -99,7 +99,7 @@ describe("AppsRail", () => {
     (window as unknown as { weft: { popupMenu: typeof popupMenu } }).weft = { popupMenu };
     const onOpen = vi.fn();
     const notify = vi.fn();
-    render(<AppsRail onOpen={onOpen} notify={notify} />);
+    render(<AppsRail onOpen={onOpen} onClose={vi.fn()} notify={notify} />);
 
     // Right-click on the middle app (GitHub, index 2). The first right-click picks "rename".
     const github = screen.getByRole("button", { name: "GitHub" });
@@ -134,7 +134,7 @@ describe("AppsRail", () => {
 
   it("does nothing when the desktop bridge has no popupMenu", async () => {
     setApps(apps);
-    render(<AppsRail onOpen={vi.fn()} notify={vi.fn()} />);
+    render(<AppsRail onOpen={vi.fn()} onClose={vi.fn()} notify={vi.fn()} />);
     const docs = screen.getByRole("button", { name: "Docs" });
     await userEvent.pointer({ keys: "[MouseRight]", target: docs });
     // The appActions are still untouched.
@@ -146,7 +146,7 @@ describe("AppsRail", () => {
     setApps(apps);
     const popupMenu = vi.fn().mockResolvedValueOnce("rename");
     (window as unknown as { weft: { popupMenu: typeof popupMenu } }).weft = { popupMenu };
-    render(<AppsRail onOpen={vi.fn()} notify={vi.fn()} />);
+    render(<AppsRail onOpen={vi.fn()} onClose={vi.fn()} notify={vi.fn()} />);
     await userEvent.pointer({ keys: "[MouseRight]", target: screen.getByRole("button", { name: "GitHub" }) });
     const input = await screen.findByLabelText("Rename GitHub");
     await userEvent.clear(input);
@@ -154,11 +154,57 @@ describe("AppsRail", () => {
     expect(appActions.rename).not.toHaveBeenCalled();
   });
 
+  it("a click on the active tile closes the browser instead of re-opening", async () => {
+    setApps(apps);
+    const onOpen = vi.fn();
+    const onClose = vi.fn();
+    render(<AppsRail current="https://launch.test" onOpen={onOpen} onClose={onClose} notify={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: "🚀 Launch" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it("a click on a non-active tile still opens it", async () => {
+    setApps(apps);
+    const onOpen = vi.fn();
+    const onClose = vi.fn();
+    render(<AppsRail current="https://launch.test" onOpen={onOpen} onClose={onClose} notify={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: "Docs" }));
+    expect(onOpen).toHaveBeenCalledWith("https://docs.test/home");
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("the right-click menu's 'open' on an active app closes the browser", async () => {
+    setApps(apps);
+    const popupMenu = vi.fn().mockResolvedValueOnce("open");
+    (window as unknown as { weft: { popupMenu: typeof popupMenu } }).weft = { popupMenu };
+    const onOpen = vi.fn();
+    const onClose = vi.fn();
+    render(<AppsRail current="https://launch.test" onOpen={onOpen} onClose={onClose} notify={vi.fn()} />);
+    await userEvent.pointer({ keys: "[MouseRight]", target: screen.getByRole("button", { name: "🚀 Launch" }) });
+    await waitFor(() => expect(popupMenu).toHaveBeenCalledTimes(1));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it("the right-click menu's 'open' on a non-active app still opens it", async () => {
+    setApps(apps);
+    const popupMenu = vi.fn().mockResolvedValueOnce("open");
+    (window as unknown as { weft: { popupMenu: typeof popupMenu } }).weft = { popupMenu };
+    const onOpen = vi.fn();
+    const onClose = vi.fn();
+    render(<AppsRail current="https://launch.test" onOpen={onOpen} onClose={onClose} notify={vi.fn()} />);
+    await userEvent.pointer({ keys: "[MouseRight]", target: screen.getByRole("button", { name: "Docs" }) });
+    await waitFor(() => expect(popupMenu).toHaveBeenCalledTimes(1));
+    expect(onOpen).toHaveBeenCalledWith("https://docs.test/home");
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("opens the share dialog when the right-click menu picks 'share'", async () => {
     setApps(apps);
     const popupMenu = vi.fn().mockResolvedValueOnce("share");
     (window as unknown as { weft: { popupMenu: typeof popupMenu } }).weft = { popupMenu };
-    render(<AppsRail onOpen={vi.fn()} notify={vi.fn()} />);
+    render(<AppsRail onOpen={vi.fn()} onClose={vi.fn()} notify={vi.fn()} />);
     expect(shareAppDialogProps.current).toBeNull();
     await userEvent.pointer({ keys: "[MouseRight]", target: screen.getByRole("button", { name: "Docs" }) });
     await waitFor(() => expect(popupMenu).toHaveBeenCalledTimes(1));

@@ -32,6 +32,16 @@ One plot, two axes:
 - `lib/runner-turn.ts`: `updateLimits()` is the per-thread writer (a rate-limit event, or the CLI's
   usage report at `init` and, through `refreshLimitsAfterTurn()`, after each turn at most every
   `LIMITS_EVERY_MS` = 5 minutes per thread); it updates the card's stats and records the sample.
+- `lib/limit-history.ts` `setOnLimitReset(handler)` and the `used >= 100 → used < 100` check inside
+  `recordLimits` notify one subscriber when a window just reset. `lib/limit-resume.ts`
+  `resumeParkedCards(backend, kind, now)` is the subscriber, installed by `lib/limit-poll.ts` on
+  first import: for every non-archived, `needs_you`, `rateLimitHit` card on that backend, it
+  clears the rate-limit flag, stamps `autoResumedAt`, sets
+  `lastLine = "Auto-resumed after 5-hour reset"` (or `weekly`), and replays the last user message
+  the same way `lib/backend-switch.ts` does for a `rateLimitHit` card. The card's `CardMarks`
+  shows an "Auto-resumed · 4:12am" chip with a tip that names the CLI. A busy card is skipped;
+  the next poll cycle picks it up. The manual "Run on …" still works as an override when the
+  user prefers to switch backends first.
 - `lib/limit-chart.ts`: pure chart math, `limitsChart(samples, stats, now)` → `{ start, end, now, hours,
   days, marks }`. `hours` are 672 15-minute slots of the 5-hour limit (`QUARTER_HOUR`); `days` are 7
   day slots of the weekly limit with hour-resolution burn-down edges. `leftAt()` is the level at a time:

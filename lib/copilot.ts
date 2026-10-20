@@ -122,6 +122,11 @@ export function prewarm() {
   startPukuTrial(() => void retryPukuWithTrial());
   // Keep the copilot's board-made chips fresh as cards move (lib/copilot-suggest.ts).
   startSuggestRefresh();
+  // Build every app folder on save (lib/app-build-watch.ts). Loaded lazily and never awaited: esbuild must stay off every
+  // route's import path, and a watcher that fails to start logs a line instead of taking the server down.
+  void import("./app-build-watch")
+    .then((m) => m.startAppBuildWatcher())
+    .catch((err: unknown) => console.error(`app-build-watch: not started: ${err instanceof Error ? err.message : String(err)}`));
   // Carry on the turns the last quit cut off (lib/resume.ts).
   resumeInterrupted();
   ensureCopilot();

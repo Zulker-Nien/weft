@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { AppShareMemo } from "./mini-apps";
 
 // The apps sidebar's store, against a real file in a temp dir (WEFT_DATA), never ~/.weft.
 
@@ -165,6 +166,28 @@ describe("rememberAppShare", () => {
     apps.removeApp(saved.id);
     apps.rememberAppShare(saved.id, { id: "s1", mode: "public", hasPassword: false });
     expect(readApps()).toEqual([]);
+  });
+
+  it("remembers the public url, owner, slug, and orgId on the share", async () => {
+    const { apps } = await load();
+    const saved = apps.saveApp("https://example.com", "App");
+    const memo: AppShareMemo = {
+      id: "s1", mode: "public", hasPassword: false,
+      url: "https://weft.zip/@alice/apps/growth", owner: "user", slug: "growth", orgId: null,
+    };
+    apps.rememberAppShare(saved.id, memo);
+    expect((readApps()[0] as { share: unknown }).share).toEqual({
+      id: "s1", mode: "public", hasPassword: false,
+      url: "https://weft.zip/@alice/apps/growth", owner: "user", slug: "growth", orgId: null,
+    });
+  });
+
+  it("rewrites the memo when the owner or slug changes", async () => {
+    const { apps } = await load();
+    const saved = apps.saveApp("https://example.com", "App");
+    apps.rememberAppShare(saved.id, { id: "s1", mode: "public", hasPassword: false, owner: "user", slug: "growth" } as AppShareMemo);
+    apps.rememberAppShare(saved.id, { id: "s1", mode: "public", hasPassword: false, owner: "org", slug: "growth", orgId: "o2" } as AppShareMemo);
+    expect((readApps()[0] as { share: { owner: string; orgId: string | null } }).share).toEqual(expect.objectContaining({ owner: "org", orgId: "o2" }));
   });
 });
 

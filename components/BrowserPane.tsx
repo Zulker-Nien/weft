@@ -3,8 +3,12 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { BrowserState } from "@/lib/client";
 import { setPaneBox } from "@/lib/float-place";
+import { appFor } from "@/lib/mini-apps";
+import { paneAddress } from "@/lib/app-share-types";
 import { useAnyOverlay } from "@/lib/overlay";
+import { useMiniApps } from "@/lib/use-mini-apps";
 import Icon, { Spinner } from "./Icon";
+import AppShareButton from "./AppShareButton";
 import SaveAppButton from "./SaveAppButton";
 import ZoomMenu from "./ZoomMenu";
 
@@ -36,7 +40,6 @@ export default function BrowserPane({
   actions?: ReactNode;
 }) {
   const holder = useRef<HTMLDivElement>(null);
-  const [draft, setDraft] = useState<string | null>(null);
   const [resizing, setResizing] = useState(false);
   const overlay = useAnyOverlay();
   const hide = obscured || overlay || resizing;
@@ -66,18 +69,15 @@ export default function BrowserPane({
     };
   }, [hide, expanded]);
 
-  function go(raw: string) {
-    const url = raw.trim();
-    if (url) void window.weft?.browser.open(url);
-  }
-
   // The native view swallows pointer events, so it's hidden while dragging the divider.
+  // The standalone pane sits left of the board (components/StandaloneBrowserPane.tsx), so its divider is its right edge.
   function startResize(e: React.PointerEvent<HTMLDivElement>) {
     e.preventDefault();
     setResizing(true);
+    const left = e.currentTarget.parentElement?.getBoundingClientRect().left ?? 0;
     const move = (ev: PointerEvent) => {
       const max = window.innerWidth - 420;
-      onWidth(Math.min(max, Math.max(320, window.innerWidth - ev.clientX)));
+      onWidth(Math.min(max, Math.max(320, ev.clientX - left)));
     };
     const up = () => {
       setResizing(false);
@@ -89,16 +89,20 @@ export default function BrowserPane({
   }
 
   const nav = "rounded-md p-1.5 text-muted hover:bg-sunken hover:text-ink disabled:opacity-30 disabled:hover:bg-transparent";
+  // The address input shows the app's name while nobody is editing it; focusing it shows the real URL.
+  // A saved app's address is a name (use sans), a real page's stays a URL (use mono).
+  const apps = useMiniApps();
+  const app = appFor(apps, state.url);
 
   return (
     <section
-      className={`relative flex flex-col border-l border-line bg-panel ${expanded ? "min-w-0 flex-1" : "shrink-0"}`}
+      className={`relative flex flex-col border-line bg-panel ${expanded ? "min-w-0 flex-1 border-l" : "shrink-0 border-r"}`}
       style={expanded ? undefined : { width }}
     >
       {!expanded && (
         <div
           onPointerDown={startResize}
-          className="absolute inset-y-0 -left-1 z-10 w-2 cursor-col-resize hover:bg-accent/30"
+          className="absolute inset-y-0 right-0 z-10 w-2 cursor-col-resize hover:bg-accent/30"
           aria-hidden="true"
         />
       )}
@@ -112,26 +116,11 @@ export default function BrowserPane({
         <button className={nav} disabled={!state.url} onClick={() => window.weft?.browser.reload()} aria-label="Reload">
           {state.loading ? <Spinner size={13} /> : <Icon name="reload" size={15} />}
         </button>
-        <input
-          value={draft ?? state.url}
-          onFocus={(e) => {
-            setDraft(state.url);
-            e.currentTarget.select();
-          }}
-          onBlur={() => setDraft(null)}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              go(e.currentTarget.value);
-              e.currentTarget.blur();
-            }
-          }}
-          disabled={!desktop}
-          placeholder="Type a URL, or ask an agent to open one"
-          className="mx-1 min-w-0 flex-1 rounded-md border border-line bg-canvas px-2.5 py-1 font-mono text-[12px] text-ink outline-none placeholder:font-sans placeholder:text-faint focus:border-accent"
-        />
+        <AddressInput desktop={desktop} url={state.url} app={app} />
         {/* Save as app: the page joins the left rail below Services (components/AppsRail.tsx). */}
         {desktop && <SaveAppButton url={state.url} title={state.title} />}
+        {/* Share an app: shown for a saved app on the board's own pane (no card actions). */}
+        {desktop && !actions && <AppShareButton app={app} />}
         {/* Only the page's zoom; ⌘+/−/0, ⌘+scroll and pinch work too. Accent when not 100%. */}
         <ZoomMenu zoom={zoom} disabled={!state.url} />
         {actions}
@@ -158,5 +147,45 @@ export default function BrowserPane({
       {rail}
       </div>
     </section>
+  );
+}
+
+// The address bar: the app's name as a placeholder when the page is a saved app, the URL when it isn't,
+// mono for a URL, sans for a name. Focusing it switches to the real URL so a user can edit it.
+function AddressInput({
+  desktop,
+  url,
+  app,
+}: {
+  desktop: boolean;
+  url: string | undefined;
+  app: ReturnType<typeof appFor> | undefined;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  function go(raw: string) {
+    const next = raw.trim();
+    if (next) void window.weft?.browser.open(next);
+  }
+  const value = draft ?? (url ? paneAddress(app, url) : url);
+  const isName = draft === null && app !== undefined && url !== undefined && url.startsWith("file:");
+  return (
+    <input
+      value={value}
+      onFocus={(e) => {
+        setDraft(url ?? null);
+        e.currentTarget.select();
+      }}
+      onBlur={() => setDraft(null)}
+      onChange={(e) => setDraft(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          go(e.currentTarget.value);
+          e.currentTarget.blur();
+        }
+      }}
+      disabled={!desktop}
+      placeholder="Type a URL, or ask an agent to open one"
+      className={`mx-1 min-w-0 flex-1 rounded-md border border-line bg-canvas px-2.5 py-1 text-[12px] text-ink outline-none placeholder:font-sans placeholder:text-faint focus:border-accent ${isName ? "font-sans" : "font-mono"}`}
+    />
   );
 }

@@ -62,6 +62,7 @@ import { cardHandlers } from "@/lib/card-handlers";
 import BoardHeader from "./BoardHeader";
 import BoardColumn, { COLUMN_LIMIT, CardSkeleton } from "./BoardColumn";
 import BoardToast from "./BoardToast";
+import StandaloneBrowserPane from "./StandaloneBrowserPane";
 
 // Each loads in its own CrashGuard (components/guarded.tsx), so a piece a thread left half-written, even one that
 // fails as its module loads, breaks only its own spot on the board.
@@ -693,11 +694,31 @@ export default function Board() {
           onTagCard={tagCard}
           catalog={tagCatalog}
           onOpenUrl={showPage}
+          onClosePane={toggleBrowser}
           paneUrl={desktop ? browser.url : undefined}
           onOpenCard={openCard}
           onStartCard={improveQuality}
           notify={notify}
         />
+        {!framed && (
+          // The standalone pane sits on the left of the board, between the rail and the columns
+          // (the framed pane lives in the workspace's `pane` column when a card is open).
+          // StandaloneBrowserPane slides the pane in and out instead of popping it.
+          <StandaloneBrowserPane open={browserOpen} width={browserWidth}>
+            {(sliding) => (
+              <BrowserPane
+                desktop={desktop}
+                state={browser}
+                obscured={sliding || showSettings || showPalette || showHelp || Boolean(login) || menuOpen}
+                width={browserWidth}
+                onWidth={setBrowserWidth}
+                onClose={selected ? () => select(null) : toggleBrowser}
+                expanded={false}
+                rail={<ShowRail card={selected} hidden={false} items={thread} pageUrl={browser.url} />}
+              />
+            )}
+          </StandaloneBrowserPane>
+        )}
         <main
           className="board-sheet flex min-w-0 flex-1 gap-3 overflow-x-auto p-3"
           onDoubleClick={(e) => {
@@ -831,6 +852,10 @@ export default function Board() {
                   onRename={(title) => void api.rename(selected.id, title).catch(notify)}
                   onMode={(mode) => void api.setMode(selected.id, mode).catch(notify)}
                   onNewChat={() => void api.resetCopilot().then(() => select(selected.id)).catch(notify)}
+                  // The first-message-error banner's "Pick a backup model" jumps to Settings → Models.
+                  onOpenSettings={() => setShowSettings(true)}
+                  // The same banner's Delete closes the thread so the open card id doesn't linger.
+                  onDeleted={() => select(null)}
                   editorOpen={workspace.layout.open.editor}
                   onEditor={() => workspace.toggle("editor")}
                   editTitle={renameId === selected.id}
@@ -859,23 +884,6 @@ export default function Board() {
           />
         ) : null}
 
-        {browserOpen && !framed && (() => {
-          // The pane sits below the board here, not in the workspace (the framed pane lives in
-          // the workspace's `pane` column above). `framed = Boolean(selected) || showNew`, so
-          // `!framed` already implies both `!showNew` and `!selected`; the JSX reflects that.
-          return (
-            <BrowserPane
-              desktop={desktop}
-              state={browser}
-              obscured={showSettings || showPalette || showHelp || Boolean(login) || menuOpen}
-              width={browserWidth}
-              onWidth={setBrowserWidth}
-              onClose={selected ? () => select(null) : toggleBrowser}
-              expanded={false}
-              rail={<ShowRail card={selected} hidden={false} items={thread} pageUrl={browser.url} />}
-            />
-          );
-        })()}
         </div>
       </div>
 

@@ -25,6 +25,7 @@
     "prepare": "git config core.hooksPath .githooks || true",
     "app": "WEFT_DIST=.next-app next build && WEFT_DIST=.next-app WEFT_PROD=1 electron .",
     "dist": "WEFT_DIST=.next-dist WEFT_STANDALONE=1 next build && node scripts/prepare-standalone.mjs .next-dist && node scripts/bundle-toolchain.mjs && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --dir",
+    "dist:linux": "WEFT_DIST=.next-dist WEFT_STANDALONE=1 next build && node scripts/prepare-standalone.mjs .next-dist && node scripts/bundle-toolchain.mjs && electron-builder --linux --publish never",
     "dist:remote": "scripts/package-remote.sh",
     "dist:release": "WEFT_DIST=.next-dist WEFT_STANDALONE=1 next build && node scripts/prepare-standalone.mjs .next-dist && node scripts/bundle-toolchain.mjs && electron-builder --mac --publish never",
     "coverage": "node scripts/run-tests.mjs --coverage",
@@ -60,6 +61,7 @@
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "codemirror": "^6.0.2",
+    "esbuild": "0.28.2",
     "libsodium-wrappers": "^0.7.16",
     "lucide-react": "^1.56.0",
     "micromark": "^4.0.3",
@@ -111,7 +113,8 @@
       "node_modules/libsodium-wrappers/**/*",
       "node_modules/node-pty/package.json",
       "node_modules/node-pty/lib/**/*",
-      "node_modules/node-pty/prebuilds/darwin-${arch}/**/*"
+      "node_modules/node-pty/prebuilds/darwin-${arch}/**/*",
+      "node_modules/node-pty/build/Release/**/*"
     ],
     "asar": true,
     "asarUnpack": [
@@ -156,6 +159,20 @@
         ]
       }
     ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Development",
+      "icon": "build/icon.png",
+      "executableName": "weft",
+      "artifactName": "Weft-${version}-${arch}.${ext}",
+      "mimeTypes": [
+        "x-scheme-handler/weft"
+      ],
+      "maintainer": "Weft <noreply@weft.zip>"
+    },
     "mac": {
       "target": [
         {

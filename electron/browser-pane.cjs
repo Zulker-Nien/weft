@@ -2,6 +2,7 @@
 // The board drives it over IPC; agents drive it through a token-protected control server on
 // 127.0.0.1 (see lib/browser-tools.ts).
 const { WebContentsView } = require("electron");
+const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 const { isSelfUrl } = require("./self-url.cjs");
@@ -11,6 +12,7 @@ const { click, typeText } = require("./pane-actions.cjs");
 const { controlHandler } = require("./control-server.cjs");
 const { failedUrl, watchLoadFailures } = require("./pane-error.cjs");
 const { canThreadOpen, rememberBoardOrigin } = require("./pane-origins.cjs");
+const { appsDir, attachWebContentsView, createAppReload } = require("./app-reload.cjs");
 
 // Chrome's zoom steps, as percentages; Zoom In/Out walk them.
 const ZOOM_STEPS = [25, 33, 50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300, 400, 500];
@@ -35,6 +37,9 @@ function createBrowserPane({ getWindow, getAppView, token, onContents, pages, on
   let active = BOARD;
   let visible = false;
   let bounds = { x: 0, y: 0, width: 0, height: 0 };
+  // When a view is showing a file in ~/.weft/apps/<slug>/, rebuilds of that app should reload the page
+  // (electron/app-reload.cjs). One watcher per folder shared by the views currently on it.
+  const appReload = createAppReload({ appsDir: appsDir(), fs, setTimeout, reloadIgnoringCache: (v) => v.webContents.reloadIgnoringCache() });
 
   function state() {
     const wc = views.get(active)?.webContents;
@@ -124,6 +129,8 @@ function createBrowserPane({ getWindow, getAppView, token, onContents, pages, on
         if (key === active) sendState();
       });
     }
+    // Reload the view when the app folder it shows changes (electron/app-reload.cjs).
+    attachWebContentsView(view, appReload, wc);
     // A failed load shows why (electron/pane-error.cjs) instead of a blank page, with the card's last page to go back to.
     watchLoadFailures(wc, { back: (url) => (key === BOARD ? undefined : lastGoodPage(key, url)) });
     // Remembered so the card's page comes back after a restart (electron/pane-pages.cjs); never the error page.

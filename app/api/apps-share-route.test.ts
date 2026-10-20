@@ -65,7 +65,13 @@ describe("PUT /api/apps/share", () => {
   it("saves the mode and password and answers the new state", async () => {
     const res = await put(JSON.stringify({ id: "ap1", mode: "password", password: "pw" }));
     expect(await res.json()).toMatchObject({ kind: "ok", mode: "password", hasPassword: true });
-    expect(lib.setAppShare).toHaveBeenLastCalledWith("ap1", { mode: "password", password: "pw" });
+    expect(lib.setAppShare).toHaveBeenLastCalledWith("ap1", { mode: "password", password: "pw", owner: undefined, orgId: undefined, slug: undefined });
+  });
+
+  it("passes owner, orgId, and slug through to the lib", async () => {
+    const res = await put(JSON.stringify({ id: "ap1", mode: "public", owner: "org", orgId: "o2", slug: "growth" }));
+    expect(await res.json()).toMatchObject({ kind: "ok" });
+    expect(lib.setAppShare).toHaveBeenLastCalledWith("ap1", { mode: "public", password: undefined, owner: "org", orgId: "o2", slug: "growth" });
   });
 
   it("needs the write header, a JSON body and a string id", async () => {

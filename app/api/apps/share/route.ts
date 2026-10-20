@@ -30,7 +30,13 @@ export async function PUT(req: Request) {
   const body = (await req.json().catch(() => null)) as (Partial<AppShareUpdate> & { id?: unknown }) | null;
   if (!body || typeof body !== "object" || typeof body.id !== "string") return fail("Send { id, mode, password? }.");
   try {
-    return Response.json(await setAppShare(body.id, { mode: body.mode as AppShareUpdate["mode"], password: body.password }));
+    return Response.json(await setAppShare(body.id, {
+      mode: body.mode as AppShareUpdate["mode"],
+      password: body.password,
+      owner: body.owner,
+      orgId: body.orgId,
+      slug: body.slug,
+    }));
   } catch (err) {
     return failed(err);
   }

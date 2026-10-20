@@ -68,6 +68,7 @@ const baseProps: Parameters<typeof SideRail>[0] = {
   onTagCard: vi.fn(),
   catalog: { byName: new Map(), ordered: [] } as unknown as TagCatalog,
   onOpenUrl: vi.fn(),
+  onClosePane: vi.fn(),
   onOpenCard: vi.fn(),
   onStartCard: vi.fn<() => Promise<string | undefined>>(() => Promise.resolve(undefined)),
   notify: vi.fn(),

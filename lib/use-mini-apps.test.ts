@@ -138,4 +138,10 @@ describe("appsApi share", () => {
     await appsApi.setShare("a", { mode: "public" });
     expect(share).toHaveBeenLastCalledWith("PUT", "/api/apps/share", { id: "a", mode: "public" });
   });
+
+  it("passes owner, orgId, and slug through to the route", async () => {
+    share.mockResolvedValue({ kind: "ok", id: "s1", url: "https://weft.zip/a/s1", mode: "public", hasPassword: false, shows: "blob" });
+    await appsApi.setShare("a", { mode: "public", owner: "org", orgId: "o2", slug: "growth" });
+    expect(share).toHaveBeenLastCalledWith("PUT", "/api/apps/share", { id: "a", mode: "public", owner: "org", orgId: "o2", slug: "growth" });
+  });
 });

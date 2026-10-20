@@ -26,6 +26,7 @@ import BlastcpDrawer from "./BlastcpDrawer";
 import BlastcpLogo from "./BlastcpLogo";
 import CloudflareDrawer from "./CloudflareDrawer";
 import ServicesDrawer from "./ServicesDrawer";
+import SkillsDrawer from "./SkillsDrawer";
 import CloudflareLogo from "./CloudflareLogo";
 import GithubDrawer from "./GithubDrawer";
 import GithubLogo from "./GithubLogo";
@@ -51,7 +52,7 @@ import "./rail-drawer.css";
 // Cloudflare's cloud on their Workers and Pages projects, BlastCP's rocket on the BlastCP property each one posts as,
 // and GitHub's mark on the gh sign-in and each one's issue sync. Below 🖥 Services, the mini apps saved from the browser pane (components/AppsRail.tsx).
 // The drawers under the divider, each with its icon, title and label.
-const TOOLS = { vault: ["🔐", "Secrets", "Secrets vault"], webhooks: ["🪝", "Webhooks", "Webhooks"], vercel: ["▲", "Vercel", "Vercel"], supabase: [<SupabaseLogo key="supabase" />, "Supabase", "Supabase"], cloudflare: [<CloudflareLogo key="cloudflare" />, "Cloudflare", "Cloudflare"], blastcp: [<BlastcpLogo key="blastcp" />, "BlastCP", "BlastCP"], github: [<GithubLogo key="github" />, "GitHub", "GitHub"], services: ["🖥", "Services", "Services"] } as const;
+const TOOLS = { vault: ["🔐", "Secrets", "Secrets vault"], webhooks: ["🪝", "Webhooks", "Webhooks"], vercel: ["▲", "Vercel", "Vercel"], supabase: [<SupabaseLogo key="supabase" />, "Supabase", "Supabase"], cloudflare: [<CloudflareLogo key="cloudflare" />, "Cloudflare", "Cloudflare"], blastcp: [<BlastcpLogo key="blastcp" />, "BlastCP", "BlastCP"], github: [<GithubLogo key="github" />, "GitHub", "GitHub"], services: ["🖥", "Services", "Services"], skills: ["✦", "Skills", "Skills"] } as const;
 type Tool = keyof typeof TOOLS;
 const DRAWER_SLIDE_MS = 200;
 const isTool = (panel: RailPanel | null): panel is Tool => panel !== null && panel in TOOLS;
@@ -68,6 +69,7 @@ export default function SideRail({
   onTagCard,
   catalog,
   onOpenUrl,
+  onClosePane,
   paneUrl,
   onOpenCard,
   onStartCard,
@@ -91,6 +93,8 @@ export default function SideRail({
   catalog: TagCatalog;
   // Shows a page (a deploy) in the board's browser pane.
   onOpenUrl: (url: string) => void;
+  // Hides the standalone browser pane (a second click on the active mini app, components/AppsRail.tsx).
+  onClosePane: () => void;
   // The page the board's pane shows, which lights its mini app below Services (components/AppsRail.tsx); unset outside the desktop app.
   paneUrl?: string;
   // Opens a card's thread (the Supabase drawer's link from a migration to the card that wrote it).
@@ -177,6 +181,7 @@ export default function SideRail({
     cloudflare: <CloudflareDrawer {...cloudflare} project={project} onOpenUrl={onOpenUrl} notify={notify} />,
     blastcp: <BlastcpDrawer {...blastcp} project={project} onOpenUrl={onOpenUrl} notify={notify} />,
     github: <GithubDrawer {...github} project={project} onOpenUrl={onOpenUrl} notify={notify} />,
+    skills: <SkillsDrawer project={project} folders={folders} notify={notify} />,
     services: <ServicesDrawer {...services} project={project} cards={cards} onOpenCard={onOpenCard} onOpenUrl={onOpenUrl} notify={notify} />,
   };
   const drawer = isTool(shown)
@@ -208,8 +213,9 @@ export default function SideRail({
         <RailIconButton icon={<CloudflareLogo />} label="Cloudflare" open={open === "cloudflare"} title={cloudflareTitle(cloudflare.status, project)} onClick={toggle("cloudflare")} />
         <RailIconButton icon={<BlastcpLogo />} label="BlastCP" open={open === "blastcp"} title={blastcpTitle(blastcp.status, project)} onClick={toggle("blastcp")} />
         <RailIconButton icon={<GithubLogo />} label="GitHub" open={open === "github"} title={githubTitle(github.status, project)} onClick={toggle("github")} />
+        <RailIconButton icon="✦" label="Skills" open={open === "skills"} title="Skills: what threads in this project get" onClick={toggle("skills")} />
         <RailIconButton icon="🖥" label="Services" open={open === "services"} title={servicesTitle(liveServices)} count={liveServices} tone="ok" onClick={toggle("services")} />
-        {paneUrl !== undefined && <AppsRail current={paneUrl} onOpen={onOpenUrl} notify={notify} />}
+        {paneUrl !== undefined && <AppsRail current={paneUrl} onOpen={onOpenUrl} onClose={onClosePane} notify={notify} />}
         {isSuperAdmin ? (
           <>
             <span className="my-1 h-px w-5 bg-line" aria-hidden />

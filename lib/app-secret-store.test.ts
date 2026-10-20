@@ -1,0 +1,236 @@
+// lib/app-secret-store.ts: splits names by `from: "author"` vs `from: "viewer"`, reads only the rows the caller
+// asked for, decrypts and returns a plain { NAME: value } map. setValue / removeValue / hasValue are the
+// single-row pair for the author and viewer upload routes. The fake Supabase client is a chain builder
+// mirroring the helpers in lib/app-share-access.test-helpers.ts.
+import { randomBytes } from "node:crypto";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { isConfigured, open, seal } from "./app-secrets";
+import { createAppSecretStore, splitByManifest } from "./app-secret-store";
+
+const KEY = randomBytes(32).toString("base64");
+const ENV = { WEFT_MINIAPP_KEY: KEY };
+
+beforeEach(() => {
+  process.env.WEFT_MINIAPP_KEY = KEY;
+});
+
+afterEach(() => {
+  delete process.env.WEFT_MINIAPP_KEY;
+});
+
+// A row that lives in the fake's `rows` array. Supabase JS sends ciphertext as a string column.
+interface FakeRow {
+  share_id: string;
+  name: string;
+  viewer_id: string | null;
+  ciphertext: string;
+}
+
+function makeClient(rows: FakeRow[]) {
+  const calls: { method: string; args: unknown[] }[] = [];
+  const make = (): Record<string, unknown> => {
+    const builder: Record<string, unknown> = {};
+    for (const m of ["select", "order", "limit", "upsert", "insert", "delete", "update"]) {
+      builder[m] = vi.fn((...args: unknown[]) => {
+        calls.push({ method: m, args });
+        return builder;
+      });
+    }
+    builder.eq = vi.fn((col: string, val: unknown) => {
+      calls.push({ method: "eq", args: [col, val] });
+      const prev = (builder as { __filter?: (r: FakeRow) => boolean }).__filter ?? (() => true);
+      (builder as { __filter?: (r: FakeRow) => boolean }).__filter = (r) => prev(r) && r[col as keyof FakeRow] === val;
+      return builder;
+    });
+    builder.is = vi.fn((col: string, val: unknown) => {
+      calls.push({ method: "is", args: [col, val] });
+      const prev = (builder as { __filter?: (r: FakeRow) => boolean }).__filter ?? (() => true);
+      (builder as { __filter?: (r: FakeRow) => boolean }).__filter = (r) => {
+        if (!prev(r)) return false;
+        const cell = r[col as keyof FakeRow];
+        return val === null ? cell === null : cell === val;
+      };
+      return builder;
+    });
+    builder.limit = vi.fn((n: number) => {
+      calls.push({ method: "limit", args: [n] });
+      const prev = (builder as { __filtered?: FakeRow[] }).__filtered;
+      const filter = (builder as { __filter?: (r: FakeRow) => boolean }).__filter;
+      if (prev === undefined && filter) {
+        // No prior .or: rows come from the table itself. The test passes them in via the closure above.
+        (builder as { __filtered?: FakeRow[] }).__filtered = rows.filter(filter).slice(0, n);
+      } else if (prev) {
+        (builder as { __filtered?: FakeRow[] }).__filtered = prev.slice(0, n);
+      }
+      return builder;
+    });
+    builder.or = vi.fn((filter: string) => {
+      calls.push({ method: "or", args: [filter] });
+      // Apply the filter to rows to mirror what Supabase would do for an `or` clause.
+      const { viewerFilter, nameFilter } = parseOr(filter);
+      const filtered = rows.filter((r) => {
+        if (nameFilter && !nameFilter.has(r.name)) return false;
+        if (viewerFilter === "null" && r.viewer_id !== null) return false;
+        if (viewerFilter === "notnull" && r.viewer_id === null) return false;
+        return true;
+      });
+      // Stash the filtered set so the .maybeSingle() below returns the right shape.
+      (builder as { __filtered?: FakeRow[] }).__filtered = filtered;
+      return builder;
+    });
+    builder.maybeSingle = vi.fn(() => {
+      const filtered = (builder as { __filtered?: FakeRow[] }).__filtered;
+      if (filtered !== undefined) return Promise.resolve({ data: filtered[0] ?? null, error: null });
+      return Promise.resolve({ data: null, error: null });
+    });
+    // `await` on the chain must resolve to the same shape Supabase would (a thenable builder).
+    builder.then = (onFulfilled: (v: { data: FakeRow[]; error: null }) => unknown, onRejected?: (err: unknown) => unknown) => {
+      const filtered = (builder as { __filtered?: FakeRow[] }).__filtered;
+      const value = { data: filtered ?? [], error: null };
+      try {
+        return Promise.resolve(onFulfilled(value));
+      } catch (err) {
+        return onRejected ? Promise.resolve(onRejected(err)) : Promise.reject(err instanceof Error ? err : new Error(String(err)));
+      }
+    };
+    return builder;
+  };
+  const service = { from: (table: string) => { calls.push({ method: "from", args: [table] }); return make(); } };
+  return { service, calls, rows };
+}
+
+// The `or` filter we build is one of:
+//   and(name.in.("A","B"),viewer_id.is.null),name.in.("C","D")
+// The first half needs an AND inside the group; the second half is a flat `name.in.(...)`. Parse enough to
+// return the matching rows; the test doesn't pretend to be a real PostgREST parser.
+function parseOr(filter: string): { nameFilter: Set<string> | null; viewerFilter: "null" | "notnull" | null } {
+  const nameFilter = new Set<string>();
+  let viewerFilter: "null" | "notnull" | null = null;
+  // Match name.in.(...) whether it's wrapped in and(...) or not.
+  const allNameIn = filter.match(/name\.in\.\(([^)]*)\)/g) ?? [];
+  for (const m of allNameIn) {
+    const inside = m.replace(/^name\.in\.\(/, "").replace(/\)$/, "");
+    for (const item of inside.split(",")) {
+      const trimmed = item.replace(/^"|"$/g, "");
+      if (trimmed) nameFilter.add(trimmed);
+    }
+  }
+  if (/viewer_id\.is\.null/.test(filter)) viewerFilter = "null";
+  if (/viewer_id\.not\.is\.null/.test(filter)) viewerFilter = "notnull";
+  return { nameFilter: nameFilter.size ? nameFilter : null, viewerFilter };
+}
+
+function row(shareId: string, name: string, viewerId: string | null, value: string): FakeRow {
+  return { share_id: shareId, name, viewer_id: viewerId, ciphertext: seal(value, { shareId, name, viewerId }, ENV) };
+}
+
+describe("app-secret-store", () => {
+  it("round-trips an author value", async () => {
+    const r = row("s1", "STRIPE_KEY", null, "sk_live_x");
+    const { service } = makeClient([r]);
+    const store = createAppSecretStore(service as never);
+    const out = await store.getValues("s1", { author: ["STRIPE_KEY"], viewer: [] }, "user-1");
+    expect(out).toEqual({ STRIPE_KEY: "sk_live_x" });
+  });
+
+  it("round-trips a viewer value", async () => {
+    const r = row("s1", "OPENAI_KEY", "user-1", "sk-openai");
+    const { service } = makeClient([r]);
+    const store = createAppSecretStore(service as never);
+    const out = await store.getValues("s1", { author: [], viewer: ["OPENAI_KEY"] }, "user-1");
+    expect(out).toEqual({ OPENAI_KEY: "sk-openai" });
+  });
+
+  it("refuses to confuse an author row with a viewer's value (viewer_id filter)", async () => {
+    const author = row("s1", "OPENAI_KEY", null, "sk-author");
+    const viewer = row("s1", "OPENAI_KEY", "user-1", "sk-viewer");
+    const { service } = makeClient([author, viewer]);
+    const store = createAppSecretStore(service as never);
+    // Ask as viewer: gets only the viewer's row.
+    const out = await store.getValues("s1", { author: [], viewer: ["OPENAI_KEY"] }, "user-1");
+    expect(out).toEqual({ OPENAI_KEY: "sk-viewer" });
+  });
+
+  it("skips a row that fails to open (a tampered or rotated ciphertext)", async () => {
+    const good = row("s1", "A", null, "v");
+    const bad = { share_id: "s1", name: "B", viewer_id: null, ciphertext: "v1:AAAA" };
+    const { service } = makeClient([good, bad]);
+    const store = createAppSecretStore(service as never);
+    const out = await store.getValues("s1", { author: ["A", "B"], viewer: [] }, "user-1");
+    expect(out).toEqual({ A: "v" });
+  });
+
+  it("returns {} when no names are asked for", async () => {
+    const { service } = makeClient([]);
+    const store = createAppSecretStore(service as never);
+    expect(await store.getValues("s1", { author: [], viewer: [] }, "user-1")).toEqual({});
+  });
+
+  it("setValue seals the value and upserts on the unique index", async () => {
+    const { service, calls } = makeClient([]);
+    const store = createAppSecretStore(service as never);
+    await store.setValue("s1", "STRIPE_KEY", null, "sk_live_y");
+    const upsert = calls.find((c) => c.method === "upsert");
+    expect(upsert).toBeDefined();
+    const row = upsert!.args[0] as { share_id: string; name: string; viewer_id: string | null; ciphertext: string };
+    expect(row.share_id).toBe("s1");
+    expect(row.name).toBe("STRIPE_KEY");
+    expect(row.viewer_id).toBeNull();
+    expect(isConfigured(ENV)).toBe(true);
+    expect(open(row.ciphertext, { shareId: "s1", name: "STRIPE_KEY", viewerId: null }, ENV)).toBe("sk_live_y");
+    const opts = upsert!.args[1] as { onConflict: string };
+    expect(opts.onConflict).toBe("share_id,name,viewer_id");
+  });
+
+  it("setValue for a viewer includes their id in the row and the AAD", async () => {
+    const { service, calls } = makeClient([]);
+    const store = createAppSecretStore(service as never);
+    await store.setValue("s1", "OPENAI_KEY", "user-1", "sk-x");
+    const upsert = calls.find((c) => c.method === "upsert");
+    const row = upsert!.args[0] as { viewer_id: string | null; ciphertext: string };
+    expect(row.viewer_id).toBe("user-1");
+    expect(open(row.ciphertext, { shareId: "s1", name: "OPENAI_KEY", viewerId: "user-1" }, ENV)).toBe("sk-x");
+  });
+
+  it("removeValue uses is(null) for the author and eq for a viewer", async () => {
+    const { service: aService, calls: aCalls } = makeClient([]);
+    const storeA = createAppSecretStore(aService as never);
+    await storeA.removeValue("s1", "STRIPE_KEY", null);
+    expect(aCalls.some((c) => c.method === "delete")).toBe(true);
+    expect(aCalls.some((c) => c.method === "is" && c.args[0] === "viewer_id" && c.args[1] === null)).toBe(true);
+
+    const { service: vService, calls: vCalls } = makeClient([]);
+    const storeV = createAppSecretStore(vService as never);
+    await storeV.removeValue("s1", "OPENAI_KEY", "user-1");
+    expect(vCalls.some((c) => c.method === "delete")).toBe(true);
+    const viewerEq = vCalls.find((c) => c.method === "eq" && c.args[0] === "viewer_id" && c.args[1] === "user-1");
+    expect(viewerEq).toBeDefined();
+  });
+
+  it("hasValue reports whether the row exists", async () => {
+    const r = row("s1", "STRIPE_KEY", null, "v");
+    const { service } = makeClient([r]);
+    const store = createAppSecretStore(service as never);
+    expect(await store.hasValue("s1", "STRIPE_KEY", null)).toBe(true);
+    expect(await store.hasValue("s1", "OTHER", null)).toBe(false);
+  });
+});
+
+describe("splitByManifest", () => {
+  it("splits names by `from: \"viewer\"` vs the default author", () => {
+    const out = splitByManifest(
+      ["A", "B", "C"],
+      { A: { hosts: ["h"] }, B: { from: "viewer", hosts: ["h"] }, C: { hosts: ["h"], from: "author" } },
+    );
+    expect(out).toEqual({ author: ["A", "C"], viewer: ["B"] });
+  });
+
+  it("drops names that aren't in the manifest", () => {
+    expect(splitByManifest(["X", "A"], { A: { hosts: ["h"] } })).toEqual({ author: ["A"], viewer: [] });
+  });
+
+  it("returns empty lists for a missing manifest", () => {
+    expect(splitByManifest(["A"], null)).toEqual({ author: [], viewer: [] });
+    expect(splitByManifest(["A"], undefined)).toEqual({ author: [], viewer: [] });
+  });
+});

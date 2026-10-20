@@ -2,7 +2,7 @@
 // first-paint dialog state from the remembered memo, the iframe src the viewer frames, and the
 // sha a blob share's page route serves. Pure, so a single import covers every branch.
 import { describe, expect, it } from "vitest";
-import { appBlobSha, appFrameSrc, appShareUrl, seedAppShareState } from "./app-share-types";
+import { APP_SLUG_RE, appBlobSha, appFrameSrc, appPublicUrl, appShareUrl, appSlugFrom, paneAddress, seedAppShareState } from "./app-share-types";
 import type { CardShareMemo } from "./types-card-detail";
 import type { MiniApp } from "./mini-apps";
 
@@ -22,6 +22,85 @@ describe("appShareUrl", () => {
   });
 });
 
+describe("appPublicUrl", () => {
+  it("puts a personal app under @username", () => {
+    expect(appPublicUrl("user", "fotoflo", "growth")).toBe("https://weft.zip/@fotoflo/apps/growth");
+  });
+
+  it("puts a team app under the workspace's slug", () => {
+    expect(appPublicUrl("org", "aimhuge", "growth", "http://localhost:3000")).toBe("http://localhost:3000/aimhuge/apps/growth");
+  });
+});
+
+describe("appSlugFrom", () => {
+  it("drops the emoji and lowercases", () => {
+    expect(appSlugFrom("📈 Growth")).toBe("growth");
+  });
+
+  it("joins words with hyphens and folds accents", () => {
+    expect(appSlugFrom("Café  Sales — Q4!")).toBe("cafe-sales-q4");
+  });
+
+  it("caps the length without a trailing hyphen", () => {
+    const slug = appSlugFrom(`${"a".repeat(39)} b`);
+    expect(slug).toBe("a".repeat(39));
+    expect(APP_SLUG_RE.test(slug)).toBe(true);
+  });
+
+  it("falls back to app when nothing usable is left", () => {
+    expect(appSlugFrom("🐙")).toBe("app");
+  });
+});
+
+describe("paneAddress", () => {
+  it("prefers the link's public address once the memo has one", () => {
+    const app: MiniApp = {
+      id: "g",
+      name: "📈 Growth",
+      url: "file:///Users/me/.weft/apps/growth/index.html",
+      addedAt: 1,
+      share: { id: "k3x9", mode: "public", hasPassword: false, url: "https://weft.zip/@fotoflo/apps/growth" },
+    };
+    expect(paneAddress(app, app.url)).toBe("📈 Growth · weft.zip/@fotoflo/apps/growth");
+  });
+});
+
+describe("paneAddress", () => {
+  const growth: MiniApp = { id: "g", name: "📈 Growth", url: "file:///Users/me/.weft/apps/growth/index.html", addedAt: 1 };
+
+  it("shows a saved local app's name instead of its file path", () => {
+    expect(paneAddress(growth, growth.url)).toBe("📈 Growth");
+  });
+
+  it("adds the weft.zip link once the app has one", () => {
+    const shared = { ...growth, share: { id: "k3x9", mode: "private" as const, hasPassword: false } };
+    expect(paneAddress(shared, growth.url)).toBe("📈 Growth · weft.zip/a/k3x9");
+  });
+
+  it("ignores a share memo with no link yet", () => {
+    const unshared = { ...growth, share: { id: null, mode: "private" as const, hasPassword: false } };
+    expect(paneAddress(unshared, growth.url)).toBe("📈 Growth");
+  });
+
+  it("still names the app on its own page with a #hash", () => {
+    expect(paneAddress(growth, `${growth.url}#retention`)).toBe("📈 Growth");
+  });
+
+  it("shows the address of a page further into the app", () => {
+    const deeper = "file:///Users/me/.weft/apps/growth/other.html";
+    expect(paneAddress(growth, deeper)).toBe(deeper);
+  });
+
+  it("keeps a web app's address", () => {
+    const repo: MiniApp = { id: "r", name: "🐙 Weft repo", url: "https://github.com/aimhuge/weft", addedAt: 1 };
+    expect(paneAddress(repo, repo.url)).toBe(repo.url);
+  });
+
+  it("shows any other page's address", () => {
+    expect(paneAddress(undefined, "file:///Users/me/.weft/show/plan.html")).toBe("file:///Users/me/.weft/show/plan.html");
+  });
+});
+
 describe("seedAppShareState", () => {
   it("returns signed-out for a signed-out visitor, even with a memo", () => {
     const memo: CardShareMemo = { id: "m1", mode: "public", hasPassword: false };
@@ -30,24 +109,24 @@ describe("seedAppShareState", () => {
 
   it("returns a private, no-link state for a file: app with no memo", () => {
     const state = seedAppShareState(makeApp({ url: "file:///Users/me/show/page.html" }), false);
-    expect(state).toEqual({ kind: "ok", id: null, url: null, mode: "private", hasPassword: false, shows: "blob" });
+    expect(state).toEqual({ kind: "ok", id: null, url: null, mode: "private", hasPassword: false, shows: "blob", manifest: null, owner: null, slug: null, orgId: null, publicUrl: null, owners: { user: null, orgs: [] } });
   });
 
   it("returns a private, no-link state for an https app with no memo", () => {
     const state = seedAppShareState(makeApp({ url: "https://example.com/dash" }), false);
-    expect(state).toEqual({ kind: "ok", id: null, url: null, mode: "private", hasPassword: false, shows: "site" });
+    expect(state).toEqual({ kind: "ok", id: null, url: null, mode: "private", hasPassword: false, shows: "site", manifest: null, owner: null, slug: null, orgId: null, publicUrl: null, owners: { user: null, orgs: [] } });
   });
 
   it("hydrates a memo's id and url, keeping its mode and password flag", () => {
     const memo: CardShareMemo = { id: "m1", mode: "email", hasPassword: false };
     const state = seedAppShareState(makeApp({ url: "https://example.com/dash", share: memo }), false);
-    expect(state).toEqual({ kind: "ok", id: "m1", url: "https://weft.zip/a/m1", mode: "email", hasPassword: false, shows: "site" });
+    expect(state).toEqual({ kind: "ok", id: "m1", url: "https://weft.zip/a/m1", mode: "email", hasPassword: false, shows: "site", manifest: null, owner: null, slug: null, orgId: null, publicUrl: null, owners: { user: null, orgs: [] } });
   });
 
   it("hydrates a memo with no id (url stays null)", () => {
     const memo: CardShareMemo = { id: null, mode: "password", hasPassword: true };
     const state = seedAppShareState(makeApp({ url: "file:///x.html", share: memo }), false);
-    expect(state).toEqual({ kind: "ok", id: null, url: null, mode: "password", hasPassword: true, shows: "blob" });
+    expect(state).toEqual({ kind: "ok", id: null, url: null, mode: "password", hasPassword: true, shows: "blob", manifest: null, owner: null, slug: null, orgId: null, publicUrl: null, owners: { user: null, orgs: [] } });
   });
 });
 
