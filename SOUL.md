@@ -100,6 +100,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   `lib/question-preview.ts`: a thread's AskUserQuestion, asked the Claude Code way above the reply box, whose composer is its
   one input (own answer or a note, sent as `annotations`); option previews open in the card's browser pane; text typed on the
   Submit tab goes with the answers as a note on all of them (`buildReply`'s `general`).
+  A send, number key or click in the first 800 ms (`ARM_MS`) is held, a rejected `onAnswer` re-enables the form, and Skip / Chat about this decline it (`onDecline`, docs/architecture/questions.md).
 - `lib/reply-mode.ts` + `components/ReplyButtons.tsx` + `components/ReplyModeChip.tsx`: the reply box is in one mode at a time
   (Send, Queue, Answer, Run, Replace, Send fresh when the cache is cold, Send at the reset when the 5-hour window is used up), named on a
   chip in the box and on its primary, with the rest in a ▾ menu, a Done button while idle and ■ Stop in its own slot (docs/architecture/composer.md).
@@ -109,6 +110,10 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   Threads, Automations, Shortcuts, Accounts); Models holds every model pick, new threads' through `components/NewThreadDefaults.tsx`;
   the four rows (NewThreadDefaults, SubagentPicker, CopilotPicker, DonePicker) share `components/Pickers.tsx`
   (`BackendPicker`, `ModelPicker`, `EffortPicker`) on top of `components/ModelSelect.tsx` (Claude / Puku / Codex optgroups driven by `MODELS` in `lib/new-thread.ts`; Copilot passes `groups=Claude` to stay Claude-only).
+- `components/BackupModelPicker.tsx` (`backupModel`): Settings → Models → Backup model. The model the first-message-failed banner reruns the card on
+  (when the very first turn came back with an error — a rate limit, mostly). Any model any installed CLI serves, plus an "Off — no backup" leading option
+  that hides the Rerun button. Behind it `lib/backend-switch.ts` `rerunOnModel` clears the session on a model change and `sendMessage`s the last user
+  message with `echo: false`; `app/api/cards/[id]/rerun-model` is the route, the banner (`components/FirstMessageErrorBanner.tsx`) is the only caller.
 - `lib/subagents.ts` + `components/SubagentPicker.tsx`: when threads delegate to subagents and on which model (Settings → Models → Use for subagents,
   any Claude or Puku model: forced through `CLAUDE_CODE_SUBAGENT_MODEL` / `PUKU_CLI_SUBAGENT_MODEL` on its own CLI, a headless `-p` run on the other).
   `lib/tasks.ts` + `lib/task-ledger.ts` + `lib/tasks-view.ts` + `components/TaskStrip.tsx`: each thread's subagents and background commands from the CLI's
@@ -144,6 +149,9 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `plugin/skills/*`: my own skills (`/weft:done`, `/weft:commit`, `/weft:preview`, `/weft:setup-done`,
   which installs tests, docs and strict lint on a project before `/done`; `/weft:done` also keeps this file current);
   `lib/skills.ts` lists skills, `lib/automations.ts` turns "When … run …" rules into turns.
+  `lib/skill-library.ts` + `lib/skill-usage.ts` + `lib/skill-sets.ts` + `lib/skill-set-actions.ts` + `app/api/skills/set` + `components/SkillsDrawer.tsx` + `components/SkillsChip.tsx`:
+  skill sets, a thread gets only its project's skills (an off-list per folder seeded from what its transcripts ran, plus the card's own
+  changes), as Claude Code `skillOverrides`/`enabledPlugins` settings when its CLI starts and a filtered skill index for puku and Codex (docs/architecture/skills.md).
 - `lib/quality.ts` + `lib/quality-view.ts` + `app/api/quality`: the header's code quality checklist (coverage via `lib/coverage.ts`,
   file size, lint, types, guardrails); `lib/scout.ts` + `lib/scout-view.ts` + `app/api/scout`: the refactor scout, a cached
   read-only Sonnet run whose findings take the score's last 10 points so it never hits 100. `components/QualityBadge.tsx`
@@ -280,6 +288,9 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   inside a CrashGuard), so even a module that throws as it loads (JSX in a constant before its import) breaks only its spot.
   A build error (a file that doesn't parse) fails the route before React runs, so no boundary sees it: `components/BuildErrorBar.tsx`
   (`lib/build-error.ts`) hides Next's overlay and leaves the last version that built running.
+  A runtime dev-server death (the supervisor's 4-in-2-min crash budget trips while the board is up) gets
+  the same treatment: `components/ServerErrorBar.tsx` (`lib/server-status.ts`) offers Restart / Open logs /
+  Fix with a thread without tearing down the React tree (`electron/server.cjs` `onNotify` → `electron/server-ipc.cjs`).
 - Deeper docs (read the one that matches your task; this is the index, not the docs themselves):
   - `admin.md` — the super-admin gate (`SUPER_ADMIN_EMAILS` on `@aimhuge/teams` via `lib/admin.ts`), the `/admin/users` and `/admin/settings` pages, the rail's 🛡 Admin icon, the data routes in `app/api/admin/*`.
   - `overview.md` — what Weft is end to end: the Electron shell, the Next.js server, cards-as-threads, the loop with the user.
@@ -288,6 +299,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - `thread-guards.md` — what `guardedCli()` strips and hooks: secret/restart/git/check/route-import/claim guards, per-CLI limits.
   - `composer.md` — the reply box's modes: `lib/reply-mode.ts`'s table of chip, primary and ▾ menu per state, and what's still planned (one dock for every ask, one server-side queue).
   - `questions.md` — a thread's AskUserQuestion end to end: the panel above the reply box, keys, previews in the pane, answers and `annotations` back to the CLI.
+  - `skills.md` — skill sets: the library (Weft's, project, yours, plugins), a project's default set seeded from usage, a card's own, and how each runner gets it at session start.
   - `subagents.md` — how threads delegate to subagents and how Settings → Models picks their model.
   - `account.md` — the optional Weft account (Supabase Auth, PKCE, `weft://account-callback`, `~/.weft/account.json` in the Keychain).
   - `teams.md` — workspaces, members, roles, email invites on weft.zip; the `requireOrg` gate and why it's not `@aimhuge/teams`'s.
@@ -303,6 +315,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - `email-forwarding.md` — `weft.zip` mail → Resend → Svix-signed `email.received` → one inbox.
   - `github-issues.md` — a project's open GitHub issues become Backlog cards, one direction, polled every 5 min, instant sync via the deployed relay.
   - `mini-apps.md` — pages saved from the browser pane as tiles on the left rail below Services: `~/.weft/apps.json`, `/api/apps`, the pane's Save as app button, right-click menu, My mini apps on the profile, and Share… at `weft.zip/a/<id>`.
+  - `mini-app-hosting.md` — design, not built: React folder apps bundled by Weft and served from weft.zip with declared reads and cloud secrets ($0), and full Next.js apps on Weft-hosted Workers for apps that need server code.
   - `tags.md` — ★ star and tags (the GitHub-label-style rules, the catalog in `~/.weft/tags.json`, the 🏷 drawer, pills on the card); replaced the library.
   - `dev-servers.md` — Weft-owned dev servers and the rail's 🖥 Services drawer: `mcp__devservers__*`, why not Bash `run_in_background`, how the process tree is split and killed, the task strip's per-task Stop.
   - `editor.md` — the open card's four columns (thread, editor, pane, show), the editor (CodeMirror, TipTap markdown with diff3 saves, Changes vs. HEAD), the files route and its safety, `weft:open-file`, inline diffs.
