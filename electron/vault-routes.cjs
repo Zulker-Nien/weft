@@ -26,7 +26,7 @@ function vaultRoutes(getVault) {
   return {
     // Names with no value yet, for the user to fill in later (lib/secret-ask.ts). The rail's 🔐 count goes up; nothing opens.
     "POST /secrets/add-blank": ({ folder, names, environment, hint }) =>
-      vault().addBlanks(String(folder), Array.isArray(names) ? names.map(String) : [], [env(environment)], { source: "a thread", hint: hint ? String(hint).slice(0, 200) : undefined }),
+      vault().addBlanks(String(folder), Array.isArray(names) ? names.map(String) : [], [env(environment)], { source: "a thread", hint: hint ? String(hint).slice(0, 400) : undefined }),
     "POST /secrets/set": ({ folder, name, value, environment }) => fillBlank(vault(), String(folder), String(name), env(environment), String(value ?? "")),
   };
 }

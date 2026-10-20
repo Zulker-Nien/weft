@@ -155,11 +155,13 @@ denied). A file watcher notices hand edits and offers "Import changes", so editi
   the board window (no vault bridge) the input says to use 🔐 on the rail. No value passes through the thread either way.
 - `mcp__secrets__add_blank(names[], hint?, environment?, project?)` (built): the default for a key a thread needs
   but isn't blocked on. The thread calls this as soon as it knows the name (with a hint for where to get the
-  value), keeps going with what doesn't need the value, and the user fills the blanks in from 🔐 on the rail
+  value: the dashboard path plus its direct https link, up to 400 characters), keeps going with what doesn't need the value, and the user fills the blanks in from 🔐 on the rail
   when they're ready — a name already filled in keeps its value. Nothing opens; the value never comes back.
   Posts `POST /secrets/add-blank` (`electron/vault-routes.cjs`); main calls `vault.addBlanks(folder, names, [env], { source, hint })`
   (`electron/vault.cjs`). The drawer's `SecretRow` (`components/SecretRow.tsx`) shows a visible **Fill in** button on
-  every blank row with the hint under the name; blanks sort first within each environment, the rail's badge counts
+  every blank row with the hint under the name, in full: the name wraps after an underscore (`<wbr>`) instead of
+  being cut off, and every https link in the hint (`hintParts` in `lib/hint-links.ts`) opens in the browser pane
+  (`lib/open-in-pane.ts`, falling back to the system browser), where the user is signed in; blanks sort first within each environment, the rail's badge counts
   them, and the plain Add form's button reads **Add blank / Add N blanks** with the same flow. Older shells without
   `addBlank` keep the "type a value" form.
 - `mcp__secrets__set_value(name, value, environment?, project?)` (built): a value the thread generated itself (a
@@ -186,7 +188,10 @@ denied). A file watcher notices hand edits and offers "Import changes", so editi
     `why` are only shown, never part of a remembered rule; a dev server's approval names its card too.
     *Always allow* is a rule in the data folder's `vault/run-rules.json` (`electron/run-rules.cjs`), sealed with
     safeStorage so a thread can't write one. It pins the vault, environment, folder, exact command and a hash of the
-    script, and covers those names or fewer, so a thread editing the script makes it ask again.
+    script, and covers those names or fewer, so a thread editing the script makes it ask again. A `run` rule also
+    pins a fingerprint of the folder's tree (`treeFingerprint`: HEAD, `git diff HEAD`, untracked files' bytes), so
+    editing any code the script runs makes it ask again too, and outside a git repo Always never holds. `dev` rules
+    don't pin the tree, so a dev server restarting while you edit doesn't re-ask.
   - Main spawns argv detached with no shell, its own env minus `WEFT_SHELL_*`, plus the values; a timeout
     (default 2 minutes, at most 10) sends SIGTERM to the process group, then SIGKILL. Output is redacted
     (`electron/secret-redact.cjs`), then cut to the last 20,000 characters, and comes back with the exit code.

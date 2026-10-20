@@ -1,5 +1,5 @@
-import { api, type ShellBridge } from "@/lib/client";
-import { openExternal } from "@/lib/auth/desktop";
+import { api } from "@/lib/client";
+import { openInPane } from "@/lib/open-in-pane";
 import { activeAt, recentMoves, SORTERS, type ProjectSummary, type SortKey } from "@/lib/board-view";
 import { timeAgo } from "@/lib/format";
 import { SCENES, setTheme, THEMES } from "@/lib/theme";
@@ -83,14 +83,7 @@ export function openTeamPage() {
 
 // Any weft.zip page (the team, a workspace's web board) in the pane, else the system browser.
 export function openWeftPage(url: string) {
-  if (typeof window === "undefined") return;
-  // Partial: a shell from before the pane has no browser bridge, so this falls back to the system browser.
-  const pane: Partial<ShellBridge["browser"]> | undefined = window.weft?.browser;
-  if (pane?.open) {
-    void pane.open(url, "board").catch(() => openExternal(url));
-    return;
-  }
-  openExternal(url);
+  openInPane(url);
 }
 
 function commandItems(s: PaletteState, a: PaletteActions): PaletteItem[] {

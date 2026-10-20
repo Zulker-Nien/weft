@@ -9,7 +9,7 @@ import { asText } from "./format";
 // thread shows an input for that key in place of the call (components/SecretAskInput.tsx), so the user pastes the
 // value where they're already reading. The value goes from that input to Electron main, never back to the thread.
 
-export const ASK_PROMPT = `When the work needs a secret that isn't in the vault yet (code reads process.env.SOMETHING, an SDK or service wants a key, a dashboard step needs a client secret), put each name in the 🔐 vault as a blank right away with mcp__secrets__add_blank, with a hint for where to get its value. Do it as soon as you know the name, before you need the value, and keep going with what doesn't need it: the user sees the blanks counted on 🔐 and fills them in when they're ready. Never make up placeholder values or write keys into files. Only when you're blocked on a value right now, call mcp__secrets__ask_add with its name, then end your turn: the user gets an input for it right in this thread, and tells you once it's in. Don't walk them through the drawer yourself.`;
+export const ASK_PROMPT = `When the work needs a secret that isn't in the vault yet (code reads process.env.SOMETHING, an SDK or service wants a key, a dashboard step needs a client secret), put each name in the 🔐 vault as a blank right away with mcp__secrets__add_blank, with a hint for where to get its value and the direct https link to that page (it opens in the browser pane from the drawer). Do it as soon as you know the name, before you need the value, and keep going with what doesn't need it: the user sees the blanks counted on 🔐 and fills them in when they're ready. Never make up placeholder values or write keys into files. Only when you're blocked on a value right now, call mcp__secrets__ask_add with its name, then end your turn: the user gets an input for it right in this thread, and tells you once it's in. Don't walk them through the drawer yourself.`;
 
 const ENVIRONMENTS = ["development", "preview", "production"] as const;
 type Environment = (typeof ENVIRONMENTS)[number];
@@ -60,7 +60,7 @@ export function addBlankTool(folder: () => string) {
     "Put secret names in the 🔐 vault as blanks (no value yet) for the user to fill in when they're ready: the default whenever the work needs a key that isn't in the vault. A name that already has a value keeps it. Nothing opens; you never see the values.",
     {
       names: z.array(NAME).min(1).max(20).describe("The secrets' names, e.g. [\"STRIPE_SECRET_KEY\", \"STRIPE_WEBHOOK_SECRET\"]"),
-      hint: z.string().max(200).optional().describe("Where the user gets the values, shown under each blank, e.g. \"Stripe dashboard → Developers → API keys\""),
+      hint: z.string().max(400).optional().describe("Where the user gets the values, shown in full under each blank: the path plus the direct https link to that page, which opens in the browser pane, e.g. \"Stripe → Developers → API keys: https://dashboard.stripe.com/apikeys\""),
       environment: z.enum(ENVIRONMENTS).optional().describe("Which environment they're for; defaults to development"),
       project: PROJECT,
     },

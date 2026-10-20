@@ -1,6 +1,9 @@
 "use client";
 
+import { Fragment } from "react";
 import { isMac } from "@/lib/hotkeys";
+import { hintParts, linkLabel } from "@/lib/hint-links";
+import { openInPane } from "@/lib/open-in-pane";
 import { useCountdown } from "@/lib/use-countdown";
 import { useModHeld } from "@/lib/use-mod-held";
 import { blankTitle, masked, type VaultSecret } from "@/lib/vault-view";
@@ -32,9 +35,9 @@ export function SecretRow({
   const { left, arm, disarm } = useCountdown(CONFIRM_WAIT_MS);
   return (
     <div onContextMenu={onMenu} onMouseLeave={disarm} className="group rounded px-1.5 py-1 hover:bg-sunken">
-      <div className="flex items-center gap-1.5 text-[11.5px]">
-        <span className="min-w-0 flex-1 truncate font-mono text-ink" title={s.missing ? blankTitle(s) : s.source ? `${s.name} · from ${s.source}` : s.name}>
-          {s.name}
+      <div className="flex items-start gap-1.5 text-[11.5px]">
+        <span className="min-w-0 flex-1 font-mono text-ink [overflow-wrap:anywhere]" title={s.missing ? blankTitle(s) : s.source ? `${s.name} · from ${s.source}` : s.name}>
+          <WrapName name={s.name} />
         </span>
         {s.missing ? <Tag tone="warn">blank</Tag> : <span className="font-mono text-[10.5px] text-faint group-hover:hidden">{masked(s)}</span>}
         {left !== null ? (
@@ -90,7 +93,7 @@ export function SecretRow({
           </span>
         )}
       </div>
-      {s.missing && s.hint && <p className="mt-0.5 truncate text-[10.5px] leading-snug text-faint" title={s.hint}>{s.hint}</p>}
+      {s.missing && s.hint && <HintText hint={s.hint} />}
       {/* data-secret: the board view (electron/board-view.cjs) reads this as ‹secret› and blanks it in screenshots. */}
       {value !== undefined && (
         <div data-secret className="mt-0.5 select-text break-all font-mono text-[10.5px] text-ink">
@@ -98,6 +101,44 @@ export function SecretRow({
         </div>
       )}
     </div>
+  );
+}
+
+// A long name wraps after an underscore (STRIPE_WEBHOOK_ / SECRET), not mid-word; <wbr> adds nothing to a copy.
+function WrapName({ name }: { name: string }) {
+  // Fragments, not spans: the row's own text stays the whole name, for search and tests.
+  return name.split("_").map((part, i, all) => (
+    <Fragment key={i}>
+      {part}
+      {i < all.length - 1 && "_"}
+      {i < all.length - 1 && <wbr />}
+    </Fragment>
+  ));
+}
+
+// A blank's hint in full, wrapped and never cut off; its links open in the browser pane, where you're signed in.
+function HintText({ hint }: { hint: string }) {
+  return (
+    <p className="mt-0.5 break-words text-[10.5px] leading-snug text-faint">
+      {hintParts(hint).map((p, i) =>
+        "url" in p ? (
+          <a
+            key={i}
+            href={p.url}
+            title={`Open ${p.url} in the browser pane`}
+            onClick={(e) => {
+              e.preventDefault();
+              openInPane(p.url);
+            }}
+            className="break-all text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent"
+          >
+            {linkLabel(p.url)}
+          </a>
+        ) : (
+          <span key={i}>{p.text}</span>
+        ),
+      )}
+    </p>
   );
 }
 

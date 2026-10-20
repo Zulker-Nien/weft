@@ -140,7 +140,6 @@ describe("VaultDrawer", () => {
     expect(github).toHaveAttribute("title", "Fill in GITHUB_TOKEN");
     expect(screen.getByText("STRIPE_SECRET_KEY").title).toContain("added by a thread");
   });
-
   it("adds one secret to several environments at once, and needs at least one", async () => {
     const { b } = setup("/dev/notes");
     await userEvent.click(screen.getByRole("button", { name: /Add/ }));
