@@ -147,6 +147,26 @@
   --on-accent: #2e1704;
 }
 
+/* Slate greys from the cockpit's frame and console; the accent is its cyan screens. The dashboard sits in
+   the picture's bottom fifth, so --scene-pos pins the crop to the bottom to keep it in view. */
+:root[data-scene="cockpit"] {
+  --scene: url("/api/scenes/cockpit");
+  --scene-pos: center 100%;
+  --scrim: linear-gradient(180deg, rgb(6 10 20 / 0.3), rgb(6 10 20 / 0.05) 55%, rgb(6 10 20 / 0.35));
+  --canvas: #0f141c;
+  --panel: #141a23;
+  --card: #1b222d;
+  --sunken: rgb(16 22 32 / 0.4);
+  --line: rgb(200 214 232 / 0.09);
+  --line-strong: rgb(200 214 232 / 0.18);
+  --ink: #e8edf5;
+  --muted: #9aa7ba;
+  --faint: #67758a;
+  --accent: #5fd0ee;
+  --accent-soft: rgb(95 208 238 / 0.15);
+  --on-accent: #04202b;
+}
+
 :root[data-scene="salt-flats"] {
   --scene: url("/api/scenes/salt-flats");
   --scrim: linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(255 250 252 / 0) 55%, rgb(240 244 252 / 0.2));
@@ -165,7 +185,7 @@
 }
 
 :root[data-scene] body {
-  background: var(--scrim), var(--scene) center 62% / cover no-repeat, var(--canvas);
+  background: var(--scrim), var(--scene) var(--scene-pos, center 62%) / cover no-repeat, var(--canvas);
 }
 
 /* Columns stay clear over a scene so the picture shows between the cards; a faint edge keeps their

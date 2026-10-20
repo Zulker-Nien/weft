@@ -9,6 +9,7 @@ const BASES = {
   "coast-road": "dark",
   "neon-city": "dark",
   "snow-pass": "dark",
+  cockpit: "dark",
   "salt-flats": "light",
 };
 

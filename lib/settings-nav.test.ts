@@ -8,7 +8,7 @@ describe("settings nav", () => {
     const ids = SETTINGS_PAGES.map((p) => p.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(pageInfo("models").label).toBe("Models");
-    expect(pageInfo("team").label).toBe("Team");
+    expect(pageInfo("team").label).toBe("Teams");
   });
 
   it("marks the pages with unsaved edits", () => {

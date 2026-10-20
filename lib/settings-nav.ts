@@ -1,4 +1,4 @@
-import { SCENES, sceneOf, type Base, type Scene } from "./theme";
+import { FIRST_SCENES, SCENES, sceneOf, type Base, type Scene, type SceneId } from "./theme";
 
 // The Settings screen's pages, down the left. Each is one scrolling page of cards; no tabs.
 export type SettingsPage = "general" | "models" | "threads" | "automations" | "shortcuts" | "accounts" | "team" | "sync";
@@ -10,7 +10,7 @@ export const SETTINGS_PAGES: { id: SettingsPage; label: string; hint: string }[]
   { id: "automations", label: "Automations", hint: "Skills that run on their own." },
   { id: "shortcuts", label: "Shortcuts", hint: "Keys for the board's global actions." },
   { id: "accounts", label: "Accounts", hint: "Your Weft account and the CLIs' logins." },
-  { id: "team", label: "Team", hint: "Your Weft workspace and the people in it." },
+  { id: "team", label: "Teams", hint: "Every Weft team you're in, and the people in each." },
   { id: "sync", label: "Sync", hint: "Which projects upload their cards to your workspace, and how it's going." },
 ];
 
@@ -34,8 +34,10 @@ export function unsavedPages(p: PendingEdits): Set<SettingsPage> {
   return pages;
 }
 
-// Twin Suns over the dark palette, Salt Flats over the light one.
-const FALLBACK_SCENE: Record<Base, Scene> = { dark: SCENES[0], light: SCENES[5] };
+// The first launch's scenes (Twin Suns over the dark palette, Salt Flats over the light one), by id so
+// a new scene in SCENES can't shift them.
+const BY_SCENE_ID = Object.fromEntries(SCENES.map((s) => [s.id, s])) as Record<SceneId, Scene>;
+const FALLBACK_SCENE: Record<Base, Scene> = { dark: BY_SCENE_ID[FIRST_SCENES.dark], light: BY_SCENE_ID[FIRST_SCENES.light] };
 
 // The picture behind Settings: your scene if you've picked one, else one that suits the light or dark palette.
 export function settingsScene(theme: string, base: Base): Scene {
