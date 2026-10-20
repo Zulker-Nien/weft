@@ -4,7 +4,7 @@ import { useState } from "react";
 import { newPropertyName, propertyOptions, SITE, type BlastcpWorkspace, type PropertyOption } from "@/lib/blastcp-view";
 import { folderName } from "@/lib/format";
 import { SMALL } from "./BlastcpConnect";
-import { Note } from "./VaultParts";
+import DbSelect, { DbRowLines } from "./DbSelect";
 
 // Links a folder to one property in one of your workspaces, or to a new one it makes.
 export default function BlastcpPicker({
@@ -27,74 +27,57 @@ export default function BlastcpPicker({
   const [search, setSearch] = useState("");
   // The new property's name while you're making one, else null.
   const [creating, setCreating] = useState<string | null>(null);
-  const rows = workspaces ? propertyOptions(workspaces, folder, search) : [];
-  const many = new Set(rows.map((r) => r.org)).size > 1;
+  const options = workspaces ? propertyOptions(workspaces, folder, search) : null;
+  const many = options ? new Set(options.map((r) => r.org)).size > 1 : false;
+  const title = folderName(folder);
+
   return (
-    <section className="mt-2 rounded-lg border border-accent/40 bg-card px-2 py-2" aria-label={`Link ${folderName(folder)}`}>
-      <div className="flex items-center gap-1 px-0.5">
-        <h3 className="min-w-0 flex-1 truncate text-[12px] font-semibold text-ink">Link {folderName(folder)} to…</h3>
-        <button onClick={onCancel} className={SMALL}>
-          Cancel
-        </button>
-      </div>
-      <input
-        autoFocus
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") onCancel();
-        }}
-        placeholder="Search properties"
-        aria-label="Search BlastCP properties"
-        className="mt-1.5 w-full rounded-md border border-line-strong bg-panel px-2 py-1 text-[12px] text-ink"
-      />
-      {!workspaces && <Note>Loading your BlastCP properties…</Note>}
-      {workspaces && rows.length === 0 && (
-        <Note>
-          {search ? (
-            "No property matches."
-          ) : workspaces.length ? (
-            "No properties yet."
-          ) : (
-            <>
-              No workspace yet.{" "}
-              <button onClick={() => onOpenUrl(SITE)} className="text-accent underline">
-                Make one on BlastCP
-              </button>
-            </>
-          )}
-        </Note>
-      )}
-      <ul className="mt-1 max-h-[320px] overflow-y-auto">
-        {rows.map((o) => (
-          <li key={`${o.org}/${o.slug}`}>
-            <button onClick={() => void onPick(o)} disabled={busy} className="w-full rounded px-1.5 py-1 text-left hover:bg-sunken disabled:opacity-40">
-              <span className="flex items-center gap-1.5">
-                <span className="min-w-0 flex-1 truncate text-[12px] text-ink">{o.name}</span>
-                {o.score >= 2 && <span className="shrink-0 rounded bg-accent-soft px-1 text-[10px] leading-[15px] text-accent">best fit</span>}
-              </span>
-              <span className="block truncate text-[10.5px] text-faint">
-                {o.slug}
-                {many ? ` · ${o.orgName}` : ""}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-      {workspaces && workspaces.length > 0 &&
-        (creating === null ? (
-          <button
-            onClick={() => setCreating(newPropertyName(folder, search))}
-            disabled={busy}
-            className="mt-1 w-full truncate rounded px-1.5 py-1 text-left text-[12px] text-accent hover:bg-sunken disabled:opacity-40"
-            title="Make a new property in BlastCP (it starts with a starter voice and playbooks) and link this folder to it"
-          >
-            + New property{search.trim() ? ` “${search.trim()}”` : "…"}
-          </button>
+    <DbSelect
+      title={`Link ${title} to…`}
+      ariaLabel={`Link ${title}`}
+      // propertyOptions has already filtered and ranked; DbSelect takes it as-is.
+      rows={options ? options.map((item) => ({ item, score: item.score })) : null}
+      loading="Loading your BlastCP properties…"
+      search={search}
+      onSearch={setSearch}
+      searchLabel="Search BlastCP properties"
+      searchPlaceholder="Search properties"
+      emptyText={
+        search ? (
+          "No property matches."
+        ) : workspaces?.length ? (
+          "No properties yet."
         ) : (
-          <NewProperty name={creating} workspaces={workspaces} busy={busy} onName={setCreating} onCreate={onCreate} onBack={() => setCreating(null)} />
-        ))}
-    </section>
+          <>
+            No workspace yet.{" "}
+            <button onClick={() => onOpenUrl(SITE)} className="text-accent underline">
+              Make one on BlastCP
+            </button>
+          </>
+        )
+      }
+      busy={busy}
+      rowKey={(o) => `${o.org}/${o.slug}`}
+      onPick={(o) => void onPick(o)}
+      onCancel={onCancel}
+      extra={
+        workspaces && workspaces.length > 0 ? (
+          creating === null ? (
+            <button
+              onClick={() => setCreating(newPropertyName(folder, search))}
+              disabled={busy}
+              className="mt-1 w-full truncate rounded px-1.5 py-1 text-left text-[12px] text-accent hover:bg-sunken disabled:opacity-40"
+              title="Make a new property in BlastCP (it starts with a starter voice and playbooks) and link this folder to it"
+            >
+              + New property{search.trim() ? ` “${search.trim()}”` : "…"}
+            </button>
+          ) : (
+            <NewProperty name={creating} workspaces={workspaces} busy={busy} onName={setCreating} onCreate={onCreate} onBack={() => setCreating(null)} />
+          )
+        ) : undefined
+      }
+      renderRow={(o, score) => <DbRowLines name={o.name} score={score} detail={many ? `${o.slug} · ${o.orgName}` : o.slug} />}
+    />
   );
 }
 

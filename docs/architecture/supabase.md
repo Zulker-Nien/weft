@@ -57,7 +57,7 @@ Restart Weft (`needsRestart`).
   (`readLink`, `writeLink`, `localMigrations`) and `registerSupabase`, whose IPC handlers answer the board window only.
 - `electron/preload.cjs`: `window.weft.supabase`.
 - `lib/supabase-view.ts`: types, the bridge, matching, labels, links. `lib/use-supabase.ts`: loading, over `lib/use-linked-status.ts` (the cache).
-- `components/SupabaseDrawer.tsx` (token form, linked folders), `components/SupabaseLinked.tsx` (a linked project), `components/SupabasePicker.tsx` (Link…),
+- `components/SupabaseDrawer.tsx` (token form, linked folders), `components/SupabaseLinked.tsx` (a linked project), `components/SupabasePicker.tsx` (Link…, on the shared `components/DbSelect.tsx` with `lib/db-picker.ts` `rankItems`),
   `components/SupabaseNewProject.tsx` (its New project form), `components/supabase-ui.ts` (shared button style),
   `components/SupabaseLogo.tsx`.
 
