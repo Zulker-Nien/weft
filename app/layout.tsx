@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import BuildErrorBar from "@/components/BuildErrorBar";
+import ServerErrorBar from "@/components/ServerErrorBar";
 import ThemeSync from "@/components/ThemeSync";
 import { THEME_SCRIPT } from "@/lib/theme";
 import "./fonts.css";
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <ThemeSync />
         {children}
         <BuildErrorBar />
+        <ServerErrorBar />
       </body>
     </html>
   );

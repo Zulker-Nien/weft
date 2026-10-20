@@ -4,7 +4,7 @@ import { patternRegex } from "@/lib/automations";
 import { asText } from "@/lib/format";
 import { fail, guard } from "@/lib/guard";
 import { EFFORTS, MODELS } from "@/lib/new-thread";
-import { setAutomations, setCopilotModel, setDefaultBackend, setDefaultPermissionMode, setDoneEffort, setDoneModel, setKeepAliveMinutes, setPushOnDone, setReviewAllModel, setSubagentModel, setThreadPrompt, settingsView } from "@/lib/settings";
+import { setAutomations, setBackupModel, setCopilotModel, setDefaultBackend, setDefaultPermissionMode, setDoneEffort, setDoneModel, setKeepAliveMinutes, setPushOnDone, setReviewAllModel, setSubagentModel, setThreadPrompt, settingsView } from "@/lib/settings";
 import { SKILL_NAME } from "@/lib/skills";
 import { isSubagentModel } from "@/lib/subagents";
 import { AUTOMATION_TRIGGERS, MODES, type Automation, type Backend, type PermissionMode } from "@/lib/types";
@@ -62,6 +62,15 @@ function validateReviewAllModel(value: unknown) {
   }
 }
 
+// Any model any installed CLI serves, or "" to disable the banner's rerun.
+const BACKUP_MODEL_IDS = new Set<string>([...MODELS.claude, ...MODELS.puku, ...MODELS.codex].map((m) => m.id));
+function validateBackupModel(value: unknown) {
+  if (value === undefined) return;
+  if (typeof value !== "string" || !(value === "" || BACKUP_MODEL_IDS.has(value))) {
+    throw new Error(`backupModel must be one of ${[...BACKUP_MODEL_IDS].join(", ")}, or "" to disable.`);
+  }
+}
+
 function validate(body: {
   threadPrompt?: unknown;
   keepAliveMinutes?: unknown;
@@ -74,6 +83,7 @@ function validate(body: {
   doneEffort?: unknown;
   copilotModel?: unknown;
   reviewAllModel?: unknown;
+  backupModel?: unknown;
 }): Automation[] | undefined {
   if (body.threadPrompt !== undefined && typeof body.threadPrompt !== "string") {
     throw new Error("threadPrompt must be text.");
@@ -98,6 +108,7 @@ function validate(body: {
   validateDone("doneEffort", body.doneEffort);
   validateCopilotModel(body.copilotModel);
   validateReviewAllModel(body.reviewAllModel);
+  validateBackupModel(body.backupModel);
   // Validate automations now so a bad rule 400s before any settings setter runs.
   return body.automations === undefined ? undefined : readAutomations(body.automations);
 }
@@ -113,6 +124,7 @@ function commit(body: {
   doneEffort?: unknown;
   copilotModel?: unknown;
   reviewAllModel?: unknown;
+  backupModel?: unknown;
 }, rules: Automation[] | undefined) {
   if (typeof body.threadPrompt === "string") setThreadPrompt(body.threadPrompt);
   if (typeof body.keepAliveMinutes === "number") setKeepAliveMinutes(body.keepAliveMinutes);
@@ -124,6 +136,7 @@ function commit(body: {
   if (typeof body.doneEffort === "string") setDoneEffort(body.doneEffort as "" | "low" | "medium" | "high" | "xhigh" | "max");
   if (typeof body.copilotModel === "string") setCopilotModel(body.copilotModel);
   if (typeof body.reviewAllModel === "string") setReviewAllModel(body.reviewAllModel);
+  if (typeof body.backupModel === "string") setBackupModel(body.backupModel);
   if (rules) setAutomations(rules);
 }
 

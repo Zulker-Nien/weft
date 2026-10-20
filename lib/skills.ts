@@ -82,9 +82,11 @@ export function listSkills(cwd?: string): SkillInfo[] {
 }
 
 // Puku and Codex don't look in .claude/skills (puku reads .puku-cli/skills, Codex .agents/skills), and Codex
-// has no plugin for Weft's own either. `weft` says whether to list those: puku loads them as a plugin.
-export function skillIndex(cwd: string, { weft }: { weft: boolean }): string {
-  const skills = foundSkills(cwd).filter((s) => weft || s.source !== "weft");
+// has no plugin for Weft's own either. `weft` says whether to list those: puku loads them as a plugin. `off` is the
+// card's skill set's off-list (lib/skill-sets.ts); a /name for one of those still runs, through skillInvocation.
+export function skillIndex(cwd: string, { weft, off = [] }: { weft: boolean; off?: string[] }): string {
+  const hidden = new Set(off);
+  const skills = foundSkills(cwd).filter((s) => (weft || s.source !== "weft") && !hidden.has(s.name));
   if (!skills.length) return "";
   const lines = skills.map((s) => `- ${s.name}: ${s.description} (${s.file})`);
   return `# Skills\nThese skills are not loaded as slash commands in this CLI. When the user types /<name>, or a task matches one, read its SKILL.md and follow it (\${CLAUDE_SKILL_DIR} is the folder it sits in).\n${lines.join("\n")}`;

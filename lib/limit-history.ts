@@ -15,9 +15,24 @@ export const KEEP_MS = 8 * 24 * 60 * 60 * 1000;
 interface Log {
   last: Map<string, LimitSample>;
   compacted: boolean;
+  // Fires when a window transitions from used >= 100 to used < 100 between two samples we logged.
+  // Set by setOnLimitReset (lib/limit-resume.ts wires it on first import). One global hook per
+  // process: the poll is the only producer, and one consumer is enough.
+  onReset?: (sample: LimitSample) => void;
 }
 
 const log = () => globalSingleton<Log>("__weftLimits", () => ({ last: new Map(), compacted: false }));
+
+// Subscribe to "limit just reset" transitions: the moment a window's `used` drops from
+// 100% (or above) to below 100% between two recordLimits calls. Returns the previous
+// handler so callers can chain or restore. lib/limit-poll.ts calls recordLimits every
+// 15 min, so this is also the rate at which the signal fires.
+export function setOnLimitReset(handler: (sample: LimitSample) => void): ((sample: LimitSample) => void) | undefined {
+  const l = log();
+  const prev = l.onReset;
+  l.onReset = handler;
+  return prev;
+}
 
 const key = (backend: Backend, kind: LimitKind) => `${backend}:${kind}`;
 
@@ -64,12 +79,21 @@ export function changedSamples(backend: Backend, patch: Partial<CardStats>, last
 }
 
 // Logs what a thread just learned about its CLI's limits (lib/runner-turn.ts). Never throws: the chart
-// is a nicety, the turn isn't.
+// is a nicety, the turn isn't. When a window's used share drops from >=100 to <100 between two
+// samples, fires the onReset hook (lib/limit-resume.ts) so parked cards on that backend get replayed.
 export function recordLimits(backend: Backend, patch: Partial<CardStats>, now = Date.now()) {
   const l = log();
   if (!l.last.size) for (const s of readSamples(now)) l.last.set(key(s.backend, s.kind), s);
   const fresh = changedSamples(backend, patch, l.last, now);
   if (!fresh.length) return;
+  // Detect the reset before overwriting `last`: a window was at/above 100% in our last reading
+  // and is now below 100%. The hook is what auto-resumes parked cards; never let it break the chart.
+  for (const s of fresh) {
+    const prev = l.last.get(key(s.backend, s.kind));
+    if (prev && prev.used >= 100 && s.used < 100) {
+      try { l.onReset?.(s); } catch { /* the hook must never break the chart */ }
+    }
+  }
   for (const s of fresh) l.last.set(key(s.backend, s.kind), s);
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });

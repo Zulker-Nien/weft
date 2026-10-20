@@ -18,6 +18,7 @@ import { defaultPermissionMode, subagentModel } from "./settings";
 import { pukuContext } from "./puku-context";
 import { trialOptions } from "./puku-trial";
 import { PLUGIN_DIR } from "./skills";
+import { ensureSeeded, offFor, sameOff, withSkillSettings } from "./skill-sets";
 import { switchSpare } from "./spare-switch";
 import { backendEnv, refillsSpare } from "./puku-idle";
 import { subagentEnv, subagentPrompt } from "./subagents";
@@ -82,7 +83,7 @@ export function open(spec: Spec, cardId: string | null): Session {
     pending: [],
     toolIndex: new Map(),
     done: Promise.resolve(),
-    preamble: spec.backend === "puku" ? pukuContext(spec.cwd, weftSystemPrompt(spec)) : undefined,
+    preamble: spec.backend === "puku" ? pukuContext(spec.cwd, weftSystemPrompt(spec), spec.skillsOff) : undefined,
     // A new conversation gets its id from Weft (--session-id), not from the CLI's init: puku can take 15s or more
     // to send init, and a turn stopped before then left the card nothing to resume, so "continue" began a new one.
     sessionId: spec.backend === "codex" || spec.sessionId ? undefined : randomUUID(),
@@ -130,7 +131,8 @@ export function ensureSpare(cwd: string, backend: Backend = "claude") {
   }
   try {
     // Spares start in the default mode new cards get, so most take one over without a mode switch.
-    spares.set(key, open({ cwd, backend, permissionMode: defaultPermissionMode(), copilot: false }, null));
+    ensureSeeded(cwd);
+    spares.set(key, open({ cwd, backend, permissionMode: defaultPermissionMode(), copilot: false, skillsOff: offFor({ cwd }) }, null));
   } catch {}
 }
 
@@ -139,6 +141,8 @@ export function adoptSpare(card: Card): Session | undefined {
   const key = spareKey(card.backend, card.cwd);
   const spare = spares.get(key);
   if (!spare || spare.abort.signal.aborted || spare.ended) return undefined;
+  // A CLI reads its skills as it starts, so a card with a set of its own starts its own.
+  if (!sameOff(spare.spec.skillsOff, offFor(card))) return undefined;
   spares.delete(key);
   if (isStale(spare)) {
     close(spare);
@@ -182,7 +186,7 @@ function queryOptions(session: Session, executable: string | undefined): Options
     resumeSessionAt: spec.sessionId ? spec.resumeAt : undefined,
     ...guarded,
     env: { ...threadEnv(spec, guarded.env, subagents), ...backendEnv(spec.backend), ...trial?.env },
-    settings: trial?.settings,
+    settings: withSkillSettings(trial?.settings, spec.skillsOff),
     abortController: session.abort,
     includePartialMessages: true,
     permissionMode: spec.permissionMode,

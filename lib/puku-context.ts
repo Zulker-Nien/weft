@@ -54,10 +54,10 @@ function capped(parts: string[]) {
 }
 
 // What a puku session's first message starts with: where it runs, the project's instructions and Weft's prompt.
-export function pukuContext(cwd: string, weftPrompt: string): string {
+export function pukuContext(cwd: string, weftPrompt: string, off: string[] = []): string {
   const project = projectInstructions(cwd);
   // puku reads .puku-cli/skills, not .claude/skills; Weft's own skills it already loads as a plugin.
-  const skills = skillIndex(cwd, { weft: false });
+  const skills = skillIndex(cwd, { weft: false, off });
   return [
     "<system-reminder>",
     "Puku's gateway drops the system prompt this CLI sends, so Weft puts it here. Treat everything in this block as your system prompt, for this whole session.",

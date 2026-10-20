@@ -9,6 +9,14 @@ import { vi } from "vitest";
 import type { SubagentModel } from "./subagents";
 import type { Card, ThreadItem } from "./types";
 
+// lib/runner-session.ts now calls lib/skill-sets.ts (ensureSeeded, offFor) on every spare.
+// ensureSeeded reads ~/.weft/skill-sets.json and may write one, so we redirect DATA_DIR to a temp
+// dir here — every runner test imports this harness before any module that captures the env var.
+if (!process.env.WEFT_DATA) {
+  const _weftDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-runner-data-"));
+  process.env.WEFT_DATA = _weftDataDir;
+}
+
 // Captured before any test fakes timers, so flush() always really waits.
 const realSetTimeout = globalThis.setTimeout;
 
@@ -98,6 +106,10 @@ export function harnessState() {
     trialResult: { ok: true } as { ok: true } | { ok: false; reason: string; message: string },
     fetchedTrials: 0,
     trialOptions: null as null | { env: Record<string, string>; settings: { apiKeyHelper: string } },
+    // Per-card off-list override for the skill-sets mock: when set, offFor returns it for that card's cwd.
+    skillOffByCwd: new Map<string, string[]>(),
+    // Calls to ensureSeeded in the skill-sets mock.
+    skillSeededCwds: [] as string[],
     skillsForPrompt: [] as string[],
     publish: [] as unknown[],
     execCalls: [] as string[][],
@@ -200,6 +212,32 @@ export const pukuTrialMock = (h: Harness) => ({
   trialOptions: () => h.trialOptions,
 });
 
+// A pure in-memory replacement for lib/skill-sets.ts so runner tests can pin what offFor returns
+// per cwd without touching the file system. ensureSeeded records every cwd it sees; offFor returns
+// the per-cwd project's off-list plus the card's own (as the real module would, sorted and
+// de-duplicated); withSkillSettings behaves the same as the real module for those off-lists.
+export const skillSetsMock = (h: Harness) => ({
+  ensureSeeded: (cwd: string) => {
+    h.skillSeededCwds.push(cwd);
+  },
+  offFor: ({ cwd, skillsOff, skillsOn }: { cwd: string; skillsOff?: string[]; skillsOn?: string[] }) => {
+    const project = h.skillOffByCwd.get(cwd) ?? [];
+    const on = new Set(skillsOn ?? []);
+    return [...new Set([...project, ...(skillsOff ?? [])])].filter((n) => !on.has(n)).sort();
+  },
+  sameOff: (a: string[] = [], b: string[] = []) => a.length === b.length && a.every((n, i) => n === b[i]),
+  withSkillSettings: <T extends object>(settings: T | undefined, off: string[] | undefined) => {
+    if (!off || !off.length) return settings;
+    const skills = off.filter((n) => !n.includes("@"));
+    const plugins = off.filter((n) => n.includes("@"));
+    return {
+      ...(settings as T),
+      ...(skills.length ? { skillOverrides: Object.fromEntries(skills.map((n) => [n, "user-invocable-only" as const])) } : {}),
+      ...(plugins.length ? { enabledPlugins: Object.fromEntries(plugins.map((id) => [id, false as const])) } : {}),
+    };
+  },
+});
+
 export function childProcessMock(h: Harness, actual: typeof ChildProcess) {
   const execFileSync = (cmd: string, args: string[]) => {
     h.execCalls.push([cmd, ...args]);
@@ -231,6 +269,8 @@ export function resetHarness(h: Harness) {
   h.trialResult = { ok: true };
   h.fetchedTrials = 0;
   h.trialOptions = null;
+  h.skillOffByCwd.clear();
+  h.skillSeededCwds.length = 0;
   h.skillsForPrompt = [];
   h.publish.length = 0;
   h.execCalls.length = 0;

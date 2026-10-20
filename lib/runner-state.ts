@@ -12,6 +12,7 @@ import type { Backend, CacheState, Card, Effort, PermissionMode, PromptReason, Q
 import { globalSingleton } from "./global-singleton";
 import { effortFor, modelOn } from "./new-thread";
 import { idleToClose, keepAliveFor } from "./puku-idle";
+import { offFor } from "./skill-sets";
 
 // What every part of the runner shares: a thread's CLI session, the maps that hold them, and the small
 // helpers around them. lib/runner.ts is the front door; lib/runner-session.ts opens and drives sessions,
@@ -79,6 +80,8 @@ export interface Spec {
   // Directories the user has approved the thread to read from, beyond cwd. Passed to the SDK as
   // additionalDirectories so the CLI's working-directory restriction lets the thread read there.
   readScope?: string[];
+  // The skills and plugins this thread doesn't get (lib/skill-sets.ts), as its CLI starts.
+  skillsOff?: string[];
   copilot: boolean;
   // The copilot's persona, whose prompt joins its system prompt (lib/copilot-personas.ts).
   persona?: CopilotPersona;
@@ -194,6 +197,8 @@ export function specFor(card: Card): Spec {
     copilot: card.role === "copilot",
     persona: card.role === "copilot" ? card.persona : undefined,
     readScope: readScopeFor(card),
+    // The copilot runs the board from your home folder; it keeps every skill, as before.
+    skillsOff: card.role === "copilot" ? undefined : offFor(card),
   };
 }
 

@@ -171,6 +171,41 @@ export interface SkillInfo {
   source: "weft" | "user" | "project";
 }
 
+// A Claude Code plugin (/plugin install) a thread can be given or not, as a whole (lib/skill-library.ts).
+export interface PluginInfo {
+  // "name@marketplace", the key Claude Code's enabledPlugins setting takes.
+  id: string;
+  name: string;
+  // How many skills it brings.
+  skills: number;
+  description: string;
+}
+
+// One row of the Skills drawer or a card's ✦ menu (lib/skill-set-actions.ts).
+export interface SkillSetRow {
+  kind: "skill" | "plugin";
+  // A skill's name, or a plugin's id ("posthog@posthog").
+  name: string;
+  // A plugin's short name.
+  label?: string;
+  description: string;
+  source: SkillInfo["source"] | "plugin";
+  // A plugin's skill count.
+  skills?: number;
+  // On in the project's default set.
+  inProject: boolean;
+  // On for this card (the project's value when there's no card).
+  on: boolean;
+  // The card differs from its project here.
+  changedHere: boolean;
+}
+
+export interface SkillSetView {
+  rows: SkillSetRow[];
+  // False until the project's set has been seeded from its threads' usage; until then every row is on.
+  seeded: boolean;
+}
+
 export interface PendingPermission {
   id: string;
   toolName: string;

@@ -51,6 +51,14 @@ export interface ReplyModeInput {
   cutOff: boolean;
   // Board threads take Send later; the copilot doesn't.
   canSchedule: boolean;
+  // The CLI can start a new session in this card from a brief (lib/splice.ts sendFresh). False for codex,
+  // which only resumes its own session.
+  canFresh?: boolean;
+  // No prior assistant turn: the model/CLI was just switched, or the card was never started. Distinct from
+  // cutOff (a turn stopped short) and from cold (cache is cold but the assistant did answer). When true,
+  // Continue has no meaning here — the reply box defaults to Send fresh, or to Send for codex, and the
+  // ▾ menu and ⌘⇧↵ Continue keybinding are hidden.
+  noPriorContext?: boolean;
   now: number;
 }
 
@@ -89,10 +97,46 @@ function editMode(input: ReplyModeInput): ReplyModeView {
   };
 }
 
+// No prior assistant context + 5-hour limit used up: the limit takes priority (you can't send now
+// anyway) but the fresh-start chip stays on, and Send fresh is in the ▾ menu for the user who
+// can't wait (Claude/puku only; codex doesn't get Send fresh).
+function noPriorSchedule(input: ReplyModeInput, here: string, later: ReplyMenuItem[]): ReplyModeView {
+  const resetAt = input.limitResetAt as number;
+  return {
+    mode: "reply",
+    chip: "Fresh start · 5-hour limit used up",
+    tone: "accent",
+    primary: { action: "schedule", label: `Send at ${formatAt(resetAt, input.now)}`, tip: "Send when the 5-hour window resets (Enter)" },
+    menu: [{ action: "send", label: here }, ...(input.canFresh ? [{ action: "fresh", label: "Send fresh now" } as ReplyMenuItem] : []), ...later],
+  };
+}
+
+// No prior assistant context, no 5-hour limit: the primary is Send fresh (Claude/puku) or plain
+// Send (codex). The full-history send is useful even on codex, so we offer it whenever the cache
+// is cold, regardless of canFresh.
+function noPriorFresh(input: ReplyModeInput): ReplyModeView {
+  const chip = input.cold ? `Fresh start · was on another model · re-sends ${input.cold.tokens}` : "Fresh start · was on another model";
+  const primary = input.canFresh
+    ? {
+        action: "fresh" as const,
+        label: "Send fresh",
+        tip: input.cold
+          ? `A new session in this card, started from a short brief of the thread and its diff, instead of re-sending ${input.cold.tokens} tokens (Enter)`
+          : "A new session in this card, started from a short brief of the thread (Enter)",
+      }
+    : { action: "send" as const, label: "Send", tip: "Send (Enter)" };
+  const menu: ReplyMenuItem[] = input.cold ? [{ action: "send", label: `Send with full history · ${input.cold.tokens}` }] : [];
+  return { mode: "reply", chip, tone: "accent", primary, menu };
+}
+
 // No turn running, nothing asked: the right default for Enter given the cache and the plan window.
 function idleMode(input: ReplyModeInput): ReplyModeView {
   const later = input.canSchedule ? [LATER] : [];
   const here = input.cold ? `Send here · re-sends ${input.cold.tokens}` : "Send now anyway";
+  if (input.noPriorContext) {
+    if (input.limitResetAt && input.canSchedule) return noPriorSchedule(input, here, later);
+    return noPriorFresh(input);
+  }
   if (input.limitResetAt && input.canSchedule) {
     const fresh: ReplyMenuItem[] = input.cold ? [{ action: "fresh", label: "Send fresh now" }] : [];
     return {
@@ -151,7 +195,10 @@ export function replyMode(input: ReplyModeInput): ReplyModeView {
     };
   }
   const idle = idleMode(input);
-  return { ...idle, done: DONE, cont: idle.primary.action === "continue" ? undefined : CONTINUE };
+  // No prior context: Continue has no meaning here (the menu item is hidden and ⌘⇧↵ is a no-op, in
+  // components/ReplyBox.tsx). Otherwise, hide it only when the primary is already Continue.
+  const cont = input.noPriorContext || idle.primary.action === "continue" ? undefined : CONTINUE;
+  return { ...idle, done: DONE, cont };
 }
 
 // When this thread's 5-hour window is used up, the time it resets (ms): the window's own reset when it's still ahead,
@@ -184,6 +231,11 @@ export interface ReplyBoxState {
   // The plan's next 5-hour reset, where Send later is offered (undefined where it isn't).
   sendLater?: { planReset?: number };
   cutOff: boolean;
+  // No prior assistant turn in the current session (model/CLI was just switched, or the card was never started).
+  // When true, the reply box defaults to Send fresh (or Send for codex) and Continue is hidden.
+  noPriorContext?: boolean;
+  // The CLI can start a new session from a brief (lib/splice.ts). False for codex.
+  canFresh?: boolean;
   now: number;
 }
 
@@ -203,6 +255,8 @@ export function replyBoxMode(s: ReplyBoxState): { view: ReplyModeView; resetAt?:
     limitResetAt: resetAt,
     cutOff: s.cutOff,
     canSchedule: Boolean(s.sendLater),
+    canFresh: s.canFresh,
+    noPriorContext: s.noPriorContext,
     now: s.now,
   });
   return { view, resetAt };

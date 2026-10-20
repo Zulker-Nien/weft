@@ -32,6 +32,7 @@ import type {
   ServiceEntry,
   SettingsView,
   SkillInfo,
+  SkillSetView,
   ThreadItem,
 } from "./types";
 
@@ -196,6 +197,12 @@ export const api = {
   // Flips a card's CLI, or with model picks one of its models (same CLI: no new session). replay=true re-sends the last user message (the rate-limit escape hatch).
   switchBackend: (id: string, backend: Backend, replay = false, model?: string) =>
     call<{ card: Card }>("POST", `/api/cards/${id}/switch-backend`, { backend, replay, model }),
+  // First-message-failed banner: rerun the card's last user message on a different model
+  // (lib/backend-switch.ts rerunOnModel), starting a fresh session of the same CLI.
+  rerunModel: (id: string, model: string) =>
+    call<{ card: Card }>("POST", `/api/cards/${id}/rerun-model`, { model }),
+  // Delete the card: ends the session and removes it from the board.
+  deleteCard: (id: string) => call<{ ok: true }>("DELETE", `/api/cards/${id}`),
   // Column-level "Switch all to <other>". Busy cards come back in `pending` so the column can
   // confirm with the user before retrying.
   switchBackends: (ids: string[], backend: Backend) =>
@@ -235,6 +242,7 @@ export const api = {
     doneEffort?: Effort | "";
     copilotModel?: string;
     reviewAllModel?: string;
+    backupModel?: string;
   }) =>
     call<SettingsView>("PATCH", "/api/settings", patch),
   addProject: (path: string) => call<{ path: string; projects: Project[] }>("POST", "/api/projects", { path }),
@@ -255,6 +263,10 @@ export const api = {
   // Weft's skills and yours; with cwd, that folder's too.
   skills: (cwd?: string) =>
     call<{ skills: SkillInfo[] }>("GET", `/api/skills${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ""}`),
+  // A project's skill set, or a card's, and turning one skill or plugin on or off there (lib/skill-sets.ts).
+  skillSet: (where: { cwd: string } | { card: string }) =>
+    call<SkillSetView>("GET", `/api/skills/set?${"card" in where ? `card=${encodeURIComponent(where.card)}` : `cwd=${encodeURIComponent(where.cwd)}`}`),
+  setSkill: (where: { cwd: string } | { card: string }, name: string, on: boolean) => call<SkillSetView>("PUT", "/api/skills/set", { ...where, name, on }),
   uploadAttachment: upload,
   dictation: () => call<{ available: boolean; reason?: string; model?: string }>("GET", "/api/transcribe"),
   transcribe,

@@ -170,7 +170,19 @@ async function boot() {
       preferredPort: PREFERRED_PORT,
       // The token goes in a file, not the env, where any process of yours could read it (electron/shell-token.cjs).
       env: { WEFT_SHELL_URL: controlUrl, WEFT_APP_PID: String(process.pid) },
-      onFatal: (message) => startup.fail(message),
+      // A runtime fatal (board was up, then died) pushes to the renderer via onNotify so the
+      // ServerErrorBar shows instead of the splash taking over the window. A startup fatal
+      // (server never came up) still goes to startup.fail — the board is on the splash already.
+      onFatal: (message) => {
+        if (server?.wasReady) return;
+        startup.fail(message);
+      },
+      onNotify: (event) => {
+        const wc = appView?.webContents;
+        if (!wc || wc.isDestroyed()) return;
+        if (event.kind === "fatal") wc.send("server:fatal", event.text);
+        else if (event.kind === "status") wc.send("server:status", event.text);
+      },
       onMark: timer.mark,
     });
   } catch (err) {
@@ -387,8 +399,15 @@ secretRun = require("./secret-run.cjs").setupSecretRun({ vault, dataDir: dataDir
 ({ vercel: vercelApi, env: vercelEnv } = require("./vercel.cjs").setupVercel({ ipcMain, dataDir: dataDir(), board: () => appView?.webContents, vault }));
 // And Supabase: its token is in the Keychain and its links are supabase/.temp/project-ref.
 supabaseApi = require("./supabase.cjs").setupSupabase({ ipcMain, dataDir: dataDir(), board: () => appView?.webContents, vault });
-// And data mini apps: the env grant + reads for panes saved as apps (electron/app-data.cjs, docs/architecture/mini-apps.md).
-require("./app-data.cjs").setupAppData({ ipcMain, dataDir: dataDir(), vault, readLink: require("./supabase.cjs").readLink, owns: (wc) => pane.owns(wc) });
+// Mini apps: data reads + the hosted fetch/env/requestSecret + the Share dialog's "Upload
+// secrets" push, plus the sealed account store the push reads from (electron/app-setup.cjs).
+require("./app-setup.cjs").setupApps({
+  ipcMain, vault, dataDir: dataDir(),
+  ownsPane: (wc) => pane.owns(wc),
+  isBoard: (sender) => Boolean(sender) && sender === appView?.webContents,
+  supabaseReadLink: require("./supabase.cjs").readLink,
+  getSafeStorage: () => require("electron").safeStorage,
+});
 // And BlastCP: its sign-in is in the Keychain too, and which property a folder posts as is in the data folder.
 require("./blastcp.cjs").setupBlastcp({ ipcMain, dataDir: dataDir(), board: () => appView?.webContents });
 // And Cloudflare: its token is in the Keychain and which Worker or Pages project a folder is is in the data folder.
@@ -396,6 +415,17 @@ require("./cloudflare.cjs").setupCloudflare({ ipcMain, dataDir: dataDir(), board
 // Keep Working (electron/keep-working.cjs): the board's Settings → General → Laptop mode card; the
 // wiring lives in electron/keep-working-ipc.cjs to keep main.cjs under the size budget.
 require("./keep-working-ipc.cjs")({ ipcMain, keepWorking: menus.keepWorking, getBoardContents: () => appView?.webContents });
+// Server supervisor IPC (electron/server-ipc.cjs): the board's ServerErrorBar calls server:retry
+// to relaunch, server:open-logs to reveal the log, and weft:create-fix-card to queue a New
+// thread dialog with the fatal + log tail pre-filled (lib/server-status.ts).
+require("./server-ipc.cjs")({
+  ipcMain,
+  shell,
+  getServer: () => server,
+  getBoardContents: () => appView?.webContents,
+  getHandleLink: () => handleLink,
+  logPath: () => server?.logPath,
+});
 // Splash IPC: the start screen's button row, the launch timing handshake and the dock badge count
 // (electron/startup-ipc.cjs). server and menus are getters: they're set later, at boot.
 require("./startup-ipc.cjs")({

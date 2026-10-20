@@ -25,6 +25,7 @@ import type { Card, PermissionMode } from "./types";
 // and driving a CLI, spares), lib/runner-turn.ts (what the CLI sends during a turn), lib/runner-ask.ts
 // (permission requests), lib/runner-login.ts (auth wall).
 export { switchBackend } from "./backend-switch";
+export { rerunOnModel } from "./backend-switch";
 export { answerPermission } from "./runner-ask";
 export { waitPermission } from "./permission-wait";
 export { ensureSpare, warmUp } from "./runner-session";

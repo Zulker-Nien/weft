@@ -141,3 +141,75 @@ describe("replyBoxMode", () => {
     expect(replyBoxMode({ ...box, shell: true }).view.chip).toBe("Shell · weft");
   });
 });
+
+describe("noPriorContext", () => {
+  // A model/CLI was just switched (lib/backend-switch.ts): the cache is cold, the new session has no
+  // assistant history. Continue has no meaning here; the primary defaults to Send fresh, Continue is
+  // hidden in the menu and on ⌘⇧↵.
+  it("cold cache + canFresh: primary is fresh, chip names it, Continue is hidden", () => {
+    const view = at({ noPriorContext: true, canFresh: true, cold: { tokens: "184.1k" } });
+    expect(view).toMatchObject({
+      mode: "reply",
+      chip: "Fresh start · was on another model · re-sends 184.1k",
+      primary: { action: "fresh", label: "Send fresh" },
+      cont: undefined,
+    });
+    expect(view.menu.map((m) => m.label)).toEqual(["Send with full history · 184.1k"]);
+  });
+
+  it("warm cache + canFresh: primary is fresh, menu empty, Continue is hidden", () => {
+    const view = at({ noPriorContext: true, canFresh: true });
+    expect(view).toMatchObject({
+      mode: "reply",
+      chip: "Fresh start · was on another model",
+      primary: { action: "fresh", label: "Send fresh" },
+      menu: [],
+      cont: undefined,
+    });
+  });
+
+  it("5-hour limit used up + noPriorContext: primary is schedule, fresh is in the menu", () => {
+    const reset = new Date("2026-10-19T22:39:00").getTime();
+    const view = at({ noPriorContext: true, canFresh: true, limitResetAt: reset });
+    expect(view).toMatchObject({
+      chip: "Fresh start · 5-hour limit used up",
+      primary: { action: "schedule", label: "Send at 10:39pm" },
+      cont: undefined,
+    });
+    expect(view.menu.map((m) => m.action)).toEqual(["send", "fresh", "later"]);
+  });
+
+  it("codex (canFresh: false): primary is plain Send, chip still flags fresh start, Continue is hidden", () => {
+    const view = at({ noPriorContext: true, canFresh: false });
+    expect(view).toMatchObject({
+      mode: "reply",
+      chip: "Fresh start · was on another model",
+      primary: { action: "send", label: "Send" },
+      menu: [],
+      cont: undefined,
+    });
+  });
+
+  it("codex + cold cache: primary is plain Send, full-history send in the menu, Continue is hidden", () => {
+    const view = at({ noPriorContext: true, canFresh: false, cold: { tokens: "184.1k" } });
+    expect(view).toMatchObject({
+      chip: "Fresh start · was on another model · re-sends 184.1k",
+      primary: { action: "send", label: "Send" },
+      cont: undefined,
+    });
+    expect(view.menu.map((m) => m.label)).toEqual(["Send with full history · 184.1k"]);
+  });
+
+  it("round-trips through replyBoxMode with a cold cache", () => {
+    const view = replyBoxMode({ live: false, question: false, shell: false, editing: false, empty: true, cwd: "/dev/weft", cutOff: true, canFresh: true, noPriorContext: true, cache: { at: NOW - 3600_000, ttl: 300, hit: 0, tokens: 184_100 }, now: NOW }).view;
+    expect(view.chip).toBe("Fresh start · was on another model · re-sends 184.1k");
+    expect(view.primary).toMatchObject({ action: "fresh", label: "Send fresh" });
+    expect(view.cont).toBeUndefined();
+  });
+
+  it("regular card with cutOff and empty: Continue is offered (no regression)", () => {
+    const view = at({ empty: true, cutOff: true });
+    expect(view).toMatchObject({ primary: { action: "continue", label: "Continue" } });
+    expect(view.cont).toBeUndefined();
+  });
+});

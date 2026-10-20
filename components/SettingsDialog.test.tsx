@@ -38,6 +38,7 @@ const SETTINGS: SettingsView = {
   doneEffort: "",
   copilotModel: "",
   reviewAllModel: "",
+  backupModel: "",
   projects: [],
   issueFolders: [],
   syncFolders: [],
@@ -131,9 +132,9 @@ describe("SettingsDialog", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("renders the Team page from the nav", async () => {
+  it("renders the Teams page from the nav", async () => {
     render(<SettingsDialog onClose={() => {}} />);
-    await go("Team");
+    await go("Teams");
     expect(screen.getByText("team settings")).toBeInTheDocument();
   });
 

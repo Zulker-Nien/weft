@@ -55,6 +55,11 @@ describe("canContinue", () => {
       expect(result.current.canContinue).toBe(false);
     }
   });
+
+  it("is false when disabled (no prior assistant context — model/CLI was just switched)", () => {
+    const { result } = setup({ disabled: true });
+    expect(result.current.canContinue).toBe(false);
+  });
 });
 
 describe("sendContinue", () => {
@@ -100,6 +105,13 @@ describe("⌘⇧↵ shortcut", () => {
     const { opts } = setup();
     const e = new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true, cancelable: true });
     window.dispatchEvent(e);
+    expect(opts.onSend).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when disabled (no prior context), even with the modifier", () => {
+    onMac();
+    const { opts } = setup({ disabled: true });
+    fireDot();
     expect(opts.onSend).not.toHaveBeenCalled();
   });
 });

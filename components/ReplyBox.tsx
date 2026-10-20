@@ -43,6 +43,7 @@ export default function ReplyBox({
   status,
   stale,
   cutOff = false,
+  noPriorContext: noPriorContextProp = false,
   fiveHour,
   autoFocus,
   editLast,
@@ -62,6 +63,9 @@ export default function ReplyBox({
   stale?: StaleProps;
   // The last turn stopped short (lib/reply-mode.ts turnCutOff), so Continue is offered.
   cutOff?: boolean;
+  // No prior assistant context: the model/CLI was just switched, or the card was never started.
+  // When true, the reply box defaults to Send fresh and Continue is hidden.
+  noPriorContext?: boolean;
   // The plan's 5-hour window on this thread; when it's used up, Enter schedules for its reset.
   fiveHour?: LimitWindow;
   autoFocus?: boolean;
@@ -270,19 +274,6 @@ export default function ReplyBox({
     }
   }
 
-  // Continue: the literal word "continue" through the same onSend path as a typed message.
-  const { sendContinue } = useReplyContinue({
-    live,
-    question: Boolean(question),
-    shell,
-    editing,
-    onSend: async (text) => {
-      await onSend(text);
-      captureReply();
-    },
-    setError: setErrorWrap,
-  });
-
   const { scheduleAt, unschedule, takeBackScheduled } = useReplySchedule(cardId, composer, saveDraft, setErrorWrap);
   const { onKeyDownCapture, onKeyDown } = useReplyKeys({
     composer,
@@ -304,6 +295,10 @@ export default function ReplyBox({
   });
 
   const scheduled = sendLater?.scheduled ?? [];
+  // Send fresh is offered to Claude and puku (stale is set there). Codex never sets it; for codex the
+  // new session in the same card isn't supported (lib/splice.ts sendFresh refuses codex), so the primary
+  // falls back to plain Send with the no-prior-context chip and Continue is hidden.
+  const canFresh = Boolean(stale);
   const { view, resetAt } = replyBoxMode({
     live,
     question: Boolean(question),
@@ -316,7 +311,30 @@ export default function ReplyBox({
     fiveHour,
     sendLater: sendLater && { planReset: sendLater.resets.fiveHour },
     cutOff,
+    canFresh,
+    // No prior assistant context when the card has no live session: a model/CLI was just switched
+    // (lib/backend-switch.ts clears sessionId), or the card was never started. A long-running card
+    // whose cache lapsed but whose session is still alive is NOT no-prior-context: Continue still
+    // makes sense there, and the chip stays "Cache cold · 184k".
+    noPriorContext: noPriorContextProp,
     now,
+  });
+
+  // Continue: the literal word "continue" through the same onSend path as a typed message. `disabled`
+  // is true when the primary is Send fresh (no prior assistant context): there's nothing to continue,
+  // so the ▾ menu hides Continue and ⌘⇧↵ is a no-op. When the primary is Continue itself, ⌘⇧↵ still
+  // works (it's the same code path that the primary button uses).
+  const { sendContinue } = useReplyContinue({
+    live,
+    question: Boolean(question),
+    shell,
+    editing,
+    disabled: view.primary.action === "fresh",
+    onSend: async (text) => {
+      await onSend(text);
+      captureReply();
+    },
+    setError: setErrorWrap,
   });
 
   // What the primary or a menu item does (lib/reply-mode.ts names them).

@@ -48,6 +48,10 @@ export interface Card {
   // Set when the thread's last turn hit the plan's rate limit, so the card menu and banner can
   // offer a one-click "Run on <other>" escape. Cleared by switchBackend on a successful switch.
   rateLimitHit?: boolean;
+  // When lib/limit-resume.ts auto-replayed the last user message because the 15-min poll saw
+  // the limit reset (5-hour or weekly). Drives the "Auto-resumed" chip on the card; cleared the
+  // next time the user-driven turn starts.
+  autoResumedAt?: number;
   pending?: PendingPermission | null;
   // The copilot is a thread too, but it lives in its own window instead of on the board.
   role?: "copilot";
@@ -95,6 +99,10 @@ export interface Card {
   // additionalDirectories. A run-time `/add-dir` slash command isn't enough on its own — the path
   // has to be a subdirectory of cwd or another already-granted directory at session launch.
   readScope?: string[];
+  // This card's changes to its project's skill set (lib/skill-sets.ts): skill names or plugin ids
+  // ("posthog@posthog") turned on or off here only. Read when its CLI starts.
+  skillsOn?: string[];
+  skillsOff?: string[];
   // Short labels (lib/tags.ts), the same rules as GitHub labels so they sync with an issue's. Weft's
   // retitle picks them after a turn (tagsBy "auto") until you edit them (tagsBy "user").
   tags?: string[];

@@ -15,6 +15,7 @@ const BASE: SettingsView = {
   doneEffort: "",
   copilotModel: "",
   reviewAllModel: "",
+  backupModel: "",
   projects: [],
   issueFolders: [],
   syncFolders: [],

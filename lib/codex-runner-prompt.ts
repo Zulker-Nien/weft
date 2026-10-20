@@ -20,7 +20,7 @@ export function promptFor(session: Session, text: string) {
   // Codex reads AGENTS.md on its own but not CLAUDE.md; a resumed session already has it in its history.
   const resumed = Boolean(session.sessionId ?? session.spec.sessionId);
   const claudeMd = resumed ? "" : codexProjectInstructions(session.spec.cwd);
-  const skills = resumed ? "" : skillIndex(session.spec.cwd, { weft: true });
+  const skills = resumed ? "" : skillIndex(session.spec.cwd, { weft: true, off: session.spec.skillsOff });
   const project = claudeMd ? `Codex doesn't load CLAUDE.md, so Weft puts the project's here. Treat it like AGENTS.md.\n\n${claudeMd}\n\n` : "";
   const reminder = project || skills ? `<system-reminder>\n${project}${skills}\n</system-reminder>\n\n` : "";
   return `${reminder}${weftInstructions}\n\n${skillPrompt(text, session.spec.cwd)}`;

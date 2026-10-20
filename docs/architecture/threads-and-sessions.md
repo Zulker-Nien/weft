@@ -195,6 +195,18 @@ turn's CLI flags are then derived from `specFor(card)` (`lib/runner-state.ts`), 
 normalizes through `effortFor` and `modelOn` (and so does the chip, through `runningOn`) — so a card already in a bad state recovers without the user
 flipping it. See `docs/bug-fixes/012-fable-xhigh-effort-crashes-puku.md`.
 
+A card whose **very first turn** came back with an error gets a different escape
+(`components/FirstMessageErrorBanner.tsx`): rerun the first message on the user's configured
+backup model (Settings → Models → Backup model, `components/BackupModelPicker.tsx`), or delete
+the card. The predicate is `firstMessageFailed(card, items)` (`lib/first-message-failed.ts`):
+exactly one user message, no assistant text after it, the card isn't live, and `card.error` is
+set. The handler is `rerunOnModel(cardId, model)` next to `switchBackend`: it ends the session,
+sets the new model (and clears `sessionId` and `error`/`rateLimitHit` either way), then
+`sendMessage`s the last user message with `echo: false`. The route is
+`POST /api/cards/:id/rerun-model` (any model any installed CLI serves); the
+web board's read-only transport leaves the banner's `onOpenSettings` undefined, so its thread
+shows no banner at all.
+
 ### Commit and PR attribution
 
 A board thread signs its commits "Co-Authored-By: <model> on Weft" and its PRs "Generated with

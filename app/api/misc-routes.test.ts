@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Card } from "@/lib/types";
 
 // The read-only picker routes (repos, skills, quality), the new-thread splash page, and the error
 // paths of the projects routes. Every lib they call is mocked except resolveFolder, which gets real temp folders.
@@ -20,12 +21,25 @@ vi.mock("@/lib/settings", () => ({
   touchProject: vi.fn(),
   removeProject: vi.fn(),
 }));
+vi.mock("@/lib/skill-set-actions", () => ({
+  // Mirrors the real isSkillName so 400s on bogus names are real validation, not a bypass.
+  isSkillName: (name: unknown) => typeof name === "string" && (/^[\w.-]+(:[\w.-]+)?$/.test(name) || (name.includes("@") && /^[\w.-]+@[\w.-]+$/.test(name))),
+  setCardSkill: vi.fn(),
+  setProjectSkill: vi.fn(),
+  skillSetView: vi.fn(),
+}));
+const cardStore = new Map<string, { id: string; cwd: string }>();
+vi.mock("@/lib/store", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/store")>()),
+  getCard: (id: string) => cardStore.get(id),
+}));
 
 const repos = await import("@/lib/repos");
 const skills = await import("@/lib/skills");
 const quality = await import("@/lib/quality");
 const show = await import("@/lib/show");
 const settings = await import("@/lib/settings");
+const skillSetActions = await import("@/lib/skill-set-actions");
 
 const reposRoute = await import("./repos/route");
 const githubRoute = await import("./repos/github/route");
@@ -34,6 +48,7 @@ const qualityRoute = await import("./quality/route");
 const newThreadPageRoute = await import("./new-thread-page/route");
 const projectsRoute = await import("./projects/route");
 const newProjectRoute = await import("./projects/new/route");
+const skillSetRoute = await import("./skills/set/route");
 
 const WRITE = { host: "localhost:3457", "x-weft-token": "1", "content-type": "application/json" };
 const READ = { host: "localhost:3457" };
@@ -51,6 +66,7 @@ afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 beforeEach(() => {
   vi.clearAllMocks();
+  cardStore.clear();
 });
 
 const reads: [string, (r: Request) => Promise<Response>][] = [
@@ -228,5 +244,94 @@ describe("POST /projects/new error paths", () => {
     } finally {
       mkdir.mockRestore();
     }
+  });
+});
+
+describe("GET /skills/set", () => {
+  it("returns the view for ?cwd=", async () => {
+    vi.mocked(skillSetActions.skillSetView).mockReturnValueOnce({ seeded: true, rows: [] });
+    const res = await skillSetRoute.GET(req("/skills/set?cwd=%2Fdev%2Fapp", { headers: READ }));
+    expect(await res.json()).toEqual({ seeded: true, rows: [] });
+    expect(skillSetActions.skillSetView).toHaveBeenLastCalledWith("/dev/app", undefined);
+  });
+
+  it("returns the view for a known card, using its cwd", async () => {
+    cardStore.set("c1", { id: "c1", cwd: "/dev/app" });
+    vi.mocked(skillSetActions.skillSetView).mockReturnValueOnce({ seeded: true, rows: [] });
+    const res = await skillSetRoute.GET(req("/skills/set?card=c1", { headers: READ }));
+    expect(await res.json()).toEqual({ seeded: true, rows: [] });
+    expect(skillSetActions.skillSetView).toHaveBeenLastCalledWith("/dev/app", { id: "c1", cwd: "/dev/app" });
+  });
+
+  it("400s when neither cwd nor a known card is given", async () => {
+    const noCwd = await skillSetRoute.GET(req("/skills/set", { headers: READ }));
+    expect(noCwd.status).toBe(400);
+    expect(await noCwd.json()).toEqual({ error: "Pass ?cwd= or a card that exists." });
+    // ?card= with an unknown id falls back to ?cwd= and is still 400.
+    const unknown = await skillSetRoute.GET(req("/skills/set?card=nope", { headers: READ }));
+    expect(unknown.status).toBe(400);
+    expect(skillSetActions.skillSetView).not.toHaveBeenCalled();
+  });
+
+  it("rejects a foreign host", async () => {
+    const res = await skillSetRoute.GET(req("/skills/set?cwd=%2Fdev%2Fapp", { headers: { host: "evil.com" } }));
+    expect(res.status).toBe(403);
+    expect(skillSetActions.skillSetView).not.toHaveBeenCalled();
+  });
+
+  it("400s when skillSetView throws (fail()'s default status)", async () => {
+    vi.mocked(skillSetActions.skillSetView).mockImplementationOnce(() => {
+      throw new Error("disk full");
+    });
+    const res = await skillSetRoute.GET(req("/skills/set?cwd=%2Fdev%2Fapp", { headers: READ }));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "disk full" });
+  });
+});
+
+describe("PUT /skills/set", () => {
+  it("rejects a write without Weft's token", async () => {
+    const res = await skillSetRoute.PUT(req("/skills/set", { method: "PUT", headers: READ, body: { cwd: "/dev/app", name: "x", on: false } }));
+    expect(res.status).toBe(403);
+    expect(skillSetActions.setProjectSkill).not.toHaveBeenCalled();
+  });
+
+  it("changes the project's default set with { cwd, name, on }", async () => {
+    vi.mocked(skillSetActions.setProjectSkill).mockReturnValueOnce(["quiet-skill"]);
+    vi.mocked(skillSetActions.skillSetView).mockReturnValueOnce({ seeded: true, rows: [] });
+    const res = await skillSetRoute.PUT(req("/skills/set", { method: "PUT", body: { cwd: "/dev/app", name: "quiet-skill", on: false } }));
+    expect(res.status).toBe(200);
+    expect(skillSetActions.setProjectSkill).toHaveBeenLastCalledWith("/dev/app", "quiet-skill", false);
+    expect(skillSetActions.skillSetView).toHaveBeenLastCalledWith("/dev/app");
+  });
+
+  it("changes just one card with { card, name, on }", async () => {
+    const card = { id: "c1", cwd: "/dev/app" };
+    cardStore.set("c1", card);
+    vi.mocked(skillSetActions.setCardSkill).mockResolvedValueOnce({ ...card, skillsOff: ["x"] } as unknown as Card);
+    vi.mocked(skillSetActions.skillSetView).mockReturnValueOnce({ seeded: true, rows: [] });
+    const res = await skillSetRoute.PUT(req("/skills/set", { method: "PUT", body: { card: "c1", name: "x", on: false } }));
+    expect(res.status).toBe(200);
+    expect(skillSetActions.setCardSkill).toHaveBeenLastCalledWith("c1", "x", false);
+    expect(skillSetActions.skillSetView).toHaveBeenLastCalledWith("/dev/app", { id: "c1", cwd: "/dev/app", skillsOff: ["x"] });
+  });
+
+  it("404s when the card doesn't exist", async () => {
+    vi.mocked(skillSetActions.setCardSkill).mockResolvedValueOnce(undefined);
+    const res = await skillSetRoute.PUT(req("/skills/set", { method: "PUT", body: { card: "nope", name: "x", on: false } }));
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "No such card." });
+  });
+
+  it("400s a body that isn't name+on, or a cwd that's missing or empty", async () => {
+    const badName = await skillSetRoute.PUT(req("/skills/set", { method: "PUT", body: { cwd: "/x", on: true } }));
+    expect(badName.status).toBe(400);
+    expect(skillSetActions.setProjectSkill).not.toHaveBeenCalled();
+    const badOn = await skillSetRoute.PUT(req("/skills/set", { method: "PUT", body: { cwd: "/x", name: "x", on: "yes" } }));
+    expect(badOn.status).toBe(400);
+    const noTarget = await skillSetRoute.PUT(req("/skills/set", { method: "PUT", body: { name: "x", on: true } }));
+    expect(noTarget.status).toBe(400);
+    const emptyCwd = await skillSetRoute.PUT(req("/skills/set", { method: "PUT", body: { cwd: "", name: "x", on: true } }));
+    expect(emptyCwd.status).toBe(400);
   });
 });

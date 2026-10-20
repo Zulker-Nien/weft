@@ -11,6 +11,9 @@ vi.mock("./Composer", () => import("./composer-mock"));
 
 type Props = Parameters<typeof ReplyBox>[0];
 
+// A cache that went cold an hour ago.
+const coldCache = { tokens: 184_100, at: Date.now() - 3600_000, ttl: 300, hit: 0 };
+
 // jsdom's user agent is Linux by default, so the hotkeys registry's "mod" wouldn't match
 // metaKey. Stub Mac so ⌘⇧↵ matches the Continue shortcut.
 function onMac() {
@@ -39,7 +42,7 @@ function setup(props: Partial<Props> = {}) {
       />
     </>,
   );
-  return { onSend, onStop, rerender: view.rerender };
+  return { onSend, onStop, box: screen.getByRole("textbox", { name: "Message" }), rerender: view.rerender };
 }
 
 function fireModDot() {
@@ -91,5 +94,31 @@ describe("Continue visibility", () => {
   it("is hidden while a turn runs", () => {
     setup({ live: true, cutOff: true });
     expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
+  });
+});
+
+// A model/CLI was just switched: the card lands on a fresh session with no prior assistant context.
+// The reply box defaults to Send fresh, Continue is hidden, and ⌘⇧↵ is a no-op.
+describe("no prior assistant context (model/CLI switched)", () => {
+  it("the chip names the fresh-start state and Continue is hidden", () => {
+    setup({ stale: { cache: coldCache, onFresh: vi.fn(() => Promise.resolve()) }, noPriorContext: true });
+    expect(screen.getByText(/^Fresh start · was on another model/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
+  });
+
+  it("⌘⇧↵ does not send 'continue' and does not start a fresh session either", () => {
+    const onFresh = vi.fn(() => Promise.resolve());
+    const { onSend } = setup({ stale: { cache: coldCache, onFresh }, noPriorContext: true });
+    fireModDot();
+    expect(onSend).not.toHaveBeenCalled();
+    expect(onFresh).not.toHaveBeenCalled();
+  });
+
+  it("clicking the primary Send fresh on Enter sends to onFresh, not onSend", async () => {
+    const onFresh = vi.fn(() => Promise.resolve());
+    const { onSend, box } = setup({ stale: { cache: coldCache, onFresh }, noPriorContext: true });
+    await userEvent.type(box, "and the header{Enter}");
+    expect(onFresh).toHaveBeenCalledWith("and the header");
+    expect(onSend).not.toHaveBeenCalled();
   });
 });

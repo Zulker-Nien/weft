@@ -97,4 +97,15 @@ describe("pukuContext", () => {
   it("leaves the project section out when there's nothing to load", () => {
     expect(pukuContext(dir, "W")).not.toContain("# Project instructions");
   });
+
+  it("drops project skills named in the off list from the skills section", () => {
+    fs.mkdirSync(path.join(dir, ".claude", "skills", "deck"), { recursive: true });
+    fs.writeFileSync(path.join(dir, ".claude", "skills", "deck", "SKILL.md"), "---\ndescription: Make a deck\n---\n");
+    fs.mkdirSync(path.join(dir, ".claude", "skills", "slide"), { recursive: true });
+    fs.writeFileSync(path.join(dir, ".claude", "skills", "slide", "SKILL.md"), "---\ndescription: Make a slide\n---\n");
+    const text = pukuContext(dir, "W", ["deck"]);
+    expect(text).toContain("# Skills");
+    expect(text).toContain("- slide: Make a slide");
+    expect(text).not.toContain("- deck:");
+  });
 });

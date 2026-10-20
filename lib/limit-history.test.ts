@@ -57,6 +57,90 @@ describe("recordLimits", () => {
   });
 });
 
+describe("setOnLimitReset", () => {
+  it("fires once when a window drops from 100% to <100%, with the new sample", async () => {
+    const { recordLimits, setOnLimitReset } = await load();
+    const seen: Array<{ backend: string; kind: string; used: number }> = [];
+    setOnLimitReset((s) => seen.push({ backend: s.backend, kind: s.kind, used: s.used }));
+    recordLimits("claude", { fiveHour: { used: 100, resetsAt: 600 } }, 1000);
+    recordLimits("claude", { fiveHour: { used: 50, resetsAt: 700 } }, 2000);
+    expect(seen).toEqual([{ backend: "claude", kind: "five_hour", used: 50 }]);
+  });
+
+  it("doesn't fire when the window stays under 100% (no transition)", async () => {
+    const { recordLimits, setOnLimitReset } = await load();
+    const seen: number[] = [];
+    setOnLimitReset((s) => seen.push(s.used));
+    recordLimits("claude", { fiveHour: { used: 80, resetsAt: 600 } }, 1000);
+    recordLimits("claude", { fiveHour: { used: 60, resetsAt: 700 } }, 2000);
+    expect(seen).toEqual([]);
+  });
+
+  it("doesn't fire twice for the same hit (only when crossing the threshold)", async () => {
+    const { recordLimits, setOnLimitReset } = await load();
+    const seen: number[] = [];
+    setOnLimitReset((s) => seen.push(s.used));
+    recordLimits("claude", { fiveHour: { used: 100, resetsAt: 600 } }, 1000);
+    recordLimits("claude", { fiveHour: { used: 50, resetsAt: 700 } }, 2000);
+    recordLimits("claude", { fiveHour: { used: 50, resetsAt: 700 } }, 3000);
+    expect(seen).toEqual([50]);
+  });
+
+  it("fires per backend: puku reset doesn't re-fire claude's hook", async () => {
+    const { recordLimits, setOnLimitReset } = await load();
+    const seen: string[] = [];
+    setOnLimitReset((s) => seen.push(s.backend));
+    recordLimits("claude", { fiveHour: { used: 100, resetsAt: 600 } }, 1000);
+    recordLimits("puku", { fiveHour: { used: 100, resetsAt: 600 } }, 1500);
+    recordLimits("puku", { fiveHour: { used: 40, resetsAt: 700 } }, 2000);
+    recordLimits("claude", { fiveHour: { used: 30, resetsAt: 700 } }, 2500);
+    expect(seen).toEqual(["puku", "claude"]);
+  });
+
+  it("fires for the weekly window too", async () => {
+    const { recordLimits, setOnLimitReset } = await load();
+    const seen: string[] = [];
+    setOnLimitReset((s) => seen.push(s.kind));
+    recordLimits("claude", { sevenDay: { used: 100 } }, 1000);
+    recordLimits("claude", { sevenDay: { used: 70 } }, 2000);
+    expect(seen).toEqual(["seven_day"]);
+  });
+
+  it("rounds resetsAt to the minute, matching the existing convention", async () => {
+    // The existing test at the top uses 600.4 → 600, 599.7 → 600; 700 (11.67 minutes) rounds to 12.
+    // This test pins the same behavior in the new reset-detection path so the chart stays consistent.
+    const { recordLimits, setOnLimitReset } = await load();
+    setOnLimitReset(() => undefined);
+    recordLimits("claude", { fiveHour: { used: 100, resetsAt: 600 } }, 1000);
+    recordLimits("claude", { fiveHour: { used: 50, resetsAt: 700 } }, 2000);
+    expect(lines()).toEqual([
+      { at: 1000, backend: "claude", kind: "five_hour", used: 100, resetsAt: 600 },
+      { at: 2000, backend: "claude", kind: "five_hour", used: 50, resetsAt: 720 },
+    ]);
+  });
+
+  it("returns the previous handler so callers can chain", async () => {
+    const { setOnLimitReset } = await load();
+    const first = () => {};
+    const second = () => {};
+    expect(setOnLimitReset(first)).toBeUndefined();
+    expect(setOnLimitReset(second)).toBe(first);
+  });
+
+  it("swallows a handler throw so the chart still records the sample", async () => {
+    const { recordLimits, setOnLimitReset } = await load();
+    setOnLimitReset(() => {
+      throw new Error("boom");
+    });
+    recordLimits("claude", { fiveHour: { used: 100, resetsAt: 600 } }, 1000);
+    expect(() => recordLimits("claude", { fiveHour: { used: 50, resetsAt: 720 } }, 2000)).not.toThrow();
+    expect(lines()).toEqual([
+      { at: 1000, backend: "claude", kind: "five_hour", used: 100, resetsAt: 600 },
+      { at: 2000, backend: "claude", kind: "five_hour", used: 50, resetsAt: 720 },
+    ]);
+  });
+});
+
 describe("readSamples", () => {
   it("is empty without a file", async () => {
     const { readSamples } = await load();

@@ -111,6 +111,12 @@ export interface ShellBridge {
   startupReady?(): Promise<StartupResult>;
   // The startup screen's buttons; "relaunch" restarts Weft (a shell from before it ignores it). Missing in older shells.
   splashAction?(action: "retry" | "logs" | "quit" | "relaunch"): void;
+  // Hosted mini apps: the Share dialog's "Upload secrets" pushes the manifest's author secrets
+  // and public names to weft.zip behind Touch ID (electron/app-secrets-push.cjs). Missing in
+  // older shells.
+  appSecrets?: {
+    push(appId: string): Promise<{ ok: true; pushed: string[]; missing?: string[] } | { error: string }>;
+  };
 }
 
 // One launch's timing from electron/startup-timer.cjs: usual is the median of recent launches (null until

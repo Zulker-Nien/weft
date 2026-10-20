@@ -40,7 +40,7 @@ export function PermissionRequest({ card, readOnly, answered, answer }: { card: 
           <Icon name="lock" size={14} className="mt-0.5 text-warn" />
           <span>{pending.title}</span>
         </div>
-        <PermissionInput input={pending.input} edit={pending.edit} askedBy={card.title} why={pending.why} />
+        <PermissionInput input={pending.input} edit={pending.edit} previewUrl={pending.previewUrl} askedBy={card.title} why={pending.why} />
         {!readOnly && (
           <PermissionActions
             pending={pending}
@@ -81,7 +81,12 @@ export function ThreadReply({ card, show, live, placeholder, question, schedulin
       sendLater={scheduling && { backend: card.backend, resets: scheduling.resets, scheduled: card.scheduled ?? [] }}
       status={status}
       stale={cache && fresh ? { cache, onFresh: (message) => fresh(card.id, message) } : undefined}
-      cutOff={turnCutOff(card)} fiveHour={card.stats?.fiveHour}
+      cutOff={turnCutOff(card)}
+      // No live session: a model/CLI was just switched (lib/backend-switch.ts clears sessionId), or the
+      // card was never started. A long-running card whose cache just lapsed still has sessionId set, so
+      // this is false there — Continue still works on cold cache with history.
+      noPriorContext={!card.sessionId}
+      fiveHour={card.stats?.fiveHour}
       editLast={editLast} onEditing={onEditing}
       onSend={onSend} onShell={shell && ((command) => shell(card.id, command))} onStop={() => transport.stop(card.id)} />
   );

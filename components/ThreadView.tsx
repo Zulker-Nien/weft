@@ -15,6 +15,8 @@ import { FileIndexContext, FileLinkContext } from "./file-link-context";
 import { Spinner } from "./Icon";
 import { PermissionRequest, ThreadReply } from "./ThreadFooter";
 import { ThreadEntries, groupThread } from "./ThreadItems";
+import FirstMessageErrorBanner from "./FirstMessageErrorBanner";
+import { firstMessageFailed } from "@/lib/first-message-failed";
 
 // Loaded in its own CrashGuard (components/guarded.tsx), so a broken strip leaves the thread and its reply box.
 const TaskStrip = guarded(() => import("./TaskStrip"), { what: "subagents", inline: true });
@@ -51,6 +53,8 @@ export default function ThreadView({
   replaceReply = false,
   readOnly = false,
   scheduling,
+  onOpenSettings,
+  onDeleted,
 }: {
   card: Card;
   // The full thread snapshot from the parent; used as the seed on first connect and on reconnect,
@@ -69,6 +73,13 @@ export default function ThreadView({
   readOnly?: boolean;
   // Given on board threads, so the reply box offers Send later; resets are the plan's next 5-hour and weekly resets.
   scheduling?: { resets: PlanResets };
+  // Open the Settings dialog (Board wires this to its own settings opener). The first-message-error banner
+  // uses it for "Pick a backup model"; the web board's read-only transport leaves it undefined and the
+  // banner hides that escape (components/FirstMessageErrorBanner.tsx).
+  onOpenSettings?: () => void;
+  // After Delete, the parent (Board) closes the thread. Optional; without it, the banner still deletes
+  // the card but the open thread stays mounted with the now-deleted id.
+  onDeleted?: () => void;
 }) {
   // The request already answered here, so a second click can't answer it (or the next one) again.
   const [answeredId, setAnsweredId] = useState<string | null>(null);
@@ -223,9 +234,15 @@ export default function ThreadView({
             <Spinner size={12} /> Working…
           </div>
         )}
-        {card.error && !live && (
+        {card.error && !live && !firstMessageFailed(card, page.items) && (
           <div className="rounded-md bg-danger-soft px-3 py-2 font-mono text-[12px] text-danger">{card.error}</div>
         )}
+        <FirstMessageErrorBanner
+          card={card}
+          items={page.items}
+          openSettings={onOpenSettings}
+          onDeleted={onDeleted}
+        />
       </div>
 
       <PermissionRequest card={card} readOnly={readOnly} answered={answered} answer={answer} />

@@ -50,6 +50,10 @@ interface Settings {
   copilotModel?: string;
   // The Claude model the Review column's "Review all" card runs on; "" means the default (components/Board.tsx).
   reviewAllModel?: string;
+  // The model the first-message-failed banner reruns the card on, in a fresh session of the same CLI.
+  // "" means "no backup set": the banner button reads "Pick a backup model" and opens Settings → Models.
+  // Any model id one of the installed CLIs serves is allowed; the rerun normalizes through modelOn.
+  backupModel?: string;
   projects: Project[];
   // Claude Code sessions whose cards were deleted, so syncing doesn't bring them back.
   dismissedSessions?: string[];
@@ -77,6 +81,7 @@ function settings(): Settings {
       doneEffort: saved.doneEffort,
       copilotModel: saved.copilotModel,
       reviewAllModel: saved.reviewAllModel,
+      backupModel: saved.backupModel,
       projects: saved.projects ?? [],
       dismissedSessions: saved.dismissedSessions ?? [],
       issueFolders: saved.issueFolders ?? [],
@@ -221,6 +226,24 @@ export function setReviewAllModel(model: string) {
   save();
 }
 
+// The first-message-failed banner's backup model: any model any installed CLI serves, or "" for "off".
+// The rerun normalizes through lib/new-thread.ts modelOn, so a Claude id on a Puku card lands on Puku's
+// default — that's a banner, not a model picker, and the normalization keeps the label honest.
+function isBackupModel(value: unknown): value is string {
+  return value === "" || (typeof value === "string" && backendFor(value) !== undefined);
+}
+
+// "" is the default ("no backup set"), so an unset value reads as off.
+export function backupModel(): string {
+  const saved = settings().backupModel;
+  return isBackupModel(saved) ? saved : "";
+}
+
+export function setBackupModel(model: string) {
+  settings().backupModel = model === "" ? undefined : model;
+  save();
+}
+
 export function dismissedSessions(): string[] {
   return settings().dismissedSessions ?? [];
 }
@@ -304,6 +327,7 @@ export function settingsView(): SettingsView {
     doneEffort: doneEffort(),
     copilotModel: copilotModel(),
     reviewAllModel: reviewAllModel(),
+    backupModel: backupModel(),
     projects: listProjects(),
     issueFolders: issueFolders(),
     syncFolders: syncFolders(),

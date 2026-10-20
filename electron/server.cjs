@@ -1,13 +1,12 @@
 // Runs the Next.js server and keeps it running: restarts it if it crashes, and writes its output
 // to a log file. Three modes: `next dev` (npm run desktop), `next start` (npm run app), and the
 // standalone server bundled inside the packaged app, run with Electron's own Node.
-const { app } = require("electron");
-const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const net = require("node:net");
 const path = require("node:path");
 
 const { freePort } = require("./free-port.cjs");
+const { readTail, TAIL_BYTES } = require("./server-log.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const MAX_LOG_BYTES = 5 * 1024 * 1024;
@@ -18,7 +17,6 @@ const RECOVER_GRACE_MS = 500;
 // Tail of the child's stdout/stderr to inspect for recoverable errors. The pure parser that backs
 // this lives at `lib/dev-server.ts`; this inline copy is a few lines so the main process doesn't
 // need a TS loader. lib/dev-server.test.ts is the contract.
-const TAIL_BYTES = 4 * 1024;
 const PEER_RE = /Another next dev server is already running\.[\s\S]*?- Local:\s+http:\/\/127\.0\.0\.1:(\d+)[\s\S]*?- PID:\s+(\d+)/;
 const MISSING_RE = /Module not found: Can't resolve ['"]([^'"]+)['"]/g;
 const RELATIVE_PROBES = ["", ".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx", "/index.js", "/index.jsx"];
@@ -26,27 +24,6 @@ const RELATIVE_PROBES = ["", ".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.
 function tailOf(buf) {
   if (buf.length <= TAIL_BYTES) return buf;
   return buf.slice(buf.length - TAIL_BYTES);
-}
-
-function readTail(file) {
-  // The log is append-only and small (capped at MAX_LOG_BYTES). Read the last TAIL_BYTES and
-  // decode; if the file is gone or unreadable, return an empty buffer so we fall through to
-  // the existing crash counter.
-  try {
-    const stat = fs.statSync(file);
-    const start = Math.max(0, stat.size - TAIL_BYTES);
-    const fd = fs.openSync(file, "r");
-    try {
-      const len = stat.size - start;
-      const buf = Buffer.alloc(len);
-      fs.readSync(fd, buf, 0, len, start);
-      return buf.toString("utf8");
-    } finally {
-      fs.closeSync(fd);
-    }
-  } catch {
-    return "";
-  }
 }
 
 function resolveSpec(spec, repoRoot) {
@@ -90,7 +67,7 @@ function killPid(pid) {
   try { process.kill(pid, "SIGTERM"); } catch {}
 }
 
-function logFile() {
+function logFile(app) {
   const file = path.join(app.getPath("logs"), "server.log");
   fs.mkdirSync(path.dirname(file), { recursive: true });
   try {
@@ -130,7 +107,7 @@ async function waitForServer(url, timeoutMs = 120_000) {
   throw new Error(`The server didn't start at ${url}`);
 }
 
-function command(port) {
+function command(port, app) {
   if (app.isPackaged) {
     const serverJs = path.join(process.resourcesPath, "server", "server.js");
     // Run it as "Weft Helper", so macOS doesn't see a second Weft app (and quitting by name works).
@@ -163,8 +140,15 @@ function command(port) {
 }
 
 // Starts the server and supervises it. onStatus(text) reports restarts; onFatal(message) fires after
-// repeated crashes; onMark("port") times freeing the port for the startup timer. Returns { url, stop, restart, logPath }.
-async function startServer({ preferredPort, env, onStatus, onFatal, onMark }) {
+// repeated crashes; onNotify(event) is the unified push channel for any state that isn't a mark or
+// fatal — status messages carry kind:"status", fatal messages carry kind:"fatal". onMark("port")
+// times freeing the port for the startup timer. Returns { url, stop, restart, logPath, wasReady }.
+//
+// `app` and `spawn` are injected so tests can run without Electron. In production they're loaded
+// here on demand; in tests they come in through the same parameter (electron/server.test.ts).
+async function startServer({ preferredPort, env, onStatus, onFatal, onMark, onNotify, app: appArg, spawn: spawnArg }) {
+  const app = appArg ?? require("electron").app;
+  const spawn = spawnArg ?? require("node:child_process").spawn;
   // From source the board always lives on one port: evict any stale server (and its build folder)
   // instead of wandering to another port, so two servers never share `.next`.
   if (!app.isPackaged) {
@@ -173,7 +157,7 @@ async function startServer({ preferredPort, env, onStatus, onFatal, onMark }) {
   const port = await pickPort(preferredPort);
   onMark?.("port");
   const url = `http://127.0.0.1:${port}`;
-  const logPath = logFile();
+  const logPath = logFile(app);
   const log = fs.createWriteStream(logPath, { flags: "a" });
   let proc;
   let stopping = false;
@@ -183,8 +167,13 @@ async function startServer({ preferredPort, env, onStatus, onFatal, onMark }) {
   const startFailed = new Promise((_, reject) => (failStart = reject));
   startFailed.catch(() => {});
 
+  function status(text) {
+    onStatus?.(text);
+    onNotify?.({ kind: "status", text });
+  }
+
   function launch() {
-    const { bin, args, cwd, env: modeEnv } = command(port);
+    const { bin, args, cwd, env: modeEnv } = command(port, app);
     log.write(`\n--- ${new Date().toISOString()} starting: ${path.basename(bin)} ${args.join(" ")}\n`);
     const child = spawn(bin, args, { cwd, env: { ...process.env, ...env, ...modeEnv }, stdio: ["ignore", "pipe", "pipe"] });
     proc = child;
@@ -206,7 +195,7 @@ async function startServer({ preferredPort, env, onStatus, onFatal, onMark }) {
         log.write(`--- weft: killing peer dev server pid ${classified.pid} (port ${classified.port})\n`);
         killPid(classified.pid);
         crashes = [];
-        onStatus?.("Restarting…");
+        status("Restarting…");
         setTimeout(launch, RECOVER_GRACE_MS);
         return;
       }
@@ -216,7 +205,7 @@ async function startServer({ preferredPort, env, onStatus, onFatal, onMark }) {
         log.write(`--- weft: stale module resolution for "${classified.spec}"; removing ${dist} and retrying\n`);
         try { fs.rmSync(distPath, { recursive: true, force: true }); } catch {}
         crashes = [];
-        onStatus?.("Restarting…");
+        status("Restarting…");
         setTimeout(launch, RECOVER_GRACE_MS);
         return;
       }
@@ -224,11 +213,18 @@ async function startServer({ preferredPort, env, onStatus, onFatal, onMark }) {
       crashes = [...crashes.filter((t) => now - t < RESTART_WINDOW_MS), now];
       if (crashes.length > MAX_RESTARTS) {
         const message = `The server stopped ${crashes.length} times in two minutes.`;
-        if (ready) onFatal?.(message);
-        else failStart(new Error(message));
+        if (ready) {
+          // The board is up. onFatal is the legacy single-consumer path; onNotify is the unified
+          // push so a renderer can draw a bar without the splash taking over the window. Both
+          // fire so the existing onFatal wiring (e.g. startup.fail in main.cjs) can still react.
+          onFatal?.(message);
+          onNotify?.({ kind: "fatal", text: message });
+        } else {
+          failStart(new Error(message));
+        }
         return;
       }
-      onStatus?.("Restarting…");
+      status("Restarting…");
       setTimeout(launch, 500);
     });
   }
@@ -241,6 +237,11 @@ async function startServer({ preferredPort, env, onStatus, onFatal, onMark }) {
     url,
     port,
     logPath,
+    // True after the server first answered /api/cards; used by main.cjs to decide whether a fatal
+    // should splash-fail (startup) or push to the board (runtime).
+    get wasReady() {
+      return ready;
+    },
     // The supervised process; changes when it restarts. In dev this is `next dev`'s launcher.
     get pid() {
       return proc?.pid;

@@ -29,6 +29,9 @@ export interface SettingsView {
   copilotModel: string;
   // The Claude model "Review all" runs on; "" means the CLI's default.
   reviewAllModel: string;
+  // The first-message-failed banner reruns the card on this model; "" means the banner
+  // shows "Pick a backup model" instead and opens Settings → Models on click.
+  backupModel: string;
   projects: { path: string; lastUsedAt: number }[];
   // Project folders whose cards sync to the cloud (lib/cloud-sync.ts). Off by default; mirrors the
   // saved settings, the same shape /api/settings sends.

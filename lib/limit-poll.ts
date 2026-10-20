@@ -1,6 +1,7 @@
 import { globalSingleton } from "./global-singleton";
 import { defaultBackend, listProjects } from "./settings";
-import { recordLimits } from "./limit-history";
+import { recordLimits, setOnLimitReset } from "./limit-history";
+import { resumeParkedCards } from "./limit-resume";
 import { ensureSpare, open } from "./runner-session";
 import { close, spares, type Session } from "./runner-state";
 import { usageWindow } from "./turn";
@@ -15,6 +16,22 @@ import type { Backend } from "./types";
 // its "no log yet" stretches there.
 
 export const LIMITS_POLL_MS = 15 * 60_000;
+
+// When the poll's first recordLimits sees a window drop from 100% to <100%, lib/limit-resume.ts
+// re-sends the last user message of every parked card on that backend. We register the hook on
+// first import so the very first poll that observes a reset fires the auto-resume.
+let resumeInstalled = false;
+function installAutoResume() {
+  if (resumeInstalled) return;
+  resumeInstalled = true;
+  setOnLimitReset((sample) => {
+    try {
+      resumeParkedCards(sample.backend, sample.kind, Date.now());
+    } catch (err) {
+      console.warn("auto-resume of parked cards failed", err);
+    }
+  });
+}
 
 interface State {
   timer: ReturnType<typeof setInterval> | null;
@@ -108,6 +125,7 @@ async function pollOnce(now = Date.now()): Promise<void> {
 // run on the interval. We never call clearInterval — the process is the lifetime; restarting Weft
 // restarts the timer with the rest of the app.
 export function startLimitPoll(): void {
+  installAutoResume();
   const s = state();
   if (s.timer) return;
   void pollOnce();
@@ -117,3 +135,7 @@ export function startLimitPoll(): void {
   // would otherwise outlive the last open request.
   if (typeof (s.timer as { unref?: () => void }).unref === "function") (s.timer as { unref: () => void }).unref();
 }
+
+// Install the auto-resume hook on module load so the very first poll that observes a reset
+// fires it even before startLimitPoll is called.
+installAutoResume();

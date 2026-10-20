@@ -123,4 +123,20 @@ contextBridge.exposeInMainWorld("weft", {
   startupReady: () => ipcRenderer.invoke("startup:ready"),
   // Buttons on the startup screen when the server fails to start, and "relaunch" to restart Weft.
   splashAction: (action) => ipcRenderer.send("splash:action", action),
+  // Hosted mini apps: the Share dialog's "Upload secrets" button calls this to ship the
+  // manifest's author secrets and public values to weft.zip, after Touch ID in main.
+  appSecrets: {
+    push: (appId) => ipcRenderer.invoke("apps:push-secrets", String(appId ?? "")),
+  },
+  // The dev server supervisor (electron/server.cjs, electron/server-ipc.cjs). The bar that shows
+  // when the budget trips (components/ServerErrorBar.tsx) calls retry/logTail/createFixCard and
+  // listens to onStatus / onFatal — main pushes those when a child crashes or the budget trips.
+  server: {
+    retry: () => ipcRenderer.invoke("server:retry"),
+    logTail: () => ipcRenderer.invoke("server:log-tail"),
+    openLogs: () => ipcRenderer.invoke("server:open-logs"),
+    createFixCard: () => ipcRenderer.invoke("weft:create-fix-card"),
+    onStatus: (callback) => listen("server:status", callback),
+    onFatal: (callback) => listen("server:fatal", callback),
+  },
 });

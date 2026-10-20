@@ -205,4 +205,13 @@ describe("skillIndex and skillInvocation, for CLIs that don't run .claude/skills
     expect(skillInvocation("/deck", project, { weft: false })).toBe("/deck");
     spy.mockRestore();
   });
+
+  it("hides skills named in the off list, but lets them still run by /name", () => {
+    fill();
+    const without = skillIndex(project, { weft: false, off: ["deck"] });
+    expect(without).not.toContain("- deck:");
+    expect(without).toContain("- slide: Make a slide");
+    // A hidden skill still runs through skillInvocation (the card's automation, or a typed /name).
+    expect(skillInvocation("/deck for investors", project, { weft: false })).toContain("DECK in");
+  });
 });

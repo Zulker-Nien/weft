@@ -1,6 +1,17 @@
-import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterAll, describe, expect, it } from "vitest";
 import type { Card } from "./types";
+
+// specFor takes a card's skill off-list from lib/skill-sets.ts. That file is keyed by cwd in
+// DATA_DIR/skill-sets.json, so we redirect DATA_DIR to a temp dir before the import.
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), "weft-spec-skills-"));
+process.env.WEFT_DATA = dir;
+afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
+
 import { specFor } from "./runner-state";
+import { setProjectOff } from "./skill-sets";
 
 // A card's spec is what the SDK's `query()` runs with: cwd, model, mode, read scope. The copilot
 // gets one too, with a few fields pinned. Pure mapping; lib/runner-session.ts is where the spec
@@ -77,5 +88,29 @@ describe("specFor", () => {
       role: "copilot",
     };
     expect(specFor(card).copilot).toBe(true);
+  });
+
+  it("sets skillsOff from the card's own list, the project's off-list, and never for the copilot", () => {
+    const cwd = "/Users/dev/spec-skills";
+    setProjectOff(cwd, ["project-skill"]);
+    const thread: Card = {
+      id: "c1",
+      title: "T",
+      prompt: "do it",
+      cwd,
+      backend: "claude",
+      permissionMode: "default",
+      column: "backlog",
+      createdAt: 0,
+      updatedAt: 0,
+      skillsOff: ["card-skill"],
+    };
+    expect(specFor(thread).skillsOff).toEqual(["card-skill", "project-skill"]);
+    // The copilot runs the board, so it keeps every skill.
+    const copilot: Card = { ...thread, id: "cp", role: "copilot" };
+    expect(specFor(copilot).skillsOff).toBeUndefined();
+    // A card with nothing in the project's or its own off-list gets an empty one.
+    const bare: Card = { ...thread, id: "b", skillsOff: undefined };
+    expect(specFor(bare).skillsOff).toEqual(["project-skill"]);
   });
 });

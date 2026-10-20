@@ -40,7 +40,7 @@ vi.mock("./runner", () => ({
 
 const busyIds = new Set<string>();
 const runner = await import("./runner");
-const { switchBackend } = await import("./backend-switch");
+const { switchBackend, rerunOnModel } = await import("./backend-switch");
 
 function addCard(over: Partial<Card> = {}): Card {
   const id = `card-${store.cards.size + 1}`;
@@ -173,5 +173,74 @@ describe("switchBackend", () => {
     store.threads.set(card.id, [{ kind: "user", text: "hi", at: 1 }]);
     await switchBackend(card.id, "puku", { replay: false });
     expect(runner.sendMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe("rerunOnModel", () => {
+  it("reruns the last user message on a different model in the same CLI", async () => {
+    const card = addCard({ backend: "claude", model: "claude-opus-5-5", sessionId: "old", error: "rate limit", rateLimitHit: true });
+    store.threads.set(card.id, [
+      { kind: "user", text: "first prompt", at: 1 },
+      { kind: "result", text: "rate limit", isError: true, at: 2 },
+    ]);
+    await rerunOnModel(card.id, "claude-sonnet-5-5");
+    const after = store.cards.get(card.id)!;
+    expect(after.model).toBe("claude-sonnet-5-5");
+    expect(after.sessionId).toBeUndefined();
+    expect(after.error).toBeUndefined();
+    expect(after.rateLimitHit).toBe(false);
+    expect(runner.endSession).toHaveBeenCalledWith(card.id);
+    expect(runner.sendMessage).toHaveBeenCalledWith(card.id, "first prompt", { echo: false });
+  });
+
+  it("normalizes a Claude model id on a puku card to puku's default", async () => {
+    // A puku card asking for a Claude id would silently land on a different model than the
+    // picker shows; rerunOnModel routes through modelOn so the user gets what they picked
+    // (or puku's default if the picked model isn't served by puku).
+    const card = addCard({ backend: "puku" });
+    await rerunOnModel(card.id, "claude-sonnet-5-5");
+    // puku's default: see lib/new-thread.ts DEFAULT_MODEL.
+    expect(store.cards.get(card.id)!.model).toBe("opus-4.8");
+  });
+
+  it("keeps the same model, still clears error and rateLimitHit, and re-sends", async () => {
+    const card = addCard({ backend: "claude", model: "claude-sonnet-5-5", error: "boom", rateLimitHit: true });
+    store.threads.set(card.id, [{ kind: "user", text: "hi", at: 1 }]);
+    await rerunOnModel(card.id, "claude-sonnet-5-5");
+    const after = store.cards.get(card.id)!;
+    expect(after.model).toBe("claude-sonnet-5-5");
+    expect(after.error).toBeUndefined();
+    expect(after.rateLimitHit).toBe(false);
+    expect(runner.sendMessage).toHaveBeenCalledWith(card.id, "hi", { echo: false });
+  });
+
+  it("refuses to rerun a busy card", async () => {
+    const card = addCard({ backend: "claude" });
+    busyIds.add(card.id);
+    await expect(rerunOnModel(card.id, "claude-sonnet-5-5")).rejects.toThrow(/Stop the thread/);
+    expect(runner.endSession).not.toHaveBeenCalled();
+    expect(runner.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("throws when the card does not exist", async () => {
+    await expect(rerunOnModel("missing", "claude-sonnet-5-5")).rejects.toThrow(/No such card/);
+  });
+
+  it("does nothing if the thread has no user message yet", async () => {
+    const card = addCard({ backend: "claude", model: "claude-opus-5-5" });
+    store.threads.set(card.id, []);
+    await rerunOnModel(card.id, "claude-sonnet-5-5");
+    expect(runner.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("sends the most recent user message, not the first", async () => {
+    const card = addCard({ backend: "claude", model: "claude-opus-5-5" });
+    store.threads.set(card.id, [
+      { kind: "user", text: "first", at: 1 },
+      { kind: "result", text: "rate limit", isError: true, at: 2 },
+      { kind: "user", text: "second", at: 3 },
+    ]);
+    await rerunOnModel(card.id, "claude-sonnet-5-5");
+    expect(runner.sendMessage).toHaveBeenCalledWith(card.id, "second", { echo: false });
   });
 });

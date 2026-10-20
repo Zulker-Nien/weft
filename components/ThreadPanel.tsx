@@ -9,6 +9,7 @@ import BackendBadge from "./BackendBadge";
 import { BackendPicker } from "./CardView";
 import CardActions from "./CardActions";
 import CrashGuard from "./CrashGuard";
+import SkillsChip from "./SkillsChip";
 import { guarded } from "./guarded";
 import Icon from "./Icon";
 import EditorToggle from "./EditorToggle";
@@ -49,6 +50,8 @@ export default function ThreadPanel({
   footer,
   readOnly = false,
   className = "",
+  onOpenSettings,
+  onDeleted,
 }: {
   card: Card;
   items: ThreadItem[];
@@ -86,6 +89,11 @@ export default function ThreadPanel({
   readOnly?: boolean;
   // Replaces the default sizing classes when the panel is rendered as a column inside CardWorkspace.
   className?: string;
+  // Board-side Settings opener. Threaded into ThreadView so the first-message-error banner can offer
+  // "Pick a backup model" by jumping to Settings → Models.
+  onOpenSettings?: () => void;
+  // After the first-message-error banner deletes the card, the board closes the thread.
+  onDeleted?: () => void;
 }) {
   const live = isLive(card);
   // The copilot opens here like any card, but it has no project and isn't filed, starred or renamed.
@@ -134,6 +142,8 @@ export default function ThreadPanel({
         onSend={onSend}
         onAnswer={onAnswer}
         readOnly={readOnly}
+        onOpenSettings={onOpenSettings}
+        onDeleted={onDeleted}
         {...threadExtras(card, pilot, items, onSend, desktop ? resets : undefined, footer)}
       />
     </aside>
@@ -221,6 +231,7 @@ function HeaderMeta({ card, pilot, desktop, onMode, onTags }: {
       {desktop && onMode && (
         <CrashGuard inline what="mode picker"><ModePicker small backend={card.backend} value={card.permissionMode} onChange={onMode} yolo={card.backend !== "puku" && !pilot} disabled={card.backend === "codex" && Boolean(card.sessionId)} /></CrashGuard>
       )}
+      {desktop && !pilot && <CrashGuard inline what="skills"><SkillsChip card={card} /></CrashGuard>}
       <span className="min-w-[3rem] truncate" title={card.cwd}>{pilot ? "✨ whole board" : folderName(card.cwd)}</span>
       {card.sessionId && (
         <span className="shrink-0 whitespace-nowrap font-mono text-faint" title={card.sessionId}>· {card.sessionId.slice(0, 8)}</span>
