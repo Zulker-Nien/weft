@@ -3,7 +3,8 @@
 // `sessionFor` helper it calls is a pure function over the sessions Map, sender id and an
 // isBoard predicate, so this test covers the new gates without the heavy deps.
 import { describe, expect, it, vi } from "vitest";
-import { registerTerminal, sessionFor } from "./terminal.cjs";
+
+import { registerTerminal, sessionFor, teardownSessions } from "./terminal.cjs";
 
 describe("sessionFor", () => {
   it("returns null when the sender isn't the board window", () => {
@@ -64,5 +65,55 @@ describe("registerTerminal", () => {
     for (const channel of ["terminal:write", "terminal:resize", "terminal:kill"]) {
       expect(() => handlers.get(channel)!({ sender: { id: 7 } }, "k", "x", 1)).not.toThrow();
     }
+  });
+});
+
+// will-quit's teardown (the Oct 18 Electron SIGABRT): node-pty hands its exit/data callbacks back to
+// JS on a libuv worker as the v8 environment tears down, and the old code let those callbacks call
+// webContents.fromId — a "Object has been destroyed" throw at that point aborts the process.
+describe("teardownSessions (will-quit)", () => {
+  type FakeProc = { kill: ReturnType<typeof vi.fn>; onData: ReturnType<typeof vi.fn> };
+
+  function fakeSessions() {
+    const procs: FakeProc[] = [];
+    const sessions = new Map(
+      Array.from({ length: 2 }, (_, i) => {
+        const proc = { kill: vi.fn(), onData: vi.fn() };
+        procs.push(proc);
+        return [`k${i}`, { proc, ownerId: 1, replay: "", cwd: "/tmp" }] as const;
+      }),
+    );
+    return { sessions, procs };
+  }
+
+  it("kills every session and clears the table", () => {
+    const { sessions, procs } = fakeSessions();
+    teardownSessions(sessions);
+    for (const proc of procs) expect(proc.kill).toHaveBeenCalledTimes(1);
+    expect(sessions.size).toBe(0);
+  });
+
+  it("detaches each pty's data callback before killing, so late output can't reach a destroyed window", () => {
+    const { sessions, procs } = fakeSessions();
+    teardownSessions(sessions);
+    for (const proc of procs) {
+      expect(proc.onData).toHaveBeenCalledTimes(1);
+      // The replacement must do nothing, so a chunk arriving after teardown is dropped.
+      const replacement = proc.onData.mock.calls[0]![0] as (chunk: string) => void;
+      replacement("late output");
+      expect(replacement).toBeTypeOf("function");
+    }
+  });
+
+  it("survives a proc whose onData or kill throws (already gone)", () => {
+    const sessions = new Map([
+      ["k", { proc: { kill: () => { throw new Error("ESRCH"); }, onData: () => { throw new Error("gone"); } }, ownerId: 1, replay: "", cwd: "/tmp" }],
+    ]);
+    expect(() => teardownSessions(sessions)).not.toThrow();
+    expect(sessions.size).toBe(0);
+  });
+
+  it("is a no-op on an empty table", () => {
+    expect(() => teardownSessions(new Map())).not.toThrow();
   });
 });

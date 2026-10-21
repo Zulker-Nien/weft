@@ -13,6 +13,7 @@ import path from "node:path";
 export type DevServerError =
   | { kind: "peer"; pid: number; port: number }
   | { kind: "module-not-found"; spec: string; exists: boolean }
+  | { kind: "oom"; message: string }
   | { kind: "other" };
 
 // How much of the child's stderr/stdout to inspect. Next's error blocks are < 1 KB; 4 KB is a safe
@@ -24,6 +25,11 @@ const PEER_RE = /Another next dev server is already running\.[\s\S]*?- Local:\s+
 // Two shapes: bare spec ("Can't resolve 'X'") and Turbopack's quoted form ("Can't resolve \"X\"").
 // The `g` flag is required for `String.prototype.matchAll`.
 const MISSING_RE = /Module not found: Can't resolve ['"]([^'"]+)['"]/g;
+// v8's "JavaScript heap out of memory" lands in stderr immediately before it aborts with SIGABRT.
+// Six of those killed the server between Oct 16 and Oct 18, taking the app with each one. Don't
+// count them against the crash budget — a fresh server has an empty heap and usually survives — but
+// name the real reason, so it stops reading as an unexplained "Stopped when the app closed".
+const OOM_RE = /(JavaScript heap out of memory|out of memory and was aborted)/;
 
 export function tailOf(buf: string): string {
   if (buf.length <= TAIL_BYTES) return buf;
@@ -42,6 +48,11 @@ export function parseDevServerError(buf: string, repoRoot: string): DevServerErr
     const pid = Number(peerMatch[2]);
     if (Number.isFinite(pid) && Number.isFinite(port)) return { kind: "peer", pid, port };
   }
+  // OOM takes precedence over a later module-not-found in the same boot, because v8 aborts the
+  // process immediately after the heap message — the actual cause is the OOM, not whichever path
+  // was chasing the heap when it ran out.
+  const oomMatch = tail.match(OOM_RE);
+  if (oomMatch) return { kind: "oom", message: oomMatch[0] };
   // Walk all matches; the last one wins so a later missing-path supersedes an earlier one.
   const misses = [...tail.matchAll(MISSING_RE)];
   const spec = misses.at(-1)?.[1];
@@ -86,5 +97,6 @@ export function resolveSpec(spec: string, repoRoot: string): string | null {
 export function isRecoverable(parsed: DevServerError): boolean {
   if (parsed.kind === "peer") return parsed.pid > 0;
   if (parsed.kind === "module-not-found") return parsed.exists;
+  if (parsed.kind === "oom") return true;
   return false;
 }

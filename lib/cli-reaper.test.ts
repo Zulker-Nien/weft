@@ -40,6 +40,21 @@ describe("isThreadCli", () => {
   it("matches the SDK binary", () => {
     expect(isThreadCli(`${SDK}/claude-code/cli.js --x`, SDK)).toBe(true);
   });
+  it("matches weft-launched codex (`exec --json` and `exec resume --json`)", () => {
+    expect(isThreadCli("/usr/local/bin/codex exec --json --cd /a/weft", SDK)).toBe(true);
+    expect(isThreadCli("codex exec resume --json ABC -", SDK)).toBe(true);
+  });
+  it("does NOT match the codex app-server daemon or interactive codex", () => {
+    expect(
+      isThreadCli(
+        "/Users/me/.codex/packages/app-server-daemon/releases/0.163.0/codex app-server --listen unix://",
+        SDK,
+      ),
+    ).toBe(false);
+    expect(isThreadCli("codex", SDK)).toBe(false);
+    expect(isThreadCli("codex review", SDK)).toBe(false);
+    expect(isThreadCli("codestream", SDK)).toBe(false);
+  });
   it("rejects unrelated processes and look-alikes", () => {
     expect(isThreadCli("node server.js", SDK)).toBe(false);
     expect(isThreadCli("node /x/bin/puku-cli-other --a", SDK)).toBe(false);
@@ -136,5 +151,19 @@ describe("reapStrayClis", () => {
       throw new Error("ESRCH");
     });
     expect(await reapStrayClis(["/a/weft"], SDK)).toEqual([10]);
+  });
+
+  it("kills orphaned weft-launched codex threads but leaves the app-server daemon", async () => {
+    const ps = [
+      "10 1 /usr/local/bin/codex exec --json --cd /a/weft -", // matches: weft-launched, in folder
+      "11 1 /usr/local/bin/codex exec --json --cd /other",  // matches: weft-launched, wrong folder
+      "12 1 /Users/me/.codex/.../codex app-server --listen unix://", // daemon: never matched
+      "13 1 /usr/local/bin/codex", // bare: never matched
+    ].join("\n");
+    fakeExec(ps, { stdout: "p10\nn/a/weft\np11\nn/other\np12\nn/a/weft\np13\nn/a/weft\n" });
+    expect(await reapStrayClis(["/a/weft"], SDK)).toEqual([10]);
+    expect(kill).toHaveBeenCalledTimes(1);
+    expect(kill).toHaveBeenCalledWith(10, "SIGKILL");
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("ended 1 thread CLI(s)"));
   });
 });

@@ -135,6 +135,34 @@ describe("startServer supervisor", () => {
     expect(onFatal).not.toHaveBeenCalled();
   });
 
+  // Which SIGTERMs are ours and which come from outside Weft. The repeated dev-server deaths in
+  // production (2026-10-21) were all code 143 with no error, and server.log only holds the child's
+  // output, so the supervisor now says in the log whether it asked for the kill.
+  describe("the exit log line", () => {
+    const logText = () => fs.readFileSync(path.join(tmpDir, "logs", "server.log"), "utf8");
+
+    it("marks an exit Weft didn't ask for as external", async () => {
+      const { handle } = makeSupervisor();
+      await markReady();
+      await handle;
+      const first = children[0];
+      if (!first) throw new Error("no first child");
+      first.emit("exit", 143, null);
+      expect(logText()).toContain("pid 1234");
+      expect(logText()).toContain("[external SIGTERM]");
+    });
+
+    it("marks a restart() exit as asked for by Weft", async () => {
+      const { handle } = makeSupervisor();
+      const resolved = await markReadyAndResolve(handle);
+      serverAlive = true;
+      const swap = resolved.restart();
+      last().emit("exit", 143, null);
+      await swap;
+      expect(logText()).toContain("[weft asked: stop/restart]");
+    });
+  });
+
   it("restart() clears crashes and relaunches", async () => {
     const { handle, onFatal } = makeSupervisor();
     const resolved = await markReadyAndResolve(handle);

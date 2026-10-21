@@ -26,6 +26,11 @@ export default defineConfig({
     // Vitest 4's default threads pool times out spawning workers in CI under load (a few
     // files "fail to start forks worker" with no error in the worker). Forks is stable.
     pool: "forks",
+    // Cap concurrent workers. The default equals cpus() — 10 on this box — and a full sweep with each
+    // worker inlining @aimhuge/* pushes memory past what the dev server, the browser pane and the
+    // rest of Weft's own processes can spare. 4 workers keeps the run useful without squeezing a
+    // Weft session mid-flight; double locally with MAX_WORKERS=8 pnpm test.
+    maxWorkers: Number(process.env.MAX_WORKERS) || 4,
     // A worker whose run died (its parent killed mid-test) ends itself instead of running on under PID 1.
     setupFiles: ["test/orphan-guard-setup.ts"],
     env: {

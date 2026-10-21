@@ -24,10 +24,20 @@ export function parsePs(out: string): Proc[] {
     .map(([, pid, ppid, command = ""]) => ({ pid: Number(pid), ppid: Number(ppid), command }));
 }
 
-// A thread CLI: puku-cli's wrapper or its `Puku` child, or the Agent SDK's Claude Code binary from Weft's own node_modules.
+// A thread CLI: puku-cli's wrapper or its `Puku` child, the Agent SDK's Claude Code binary from Weft's own
+// node_modules, or the Codex a card drives. Codex is matched on its `exec` subcommand, which only Weft's
+// runner passes (lib/codex-runner-prompt.ts argsFor: `exec --json` or `exec resume --json`), so a codex you
+// run by hand, and the long-lived `codex app-server` daemon (which spawns its own process tree under PID 1
+// after a crash), are never touched.
 export function isThreadCli(command: string, sdkDir: string) {
   const [exe = ""] = command.split(/\s+/);
-  return path.basename(exe) === "Puku" || /(^|\/)puku-cli(\s|$)/.test(command) || exe.startsWith(sdkDir);
+  const base = path.basename(exe);
+  return (
+    base === "Puku" ||
+    /(^|\/)puku-cli(\s|$)/.test(command) ||
+    exe.startsWith(sdkDir) ||
+    (base === "codex" && /(?:^|\s)exec(?:\s|$)/.test(command))
+  );
 }
 
 // `lsof -Fpn -d cwd` → pid → cwd.

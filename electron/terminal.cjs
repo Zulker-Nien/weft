@@ -41,12 +41,42 @@ function sessionFor(sessions, isBoard, sender, id) {
   return session;
 }
 
+// Ends every session for will-quit. Detaches the pty's data callback and kills each shell, so a
+// node-pty teardown event handed back to JS on a libuv worker can't reach webContents as the v8
+// environment tears down (that throw aborted the process: Oct 18 Electron SIGABRT, the Oct 18 Electron
+// SIGABRT in pty.node's ThreadSafeFunction). Extracted and taking the session Map so it can be unit-tested
+// with fake procs — like sessionFor above — without spinning up node-pty.
+function teardownSessions(sessions) {
+  // Replaces onData with a no-op so late output is dropped rather than sent.
+  for (const session of sessions.values()) {
+    try {
+      session.proc.onData(() => {});
+    } catch {
+      // Already gone.
+    }
+  }
+  for (const session of sessions.values()) {
+    try {
+      session.proc.kill();
+    } catch {
+      // Already gone.
+    }
+  }
+  sessions.clear();
+}
+
 function registerTerminal(ipcMain, { isBoard }) {
   // id -> { proc, ownerId, replay, cwd }. ownerId is the webContents.id of the renderer that
   // opened the shell; writes, resizes and kills from a different webContents are dropped.
   const sessions = new Map();
+  // Set during will-quit's killAll so a late onExit/onData callback (which fires on a libuv worker
+  // thread and ends up on the JS thread as the v8 environment is tearing down) cannot call
+  // webContents.fromId — that throws "Object has been destroyed" and aborts the process. We saw
+  // it as the Oct 18 Electron SIGABRT in pty.node.
+  let closing = false;
 
   function send(session, channel, ...args) {
+    if (closing) return;
     // Output always goes to the owner. If the owner has gone away (closed the page) we just stop
     // sending — the session keeps running so a reattach picks it up.
     if (!session.ownerId) return;
@@ -72,6 +102,7 @@ function registerTerminal(ipcMain, { isBoard }) {
     proc.onExit(({ exitCode }) => {
       if (sessions.get(id) !== session) return;
       sessions.delete(id);
+      if (closing) return;
       send(session, "terminal:exit", id, exitCode);
     });
     sessions.set(id, session);
@@ -111,9 +142,10 @@ function registerTerminal(ipcMain, { isBoard }) {
   });
 
   return function killAll() {
-    for (const session of sessions.values()) session.proc.kill();
-    sessions.clear();
+    if (closing) return;
+    closing = true;
+    teardownSessions(sessions);
   };
 }
 
-module.exports = { registerTerminal, sessionFor };
+module.exports = { registerTerminal, sessionFor, teardownSessions };

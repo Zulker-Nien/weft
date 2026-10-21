@@ -120,6 +120,25 @@ Module not found: Can't resolve './c'
     const parsed = parseDevServerError(fixture, root);
     expect(parsed.kind).toBe("other");
   });
+
+  it("returns 'oom' for v8's 'JavaScript heap out of memory' (recoverable)", () => {
+    const parsed = parseDevServerError(
+      "<- - aborting\n<--- Last few GCs --->\nFATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory\n",
+      root,
+    );
+    expect(parsed.kind).toBe("oom");
+    if (parsed.kind !== "oom") throw new Error("type guard");
+    expect(parsed.message).toContain("JavaScript heap out of memory");
+    expect(isRecoverable(parsed)).toBe(true);
+  });
+
+  it("an OOM in the same boot as a module-not-found wins, because v8 aborts right after the heap message", () => {
+    const fixture = `Module not found: Can't resolve './a'
+FATAL ERROR: Allocation failed - JavaScript heap out of memory
+--- server exited`;
+    const parsed = parseDevServerError(fixture, root);
+    expect(parsed.kind).toBe("oom");
+  });
 });
 
 describe("server.cjs duplicate-parser contract", () => {
@@ -148,6 +167,11 @@ describe("server.cjs duplicate-parser contract", () => {
 
   it("server.cjs keeps the same relative-spec probe list", () => {
     expect(serverCjs).toContain('RELATIVE_PROBES = ["", ".ts", ".tsx", ".js", ".jsx",');
+  });
+
+  it("server.cjs carries the same OOM_RE as the parser", () => {
+    expect(serverCjs).toContain("OOM_RE");
+    expect(serverCjs).toContain("JavaScript heap out of memory");
   });
 });
 
