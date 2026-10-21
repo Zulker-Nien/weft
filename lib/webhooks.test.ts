@@ -130,3 +130,29 @@ describe("recordDelivery", () => {
     expect(w.recordDelivery("nope", { at: 1, method: "POST", status: 0, ms: 1, error: "down" })).toBeUndefined();
   });
 });
+
+describe("provider", () => {
+  it("rejects a provider the relay can't verify, and lowercases + trims what it keeps", async () => {
+    const w = await load();
+    // addWebhook runs cleanProvider, so an unknown one throws.
+    expect(() => w.addWebhook({ folder: "/a", name: "x", target: "/x", provider: "acme" })).toThrow(/one of: stripe/);
+    const a = w.addWebhook({ folder: "/a", name: "x", target: "/x", provider: " Github " }, 1).hook;
+    expect(a.provider).toBe("github");
+    // updateWebhook too.
+    expect(w.updateWebhook(a.id, { provider: "Stripe" }).provider).toBe("stripe");
+    // An empty patch clears it; non-string throws.
+    expect(w.updateWebhook(a.id, { provider: "" }).provider).toBeUndefined();
+    expect(() => w.updateWebhook(a.id, { provider: 3 as unknown as string })).toThrow();
+    expect(() => w.updateWebhook(a.id, { provider: "stripe" })).not.toThrow();
+  });
+
+  it("providerFor resolves a recorded value first, then a lowercased name when that matches", async () => {
+    const w = await load();
+    const stripe = w.addWebhook({ folder: "/a", name: "Stripe", target: "/x" }).hook;
+    expect(w.providerFor(stripe)).toBe("stripe");
+    const resend = w.addWebhook({ folder: "/a", name: "resend", target: "/x", provider: "svix" }).hook;
+    expect(w.providerFor(resend)).toBe("svix");
+    const team = w.addWebhook({ folder: "/a", name: "team-chat", target: "/x" }).hook;
+    expect(w.providerFor(team)).toBeNull();
+  });
+});

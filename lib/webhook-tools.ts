@@ -17,10 +17,11 @@ const FIELDS = {
   events: z.array(z.string()).max(50).optional().describe("The provider's events it should send, e.g. [\"checkout.session.completed\"]"),
   hint: z.string().max(200).optional().describe("Where to register it, e.g. \"Stripe dashboard → Developers → Webhooks\""),
   secret: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, "Letters, digits and _, not starting with a digit").optional().describe("The vault name of its signing secret, e.g. STRIPE_WEBHOOK_SECRET"),
+  provider: z.enum(["stripe", "github", "vercel", "svix"]).optional().describe("The provider whose signature the relay verifies (default: lowercased name). Resend and Clerk are 'svix'. Required for a public relay URL."),
   project: PROJECT,
 };
 
-type AddArgs = { name: string; target: string; events?: string[]; hint?: string; secret?: string; project?: string };
+type AddArgs = { name: string; target: string; events?: string[]; hint?: string; secret?: string; provider?: string; project?: string };
 
 function describeHook(h: Webhook) {
   const last = h.deliveries?.[0];
@@ -30,6 +31,7 @@ function describeHook(h: Webhook) {
     h.events?.length ? `events ${h.events.join(", ")}` : "",
     h.url ? `relay ${h.url}` : "no relay",
     h.secret ? `secret ${h.secret}` : "",
+    h.provider ? `provider ${h.provider}` : "",
     last ? `last delivery ${last.status || "unreachable"}` : "",
   ].filter(Boolean);
   return `- ${h.name}: ${parts.join("; ")}`;
@@ -43,7 +45,7 @@ function findHook(folder: string, name: string): Webhook {
 
 // Records the webhook (and, best effort, its signing secret as a vault blank).
 async function record(folder: string, a: AddArgs) {
-  const added = addWebhook({ folder, name: a.name, target: a.target, events: a.events, hint: a.hint, secret: a.secret });
+  const added = addWebhook({ folder, name: a.name, target: a.target, events: a.events, hint: a.hint, secret: a.secret, provider: a.provider });
   if (a.secret) await shell("/secrets/add-blank", { folder, names: [a.secret], environment: "development", hint: a.hint }).catch(() => null);
   return added;
 }
@@ -87,13 +89,17 @@ export function webhooksMcpServer(folder: () => string) {
             return text(`Opened the 🪝 drawer on ${hook.name}. Ask the user to register it with the provider (mcp__webhooks__relay gives it a public URL); mcp__webhooks__list shows when it's registered.`);
           }),
       ),
-      tool("relay", "Give a webhook a public URL on Weft to register with the provider (paste it into its dashboard, or use its CLI or API). Deliveries forward to the webhook's target while Weft runs. Needs the user signed in to a Weft account.", { name: NAME, project: PROJECT }, ({ name, project }) =>
-        attempt(async () => {
-          const hook = await createRelay(findHook(where(project), name).id);
-          return text(
-            `${hook.name} has a public URL: ${hook.url}\nRegister it with the provider${hook.hint ? ` (${hook.hint})` : ""}. Deliveries forward to ${hook.target} while Weft runs. Once it's registered, call mcp__webhooks__mark_registered.`,
-          );
-        }),
+      tool(
+        "relay",
+        "Give a webhook a public URL on Weft to register with the provider (paste it into its dashboard, or use its CLI or API). Deliveries forward to the webhook's target while Weft runs. Needs the user signed in to a Weft account, and the webhook must name a known provider (stripe, github, vercel, svix — Resend and Clerk are svix) plus the vault name of its signing secret, since the relay only accepts deliveries carrying the provider's signature. The user approves the secret being sealed with one Touch ID.",
+        { name: NAME, project: PROJECT },
+        ({ name, project }) =>
+          attempt(async () => {
+            const hook = await createRelay(findHook(where(project), name).id);
+            return text(
+              `${hook.name} has a public URL: ${hook.url}\nRegister it with the provider${hook.hint ? ` (${hook.hint})` : ""}. Deliveries forward to ${hook.target} while Weft runs. Once it's registered, call mcp__webhooks__mark_registered.`,
+            );
+          }),
       ),
       tool("mark_registered", "Mark a webhook registered, after you registered it with the provider yourself.", { name: NAME, project: PROJECT }, ({ name, project }) =>
         attempt(() => {

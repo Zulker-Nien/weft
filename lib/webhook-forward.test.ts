@@ -22,6 +22,19 @@ vi.mock("./account", () => ({
   },
 }));
 vi.mock("./github-hooks", () => ({ HOOK_URL: "https://relay.example/api/github/webhook" }));
+// A relay row carries the provider's signing secret sealed by Electron main (pentest 2026-10-20, F-12).
+// The tests stub shell() to return a fixed ciphertext trio so we can assert the insert carries them.
+const sealed = vi.hoisted(() => ({
+  secret_ciphertext: "ab".repeat(16),
+  secret_nonce: "cd".repeat(12),
+  secret_key_id: "v1",
+}));
+vi.mock("./browser-tools", () => ({
+  shell: vi.fn((route: string, body?: Record<string, unknown>) => {
+    if (route === "/webhooks/relay-seal") return Promise.resolve(sealed);
+    return Promise.reject(new Error(`Unexpected shell call: ${route} ${JSON.stringify(body)}`));
+  }),
+}));
 
 const fwd = await import("./webhook-forward");
 const reg = await import("./webhooks");
@@ -47,7 +60,7 @@ beforeEach(() => {
   fs.rmSync(fake.dir, { recursive: true, force: true });
   Object.assign(fake.state, { uid: "u1", relays: [], deliveries: [], error: null, deleteError: null, nextRelay: 1, onChange: null, onStatus: null, onAuth: null, channels: [], removed: 0, throwClient: false, gte: [] });
   delete (globalThis as Record<string, unknown>).__weftWebhookRelay;
-  hookId = reg.addWebhook({ folder: "/a", name: "stripe", target: "/api/stripe/webhook" }).hook.id;
+  hookId = reg.addWebhook({ folder: "/a", name: "stripe", target: "/api/stripe/webhook", secret: "STRIPE_WEBHOOK_SECRET" }).hook.id;
   fetchMock.mockReset();
   fetchMock.mockImplementation(() => Promise.resolve(new Response("ok", { status: 200 })));
   vi.stubGlobal("fetch", fetchMock);
@@ -77,28 +90,39 @@ describe("relaySignedIn", () => {
 });
 
 describe("createRelay", () => {
-  it("makes the relay row, saves its URL on the webhook, and listens", async () => {
+  it("seals the vault secret in main, then inserts the row with the provider + sealed columns", async () => {
+    const shellMock = (await import("./browser-tools")).shell as ReturnType<typeof vi.fn>;
     const hook = await fwd.createRelay(hookId);
+    expect(shellMock).toHaveBeenCalledWith("/webhooks/relay-seal", { folder: "/a", name: "STRIPE_WEBHOOK_SECRET", environment: "development", provider: "stripe" });
+    expect(fake.state.relays[0]).toMatchObject({ name: "stripe", provider: "stripe", secret_ciphertext: sealed.secret_ciphertext, secret_nonce: sealed.secret_nonce, secret_key_id: sealed.secret_key_id });
     const relayId = String(fake.state.relays[0]?.id);
-    expect(fake.state.relays[0]).toMatchObject({ name: "stripe" });
     expect(hook).toMatchObject({ relayId, url: `https://relay.example/api/hooks/${relayId}` });
     expect(reg.getWebhook(hookId)?.relayId).toBe(relayId);
     expect(fake.state.channels).toEqual(["webhook-deliveries-u1"]);
   });
 
-  it("returns the relay it already has", async () => {
+  it("returns the relay it already has, without touching the vault again", async () => {
+    const shellMock = (await import("./browser-tools")).shell as ReturnType<typeof vi.fn>;
     await fwd.createRelay(hookId);
+    shellMock.mockClear();
     const again = await fwd.createRelay(hookId);
+    expect(shellMock).not.toHaveBeenCalled();
     expect(fake.state.relays).toHaveLength(1);
     expect(again.relayId).toBe(fake.state.relays[0]?.id);
     expect(fake.state.channels).toHaveLength(1);
   });
 
-  it("needs a Weft sign-in, a webhook that exists, and a working database", async () => {
+  it("needs a Weft sign-in, a webhook that exists, a known provider, a vault secret, and a working database", async () => {
     fake.state.uid = null;
     await expect(fwd.createRelay(hookId)).rejects.toThrow("Sign in to your Weft account first: relay URLs come through it.");
     fake.state.uid = "u1";
     await expect(fwd.createRelay("nope")).rejects.toThrow("That webhook is gone.");
+    // A webhook whose name isn't a known provider, and never set one, refuses too.
+    const adHoc = reg.addWebhook({ folder: "/a", name: "team-chat", target: "/hook", secret: "X" }).hook.id;
+    await expect(fwd.createRelay(adHoc)).rejects.toThrow(/knows the provider/i);
+    // No secret = no relay: the secret lives in the vault, and the relay seals it.
+    const unnamed = reg.addWebhook({ folder: "/a", name: "github", target: "/hook" }).hook.id;
+    await expect(fwd.createRelay(unnamed)).rejects.toThrow(/signing secret/);
     fake.state.error = { message: "offline" };
     await expect(fwd.createRelay(hookId)).rejects.toThrow("offline");
     expect(reg.getWebhook(hookId)?.relayId).toBeUndefined();
@@ -116,7 +140,7 @@ describe("removeRelay", () => {
   });
 
   it("keeps listening while another webhook has a relay", async () => {
-    const other = reg.addWebhook({ folder: "/a", name: "github", target: "/hook" }).hook.id;
+    const other = reg.addWebhook({ folder: "/a", name: "github", target: "/hook", secret: "GH_SECRET" }).hook.id;
     await fwd.createRelay(hookId);
     await fwd.createRelay(other);
     await fwd.removeRelay(hookId);

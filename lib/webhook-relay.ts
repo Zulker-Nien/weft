@@ -1,13 +1,26 @@
 // The webhook relay (docs/architecture/webhooks.md), served by the deployed Weft on Vercel at /api/hooks/<relay id>
-// (app/api/hooks/[id]/[[...rest]]/route.ts), since a provider can't reach a dev server on localhost. Whatever it posts
-// becomes a webhook_deliveries row on Weft's Supabase, which the owner's Weft hears through Realtime and forwards to
-// the webhook's local target (lib/webhook-forward.ts). The relay id in the URL is the only check it makes: the
-// provider's own signature is verified by the app at the target, over the body, which is kept byte-exact for that.
+// (app/api/hooks/[id]/[[...rest]]/route.ts), since a provider can't reach a dev server on localhost. Whatever the
+// provider posts becomes a webhook_deliveries row on Weft's Supabase, which the owner's Weft hears through Realtime
+// and forwards to the webhook's local target (lib/webhook-forward.ts).
+//
+// Pentest 2026-10-20, F-12: the relay used to accept any request holding the id; a stranger could inject a body
+// to any local target. The relay now refuses unless the row declares a known provider (lib/webhook-signatures.ts
+// PRO registry), the local Weft encrypted the signing secret on the way in (lib/relay-secret.ts), and the
+// deployment has WEFT_RELAY_SECRET_KEY to decrypt it. The signature is verified in constant time over the raw
+// body bytes, the same ones forwarded to the local target, so a target with the secret locally agrees with the
+// relay on what counts as authentic.
+
+import { PROVIDERS, type Headers as ProviderHeaders } from "./webhook-signatures";
+import { openSecret, relayKeyFromEnv, sealedFromHex, type RelayKey } from "./relay-secret";
 
 export interface Relay {
   id: string;
   user_id: string;
   name: string;
+  provider?: string | null;
+  secret_ciphertext?: string | null;
+  secret_nonce?: string | null;
+  secret_key_id?: string | null;
 }
 
 export interface DeliveryRow {
@@ -46,7 +59,23 @@ export function keptHeaders(headers: Headers): Record<string, string> {
 
 const base64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64");
 
-export async function handle(req: Request, relayId: string, extra: string, store: RelayStore): Promise<Response> {
+// What the verifier sees. The headers are already lowercased and stripped of hop-by-hop
+// (keptHeaders), so a provider like Stripe sees only what it sent.
+function providerHeaders(headers: Record<string, string>): ProviderHeaders {
+  const out: ProviderHeaders = {};
+  for (const [k, v] of Object.entries(headers)) out[k.toLowerCase()] = v;
+  return out;
+}
+
+// The handler used by the route. The relay key is taken from the environment by default; pass a
+// key directly so the tests can drive it without setting process.env.
+export async function handle(
+  req: Request,
+  relayId: string,
+  extra: string,
+  store: RelayStore,
+  opts: { key?: RelayKey | null; now?: () => number } = {},
+): Promise<Response> {
   if (!METHODS.has(req.method)) return text("Method not allowed", 405);
   if (!UUID.test(relayId)) return text("Unknown webhook", 404);
   const relay = await store.relay(relayId);
@@ -57,7 +86,25 @@ export async function handle(req: Request, relayId: string, extra: string, store
   const body = new Uint8Array(await req.arrayBuffer());
   if (body.length > MAX_BODY) return text("Body too large", 413);
 
-  await store.save({ relay_id: relay.id, user_id: relay.user_id, method: req.method, path: extra, headers: keptHeaders(req.headers), body: base64(body) });
+  // F-12: the relay used to save every request here. We refuse unless the row declares a provider
+  // we know how to verify, and the deployment can open its ciphertext. Without a provider row the
+  // local Weft must create a fresh relay through createRelay() before deliveries flow again.
+  const provider = relay.provider?.trim();
+  if (!provider) return text("Relay has no provider; create a fresh relay through Weft.", 403);
+  const verifier = PROVIDERS.get(provider);
+  if (!verifier) return text("Unknown provider", 403);
+  const key = opts.key ?? relayKeyFromEnv();
+  if (!key) return text("Relay signing key is not configured on this deployment", 503);
+  // sealedFromHex reads the snake_case Supabase columns off the row; Relay carries the same fields, typed.
+  const sealed = sealedFromHex(relay as unknown as Record<string, unknown>);
+  const secret = openSecret(sealed, key);
+  if (!secret) return text("Relay signing key mismatch", 403);
+
+  const headers = providerHeaders(keptHeaders(req.headers));
+  const bodyText = new TextDecoder("utf-8", { fatal: false }).decode(body);
+  if (!verifier.verify(secret, bodyText, headers, (opts.now ?? Date.now)())) return text("Bad signature", 401);
+
+  await store.save({ relay_id: relay.id, user_id: relay.user_id, method: req.method, path: extra, headers, body: base64(body) });
   return text("Relayed", 200);
 }
 
@@ -65,6 +112,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Relays and deliveries through Supabase's REST API with a secret key, which skips row-level security: only this
 // relay holds one. A new-style sb_secret_ key goes in apikey alone; a legacy service_role JWT also as the bearer.
+// The select line picks up the new signature columns (pentest F-12, supabase/migrations/…webhook_relay_provider.sql);
+// the secret columns are kept out of the owner's grant, so the service role needs the SUPABASE_SECRET_KEY.
 export function restStore(url: string, key: string, now = () => Date.now()): RelayStore {
   const headers: Record<string, string> = { apikey: key, "content-type": "application/json" };
   if (!key.startsWith("sb_")) headers.authorization = `Bearer ${key}`;
@@ -75,7 +124,11 @@ export function restStore(url: string, key: string, now = () => Date.now()): Rel
   }
   return {
     relay: async (id) => {
-      const rows = (await (await rest(`webhook_relays?id=eq.${id}&select=id,user_id,name`)).json()) as Relay[];
+      const rows = (await (
+        await rest(
+          `webhook_relays?id=eq.${id}&select=id,user_id,name,provider,secret_ciphertext,secret_nonce,secret_key_id`,
+        )
+      ).json()) as Relay[];
       return rows[0] ?? null;
     },
     save: async (delivery) => {

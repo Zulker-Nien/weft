@@ -219,7 +219,7 @@ export default function QuestionForm({
 
   const toTab = (tab: number) => show(goTo(withBox(state), questions, tab), state);
   return (
-    <div className="mb-2 flex max-h-[50vh] min-h-0 flex-col rounded-md border border-warn/40 bg-warn-soft px-3 py-2.5">
+    <div className="mb-2 flex max-h-[50vh] min-h-0 flex-col rounded-md border border-warn/40 bg-warn-soft px-3 py-2.5" data-human-only>
       <QuestionTabs questions={questions} state={state} onTab={toTab} />
       <div className="-mr-2 mt-2 min-h-0 overflow-y-auto pr-2">
         {q ? (

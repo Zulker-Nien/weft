@@ -353,7 +353,7 @@ export default function ReplyBox({
   }
 
   return (
-    <div className="border-t border-line p-3" onKeyDownCapture={onKeyDownCapture} onKeyDown={onKeyDown}>
+    <div className="border-t border-line p-3" data-human-only onKeyDownCapture={onKeyDownCapture} onKeyDown={onKeyDown}>
       {question && <QuestionForm {...question} key={question.key} ref={form} cardId={cardId} composer={composer} />}
       <ReplyQueue
         scheduled={scheduled}

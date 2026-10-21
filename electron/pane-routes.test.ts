@@ -20,7 +20,7 @@ function make(over: Record<string, unknown> = {}) {
 describe("paneRoutes", () => {
   it("serves every route main used to declare inline", () => {
     const keys = Object.keys(make().routes);
-    for (const key of ["POST /secrets/ask-add", "POST /folder-access/ask", "POST /app/restart", "POST /webhooks/ask-add",
+    for (const key of ["POST /secrets/ask-add", "POST /folder-access/ask", "POST /app/restart", "POST /webhooks/ask-add", "POST /webhooks/relay-seal",
       "POST /vercel/status", "POST /supabase/status", "POST /vercel/env-push"]) expect(keys).toContain(key);
   });
 
@@ -40,6 +40,39 @@ describe("paneRoutes", () => {
     const { routes, sendMenu } = make();
     expect(routes["POST /webhooks/ask-add"]!({ folder: "/p", id: "stripe" })).toEqual({ ok: true });
     expect(sendMenu).toHaveBeenCalledWith("add-webhook", JSON.stringify({ folder: "/p", id: "stripe" }));
+  });
+
+  it("seals the vault value for the relay row, and hands back only the ciphertext trio", async () => {
+    // Touch ID lives inside vault.sendValue; this stubs it to hand the value straight to the sealler.
+    // The value is asserted inside send() — if it weren't reaching the seal, nothing would return.
+    process.env.WEFT_RELAY_SECRET_KEY = "11".repeat(32);
+    const vault = () => ({
+      sendValue: (_folder: string, name: string, _env: string, reason: (label: string) => string, seal: (v: string) => unknown) =>
+        Promise.resolve({ ...(seal("whsec_test") as object), label: "label", reason: reason("label"), name }),
+    });
+    const { routes } = make({ vault });
+    try {
+      const r = (await routes["POST /webhooks/relay-seal"]!({ folder: "/p", name: "STRIPE_WEBHOOK_SECRET", environment: "development", provider: "stripe" })) as Record<string, string>;
+      expect(r.reason).toContain("STRIPE_WEBHOOK_SECRET");
+      expect(r.name).toBe("STRIPE_WEBHOOK_SECRET");
+      expect(r.secret_key_id).toBe("v1");
+      // Ciphertext, not the secret: nothing here lets a reader recover "whsec_test".
+      expect(r.secret_ciphertext).toMatch(/^[0-9a-f]+$/);
+      expect(r.secret_nonce).toHaveLength(24);
+      expect(JSON.stringify(r)).not.toContain("whsec_test");
+    } finally {
+      delete process.env.WEFT_RELAY_SECRET_KEY;
+    }
+  });
+
+  it("refuses an unknown provider and an absent relay key", () => {
+    process.env.WEFT_RELAY_SECRET_KEY = "11".repeat(32);
+    const vault = () => ({ sendValue: () => Promise.resolve({}) });
+    const { routes } = make({ vault });
+    expect(() => routes["POST /webhooks/relay-seal"]!({ folder: "/p", name: "S", environment: "development", provider: "acme" })).toThrow("Unknown provider");
+    // An absent (or non-hex) env key refuses too, so a misconfigured Mac never seals with a guess.
+    delete process.env.WEFT_RELAY_SECRET_KEY;
+    expect(() => routes["POST /webhooks/relay-seal"]!({ folder: "/p", name: "S", environment: "development", provider: "stripe" })).toThrow(/not configured/);
   });
 
   it("reads Vercel's status per folder, and an empty one while Supabase isn't set up", () => {

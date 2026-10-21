@@ -1,8 +1,9 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { accountClient } from "./account";
+import { shell } from "./browser-tools";
 import { globalSingleton } from "./global-singleton";
 import { HOOK_URL } from "./github-hooks";
-import { getWebhook, listWebhooks, recordDelivery, setRelay, webhookByRelay, type Webhook } from "./webhooks";
+import { getWebhook, listWebhooks, providerFor, recordDelivery, setRelay, webhookByRelay, type Webhook } from "./webhooks";
 import type { DeliveryRow } from "./webhook-relay";
 
 // Webhook relays, the local half (docs/architecture/webhooks.md). A webhook's relay URL is on the deployed Weft
@@ -18,6 +19,10 @@ export const relayUrl = (relayId: string) => `${RELAY_ORIGIN}/api/hooks/${relayI
 export const FORWARD_TIMEOUT_MS = 30_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SIGN_IN = "Sign in to your Weft account first: relay URLs come through it.";
+const NO_PROVIDER =
+  "A relay URL only works when Weft knows the provider whose signature it will check. Name the webhook one of stripe, github, vercel or svix (Resend and Clerk are svix), or set its provider, then try again.";
+const NO_SECRET =
+  "A relay URL needs the provider's signing secret, so its deliveries can be checked. Record the vault name (e.g. STRIPE_WEBHOOK_SECRET) with mcp__webhooks__add_blank, fill it in, then try again.";
 // Set by fetch itself, or meaningless on a new connection to localhost.
 const NOT_FORWARDED = new Set(["host", "connection", "content-length", "transfer-encoding", "keep-alive"]);
 
@@ -57,11 +62,39 @@ function requireHook(id: string): Webhook {
 }
 
 // Gives the webhook a public URL on the deployed Weft, and starts listening for what comes to it.
+// The relay refuses anything that doesn't carry the provider's signature (lib/webhook-relay.ts), so a relay
+// row needs a provider and its signing secret sealed for the deployment to verify with. The secret lives in
+// the 🔐 vault; the desktop shell (Electron main) seals it and hands back only the ciphertext trio — the
+// plaintext never reaches this server or the thread. Touch ID on every seal (vault.sendValue).
 export async function createRelay(id: string): Promise<Webhook> {
   if (!(await relaySignedIn())) throw new Error(SIGN_IN);
   const hook = requireHook(id);
   if (hook.relayId) return hook;
-  const { data, error } = await accountClient().from("webhook_relays").insert({ name: hook.name }).select("id").single();
+  const provider = providerFor(hook);
+  if (!provider) throw new Error(NO_PROVIDER);
+  if (!hook.secret) throw new Error(NO_SECRET);
+  // Seal the vault secret for the relay row. Denied or missing here means no relay, not an unsigned one.
+  const sealed = (await shell("/webhooks/relay-seal", { folder: hook.folder, name: hook.secret, environment: "development", provider })) as {
+    denied?: boolean;
+    missing?: boolean;
+    secret_ciphertext?: string;
+    secret_nonce?: string;
+    secret_key_id?: string;
+  };
+  if (sealed.denied) throw new Error("Weft didn't get your Touch ID, so no relay was created.");
+  if (sealed.missing || !sealed.secret_ciphertext || !sealed.secret_nonce || !sealed.secret_key_id)
+    throw new Error(`${hook.secret} has no value in the vault yet — add it in 🔐, then call relay again.`);
+  const { data, error } = await accountClient()
+    .from("webhook_relays")
+    .insert({
+      name: hook.name,
+      provider,
+      secret_ciphertext: sealed.secret_ciphertext,
+      secret_nonce: sealed.secret_nonce,
+      secret_key_id: sealed.secret_key_id,
+    })
+    .select("id")
+    .single();
   if (error) throw new Error(error.message);
   const relayId = String(data.id);
   const next = setRelay(id, { relayId, url: relayUrl(relayId) });

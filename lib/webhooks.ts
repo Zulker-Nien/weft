@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { DATA_DIR } from "./store";
+import { isKnownProvider } from "./webhook-signatures";
 
 // The 🪝 webhooks of each project (docs/architecture/webhooks.md), kept in ~/.weft/webhooks.json. A webhook is what
 // a provider (Stripe, GitHub, Resend…) posts to and the local route that should get it. Until the user (or a thread)
@@ -33,6 +34,11 @@ export interface Webhook {
   hint?: string;
   // The vault name of its signing secret, e.g. STRIPE_WEBHOOK_SECRET.
   secret?: string;
+  // The provider whose signature the relay verifies (lib/webhook-signatures.ts): `stripe`, `github`,
+  // `vercel`, or `svix` (the wire shape Resend and Clerk use). Defaults to the lowercased name when
+  // that matches; a "resend" webhook can declare "svix" so the local Weft and the deployed relay agree
+  // before the user registers it. Required for a relay URL, since the relay refuses unsigned requests.
+  provider?: string;
   // The provider sends to it now; until then it's a blank.
   registered?: boolean;
   // Its public URL on the deployed Weft, and that relay's row id (webhook_relays).
@@ -44,8 +50,8 @@ export interface Webhook {
   updatedAt: number;
 }
 
-export type WebhookInput = Pick<Webhook, "folder" | "name"> & Partial<Pick<Webhook, "target" | "events" | "hint" | "secret">>;
-export type WebhookPatch = Partial<Pick<Webhook, "name" | "target" | "events" | "hint" | "secret" | "registered">>;
+export type WebhookInput = Pick<Webhook, "folder" | "name"> & Partial<Pick<Webhook, "target" | "events" | "hint" | "secret" | "provider">>;
+export type WebhookPatch = Partial<Pick<Webhook, "name" | "target" | "events" | "hint" | "secret" | "provider" | "registered">>;
 
 export const MAX_DELIVERIES = 10;
 // A bare path goes to the usual Next dev server.
@@ -110,6 +116,25 @@ function cleanSecret(raw: unknown): string | undefined {
   return raw;
 }
 
+// The four providers the relay verifies (lib/webhook-signatures.ts). An empty value clears it; unknown
+// values are refused so the row the relay ends up with always matches a known verifier.
+export function cleanProvider(raw: unknown): string | undefined {
+  if (raw === undefined || raw === null || raw === "") return undefined;
+  if (typeof raw !== "string") throw new Error("A webhook's provider is one of: stripe, github, vercel, svix.");
+  const value = raw.trim().toLowerCase();
+  if (!isKnownProvider(value)) throw new Error("A webhook's provider is one of: stripe, github, vercel, svix.");
+  return value;
+}
+
+// Resolves what the deployed relay verifies against: the recorded value if set, otherwise the
+// lowercased name when that matches a known provider ("stripe" → "stripe", "Stripe" → "stripe").
+// Returns null when nothing matches — the caller then refuses to mint a relay URL.
+export function providerFor(hook: Webhook): string | null {
+  if (hook.provider) return hook.provider;
+  const lower = hook.name.trim().toLowerCase();
+  return isKnownProvider(lower) ? lower : null;
+}
+
 // Every webhook, or only those in folders, by folder then name.
 export function listWebhooks(folders?: readonly string[]): Webhook[] {
   const keep = folders && new Set(folders);
@@ -139,6 +164,7 @@ export function addWebhook(input: WebhookInput, now = Date.now()): { hook: Webho
     ...(input.events !== undefined && { events: cleanEvents(input.events) }),
     ...(input.hint !== undefined && { hint: cleanHint(input.hint) }),
     ...(input.secret !== undefined && { secret: cleanSecret(input.secret) }),
+    ...(input.provider !== undefined && { provider: cleanProvider(input.provider) }),
   };
   const hooks = read();
   const i = hooks.findIndex((h) => h.folder === folder && h.name.toLowerCase() === name.toLowerCase());
@@ -165,6 +191,7 @@ export function updateWebhook(id: string, patch: WebhookPatch, now = Date.now())
     ...(patch.events !== undefined && { events: cleanEvents(patch.events) }),
     ...(patch.hint !== undefined && { hint: cleanHint(patch.hint) }),
     ...(patch.secret !== undefined && { secret: cleanSecret(patch.secret) }),
+    ...(patch.provider !== undefined && { provider: cleanProvider(patch.provider) }),
     ...(patch.registered !== undefined && { registered: patch.registered }),
     updatedAt: now,
   };
