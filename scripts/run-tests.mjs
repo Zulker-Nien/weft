@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { runHolding } from "./one-at-a-time.mjs";
+import { checkMemoryPressure, pressureMessage } from "./test-memory.mjs";
 
 // Flags whose value is the next argument, so that argument isn't a file filter.
 const TAKES_VALUE = new Set(["-t", "--testNamePattern", "--reporter", "--project", "--pool", "--shard", "--maxWorkers", "--config", "-c", "--root", "-r", "--environment"]);
@@ -22,8 +23,21 @@ function vitestBin() {
 }
 
 export async function main(args) {
+  if (!isFiltered(args)) {
+    // Refuse to start a full sweep on a memory-constrained box (scripts/test-memory.mjs): without this,
+    // every vitest fork inlines @aimhuge/* and pushes the Mac into swap alongside a running Weft, taking
+    // Weft down with it (twice on 2026-10-21). A run of named files is short and scoped; never gated.
+    if (!args.includes("--no-memory-gate")) {
+      const pressure = checkMemoryPressure(Number(process.env.WEFT_TEST_MIN_FREE_MB) || undefined);
+      if (!pressure.ok) {
+        console.error(pressureMessage(pressure, Number(process.env.WEFT_TEST_MIN_FREE_MB) || 2048));
+        return 1;
+      }
+    }
+    const vitest = [vitestBin(), "run", ...args];
+    return runHolding("test", process.execPath, { args: vitest });
+  }
   const vitest = [vitestBin(), "run", ...args];
-  if (!isFiltered(args)) return runHolding("test", process.execPath, { args: vitest });
   const child = spawn(process.execPath, vitest, { stdio: "inherit" });
   const forward = (signal) => child.kill(signal);
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.once(signal, forward);

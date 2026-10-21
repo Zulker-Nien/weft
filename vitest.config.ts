@@ -21,16 +21,25 @@ export default defineConfig({
   },
   test: {
     // Component tests opt into jsdom per file (`// @vitest-environment jsdom`); everything else stays on node.
-    include: ["lib/**/*.test.ts", "app/**/*.test.ts", "components/**/*.test.tsx", "electron/**/*.test.ts", "scripts/**/*.test.ts", "plugin/**/*.test.ts"],
+    include: ["lib/**/*.test.ts", "app/**/*.test.ts", "components/**/*.test.tsx", "electron/**/*.test.ts", "scripts/**/*.test.ts", "scripts/**/*.test.mjs", "plugin/**/*.test.ts"],
     environment: "node",
     // Vitest 4's default threads pool times out spawning workers in CI under load (a few
     // files "fail to start forks worker" with no error in the worker). Forks is stable.
     pool: "forks",
-    // Cap concurrent workers. The default equals cpus() — 10 on this box — and a full sweep with each
-    // worker inlining @aimhuge/* pushes memory past what the dev server, the browser pane and the
-    // rest of Weft's own processes can spare. 4 workers keeps the run useful without squeezing a
-    // Weft session mid-flight; double locally with MAX_WORKERS=8 pnpm test.
-    maxWorkers: Number(process.env.MAX_WORKERS) || 4,
+    // Cap concurrent workers. The default equals cpus() — 10 on this box — and each worker inlines @aimhuge/*
+// plus Next's module graph, so a worker is easily 300-600 MB. Weft's own processes (next-server 0.8-1.9 GB,
+// Electron main ~220 MB, renderer ~440 MB, the pane and the thread CLIs) already hold most of a 16 GB box,
+// so a sweep at the core count pushed the Mac into swap and took the app down with it (twice, 2026-10-21).
+// Two keeps a full run useful without squeezing a live Weft session. Raise deliberately, never by default:
+//   MAX_WORKERS=4 pnpm test
+maxWorkers: Number(process.env.MAX_WORKERS) || 2,
+    // Bound each worker's memory, so one runaway fork fails its own test loudly instead of taking the
+    // whole box's memory and aborting Weft's dev server. `vmMemoryLimit` recycles a worker past it;
+    // `execArgv` sets --max-old-space-size so the ceiling is enforced inside the worker too. Both are
+    // top-level: Vitest 4 removed `poolOptions`, where a nested execArgv is silently ignored.
+    // WORKER_HEAP (MB) overrides both.
+    vmMemoryLimit: Number(process.env.WORKER_HEAP) || 768,
+    execArgv: [`--max-old-space-size=${Number(process.env.WORKER_HEAP) || 768}`],
     // A worker whose run died (its parent killed mid-test) ends itself instead of running on under PID 1.
     setupFiles: ["test/orphan-guard-setup.ts"],
     env: {

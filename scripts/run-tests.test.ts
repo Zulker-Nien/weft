@@ -38,7 +38,31 @@ describe("the command line", () => {
     const cfg = ["--root", dir, "--config", path.join(dir, "vitest.config.mjs")];
     expect(run([...cfg, "ok.test.mjs"])).toBe(0);
     fs.writeFileSync(path.join(dir, "bad.test.mjs"), 'test("bad", () => { throw new Error("x"); });\n');
-    expect(run(cfg)).toBe(1);
+    // --no-memory-gate: this asserts vitest's exit code, not the memory guard, which would otherwise
+    // make a failing test indistinguishable from a refused run on a busy machine.
+    expect(run([...cfg, "--no-memory-gate"])).toBe(1);
     fs.rmSync(dir, { recursive: true, force: true });
   }, 60_000);
+
+  it("refuses a whole-suite run when memory is short, without starting vitest", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "run-tests-gate-"));
+    let stderr = "";
+    let status = 0;
+    try {
+      execFileSync(process.execPath, [script, "--root", dir], {
+        cwd: dir,
+        stdio: "pipe",
+        env: { ...process.env, WEFT_LOCK_DIR: dir, WEFT_TEST_MIN_FREE_MB: "99999999" },
+      });
+    } catch (err) {
+      const e = err as { status: number; stderr: Buffer };
+      status = e.status;
+      stderr = e.stderr.toString();
+    }
+    fs.rmSync(dir, { recursive: true, force: true });
+    // With an impossible threshold the gate must refuse before vitest is ever spawned: exit 1 and the
+    // reason on stderr, not vitest's "no test files" error.
+    expect(status).toBe(1);
+    expect(stderr).toContain("not starting a full sweep");
+  }, 30_000);
 });
