@@ -92,7 +92,11 @@ with SIGKILL or SIGTERM mid-test: every busy worker reparented to PID 1 and kept
 - **Backstop.** `startWorkerReaper()` (`lib/worker-reaper.ts`, started from `prewarm()`) reaps every 5 min
   any `node (vitest N)` whose parent is PID 1, at least 2 min old, with its cwd in a project or card folder.
   That catches a worker stuck in a synchronous loop, which can't reach its own check. A run whose
-  `node (vitest)` is alive keeps its workers' parent, so another card's tests are never touched.
+  `node (vitest)` is alive keeps its workers' parent, so another card's tests are never touched. The
+  same sweep matches orphaned `next dev` servers — `next-server (vN.M)` or `node …/next/dist/bin/next dev …`
+  whose launcher died and whose `next-server` reparented to PID 1, holding ~1.9 GB of heap. Without this, a
+  crashed Weft leaves an orphaned dev server that contributes directly to the next heap-OOM SIGABRT. A user
+  `next dev` has a shell as its parent, so it's never matched.
 
 ### Idle puku CLIs (`lib/puku-idle.ts`)
 

@@ -2,10 +2,13 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { killInFolders } from "./cli-reaper";
 
-// The backstop behind lib/orphan-guard.ts: every few minutes, end the vitest workers whose run died and
-// that couldn't end themselves (a test stuck in a synchronous loop never gets to its own check). Only
-// workers under PID 1 (their `node (vitest)` parent is gone), older than MIN_AGE_S, in one of Weft's
-// project folders: a run another card has going keeps its parent, so it's never touched.
+// The backstop behind lib/orphan-guard.ts: every few minutes, end the long-running processes whose
+// parent died and that couldn't end themselves. Two kinds:
+//   a vitest worker whose run was killed mid-test (a test stuck in a synchronous loop never gets to
+//     its own check), and a `next dev` server whose launcher exited — it reparents to PID 1 and keeps
+//     holding ~1.9 GB of heap, which is a real share of a 16 GB box.
+// Only processes under PID 1, older than MIN_AGE_S, in one of Weft's project folders: anything another
+// card or the user still has running keeps its parent, so it's never touched.
 
 const run = promisify(execFile);
 
@@ -16,6 +19,16 @@ export const MIN_AGE_S = 120;
 // A vitest pool worker's process title: `node (vitest 3)`. The run's own `node (vitest)` isn't one.
 export function isVitestWorker(command: string) {
   return /^node \(vitest \d+\)/.test(command.trim());
+}
+
+// A Next dev server, either half of one:
+//   the launcher Weft spawns — `node /…/next/dist/bin/next dev -H 127.0.0.1 -p 1024`
+//   the worker it forks  — `next-server (v16.4.0)`
+// Both matter: when the launcher dies the worker reparents to PID 1 and keeps holding ~1.9 GB, which
+// is a large share of a 16 GB box and shows up in the heap OOMs that take Weft's own server down.
+// A `next dev` the user runs by hand has a shell as its parent, so it never reaches the PID-1 filter.
+export function isNextDev(command: string) {
+  return /next-server \(v\d/.test(command) || /(?:^|\/)next(?:\.js)?\s+dev(?:\s|$)/.test(command);
 }
 
 // ps's etime, `[[dd-]hh:]mm:ss`, in seconds.
@@ -43,14 +56,17 @@ export function parsePsAged(out: string): AgedProc[] {
     .map(([, pid, ppid, etime = "", command = ""]) => ({ pid: Number(pid), ppid: Number(ppid), age: etimeSeconds(etime), command }));
 }
 
-// Kills the orphaned workers and returns their pids.
+// Kills the orphans and returns their pids. Covers both a killed vitest run's workers and a `next dev`
+// whose launcher died (both hold hundreds of MB to ~2 GB each once they reach PID 1).
 export async function reapOrphanWorkers(folders: string[], minAge = MIN_AGE_S) {
   if (process.platform === "win32" || folders.length === 0) return [];
   const { stdout } = await run("/bin/ps", ["-axo", "pid=,ppid=,etime=,command="]);
-  const orphans = parsePsAged(stdout).filter((p) => p.ppid === 1 && p.age >= minAge && isVitestWorker(p.command));
+  const orphans = parsePsAged(stdout).filter(
+    (p) => p.ppid === 1 && p.age >= minAge && (isVitestWorker(p.command) || isNextDev(p.command)),
+  );
   if (orphans.length === 0) return [];
   const strays = await killInFolders(orphans.map((p) => p.pid), folders);
-  if (strays.length) console.log(`[weft] ended ${strays.length} orphaned vitest worker(s): ${strays.join(", ")}`);
+  if (strays.length) console.log(`[weft] ended ${strays.length} orphaned worker(s) or dev server(s): ${strays.join(", ")}`);
   return strays;
 }
 

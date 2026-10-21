@@ -5,6 +5,7 @@ vi.mock("node:child_process", () => ({ execFile }));
 
 import {
   etimeSeconds,
+  isNextDev,
   isVitestWorker,
   MIN_AGE_S,
   parsePsAged,
@@ -28,6 +29,22 @@ describe("isVitestWorker", () => {
     expect(isVitestWorker("node (vitest 12)")).toBe(true);
     expect(isVitestWorker("node (vitest)")).toBe(false);
     expect(isVitestWorker("node server.js")).toBe(false);
+  });
+});
+
+describe("isNextDev", () => {
+  it("matches both halves of a next dev: the launcher and the worker it forks", () => {
+    // Real command lines from this box (2026-10-22).
+    expect(isNextDev("node /Users/me/dev/weft/node_modules/next/dist/bin/next dev -H 127.0.0.1 -p 1024")).toBe(true);
+    expect(isNextDev("next-server (v16.4.0)")).toBe(true);
+    expect(isNextDev("node /x/node_modules/.pnpm/next@16.3.8/node_modules/next/dist/bin/next dev -p 8080")).toBe(true);
+  });
+  it("rejects other next commands and look-alikes", () => {
+    expect(isNextDev("next build")).toBe(false);
+    expect(isNextDev("next start")).toBe(false);
+    expect(isNextDev("node server.js")).toBe(false);
+    expect(isNextDev("node /x/nextcrawler")).toBe(false);
+    expect(isNextDev("next dev-runner")).toBe(false);
   });
 });
 
@@ -88,7 +105,37 @@ describe("reapOrphanWorkers", () => {
     fakeExec("10 1 30:00 node (vitest 1)\n13 1 1:00:00 node (vitest 4)\n", "p10\nn/a/weft\np13\nn/elsewhere\n");
     expect(await reapOrphanWorkers(["/a/weft"])).toEqual([10]);
     expect(kill).toHaveBeenCalledExactlyOnceWith(10, "SIGKILL");
-    expect(log).toHaveBeenCalledWith(expect.stringContaining("ended 1 orphaned vitest worker(s)"));
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("ended 1 orphaned worker(s) or dev server(s)"));
+  });
+
+  // The leak behind the six heap OOMs of 2026-10-16..18: when a next dev launcher dies, its
+  // next-server worker reparents to PID 1 and keeps ~1.9 GB. Both halves must go.
+  it("kills an orphaned next dev server (the worker whose launcher died) inside a Weft folder", async () => {
+    fakeExec(
+      "20 1 1:00:00 next-server (v16.4.0)\n21 99 1:00:00 next-server (v16.4.0)\n",
+      "p20\nn/a/weft\np21\nn/a/weft\n",
+    );
+    expect(await reapOrphanWorkers(["/a/weft"])).toEqual([20]);
+    expect(kill).toHaveBeenCalledExactlyOnceWith(20, "SIGKILL");
+  });
+
+  it("kills an orphaned next dev launcher too, and leaves another project's dev server alone", async () => {
+    fakeExec(
+      "30 1 1:00:00 node /a/weft/node_modules/next/dist/bin/next dev -H 127.0.0.1 -p 1024\n" +
+        "31 1 12:12:50 next-server (v16.3.8)\n",
+      "p30\nn/a/weft\np31\nn/other/groovenfill\n",
+    );
+    expect(await reapOrphanWorkers(["/a/weft"])).toEqual([30]);
+  });
+
+  it("leaves a next dev that still has its parent, and one too young, alone", async () => {
+    // 30:00 is well past MIN_AGE_S, so only the live parent spares pid 40; 41 is young.
+    fakeExec(
+      "40 7 30:00 next-server (v16.4.0)\n41 1 00:30 next-server (v16.4.0)\n",
+      "p40\nn/a/weft\np41\nn/a/weft\n",
+    );
+    expect(await reapOrphanWorkers(["/a/weft"])).toEqual([]);
+    expect(kill).not.toHaveBeenCalled();
   });
 
   it("says nothing when every orphan is outside Weft's folders", async () => {
