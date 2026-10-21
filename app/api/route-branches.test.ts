@@ -6,6 +6,8 @@ import { COPILOT_ID } from "@/lib/types";
 
 vi.mock("next/server", () => ({ connection: async () => {} }));
 vi.mock("@/lib/store", () => ({ getCard: vi.fn((id: string) => ({ id })) }));
+// No launch token (as in a browser or tests), so the elevated routes take x-weft-token: 1 (lib/guard.ts).
+vi.mock("@/lib/shell-token", () => ({ shellToken: () => "" }));
 vi.mock("@/lib/runner", () => ({ sendUserMessage: vi.fn(), editLastMessage: vi.fn(() => Promise.resolve()), retryAfterLogin: vi.fn(), clearLoginWaiters: vi.fn() }));
 vi.mock("@/lib/restart", () => ({ restartTurn: vi.fn(() => Promise.resolve()) }));
 vi.mock("@/lib/copilot", () => ({ sendToCopilot: vi.fn() }));

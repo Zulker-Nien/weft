@@ -19,7 +19,8 @@ runs, in every permission mode (bypass included), and the denial's reason goes b
 ## The local API's own gate
 
 `lib/guard.ts` guards `app/api/*`: Host must be local, writes need `x-weft-token: 1`, and `sensitive` reads (account,
-account/team, account/billing, settings, services) also need the launch token in `x-weft-token`. The desktop app adds it
+account/team, account/billing, settings, services) also need the launch token in `x-weft-token`. So do writes that grant power (`elevated()`: a permission answer,
+settings, folder grants, `!` shell, a card's mode or read scope), which a thread's `curl` with `1` can't send. The desktop app adds it
 to the board window's requests only (`electron/api-token.cjs`, a `webRequest` hook on the default session; the browser
 pane is another partition), and it is the control server's token, which threads can't read. With no token (dev in a
 browser, tests) the check is off. `weft://reply|commit` links act only from a real file under `~/.weft` (`ownPage`,

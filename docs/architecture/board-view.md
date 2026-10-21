@@ -41,9 +41,12 @@ is over. A minimized or hidden window captures empty, which the tool reports as 
     thread can't trigger a reveal or put a value on the clipboard (where `pbpaste` could read it). Right-click
     menus are native and out of reach: `click` only calls `el.click()`.
   - `type_text` only types into fields, so it can't send Enter or Space to a reveal button.
+  - Anything inside `data-human-only` (the permission panel, the reply box while a question waits, the mode picker,
+    Settings) can be read and screenshotted but not clicked or typed into: a thread there would approve its own
+    prompts or loosen its own limits (pentest 2026-10-20, P-1).
 
 When you add UI that shows a secret value, mark it `data-secret`; a control that reveals or copies one,
-`data-secret-action`.
+`data-secret-action`; a control that answers a permission, grants access or changes settings, `data-human-only`.
 
 ## Tests
 

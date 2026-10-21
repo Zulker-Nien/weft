@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fail, guard } from "./guard";
+import { elevated, fail, guard } from "./guard";
 
 const token = vi.hoisted(() => ({ value: "" }));
 vi.mock("./shell-token", () => ({ shellToken: () => token.value }));
@@ -96,5 +96,27 @@ describe("guard sensitive reads", () => {
   it("still checks the host first", () => {
     token.value = "t";
     expect(guard(req({ host: "evil.com", "x-weft-token": "t" }), { write: false, sensitive: true })?.status).toBe(403);
+  });
+});
+
+describe("elevated writes", () => {
+  const send = (headers: Record<string, string>) => elevated(req({ host: "localhost:3456", ...headers }));
+
+  it("refuses the plain 1 a thread's curl sends once the desktop has a token", async () => {
+    token.value = "secret-token";
+    const res = send({ "x-weft-token": "1" });
+    expect(res?.status).toBe(403);
+    expect(((await res!.json()) as { error: string }).error).toBe("This change needs Weft's own window");
+    expect(send({ "x-weft-token": "secret-token" })).toBeNull();
+  });
+
+  it("takes 1 where there is no token (a browser, tests)", () => {
+    expect(send({ "x-weft-token": "1" })).toBeNull();
+  });
+
+  it("still checks the host and the header first", () => {
+    token.value = "t";
+    expect(elevated(req({ host: "evil.com", "x-weft-token": "t" }))?.status).toBe(403);
+    expect(send({})?.status).toBe(403);
   });
 });

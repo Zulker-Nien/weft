@@ -1,10 +1,10 @@
-import { fail, guard } from "@/lib/guard";
+import { fail, elevated } from "@/lib/guard";
 import { runShell } from "@/lib/shell";
 
 // "!" in the reply box: starts your command in the card's folder. It answers once the command has started;
 // the thread shows its output when it ends.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const denied = guard(req);
+  const denied = elevated(req);
   if (denied) return denied;
   const { id } = await params;
   try {

@@ -182,6 +182,7 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
       <div
         // The whole panel is the scene photo; a mousedown anywhere on it closes, like a backdrop.
         // The panes below (header, row, footer) stop the event so clicks on them keep working.
+        data-human-only
         onMouseDown={onClose}
         className="flex h-full min-h-0 flex-col"
       >

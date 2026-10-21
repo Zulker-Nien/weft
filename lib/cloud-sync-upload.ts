@@ -4,6 +4,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { replaceOutboxHead } from "./cloud-outbox";
 import { cardRows } from "./cloud-sync-cards";
+import { redactCardRow, redactItemRow, redactOutputRow } from "./cloud-sync-redact";
 import { TOOL_RESULT_INLINE_MAX, type BlobStore, type CloudThreadItemRow, type CloudToolOutputRow, type OutboxEntry } from "./cloud-sync-types";
 import { getCard, getThread } from "./store";
 import type { ThreadItem } from "./types";
@@ -72,7 +73,7 @@ export async function uploadPending(
   pending: OutboxEntry[],
   onShipped: (items: number) => void,
 ): Promise<Skipped | null> {
-  const cards = scrub(await cardRows(ctx.blobs, orgId, pending, ctx.now()));
+  const cards = scrub((await cardRows(ctx.blobs, orgId, pending, ctx.now())).map(redactCardRow));
   for (let i = 0; i < cards.length; i += ITEM_CHUNK) check(await client.from("cloud_cards").upsert(cards.slice(i, i + ITEM_CHUNK)));
   for (const entry of pending) {
     // The row keeps the card json it last uploaded; a card that never synced matches no row.
@@ -127,8 +128,8 @@ async function putItems(ctx: UploadCtx, client: SupabaseClient, orgId: string, e
     items.push({ org_id: orgId, card_id: entry.cardId, seq: entry.seq, kind: item.kind, item, at: new Date(live.at).toISOString() });
     if (output) outputs.push({ org_id: orgId, card_id: entry.cardId, ...output });
   }
-  if (outputs.length) check(await client.from("cloud_tool_outputs").upsert(scrub(lastPerKey(outputs, (o) => `${o.card_id}/${o.tool_id}`))));
-  if (items.length) check(await client.from("cloud_thread_items").upsert(scrub(lastPerKey(items, (i) => `${i.card_id}/${i.seq}`))));
+  if (outputs.length) check(await client.from("cloud_tool_outputs").upsert(scrub(lastPerKey(outputs, (o) => `${o.card_id}/${o.tool_id}`).map(redactOutputRow))));
+  if (items.length) check(await client.from("cloud_thread_items").upsert(scrub(lastPerKey(items, (i) => `${i.card_id}/${i.seq}`).map(redactItemRow))));
   return items.length;
 }
 

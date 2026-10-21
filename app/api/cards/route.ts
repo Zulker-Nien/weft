@@ -1,7 +1,7 @@
 import os from "node:os";
 import { connection } from "next/server";
 import { prewarm } from "@/lib/copilot";
-import { fail, guard } from "@/lib/guard";
+import { elevated, fail, guard } from "@/lib/guard";
 import { projectRoot } from "@/lib/repos";
 import { createCardFromBody, startCard } from "@/lib/new-card";
 import { listProjects } from "@/lib/settings";
@@ -28,6 +28,9 @@ export async function POST(req: Request) {
   if (denied) return denied;
   try {
     const body = (await req.json()) as Record<string, unknown>;
+    // A thread may create cards with its curl, but not cards that ask less than the default (lib/guard.ts elevated).
+    const loose = body.permissionMode !== undefined && body.permissionMode !== "default" ? elevated(req) : null;
+    if (loose) return loose;
     const card = createCardFromBody(body);
     if (body.start) startCard(card);
     return Response.json({ card: getCard(card.id) });

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { connection } from "next/server";
 import { patternRegex } from "@/lib/automations";
 import { asText } from "@/lib/format";
-import { fail, guard } from "@/lib/guard";
+import { elevated, fail, guard } from "@/lib/guard";
 import { EFFORTS, MODELS } from "@/lib/new-thread";
 import { setAutomations, setBackupModel, setCopilotModel, setDefaultBackend, setDefaultPermissionMode, setDoneEffort, setDoneModel, setKeepAliveMinutes, setPushOnDone, setReviewAllModel, setSubagentModel, setThreadPrompt, settingsView } from "@/lib/settings";
 import { SKILL_NAME } from "@/lib/skills";
@@ -141,7 +141,7 @@ function commit(body: {
 }
 
 export async function PATCH(req: Request) {
-  const denied = guard(req);
+  const denied = elevated(req);
   if (denied) return denied;
   try {
     const body = (await req.json()) as Parameters<typeof validate>[0];

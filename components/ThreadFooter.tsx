@@ -35,7 +35,7 @@ export function PermissionRequest({ card, readOnly, answered, answer }: { card: 
 
   return (
     <CrashGuard key={pending.id} what="permission request" className="mx-4 my-2">
-      <div className="flex shrink-0 flex-col border-t border-warn/40 bg-warn-soft px-4 py-3">
+      <div data-human-only className="flex shrink-0 flex-col border-t border-warn/40 bg-warn-soft px-4 py-3">
         <div className="flex items-start gap-2 text-[13px] font-medium text-ink">
           <Icon name="lock" size={14} className="mt-0.5 text-warn" />
           <span>{pending.title}</span>

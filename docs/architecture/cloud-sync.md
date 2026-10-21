@@ -17,7 +17,9 @@ is the contract between the parts:
   position as it lands, so an update that lands mid-upload stays queued and a backlog of tens of thousands makes
   progress instead of one giant request. Every row goes through `scrub()` first: Postgres refuses a NUL or a lone
   UTF-16 surrogate in text and jsonb ("unsupported Unicode escape sequence"), and a terminal's output has both;
-  before the scrub one such item failed the whole batch on every retry and nothing uploaded. If the server still
+  before the scrub one such item failed the whole batch on every retry and nothing uploaded. Cards, items and
+  long tool outputs are also redacted on the way out (`lib/cloud-sync-redact.ts`, the share redactor; ids and paths
+  kept), since every workspace member can read these rows. If the server still
   refuses a chunk with a data error (Postgres class 22), its rows go one at a time and the refused ones are skipped
   and named in `lastError` ("Skipped N items the server refused"); a dropped connection or row-level security
   stays a backoff that keeps everything. A request holds one row per primary key (`lastPerKey`): Codex reuses tool ids like

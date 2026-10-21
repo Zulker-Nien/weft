@@ -1,11 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fail, guard } from "@/lib/guard";
+import { fail, elevated } from "@/lib/guard";
 import { allowFolder } from "@/lib/settings";
 
 // "Always allow" on a folder-guard prompt (lib/folder-guard.ts): every card may use that folder outside its project from now on.
 export async function POST(req: Request) {
-  const denied = guard(req);
+  const denied = elevated(req);
   if (denied) return denied;
   try {
     const { folder } = (await req.json()) as { folder?: unknown };

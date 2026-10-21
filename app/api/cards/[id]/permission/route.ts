@@ -1,9 +1,9 @@
-import { fail, guard } from "@/lib/guard";
+import { fail, elevated } from "@/lib/guard";
 import { readQuestionReply } from "@/lib/question-reply";
 import { answerPermission, waitPermission } from "@/lib/runner";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const denied = guard(req);
+  const denied = elevated(req);
   if (denied) return denied;
   const { id } = await params;
   try {
