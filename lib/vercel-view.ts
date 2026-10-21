@@ -191,7 +191,7 @@ export function vercelBridge(): VercelBridge | null {
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 // How well a project fits a folder: 3 deploys from its GitHub repo, 2 has the repo's or folder's name,
-// 1 a name that contains it either way, 0 none.
+// 1 a name that contains it either way, 0 none. The picker's score (components/VercelPicker.tsx) and its tests.
 export function matchScore(project: Pick<VercelProject, "name" | "git">, folder: Pick<VercelFolder, "folder" | "repo">) {
   if (project.git && folder.repo && project.git.toLowerCase() === folder.repo.toLowerCase()) return 3;
   const names = [folderName(folder.folder), folder.repo?.split("/")[1] ?? ""].map(norm).filter(Boolean);
@@ -202,7 +202,8 @@ export function matchScore(project: Pick<VercelProject, "name" | "git">, folder:
 }
 
 // The picker's list: projects matching the search (name, team or repo), best fits for the folder first,
-// then the most recently updated.
+// then the most recently updated. Kept here so the picker stays self-contained; components/VercelPicker.tsx
+// shares the same loop through lib/db-picker.ts.
 export function pickerList(projects: VercelProject[], folder: Pick<VercelFolder, "folder" | "repo">, search = "") {
   const q = search.trim().toLowerCase();
   return projects

@@ -141,7 +141,7 @@ describe("helpers", () => {
   it("describes the request for the approval", () => {
     expect(describeRun({ kind: "run", command: "npm run job", cwd: "/p", script: "job: node j.js", names: ["A", "B"], environment: "production", label: "o/r" })).toEqual({
       message: "A thread wants to run a command with secrets from o/r.",
-      detail: "Command: npm run job\n\nIn: /p\n\nRuns:\njob: node j.js\n\nSecrets (production): A, B\n\nThe thread won't see the values; they're shown as ‹NAME› in its output.",
+      detail: "Command: npm run job\n\nIn: /p\n\nRuns:\njob: node j.js\n\nSecrets (production): A, B\n\nThe thread won't see the values; they're shown as ‹NAME› in its output.\n\nAlways lasts until the code in this folder changes; then Weft asks again.",
       reason: 'run "npm run job" with A, B (o/r)',
       view: { kind: "run", command: "npm run job", cwd: "/p", script: "job: node j.js", names: ["A", "B"], environment: "production", label: "o/r" },
     });

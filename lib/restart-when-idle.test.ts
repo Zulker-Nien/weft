@@ -229,3 +229,36 @@ describe("holdForRestart", () => {
     expect(() => holdForRestart("copilot", "hi")).toThrow(COPILOT_HELD);
   });
 });
+
+// A drain armed by a server process that has since been replaced. globalSingleton keeps it on globalThis, so a
+// respawned `next dev` used to inherit it still-armed and restart Weft again a second after it came up (the
+// server.cjs SIGTERM loop, 2026-10-21). Re-importing with fresh modules is exactly that respawn.
+describe("a drain inherited from a previous server process", () => {
+  it("is disarmed on boot instead of restarting Weft again", async () => {
+    vi.resetModules();
+    const first = await import("./restart-when-idle");
+    first.armRestart();
+    expect(first.restartArmed()).toBe(true);
+    // No timers run: this is the old process, about to be killed mid-drain.
+    vi.useRealTimers();
+
+    vi.resetModules();
+    const second = await import("./restart-when-idle");
+    expect(second.restartStatus().armed).toBe(false);
+    // And it stays disarmed: nothing fires a second restart.
+    vi.useFakeTimers();
+    await vi.advanceTimersByTimeAsync(SETTLE_MS * 5);
+    expect(shell).not.toHaveBeenCalled();
+  });
+
+  it("keeps a drain this generation armed", async () => {
+    vi.resetModules();
+    const mod = await import("./restart-when-idle");
+    mod.armRestart();
+    vi.resetModules();
+    // The same module instance (no respawn) still has it armed; only a respawn clears it.
+    expect(mod.restartArmed()).toBe(true);
+    mod.cancelRestart();
+    expect(mod.restartArmed()).toBe(false);
+  });
+});

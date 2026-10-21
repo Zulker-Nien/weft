@@ -2,27 +2,35 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { api } from "@/lib/client";
+import { openNewThread, selectCard } from "@/lib/onboarding-events";
 import { answerFor, answerWelcome, defaultTicks, loadWelcome, REPLAY_EVENT, TEST_EVENT, type WelcomePreview } from "@/lib/welcome-client";
 import Modal from "./Modal";
-import { AboutStep, BoardStep, RailStep } from "./WelcomeIntro";
-import { ProfileStep, ProjectsStep } from "./WelcomeSteps";
+import { FirstThreadStep, STARTERS } from "./WelcomeFirst";
+import { WelcomeFooter, welcomeNote, type WelcomeStep } from "./WelcomeFooter";
+import { CLIS, ReadyStep, readyCli, useCliStatus } from "./WelcomeIntro";
+import { ProjectsStep } from "./WelcomeSteps";
 
-// First launch's welcome, for everyone (lib/welcome.ts): screens 1 to 3 explain Weft, its board and the left bar (Back / Next),
-// screen 4 shows the Wefter Profile your Claude Code history makes (Opt out / OK), screen 5 the projects to bring in (Start fresh / OK). OK is the
-// default on ↵. The session sync adds no cards until it's answered; with no sessions at all there's
-// nothing to ask, so it answers itself. Settings → General's "Replay the welcome" shows it again as a
-// preview that changes nothing (its switches do that); its "Test it" shows the real one, answered for real. It draws over the rest of the window, Settings too.
-const STEPS = 5;
-type Step = 1 | 2 | 3 | 4 | 5;
+// First launch's welcome, for everyone, history or not (lib/welcome.ts). Do, don't tell: screen 1 is what Weft is on a
+// real board, with the agent CLIs and Log in right there; screen 2 the projects to bring in, with the switch that counts
+// your Claude Code history on your Wefter Profile (left out when there's no history); screen 3 starts your first thread.
+// The answer is saved on leaving screen 2 (or 1 with no history), so the import runs while you write the first prompt;
+// the session sync adds no cards until then. The board explains the rest in place, once, as cards move.
+// Settings → General's "Replay the welcome" shows it again as a preview that saves nothing (Start still starts a
+// thread: you asked for that one); its "Test it" shows the real one, answered for real. It draws over the whole window.
 
 export default function WelcomeDialog({ onError }: { onError?: (err: unknown) => void }) {
   const [preview, setPreview] = useState<WelcomePreview | null>(null);
-  const [step, setStep] = useState<Step>(1);
+  const [step, setStep] = useState<WelcomeStep>("ready");
   const [countHistory, setCountHistory] = useState(true);
   const [ticked, setTicked] = useState<Set<string>>(new Set());
+  const [cwd, setCwd] = useState("");
+  const [prompt, setPrompt] = useState(STARTERS[0]?.text ?? "");
   const [busy, setBusy] = useState(false);
   const [replay, setReplay] = useState(false);
   const ok = useRef<HTMLButtonElement>(null);
+  // Screen 1 polls each agent CLI's login while the welcome shows, so a login finished in the browser ticks itself.
+  const cliStatus = useCliStatus(preview !== null);
   // The board hands a new onError on every render; the loading effect shouldn't rerun for that.
   const report = useRef(onError);
   useEffect(() => {
@@ -31,26 +39,25 @@ export default function WelcomeDialog({ onError }: { onError?: (err: unknown) =>
 
   useEffect(() => {
     let live = true;
+    const show = (view: WelcomePreview, isReplay: boolean) => {
+      const ticks = defaultTicks(view.projects);
+      setReplay(isReplay);
+      setStep("ready");
+      setPreview(view);
+      setTicked(ticks);
+      setCwd(view.projects.find((p) => ticks.has(p.cwd))?.cwd ?? "");
+    };
     const load = () =>
       void loadWelcome()
         .then((view) => {
-          if (!live || view.welcome || !view.preview) return;
-          if (!view.preview.projects.length) return void answerWelcome({ countHistory: true, fresh: false, skip: [] }).catch(() => {});
-          setReplay(false);
-          setStep(1);
-          setPreview(view.preview);
-          setTicked(defaultTicks(view.preview.projects));
+          if (live && !view.welcome && view.preview) show(view.preview, false);
         })
         .catch(() => {});
     load();
     const onReplay = () =>
       void loadWelcome(true)
         .then((view) => {
-          if (!live || !view.preview) return;
-          setReplay(true);
-          setStep(1);
-          setPreview(view.preview);
-          setTicked(defaultTicks(view.preview.projects));
+          if (live && view.preview) show(view.preview, true);
         })
         .catch((err: unknown) => report.current?.(err));
     window.addEventListener(REPLAY_EVENT, onReplay);
@@ -66,92 +73,99 @@ export default function WelcomeDialog({ onError }: { onError?: (err: unknown) =>
 
   if (!preview) return null;
 
-  const finish = (fresh: boolean) => {
+  const hasHistory = preview.projects.length > 0;
+  const steps: WelcomeStep[] = hasHistory ? ["ready", "projects", "first"] : ["ready", "first"];
+  const folders = preview.projects.filter((p) => ticked.has(p.cwd));
+  const cli = readyCli(cliStatus);
+
+  const fail = (err: unknown) => {
+    setBusy(false);
+    report.current?.(err);
+  };
+  // Saves the answer (not in a replay) and moves on to the first thread.
+  const answer = (fresh: boolean) => {
     if (replay) {
-      setPreview(null);
+      setStep("first");
       return;
     }
     setBusy(true);
     answerWelcome(answerFor(countHistory, preview.projects, ticked, fresh))
-      .then(() => setPreview(null))
-      .catch((err: unknown) => {
+      .then(() => {
         setBusy(false);
-        report.current?.(err);
-      });
+        setStep("first");
+      })
+      .catch(fail);
   };
-  const first = (count: boolean) => {
-    setCountHistory(count);
-    setStep(5);
+  const next = () => {
+    if (hasHistory) setStep("projects");
+    else answer(false);
   };
-  const toggle = (cwd: string) =>
+  // Start: the thread runs and its card opens; with no folder picked, the New thread dialog takes over with the prompt.
+  const start = () => {
+    const text = prompt.trim();
+    if (!cwd) {
+      setPreview(null);
+      openNewThread({ prompt: text });
+      return;
+    }
+    if (!text) return;
+    setBusy(true);
+    api
+      .create({ prompt: text, cwd, backend: cli, start: true })
+      .then(({ card }) => {
+        setBusy(false);
+        setPreview(null);
+        selectCard(card.id);
+      })
+      .catch(fail);
+  };
+  const toggle = (folder: string) =>
     setTicked((prev) => {
-      const next = new Set(prev);
-      if (next.has(cwd)) next.delete(cwd);
-      else next.add(cwd);
-      return next;
+      const nextTicks = new Set(prev);
+      if (nextTicks.has(folder)) nextTicks.delete(folder);
+      else nextTicks.add(folder);
+      return nextTicks;
     });
-  // ↵ is OK wherever focus is (a ticked box too), except on another button, which presses itself.
+  // ↵ is the primary wherever focus is, except on another button (which presses itself) and in the prompt, where ⌘↵ is.
   const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key !== "Enter" || (e.target as HTMLElement).tagName === "BUTTON") return;
+    const tag = (e.target as HTMLElement).tagName;
+    if (e.key !== "Enter" || tag === "BUTTON" || tag === "SELECT" || (tag === "TEXTAREA" && !(e.metaKey || e.ctrlKey))) return;
     e.preventDefault();
     ok.current?.click();
   };
 
-  const button = "rounded-md border border-line px-3 py-1.5 text-[12.5px] text-ink hover:bg-sunken disabled:opacity-40";
-  const primary = "rounded-md bg-accent px-4 py-1.5 text-[12.5px] font-semibold text-on-accent ring-2 ring-accent/30 disabled:opacity-40";
+  const cliReady = cliStatus === null ? null : CLIS.some((c) => cliStatus[c.id]?.loggedIn);
   return createPortal(
     <Modal label="Welcome to Weft" onClose={() => {}} keepOnBackdrop className="w-full max-w-[620px]">
       <div onKeyDown={onKeyDown} className="flex flex-col">
         <div className="flex items-center justify-between border-b border-line px-5 py-2.5 text-[12px] text-muted">
-          <span>{replay ? "Welcome to Weft · replay, nothing changes" : "Welcome to Weft"}</span>
-          <span className="flex gap-1.5" aria-label={`Step ${step} of ${STEPS}`}>
-            {[1, 2, 3, 4, 5].map((n) => (
-              <span key={n} className={`size-1.5 rounded-full ${step === n ? "bg-accent" : "bg-line"}`} />
+          <span>{replay ? "Replay · saves nothing" : `Step ${steps.indexOf(step) + 1} of ${steps.length}`}</span>
+          <span className="flex gap-1.5" aria-label={`Step ${steps.indexOf(step) + 1} of ${steps.length}`}>
+            {steps.map((s) => (
+              <span key={s} className={`h-1.5 rounded-full transition-all ${step === s ? "w-4 bg-accent" : "w-1.5 bg-line"}`} />
             ))}
           </span>
         </div>
-        <div className="max-h-[70vh] overflow-auto px-5 py-4">
-          {step === 1 && <AboutStep />}
-          {step === 2 && <BoardStep />}
-          {step === 3 && <RailStep />}
-          {step === 4 && <ProfileStep preview={preview} />}
-          {step === 5 && <ProjectsStep projects={preview.projects} ticked={ticked} toggle={toggle} />}
-        </div>
-        <div className="flex items-center gap-3 border-t border-line px-5 py-3">
-          <span className="flex-1 text-[11.5px] text-muted">
-            {step < 4 ? "Replay this any time from Settings → General." : step === 4 ? "Change it any time in Settings → General." : "Start fresh leaves your old sessions off the board. Bring them in later from Settings."}
-          </span>
-          {step < 4 ? (
-            <span className="flex shrink-0 gap-2">
-              {step > 1 && (
-                <button type="button" className={button} onClick={() => setStep((step - 1) as Step)}>
-                  Back
-                </button>
-              )}
-              <button type="button" ref={ok} className={primary} onClick={() => setStep((step + 1) as Step)}>
-                Next ↵
-              </button>
-            </span>
-          ) : step === 4 ? (
-            <span className="flex shrink-0 gap-2">
-              <button type="button" className={button} onClick={() => first(false)}>
-                Opt out
-              </button>
-              <button type="button" ref={ok} className={primary} onClick={() => first(true)}>
-                OK ↵
-              </button>
-            </span>
-          ) : (
-            <span className="flex shrink-0 gap-2">
-              <button type="button" className={button} disabled={busy} onClick={() => finish(true)}>
-                Start fresh
-              </button>
-              <button type="button" ref={ok} className={primary} disabled={busy} onClick={() => finish(false)}>
-                OK ↵
-              </button>
-            </span>
+        <div className="max-h-[72vh] overflow-auto px-5 py-4">
+          {step === "ready" && <ReadyStep status={cliStatus} />}
+          {step === "projects" && <ProjectsStep projects={preview.projects} ticked={ticked} toggle={toggle} history={{ on: countHistory, set: setCountHistory, preview }} />}
+          {step === "first" && (
+            <FirstThreadStep folders={folders} cwd={cwd} setCwd={setCwd} prompt={prompt} setPrompt={setPrompt} cliLabel={CLIS.find((c) => c.id === cli)?.label ?? cli} />
           )}
         </div>
+        <WelcomeFooter
+          step={step}
+          note={welcomeNote(step, cliReady, cwd)}
+          busy={busy}
+          okRef={ok}
+          bringing={folders.length}
+          cwd={cwd}
+          canStart={!cwd || Boolean(prompt.trim())}
+          onNext={next}
+          onAnswer={answer}
+          onSkip={() => setPreview(null)}
+          onStart={start}
+        />
       </div>
     </Modal>,
     document.body,

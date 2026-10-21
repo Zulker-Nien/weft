@@ -2,7 +2,7 @@ import { firstMessage, messagesForMove, doneOverrides } from "@/lib/automations"
 import { randomUUID } from "node:crypto";
 import { resolveFolder } from "@/lib/folders";
 import { asText, cleanTitle } from "@/lib/format";
-import { fail, guard } from "@/lib/guard";
+import { elevated, fail, guard } from "@/lib/guard";
 import { withReadScope } from "@/lib/read-scope";
 import { archiveWhenIdle, endSession, isBusy, queueMessages, sendMessage, setPermissionMode } from "@/lib/runner";
 import { addScheduled } from "@/lib/schedule";
@@ -77,6 +77,11 @@ function applyDoneOverride(card: Card) {
   });
 }
 
+// A mode change or a read grant widens what the thread may do: only Weft's own window, not a thread's curl (lib/guard.ts).
+function widens(req: Request, body: { permissionMode?: unknown; readScope?: unknown }): Response | null {
+  return body.permissionMode !== undefined || body.readScope !== undefined ? elevated(req) : null;
+}
+
 export async function PATCH(req: Request, { params }: Ctx) {
   const denied = guard(req);
   if (denied) return denied;
@@ -101,6 +106,9 @@ export async function PATCH(req: Request, { params }: Ctx) {
       // in the card's own column, or at the end when null.
       before?: string | null;
     };
+
+    const loose = widens(req, body);
+    if (loose) return loose;
 
     if (body.title !== undefined) {
       const title = cleanTitle(asText(body.title));

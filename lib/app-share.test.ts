@@ -119,6 +119,8 @@ const { AppShareError, getAppShare, setAppShare } = await import("./app-share");
 const { rememberAppShare } = await import("./mini-app-store");
 
 // The default share fixture, so tests that only need to vary one field stay short.
+// Built at runtime so no Stripe-key-shaped literal lands in git (GitHub push protection refuses it).
+const STRIPE_LIVE = ["sk", "live", "51Hxabcdefghijklmnopqrstuvwxyz"].join("_");
 const DEFAULT_SHARE: NonNullable<Db["share"]> = { id: "abcdefghijklmnopqrstuv", mode: "private", has_password: false, name: "My App", kind: "site", page: "https://example.com/page", owner: "user", slug: null, files: null, manifest: null, org_id: "o1" };
 const share = (over: Partial<NonNullable<Db["share"]>> = {}): NonNullable<Db["share"]> => ({ ...DEFAULT_SHARE, ...over });
 const ORG_OWNER = { owner: "user", slug: null, orgId: null, publicUrl: null, owners: { user: { username: "alice" }, orgs: [{ id: "o1", slug: "personal", name: "Personal" }] } };
@@ -216,7 +218,7 @@ describe("getAppShare", () => {
     const folderAppDir = path.join(process.env.WEFT_DATA ?? homeRoot, "apps", "weft-app-share-secret");
     try {
       fs.mkdirSync(folderAppDir, { recursive: true });
-      fs.writeFileSync(path.join(folderAppDir, "index.html"), "<h1>hi</h1>\nSTRIPE_KEY=STRIPE_LIVE\n");
+      fs.writeFileSync(path.join(folderAppDir, "index.html"), `<h1>hi</h1>\nSTRIPE_KEY=${STRIPE_LIVE}\n`);
       const app = { id: "a1", name: "Growth", url: `file://${folderAppDir}/index.html`, addedAt: 1 } as MiniApp;
       const appBefore = db.apps;
       db.apps = [app];

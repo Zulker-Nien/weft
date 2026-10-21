@@ -29,7 +29,7 @@ function describe({ kind, command, cwd, script, names, environment, label, threa
     kind === "dev"
       ? `Start ${thread ? `"${thread}"'s` : "this card's"} dev server with ${label}'s ${environment} secrets?`
       : `${thread ? `"${thread}"` : "A thread"} wants to run a command with secrets from ${label}.`;
-  const detail = [why ? `Why: ${why}` : null, `Command: ${command}`, `In: ${cwd}`, script ? `Runs:\n${script}` : null, `Secrets (${environment}): ${names.join(", ")}`, "The thread won't see the values; they're shown as ‹NAME› in its output."].filter(Boolean).join("\n\n");
+  const detail = [why ? `Why: ${why}` : null, `Command: ${command}`, `In: ${cwd}`, script ? `Runs:\n${script}` : null, `Secrets (${environment}): ${names.join(", ")}`, "The thread won't see the values; they're shown as ‹NAME› in its output.", kind === "dev" ? null : "Always lasts until the code in this folder changes; then Weft asks again."].filter(Boolean).join("\n\n");
   const reason = `run "${command}" with ${names.join(", ")} (${label})${thread ? ` for "${thread}"` : ""}`;
   return { message, detail, reason, view: { kind, command, cwd, script, names, environment, label, thread, why } };
 }

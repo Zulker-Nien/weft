@@ -25,6 +25,7 @@ import {
   type SortKey,
 } from "@/lib/board-view";
 import { useBoardEvents } from "@/lib/use-events";
+import { useOnboardingEvents } from "@/lib/onboarding-events";
 import { useRestart } from "@/lib/use-restart";
 import { useDesktopBridge } from "@/lib/use-desktop-bridge";
 import { useStartupCheck } from "@/lib/use-startup-check";
@@ -69,6 +70,7 @@ import StandaloneBrowserPane from "./StandaloneBrowserPane";
 const AccountButton = guarded(() => import("./AccountButton"), { inline: true, what: "account button" });
 const CopilotButton = guarded(() => import("./CopilotButton"), { inline: true, what: "copilot button" });
 const CopilotLane = guarded(() => import("./CopilotLane"), { what: "copilot", className: "self-stretch shrink-0" });
+const OnboardingTips = guarded(() => import("./OnboardingTips"), { what: "onboarding tips", inline: true });
 const RestartChip = guarded(() => import("./RestartChip"), { inline: true, what: "restart chip" });
 const BrowserPane = guarded(() => import("./BrowserPane"), { what: "browser pane", className: "m-3 w-[360px] self-start" });
 const CardView = guarded(() => import("./CardView"), { what: "card", placeholder: <CardSkeleton /> });
@@ -491,6 +493,7 @@ export default function Board() {
   useEffect(() => {
     menuActions.current = { openNew, openCard, focusFilter, toggleTerminal };
   });
+  useOnboardingEvents(openNew, select);
 
   // Everything the command palette offers: the board's actions, the projects, and every card.
   // Computed lazily: only when the palette is open (`showPalette`), so creating a fresh array of
@@ -784,6 +787,7 @@ export default function Board() {
             );
           })}
         </main>
+        <OnboardingTips cards={cards} loaded={loaded} filtering={filtering} />
         <CopilotLane
           state={laneState}
           cards={cards}

@@ -6,7 +6,7 @@ import "./test-utils";
 import type { WelcomeProject } from "@/lib/welcome-preview";
 
 // The first-launch welcome (components/WelcomeDialog.tsx): the board's view of /api/welcome, with
-// loadWelcome / answerWelcome faked and answerFor / defaultTicks kept real so the dialog answers
+// loadWelcome / answerWelcome and the CLI and card APIs faked and answerFor / defaultTicks kept real so the dialog answers
 // with the ticks the user actually sees.
 
 const api = vi.hoisted(() => ({
@@ -14,6 +14,12 @@ const api = vi.hoisted(() => ({
   answerWelcome: vi.fn(() => Promise.resolve({ welcome: { at: 0, countHistory: true, fresh: false, skip: [] } })),
   changeWelcome: vi.fn(),
 }));
+const client = vi.hoisted(() => ({
+  loginStatus: vi.fn(() => Promise.resolve({ status: { claude: { loggedIn: true, email: "a@b.c" }, puku: { loggedIn: false }, codex: { loggedIn: false } }, runs: [] })),
+  login: vi.fn(() => Promise.resolve({ login: null })),
+  create: vi.fn(() => Promise.resolve({ card: { id: "card-1" } })),
+}));
+vi.mock("@/lib/client", () => ({ api: client }));
 vi.mock("@/lib/welcome-client", async () => {
   const actual = await vi.importActual<typeof import("@/lib/welcome-client")>("@/lib/welcome-client");
   return { ...actual, loadWelcome: api.loadWelcome, answerWelcome: api.answerWelcome, changeWelcome: api.changeWelcome };
@@ -49,12 +55,13 @@ function setup() {
   api.loadWelcome.mockReset();
   api.answerWelcome.mockReset().mockResolvedValue({ welcome: { at: 0, countHistory: true, fresh: false, skip: [] } });
   api.changeWelcome.mockReset();
+  client.create.mockClear();
+  client.login.mockClear();
 }
 
-// Three explaining screens come first (Welcome, the board, the left bar); the Wefter Profile is screen 4.
-async function toProfile() {
-  for (let i = 0; i < 3; i++) await userEvent.click(await screen.findByRole("button", { name: /^Next/ }));
-}
+// Screen 1 is Get ready (the CLIs); Next goes to the projects, or straight to the first thread with no history.
+const next = async () => userEvent.click(await screen.findByRole("button", { name: /^Next/ }));
+const bringIn = async () => userEvent.click(await screen.findByRole("button", { name: /^Bring in/ }));
 
 beforeEach(setup);
 afterEach(() => {
@@ -69,115 +76,104 @@ describe("WelcomeDialog", () => {
     expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 
-  it("answers itself with the default welcome when there are no projects", async () => {
+  it("shows to a new user with no history too, and answers on leaving screen 1", async () => {
     api.loadWelcome.mockResolvedValue({ welcome: null, preview: preview([]) });
     render(<WelcomeDialog />);
-    await waitFor(() => expect(api.answerWelcome).toHaveBeenCalledWith({ countHistory: true, fresh: false, skip: [] }));
-  });
-
-  it("opens on the explaining screens, which step with Next and Back", async () => {
-    api.loadWelcome.mockResolvedValue({ welcome: null, preview: preview([project("/repo/a")]) });
-    render(<WelcomeDialog />);
     expect(await screen.findByText("Welcome to Weft", { selector: "h2" })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /^Next/ }));
-    expect(await screen.findByText("How a card moves")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /^Next/ }));
-    expect(await screen.findByText("The left bar")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Back" }));
-    expect(await screen.findByText("How a card moves")).toBeInTheDocument();
     expect(api.answerWelcome).not.toHaveBeenCalled();
+    await next();
+    expect(api.answerWelcome).toHaveBeenCalledWith({ countHistory: true, fresh: false, skip: [] });
+    expect(await screen.findByText("Start your first thread")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Choose a folder/ })).toBeInTheDocument();
   });
 
-  it("opens on screen 1 with the Wefter Profile when projects are available", async () => {
+  it("screen 1 shows each CLI's login and offers Log in for one that isn't", async () => {
     api.loadWelcome.mockResolvedValue({ welcome: null, preview: preview([project("/repo/a")]) });
     render(<WelcomeDialog />);
-    await toProfile();
-    expect(await screen.findByText("Here's your Wefter Profile")).toBeInTheDocument();
-    expect(await screen.findByText(/Change it any time in Settings/)).toBeInTheDocument();
+    expect(await screen.findByText(/Ready · a@b.c/)).toBeInTheDocument();
+    expect(screen.getByText(/Ready to run threads/)).toBeInTheDocument();
+    const logIns = screen.getAllByRole("button", { name: /Log in/ });
+    expect(logIns).toHaveLength(2);
+    await userEvent.click(logIns[0]!);
+    expect(client.login).toHaveBeenCalledWith("puku", "start");
   });
 
-  it("screen 1 OK moves to screen 2 with countHistory true", async () => {
-    api.loadWelcome.mockResolvedValue({ welcome: null, preview: preview([project("/repo/a")]) });
+  it("Bring in with the default ticks sends an empty skip list and moves to the first thread", async () => {
+    api.loadWelcome.mockResolvedValue({ welcome: null, preview: preview([project("/repo/a"), project("/repo/b")]) });
     render(<WelcomeDialog />);
-    await toProfile();
-    await userEvent.click(await screen.findByRole("button", { name: /OK/ }));
+    await next();
     expect(await screen.findByText("Bring in your projects")).toBeInTheDocument();
+    await bringIn();
+    expect(api.answerWelcome).toHaveBeenLastCalledWith({ countHistory: true, fresh: false, skip: [] });
+    expect(await screen.findByText("Start your first thread")).toBeInTheDocument();
   });
 
-  it("Opt out on screen 1 moves to screen 2 with countHistory false", async () => {
+  it("unticking the history switch sends countHistory false", async () => {
     api.loadWelcome.mockResolvedValue({ welcome: null, preview: preview([project("/repo/a")]) });
     render(<WelcomeDialog />);
-    await toProfile();
-    await userEvent.click(await screen.findByRole("button", { name: "Opt out" }));
-    await screen.findByText("Bring in your projects");
-    await userEvent.click(screen.getByRole("button", { name: /^OK/ }));
+    await next();
+    await userEvent.click(await screen.findByRole("checkbox", { name: /Count my past sessions/ }));
+    await bringIn();
     expect(api.answerWelcome).toHaveBeenLastCalledWith({ countHistory: false, fresh: false, skip: [] });
   });
 
-  it("Start fresh sends fresh true and an empty skip list", async () => {
+  it("Start empty sends fresh true and an empty skip list", async () => {
     api.loadWelcome.mockResolvedValue({ welcome: null, preview: preview([project("/repo/a")]) });
     render(<WelcomeDialog />);
-    await toProfile();
-    await userEvent.click(await screen.findByRole("button", { name: /^OK/ }));
-    await userEvent.click(await screen.findByRole("button", { name: "Start fresh" }));
+    await next();
+    await userEvent.click(await screen.findByRole("button", { name: "Start empty" }));
     expect(api.answerWelcome).toHaveBeenLastCalledWith({ countHistory: true, fresh: true, skip: [] });
   });
 
-  it("OK on screen 2 with the default ticks sends an empty skip list", async () => {
+  it("toggles a project off, then Bring in sends the unticked folder in skip", async () => {
     api.loadWelcome.mockResolvedValue({ welcome: null, preview: preview([project("/repo/a"), project("/repo/b")]) });
     render(<WelcomeDialog />);
-    await toProfile();
-    // Screen 1 → Screen 2.
-    await userEvent.click(await screen.findByRole("button", { name: /^OK/ }));
-    // Screen 2: OK with both ticked by default.
-    await userEvent.click(await screen.findByRole("button", { name: /^OK/ }));
-    expect(api.answerWelcome).toHaveBeenLastCalledWith({ countHistory: true, fresh: false, skip: [] });
-  });
-
-  it("toggles a project off, then OK sends the unticked folder in skip", async () => {
-    api.loadWelcome.mockResolvedValue({ welcome: null, preview: preview([project("/repo/a"), project("/repo/b")]) });
-    render(<WelcomeDialog />);
-    await toProfile();
-    await userEvent.click(await screen.findByRole("button", { name: /^OK/ }));
-    // Now on screen 2; untick /repo/b then click OK to finish.
+    await next();
     await userEvent.click(await screen.findByRole("checkbox", { name: /\/repo\/b/ }));
-    await userEvent.click(await screen.findByRole("button", { name: /^OK/ }));
+    await bringIn();
     expect(api.answerWelcome).toHaveBeenLastCalledWith({ countHistory: true, fresh: false, skip: ["/repo/b"] });
   });
 
   it("scratch projects are unticked and folded under a count", async () => {
     api.loadWelcome.mockResolvedValue({ welcome: null, preview: preview([project("/repo/real"), project("/tmp/wt", true), project("/tmp/wt2", true)]) });
     render(<WelcomeDialog />);
-    await toProfile();
-    await userEvent.click(await screen.findByRole("button", { name: /^OK/ }));
-    // The collapse button shows the count and is the only place the scratch names appear.
-    const collapse = screen.getByRole("button", { name: /scratch/ });
+    await next();
+    const collapse = await screen.findByRole("button", { name: /scratch/ });
     expect(collapse).toHaveTextContent("2 scratch, temp and worktree folders left out");
-    // Before expanding: one checkbox for the real project.
-    expect(screen.getAllByRole("checkbox")).toHaveLength(1);
+    // One project checkbox plus the history switch.
+    expect(screen.getAllByRole("checkbox")).toHaveLength(2);
     await userEvent.click(collapse);
-    // After: three checkboxes (real + two scratch).
-    expect(screen.getAllByRole("checkbox")).toHaveLength(3);
+    expect(screen.getAllByRole("checkbox")).toHaveLength(4);
   });
 
-  it("Enter on a checkbox presses OK", async () => {
+  it("Enter on a checkbox presses Bring in", async () => {
     api.loadWelcome.mockResolvedValue({ welcome: null, preview: preview([project("/repo/a")]) });
     render(<WelcomeDialog />);
-    await toProfile();
-    await userEvent.click(await screen.findByRole("button", { name: /^OK/ }));
-    // On screen 2; focus a checkbox and press Enter.
-    const checkbox = await screen.findByRole("checkbox");
+    await next();
+    const checkbox = await screen.findByRole("checkbox", { name: /\/repo\/a/ });
     checkbox.focus();
     await userEvent.keyboard("{Enter}");
     expect(api.answerWelcome).toHaveBeenCalled();
   });
 
-  it("closes the dialog once the answer is saved", async () => {
+  it("starts the first thread in the first brought-in project on the ready CLI, then closes", async () => {
     api.loadWelcome.mockResolvedValue({ welcome: null, preview: preview([project("/repo/a")]) });
     const { container } = render(<WelcomeDialog />);
-    await toProfile();
-    await userEvent.click(await screen.findByRole("button", { name: /^OK/ }));
-    await userEvent.click(await screen.findByRole("button", { name: /^OK/ }));
+    await next();
+    await bringIn();
+    await userEvent.click(await screen.findByRole("button", { name: /Fix a bug/ }));
+    await userEvent.click(screen.getByRole("button", { name: /Start thread/ }));
+    expect(client.create).toHaveBeenCalledWith({ prompt: "Find one real bug in this project and fix it.", cwd: "/repo/a", backend: "claude", start: true });
+    await waitFor(() => expect(container.querySelector('[role="dialog"]')).toBeNull());
+  });
+
+  it("Skip on the first thread closes without starting one", async () => {
+    api.loadWelcome.mockResolvedValue({ welcome: null, preview: preview([project("/repo/a")]) });
+    const { container } = render(<WelcomeDialog />);
+    await next();
+    await bringIn();
+    await userEvent.click(await screen.findByRole("button", { name: "Skip" }));
+    expect(client.create).not.toHaveBeenCalled();
     await waitFor(() => expect(container.querySelector('[role="dialog"]')).toBeNull());
   });
 });

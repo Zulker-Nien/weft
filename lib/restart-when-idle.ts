@@ -8,10 +8,15 @@ import { getCard, updateCard } from "./store";
 import type { RestartStatus } from "./types";
 
 // Restart when idle: restarting Weft cuts off every running turn, so instead you arm a restart. From then no new
-// turn starts (lib/runner.ts asks holdForRestart first): a message sent to a card waits on it as a scheduled message,
-// due now, which lib/scheduler.ts sends once Weft is back. When the last running turn ends, the server asks Electron
-// main to relaunch, or to install the downloaded update (electron/main.cjs "POST /app/restart"). It lives in memory
-// only, so the restart itself disarms it.
+// turn starts (lib/runner.ts asks holdForRestart first): a message sent to a card waits on its card, due now,
+// which lib/scheduler.ts sends once Weft is back. When the last running turn ends, the server asks Electron
+// main to relaunch, or to install the downloaded update (electron/main.cjs "POST /app/restart").
+//
+// The drain lives in memory only, and the restart itself disarms it. But globalSingleton outlives a supervised
+// dev-server restart (globalThis is shared with the next `next dev` Electron respawns), so a drain armed by a
+// dying process would otherwise still be sitting here, still armed, and would fire again ~SETTLE_MS after the
+// new server came up: Weft relaunching itself every few seconds. Each drain therefore records the id of the
+// server generation that armed it, and a new generation disarms an inherited one on boot.
 
 export type RestartThen = NonNullable<RestartStatus["then"]>;
 
@@ -22,15 +27,33 @@ export const SETTLE_MS = 1_000;
 export const COPILOT_HELD = "Weft restarts once the running threads finish, so the copilot is paused until then.";
 export const RERUN_HELD = "Weft restarts once the running threads finish, so this can't run now. Run it again after the restart.";
 
+// This server generation's id, fresh per process. A drain armed by another one is left over from a server that
+// has since been replaced, so it must not fire.
+const GENERATION = randomUUID();
+
 interface Drain {
   then: RestartThen;
   stop: () => void;
   timer?: ReturnType<typeof setTimeout>;
   // The status last published, so a card event that changes nothing stays quiet.
   last?: string;
+  // The server generation that armed this drain; a mismatch means it survived that generation's death.
+  generation?: string;
 }
 
 const state = globalSingleton("__weftRestart", () => ({ drain: undefined as Drain | undefined }));
+
+// A drain inherited from a previous server process, whose restart already happened (or was lost when it died).
+// Cleared once on boot, before anything can read it, so it can't restart Weft a second time.
+const inherited = state.drain;
+if (inherited && inherited.generation !== undefined && inherited.generation !== GENERATION) {
+  console.warn(
+    `[weft] clearing a restart-when-idle drain left armed by a previous server process (armed for "${inherited.then}"); it would have restarted Weft again`,
+  );
+  inherited.stop();
+  clearTimeout(inherited.timer);
+  state.drain = undefined;
+}
 
 export function restartArmed(): boolean {
   return state.drain !== undefined;
@@ -50,11 +73,12 @@ export function restartStatus(): RestartStatus {
 // Arms the restart, or turns an armed relaunch into an update. With nothing running it restarts after SETTLE_MS.
 export function armRestart(then: RestartThen = "relaunch"): RestartStatus {
   if (!process.env.WEFT_SHELL_URL) throw new Error("Restarting Weft needs the desktop app.");
+  console.warn(`[weft] restart-when-idle armed (${then}), generation ${GENERATION}`);
   let drain = state.drain;
   if (drain) {
     if (then === "update") drain.then = "update";
   } else {
-    const armed = { then } as Drain;
+    const armed = { then, generation: GENERATION } as Drain;
     armed.stop = subscribe((event) => {
       if (event.type === "card") check(armed);
     });
@@ -67,6 +91,7 @@ export function armRestart(then: RestartThen = "relaunch"): RestartStatus {
 function disarm(error?: string): RestartStatus {
   const drain = state.drain;
   if (drain) {
+    console.warn(`[weft] restart-when-idle disarmed${error ? `: ${error}` : ""} (was ${drain.then})`);
     drain.stop();
     clearTimeout(drain.timer);
     state.drain = undefined;
@@ -98,6 +123,7 @@ function check(drain: Drain) {
 // Stays armed while Electron quits, so nothing starts in the meantime.
 async function restartNow(drain: Drain) {
   try {
+    console.warn(`[weft] restart-when-idle firing: asking Electron to ${drain.then} (generation ${drain.generation})`);
     await shell("/app/restart", { then: drain.then });
   } catch (err) {
     if (state.drain === drain) disarm(`Weft couldn't restart: ${err instanceof Error ? err.message : String(err)}`);

@@ -120,11 +120,15 @@ same time; Next.js allows one dev server per project folder.
 On launch and every minute after, Weft picks up your Claude Code sessions (the ones
 `claude --resume` and the Claude app list) as cards, read-only from `~/.claude/projects`:
 
-- **First launch asks first.** A welcome shows the Wefter Profile your sessions make and where it came from
-  (**Opt out** keeps your history off your XP and streaks), then your projects with their session counts,
-  worktree, scratch and temp folders unticked; **Start fresh** brings in none of the old ones. No cards are
-  added until you answer. A board that already had cards is left as it was. Settings → General changes either
-  answer later and replays the welcome (`lib/welcome.ts`, `components/WelcomeDialog.tsx`).
+- **First launch gets you to a running thread.** Three screens, for everyone, history or not: **Get ready** shows
+  a real board and whether Claude Code, puku-cli and Codex are logged in, with **Log in** right there; **Bring in your
+  projects** lists the folders with Claude Code sessions (worktree, scratch and temp folders unticked; **Start empty**
+  brings in none) with a switch that counts your history on your Wefter Profile; **Start your first thread** picks a
+  project and a starter prompt and opens the card as it runs. No cards are added until you answer. A board that already
+  had cards is left as it was. Settings → General changes either answer later and replays the welcome
+  (`lib/welcome.ts`, `components/WelcomeDialog.tsx`). After it, an empty board offers New thread and the same starters,
+  and the first card to reach Needs you, Review and Done gets a one-time tip under that column (the last opens your
+  Wefter Profile); Settings → General → **Reset tips** shows them again (`lib/tips.ts`, `components/OnboardingTips.tsx`).
 
 - A title like "GOING DEEPER - Weft desktop app" becomes the card "Weft desktop app" with stage
   "Going deeper". DONE threads go to Done; other status words, and threads active in the last three

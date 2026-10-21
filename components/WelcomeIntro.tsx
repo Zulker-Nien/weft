@@ -1,112 +1,101 @@
-// The welcome's three explaining screens, before the profile and projects (components/WelcomeDialog.tsx draws the frame and the buttons).
-// Each one is a small mockup of the real window drawn with the app's own colors, with the explanation written on it.
+"use client";
 
-function Title({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <h2 className="text-[18px] font-semibold text-ink">{title}</h2>
-      <p className="text-[12.5px] text-muted">{children}</p>
-    </div>
-  );
-}
+import { useCallback, useEffect, useState } from "react";
+import { api } from "@/lib/client";
+import type { Backend, CliStatus } from "@/lib/types";
+import { Spinner } from "./Icon";
 
-const frame = "overflow-hidden rounded-lg border border-line bg-sunken";
+// The welcome's first screen (components/WelcomeDialog.tsx draws the frame and the buttons): what Weft is, on a real
+// screenshot of a working board, and whether an agent CLI is ready to run a thread, with Log in right there.
 
-// Screen 1: an open card, the thread on the left and the browser pane on the right, the explanation in the pane.
-export function AboutStep() {
-  return (
-    <div className="flex flex-col gap-3">
-      <Title title="Welcome to Weft">A board where every card is an AI coding thread. You bring the idea; Weft runs the threads that plan it, build it and show it to you.</Title>
-      <div className={`${frame} flex h-[250px]`} aria-hidden>
-        <div className="flex w-[38%] flex-col gap-1.5 border-r border-line p-2">
-          <b className="truncate text-[11px] text-ink">🧵 Add a login page</b>
-          <span className="w-fit rounded bg-bg px-1.5 py-0.5 text-[9.5px] text-muted">Claude Code · Auto · my-app</span>
-          <span className="mt-1 self-end rounded-md bg-accent/20 px-2 py-1 text-[10px] text-ink">add a login page with GitHub sign-in</span>
-          <span className="rounded-md bg-bg px-2 py-1 text-[10px] text-muted">Built it. Take a look at the page on the right.</span>
-          <span className="mt-auto rounded-md border border-line bg-bg px-2 py-1.5 text-[10px] text-muted">Write the next message</span>
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-center gap-1.5 border-b border-line px-2 py-1 text-[9.5px] text-muted">
-            <span className="flex-1 truncate rounded bg-bg px-2 py-0.5">localhost:3000/login</span>
-            <span>⟳</span>
-          </div>
-          <div className="flex flex-1 flex-col gap-2 overflow-hidden p-3 text-[11px] text-muted">
-            <b className="text-[12.5px] text-ink">This is the browser pane.</b>
-            <span>
-              🧵 <b className="text-ink">Each card is a thread</b>: a Claude Code, puku or Codex session working in one of your folders. Start as many as you like.
-            </span>
-            <span>
-              🖥 <b className="text-ink">The pane always shows something</b>: your running app, or a page the thread wrote, so you see the work.
-            </span>
-            <span>
-              🧭 <b className="text-ink">⌘J opens the copilot</b>, which runs the board: ask what&apos;s waiting, start threads, plan a sprint.
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const LANES: { name: string; note: string; card?: boolean }[] = [
-  { name: "Backlog", note: "Ideas not started. Drop one in with ⌘B." },
-  { name: "Running", note: "A thread is working. Several run at once." },
-  { name: "Needs you", note: "It asked a question or wants a permission." },
-  { name: "Review", note: "Finished. Open it and Weft walks you through the change in the browser pane, one step at a time, then sends your notes back to the thread." },
-  { name: "Done", note: "Moving a card here commits and pushes it, refactors the code it touched, and updates the docs and tests." },
+export const CLIS: { id: Backend; label: string; note: string }[] = [
+  { id: "claude", label: "Claude Code", note: "Anthropic's coding agent" },
+  { id: "puku", label: "puku-cli", note: "Claude Code on the Puku gateway, free to try" },
+  { id: "codex", label: "Codex", note: "OpenAI's coding agent" },
 ];
 
-// Screen 2: an empty board, each swimlane with its explanation written at the top.
-export function BoardStep() {
+export type CliStatuses = Partial<Record<Backend, CliStatus>>;
+
+// The CLI a first thread runs on: the first one that's logged in, else Claude Code.
+export const readyCli = (status: CliStatuses | null): Backend => CLIS.find((c) => status?.[c.id]?.loggedIn)?.id ?? "claude";
+
+// Each CLI's login, polled every few seconds while the screen shows so a login finished in the browser ticks itself.
+export function useCliStatus(poll = true) {
+  const [status, setStatus] = useState<CliStatuses | null>(null);
+  const refresh = useCallback(
+    () =>
+      api.loginStatus().then(
+        (r) => setStatus(r.status),
+        () => setStatus((s) => s ?? {}),
+      ),
+    [],
+  );
+  useEffect(() => {
+    void refresh();
+    if (!poll) return;
+    const timer = setInterval(() => void refresh(), 4000);
+    return () => clearInterval(timer);
+  }, [poll, refresh]);
+  return status;
+}
+
+// One CLI's readiness: the dot's color, the line beside the label, and whether a Log in button belongs there.
+// Pulled out of CliRow so the row itself only draws; this is where the three-way branch lives.
+function cliState(cli: (typeof CLIS)[number], status: CliStatus | undefined) {
+  const missing = status?.error && /not (found|installed)|ENOENT/i.test(status.error);
+  const dot = !status ? "bg-faint" : status.loggedIn ? "bg-ok" : missing ? "bg-line-strong" : "bg-warn";
+  const line = !status ? "Checking…" : status.loggedIn ? (status.email ? `Ready · ${status.email}` : "Ready") : missing ? "Not installed" : "Not logged in";
+  return { dot, line: status?.loggedIn ? line : `${line} · ${cli.note}`, canLogIn: Boolean(status && !status.loggedIn && !missing) };
+}
+
+function CliRow({ cli, status, onLogin, starting }: { cli: (typeof CLIS)[number]; status: CliStatus | undefined; onLogin: () => void; starting: boolean }) {
+  const { dot, line, canLogIn } = cliState(cli, status);
+  return (
+    <div className="flex items-center gap-2.5 rounded-md border border-line px-3 py-1.5 text-[12.5px]">
+      <span className={`size-2 shrink-0 rounded-full ${dot}`} aria-hidden />
+      <span className="w-[92px] shrink-0 font-medium text-ink">{cli.label}</span>
+      <span className="min-w-0 flex-1 truncate text-muted">{line}</span>
+      {canLogIn && (
+        <button type="button" onClick={onLogin} disabled={starting} className="flex shrink-0 items-center gap-1 rounded-md border border-line-strong px-2 py-0.5 text-[12px] text-ink hover:bg-sunken disabled:opacity-50">
+          {starting && <Spinner size={10} />}
+          Log in
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Screen 1: a real board in the hero, then the CLIs. One ready CLI is enough; the rest can wait for Settings → Accounts.
+export function ReadyStep({ status }: { status: CliStatuses | null }) {
+  const [starting, setStarting] = useState<Backend | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const login = (backend: Backend) => {
+    setStarting(backend);
+    setError(null);
+    api
+      .login(backend, "start")
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setStarting(null));
+  };
+  const ready = CLIS.some((c) => status?.[c.id]?.loggedIn);
   return (
     <div className="flex flex-col gap-3">
-      <Title title="How a card moves">The thread moves its own card as it goes. You step in at Needs you and Review.</Title>
-      <div className={`${frame} grid grid-cols-5 gap-1.5 p-1.5`} aria-hidden>
-        {LANES.map((lane) => (
-          <div key={lane.name} className="flex h-[250px] flex-col gap-1.5 rounded-md border border-dashed border-line bg-bg p-1.5">
-            <b className="text-[10.5px] text-ink">{lane.name}</b>
-            <span className="text-[9.5px] leading-snug text-muted">{lane.note}</span>
-          </div>
+      <div className="relative overflow-hidden rounded-lg border border-line">
+        <img src="/brand/faq/tour-board.jpg" alt="A Weft board with threads in Running, Needs you, Review and Done" className="h-[190px] w-full object-cover object-top" />
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/60 to-transparent px-4 pb-3 pt-10">
+          <h2 className="text-[19px] font-semibold text-white">Welcome to Weft</h2>
+          <p className="text-[12.5px] text-white/80">Every card is an AI coding thread. You bring the idea; the threads plan it, build it and show it to you.</p>
+        </div>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-baseline justify-between">
+          <b className="text-[13px] text-ink">Your coding agents</b>
+          <span className={`text-[11.5px] ${ready ? "text-ok" : "text-warn"}`}>{status === null ? "" : ready ? "✓ Ready to run threads" : "Log in to one to start"}</span>
+        </div>
+        {CLIS.map((cli) => (
+          <CliRow key={cli.id} cli={cli} status={status?.[cli.id]} starting={starting === cli.id} onLogin={() => login(cli.id)} />
         ))}
-      </div>
-    </div>
-  );
-}
-
-const RAIL: { icon: string; name: string; note: string }[] = [
-  { icon: "★", name: "Starred", note: "Filter the board to starred cards. Starred cards are never archived." },
-  { icon: "🏷", name: "Tags", note: "Label cards like GitHub issues." },
-  { icon: "🖥", name: "Services", note: "Every process Weft started: threads, dev servers, terminals." },
-  { icon: "🔐", name: "Vault", note: "API keys, encrypted. Threads use them but never see them." },
-  { icon: "🪝", name: "Webhooks", note: "Routes providers post to, with a public relay URL." },
-  { icon: "▲", name: "Vercel", note: "Link a project, push env vars, see deploys." },
-  { icon: "⚡", name: "Supabase", note: "Link a project and apply its migrations." },
-  { icon: "☁", name: "Cloudflare", note: "Link a Worker or Pages project." },
-  { icon: "🚀", name: "BlastCP", note: "Posting queue for your launch." },
-  { icon: "⌥", name: "GitHub", note: "Turn open issues into Backlog cards." },
-];
-
-// Screen 3: the left bar, one row per icon.
-export function RailStep() {
-  return (
-    <div className="flex flex-col gap-3">
-      <Title title="The left bar">Everything around the board lives in this strip. Open a drawer when you need it.</Title>
-      <div className={`${frame} flex`} aria-hidden>
-        <div className="flex w-9 shrink-0 flex-col items-center gap-1 border-r border-line bg-bg py-2">
-          {RAIL.map((r) => (
-            <span key={r.name} className="flex size-6 items-center justify-center rounded text-[13px] text-ink">
-              {r.icon}
-            </span>
-          ))}
-        </div>
-        <ul className="flex min-w-0 flex-1 flex-col py-1">
-          {RAIL.map((r) => (
-            <li key={r.name} className="flex h-6 items-center gap-2 px-3 text-[11px]">
-              <b className="w-[72px] shrink-0 text-ink">{r.name}</b>
-              <span className="truncate text-muted">{r.note}</span>
-            </li>
-          ))}
-        </ul>
+        {error && <p className="text-[12px] text-danger">{error}</p>}
       </div>
     </div>
   );
