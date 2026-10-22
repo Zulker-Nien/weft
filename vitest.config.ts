@@ -33,12 +33,13 @@ export default defineConfig({
 // Two keeps a full run useful without squeezing a live Weft session. Raise deliberately, never by default:
 //   MAX_WORKERS=4 pnpm test
 maxWorkers: Number(process.env.MAX_WORKERS) || 2,
-    // Bound each worker's memory, so one runaway fork fails its own test loudly instead of taking the
-    // whole box's memory and aborting Weft's dev server. `vmMemoryLimit` recycles a worker past it;
-    // `execArgv` sets --max-old-space-size so the ceiling is enforced inside the worker too. Both are
-    // top-level: Vitest 4 removed `poolOptions`, where a nested execArgv is silently ignored.
-    // WORKER_HEAP (MB) overrides both.
-    vmMemoryLimit: Number(process.env.WORKER_HEAP) || 768,
+    // Bound each worker's V8 heap, so one runaway fork fails its own test loudly instead of taking the
+    // whole box's memory. `execArgv` is top-level because Vitest 4 removed `poolOptions`, where a nested
+    // execArgv is silently ignored. This is a *JS heap* cap only: it can't see RSC, turbopack's native
+    // buffers or mmap'd module graphs — the allocations that actually crashed us. The real cap on a whole
+    // suite's total resident memory is the RSS watchdog in scripts/test-watchdog.mjs, wired through
+    // scripts/run-tests.mjs (a `pnpm test lib/x.test.ts` is never watched: short, scoped, and fine).
+    // WORKER_HEAP (MB) overrides it.
     execArgv: [`--max-old-space-size=${Number(process.env.WORKER_HEAP) || 768}`],
     // A worker whose run died (its parent killed mid-test) ends itself instead of running on under PID 1.
     setupFiles: ["test/orphan-guard-setup.ts"],

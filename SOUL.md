@@ -388,6 +388,13 @@ in Electron main, revealed or copied only after the user's Touch ID (docs/archit
 - Run `pnpm lint`, `pnpm typecheck` and `pnpm test` (Vitest; tests sit beside the code as `lib/*.test.ts` and `components/*.test.tsx`, the latter in jsdom with `// @vitest-environment jsdom` and `./test-utils`; API routes in `app/api/routes.test.ts`).
   `pnpm typecheck` and `pnpm lint` take turns across cards (`scripts/one-at-a-time.mjs`, as does the pre-commit hook's tsc);
   `lib/check-guard.ts` refuses `npx tsc` or bare `eslint`. To lint only your own files, `pnpm lint <files>`.
+- A whole-suite `pnpm test` is memory-guarded twice over, because a sweep at the core count used to take Weft
+  down with it: `scripts/test-memory.mjs` refuses to start one with under 2 GB genuinely free, and
+  `scripts/test-watchdog.mjs` ends the run if the vitest process tree's real RSS crosses 3072 MB
+  (`WEFT_TEST_MAX_RSS_MB`). Both are bypassed by a run of named files, which is what a thread should do:
+  `pnpm test lib/x.test.ts`. Never call `scripts/run-tests.mjs` bare to "check" something — that starts a real
+  sweep. Vitest's own `vmMemoryLimit` is not one of these guards: it is a no-op on `pool: "forks"`, reads a
+  bare number as bytes, and only measures V8's `heapUsed` after each file, so it cannot see off-heap growth.
 - Stage every new file a change imports. The pre-commit hook (`.githooks/pre-commit`, set up by
   `pnpm install`) type-checks the staged files alone and refuses a commit that imports an unstaged
   file. Never `git stash` in this tree: other threads' unstaged work lives here too.

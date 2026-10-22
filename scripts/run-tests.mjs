@@ -1,13 +1,13 @@
-// `pnpm test` and `pnpm coverage`: vitest, with whole-suite runs taking turns across cards. Each full run starts
-// a worker per core, so three cards testing at once ran 27 workers on 8 cores. A run of named files
-// (`pnpm test lib/x.test.ts`) is quick and goes straight through. Either way a signal that stops this script
-// reaches vitest too (scripts/one-at-a-time.mjs runHolding). Usage: node scripts/run-tests.mjs [vitest args...]
+// `pnpm test` and `pnpm coverage`: vitest, with whole-suite runs taking turns across cards. A run of named
+// files (`pnpm test lib/x.test.ts`) is quick and goes straight through. Either way a signal that stops this
+// script reaches vitest too (scripts/one-at-a-time.mjs runHolding). Usage: node scripts/run-tests.mjs [vitest args...]
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { runHolding } from "./one-at-a-time.mjs";
 import { checkMemoryPressure, pressureMessage } from "./test-memory.mjs";
+import { startWatchdog, DEFAULT_MAX_RSS_MB } from "./test-watchdog.mjs";
 
 // Flags whose value is the next argument, so that argument isn't a file filter.
 const TAKES_VALUE = new Set(["-t", "--testNamePattern", "--reporter", "--project", "--pool", "--shard", "--maxWorkers", "--config", "-c", "--root", "-r", "--environment"]);
@@ -34,8 +34,22 @@ export async function main(args) {
         return 1;
       }
     }
+    // Whole-suite runs are also watched by an RSS watchdog (scripts/test-watchdog.mjs): Vitest's own
+    // `vmMemoryLimit` measures V8 `heapUsed` after each file and only gates worker reuse — it cannot stop a
+    // single runaway file and cannot see the off-heap allocations (RSC, turbopack native buffers) that have
+    // actually crashed us. Bypassed by `--no-watchdog` so a debug session can let one blow through.
+    if (args.includes("--no-watchdog")) {
+      const vitest = [vitestBin(), "run", ...args];
+      return runHolding("test", process.execPath, { args: vitest });
+    }
+    const limitMb = Number(process.env.WEFT_TEST_MAX_RSS_MB) || DEFAULT_MAX_RSS_MB;
     const vitest = [vitestBin(), "run", ...args];
-    return runHolding("test", process.execPath, { args: vitest });
+    return runHolding("test", process.execPath, {
+      args: vitest,
+      // The watchdog polls the whole process tree of the child runHolding spawned, so it sees the vitest
+      // main process and every fork worker.
+      watchdog: { limitMb, start: startWatchdog },
+    });
   }
   const vitest = [vitestBin(), "run", ...args];
   const child = spawn(process.execPath, vitest, { stdio: "inherit" });

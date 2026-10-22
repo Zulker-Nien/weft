@@ -224,3 +224,16 @@ No hook stands between a thread and `vitest`; the guarding happens around the ru
 for whole-suite runs (`scripts/run-tests.mjs`), a worker whose run died ends itself (`lib/orphan-guard.ts`), a
 stopped card's Bash commands end with its CLI (`lib/process-tree.ts`), and the server reaps leftover workers every
 5 minutes (`lib/worker-reaper.ts`). See "Bash commands and orphaned test workers" in threads-and-sessions.md.
+
+A whole-suite run is bounded on memory, because a sweep at the core count used to take Weft down with it (twice,
+2026-10-21). Two guards, both on the whole-suite path only — a run of named files is short, scoped and untouched:
+`scripts/test-memory.mjs` refuses to *start* one with under 2 GB genuinely free (`free + inactive + purgeable` less
+swap in use), and `scripts/test-watchdog.mjs` ends the run if the vitest process tree's real RSS crosses 3072 MB
+(`WEFT_TEST_MAX_RSS_MB`, `--no-watchdog` to bypass). The watcher attaches through `runHolding`'s `watchdog` option
+in `scripts/one-at-a-time.mjs`, which already owned the spawn.
+
+Vitest's own `vmMemoryLimit` is deliberately absent. It cannot do this job: on `pool: "forks"` `getMemoryLimit()`
+returns `null`, a bare number parses as bytes rather than MB, and it only reads V8's `heapUsed` after each test
+file finishes — so it is blind to RSC, native buffers and mmap'd graphs, and blind to a single runaway file mid-run.
+`--max-old-space-size` stays as the per-worker JS-heap cap, which is all it ever was. See
+`docs/bug-fixes/027-test-suite-memory-cap-was-a-noop.md`.

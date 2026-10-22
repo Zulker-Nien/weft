@@ -68,7 +68,7 @@ async function main([name, command, ...args]) {
 // is given), and returns its exit code. A signal that ends
 // this script (a thread's Bash command stopped or timed out) goes on to the command too: left running, a
 // vitest run's workers outlived it under PID 1 (lib/orphan-guard.ts).
-export async function runHolding(name, command, { args, dir = process.env.WEFT_LOCK_DIR || os.tmpdir(), poll = POLL_MS } = {}) {
+export async function runHolding(name, command, { args, dir = process.env.WEFT_LOCK_DIR || os.tmpdir(), poll = POLL_MS, watchdog } = {}) {
   const file = lockPath(name, dir);
   await waitForLock(file, {
     poll,
@@ -77,6 +77,10 @@ export async function runHolding(name, command, { args, dir = process.env.WEFT_L
   const release = () => unlock(file);
   process.on("exit", release);
   const child = spawn(command, args ?? [], { stdio: "inherit", shell: !args });
+  // An optional resident-memory cap on the command's whole process tree (scripts/test-watchdog.mjs), for a
+  // job whose workers can outgrow the box: a whole-suite vitest run beside a live Weft, say. The watcher
+  // SIGTERMs the child on breach; vitest's own limits only see V8's heap, not RSS.
+  const stopWatchdog = watchdog?.start?.(child, watchdog.limitMb);
   const forward = (signal) => {
     release();
     child.kill(signal);
@@ -88,6 +92,7 @@ export async function runHolding(name, command, { args, dir = process.env.WEFT_L
     child.on("exit", (code, signal) => {
       for (const s of signals) process.off(s, forward);
       process.off("exit", release);
+      stopWatchdog?.();
       release();
       resolve(code ?? (signal ? 1 : 0));
     }),

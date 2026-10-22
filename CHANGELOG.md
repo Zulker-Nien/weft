@@ -38,6 +38,8 @@ lands; a release moves those lines under its version and tags the commit `vX.Y.Z
 
 ### Fixed
 
+- **A whole-suite `pnpm test` no longer takes Weft down with it.** The memory cap added in `f9140cf` did nothing: Vitest's `vmMemoryLimit` is a no-op on `pool: "forks"` (its `getMemoryLimit()` returns null for any pool but `vmForks`/`vmThreads`), reads a bare number as bytes rather than MB, and only measures V8's `heapUsed` after each test file finishes — so it could not see, let alone stop, the off-heap growth that crashed us. An RSS watchdog now polls the vitest process tree every 2s and ends a run whose real resident memory crosses 3072 MB (`WEFT_TEST_MAX_RSS_MB`, `--no-watchdog` to bypass), wired through `runHolding`'s new `watchdog` option. A run of named files is never gated or watched (bug-fixes/027).
+
 - **A shared mini app's link no longer says "Not found" for a folder share.** The Mac can share an app as a whole folder, and the deployed page route only knew single-page rows; it now serves the folder's entry file through the same gate and sandbox (bug-fixes/024).
 
 ### Security
