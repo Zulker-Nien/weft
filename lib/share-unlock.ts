@@ -11,6 +11,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { grantGatePass, verifySharePassword } from "@aimhuge/share/server";
 import { isPlausibleEmail } from "@aimhuge/teams";
+import { NO_STORE } from "./app-share-reply";
 import { getShareGate } from "./share-gate";
 import { checkAndRecord, hashIp } from "./share-unlock-rate";
 import { serviceClient } from "./web-session";
@@ -21,8 +22,6 @@ export interface UnlockTarget {
   load: (id: string) => Promise<{ mode: string; password_hash?: string | null } | null>;
   recordVisit: (service: SupabaseClient, input: { shareId: string; email: string | null }) => Promise<void>;
 }
-
-const NO_STORE = { "Cache-Control": "no-store" } as const;
 
 // x-real-ip is set by Vercel at the edge (and by a few other trusted proxies); it is the only
 // trustworthy source for the client's IP. x-forwarded-for is whatever the client put there, so an

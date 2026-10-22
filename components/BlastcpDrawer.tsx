@@ -21,6 +21,7 @@ import { useNow } from "@/lib/use-now";
 import { BlastcpConnect, BlastcpRestart, SMALL } from "./BlastcpConnect";
 import BlastcpLogo from "./BlastcpLogo";
 import BlastcpPicker from "./BlastcpPicker";
+import { FolderRow } from "./FolderRow";
 import { Note } from "./VaultParts";
 
 // The posts a property shows coming up.
@@ -164,22 +165,15 @@ function FolderSection({
 }) {
   const link = f.link;
   return (
-    <section className="mt-2 rounded-lg border border-line bg-card px-2.5 py-2">
-      <div className="flex items-center gap-1">
-        <h3 className="min-w-0 flex-1 truncate text-[12px] font-semibold text-ink" title={f.folder}>
-          {folderName(f.folder)}
-        </h3>
-        {link ? (
-          <button onClick={onUnlink} disabled={busy} className={SMALL} title="Stop showing this property here (nothing changes on BlastCP)">
-            Unlink
-          </button>
-        ) : (
-          <button onClick={onLink} disabled={busy} className="rounded-md bg-accent px-2 py-0.5 text-[11px] font-medium text-on-accent disabled:opacity-40">
-            Link…
-          </button>
-        )}
-      </div>
-      {!link && <p className="mt-0.5 text-[11px] text-faint">Not linked to a BlastCP property</p>}
+    <FolderRow
+      folder={f.folder}
+      linked={Boolean(link)}
+      busy={busy}
+      onLink={onLink}
+      onUnlink={onUnlink}
+      unlinkTitle="Stop showing this property here (nothing changes on BlastCP)"
+      unlinked="Not linked to a BlastCP property"
+    >
       {link && (
         <div className="mt-1 space-y-1 text-[11px] text-muted">
           <button onClick={() => onOpenUrl(`${link.url}/queue`)} className="block max-w-full truncate text-left text-[12px] text-ink hover:underline" title="Open its queue in the browser pane">
@@ -188,7 +182,7 @@ function FolderSection({
           {f.error ? <p className="text-danger">{f.error}</p> : f.posts ? <Queue posts={f.posts} now={now} draftsUrl={`${link.url}/drafts`} onOpenUrl={onOpenUrl} /> : <p className="text-faint">Loading posts…</p>}
         </div>
       )}
-    </section>
+    </FolderRow>
   );
 }
 

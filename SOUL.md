@@ -42,8 +42,10 @@ If you are an agent editing this repo, you are working on me. Read README.md for
     Pure logic already moved out: `lib/board-view.ts` (columns, project chips, chime/unseen rules, Review's Errors/Restart filter chips drawn by `components/ReviewFilterChips.tsx`) and
     `lib/turn.ts` (how a turn's result reads, cost, limits); Board's hooks into `lib/use-*.ts` (`use-now`,
     `use-toast`, `use-desktop-bridge`, `use-copilot-card`, `use-board-actions`, `use-board-toggles`, `use-board-view`, `use-board-archive`,
-    `use-board-card-actions`, plus `lib/board-focus.ts`, `lib/board-helpers.ts`) and its JSX into `BoardHeader`, `BoardColumn`, `BoardToast`.
-    Next: the dialog stage and footer into a `BoardFrame`, the event handlers into a hook.
+    `use-board-card-actions`, plus `lib/board-focus.ts`, `lib/board-helpers.ts`) and its JSX into `BoardHeader`, `BoardColumn`, `BoardToast` and
+    `components/BoardDialogs.tsx` (the nine dialogs, sheets and overlays the board stacks over its columns, each still loaded through
+    `guarded()`; `components/BoardDialogs.test.tsx` says which prop opens which panel and that each close handler fires through).
+    Next: the footer into a `BoardFrame`, the event handlers into a hook, and the prop volume (`SideRail` takes 16, `BoardHeader` 11).
   - My Vitest suite (`pnpm test`, ~3,500 tests) covers every line of `lib/` and `app/api/` (98.6% of branches,
     `pnpm coverage`): a test file beside each module, routes with their libs mocked, the runner's SDK loop
     against a fake `query()` (`lib/runner.harness.ts`, shared by `lib/runner*.test.ts`), and browser code and React hooks under happy-dom +
@@ -114,7 +116,15 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   (▲ Vercel, Supabase, Cloudflare, 🚀 BlastCP — `components/VercelPicker.tsx`, `SupabasePicker.tsx`, `CloudflarePicker.tsx`, `BlastcpPicker.tsx`).
   `DbSelect` draws the search box, the loading/empty notes and the row list; each picker supplies its rows, its own score
   (`matchScore` in its `*-view.ts`) and its row markup (`DbRowLines`), and `rankItems` does the shared filter-then-sort. A fifth
-  provider is one file that calls it, not another list UI to write.
+  provider is one file that calls it, not another list UI to write. `lib/db-picker.ts` also owns the two helpers all four view modules
+  used to carry byte-identical copies of — `norm` (the name comparison behind every `matchScore`) and `shownFolders` (the drawer's
+  top-bar-project-or-all filter) — plus the `Tone` type the providers' `STATES` maps and `components/tone.ts`'s `TONE` palette share.
+  `components/TokenForm.tsx` is the same idea one layer up: the paste-a-token form ▲ and Supabase use, and `components/tone.ts`
+  (`TONE`, `SMALL`, `LINK`, `BODY`) the class strings they all shared. Cloudflare's two-step setup-token form and BlastCP's OAuth sign-in
+  stay their own components — they aren't that shape. `components/FolderRow.tsx` is the same story for the linked-folder row all four
+  of those drawers draw (the bordered card, the folder name with its Link/Unlink buttons, the unlinked line, the red line for a link
+  that failed to read); each supplies its own details as children and Supabase its third "Link CLI…" button. GitHub's drawer keeps
+  its own row — it has no Link/Unlink pair and no link object, just a sync switch.
 - `components/BackupModelPicker.tsx` (`backupModel`): Settings → Models → Backup model. The model the first-message-failed banner reruns the card on
   (when the very first turn came back with an error — a rate limit, mostly). Any model any installed CLI serves, plus an "Off — no backup" leading option
   that hides the Rerun button. Behind it `lib/backend-switch.ts` `rerunOnModel` clears the session on a model change and `sendMessage`s the last user

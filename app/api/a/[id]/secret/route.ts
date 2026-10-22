@@ -6,19 +6,15 @@
 import { connection } from "next/server";
 import { appShareAccess } from "@/lib/app-share-access";
 import { clientIpFromHeaders, fetchLimitVerdict, insertFetchLog } from "@/lib/app-fetch-limit";
+import { NO_STORE, rateLimited, reject } from "@/lib/app-share-reply";
 import { isConfigured as secretsConfigured } from "@/lib/app-secrets";
 import { createAppSecretStore } from "@/lib/app-secret-store";
 import { serviceClient, webUser } from "@/lib/web-session";
 
-const NO_STORE = { "Cache-Control": "no-store" };
 const MAX_PUT_BYTES = 4 * 1024;
 const NAME_RE = /^[A-Z][A-Z0-9_]{0,63}$/;
 
 type ServiceClient = NonNullable<ReturnType<typeof serviceClient>>;
-
-function reject(status: number, error: string): Response {
-  return Response.json({ error, status }, { status, headers: NO_STORE });
-}
 
 // The manifest's declaration of a name: true when the name is a viewer secret. Anything else (author,
 // unknown) is a 400. We don't surface the rule's details through this route — the policy module enforces
@@ -63,7 +59,7 @@ async function runSecretOp(
   const verdict = await fetchLimitVerdict(service, id, viewer.id, clientIp);
   if (!verdict.ok) {
     await insertFetchLog(service, { shareId: id, viewerId: viewer.id, method: "SECRET", host: "", path: `/${name}`, status: 429 });
-    return new Response(JSON.stringify({ error: "rate limit exceeded", status: 429 }), { status: 429, headers: { ...NO_STORE, "Retry-After": String(verdict.retryAfter) } });
+    return rateLimited(verdict.retryAfter);
   }
   if (!secretsConfigured()) return reject(503, "App secrets aren't set up on this server.");
   try {

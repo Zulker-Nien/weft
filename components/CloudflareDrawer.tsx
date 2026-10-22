@@ -24,11 +24,9 @@ import { folderName, timeAgo } from "@/lib/format";
 import { useNow } from "@/lib/use-now";
 import CloudflareLogo from "./CloudflareLogo";
 import CloudflarePicker from "./CloudflarePicker";
+import { FolderRow } from "./FolderRow";
+import { BODY, SMALL, TONE } from "./tone";
 import { Note } from "./VaultParts";
-
-const TONE = { ok: "bg-ok-soft text-ok", warn: "bg-warn-soft text-warn", bad: "bg-danger-soft text-danger", muted: "bg-sunken text-muted" } as const;
-const SMALL = "rounded px-1.5 py-0.5 text-[11px] text-muted hover:bg-sunken hover:text-ink disabled:opacity-40";
-const BODY = "flex flex-col gap-2 px-3 py-3 text-[11.5px] leading-snug text-muted";
 
 // The Cloudflare drawer's body (docs/architecture/cloudflare.md): your Cloudflare API token, kept by Electron
 // main in the Keychain, and each board project's link to a Worker or Pages project (kept in Weft's data folder;
@@ -216,29 +214,18 @@ function Step({ n }: { n: number }) {
 function FolderSection({ folder: f, busy, onLink, onUnlink, onOpenUrl }: { folder: CloudflareFolder; busy: boolean; onLink: () => void; onUnlink: () => void; onOpenUrl: (url: string) => void }) {
   const link = f.link;
   return (
-    <section className="mt-2 rounded-lg border border-line bg-card px-2.5 py-2">
-      <div className="flex items-center gap-1">
-        <h3 className="min-w-0 flex-1 truncate text-[12px] font-semibold text-ink" title={f.folder}>
-          {folderName(f.folder)}
-        </h3>
-        {link ? (
-          <button onClick={onUnlink} disabled={busy} className={SMALL} title="Forget this link; the Cloudflare project stays">
-            Unlink
-          </button>
-        ) : (
-          <button onClick={onLink} disabled={busy} className="rounded-md bg-accent px-2 py-0.5 text-[11px] font-medium text-on-accent disabled:opacity-40">
-            Link…
-          </button>
-        )}
-      </div>
-      {!link && <p className="mt-0.5 text-[11px] text-faint">{unlinkedLine(f)}</p>}
-      {link && f.error && (
-        <p className="mt-1 text-[11px] text-danger">
-          {link.name}: {f.error}
-        </p>
-      )}
-      {link && !f.error && <Linked link={link} folder={f} onOpenUrl={onOpenUrl} />}
-    </section>
+    <FolderRow
+      folder={f.folder}
+      linked={Boolean(link)}
+      busy={busy}
+      onLink={onLink}
+      onUnlink={onUnlink}
+      unlinkTitle="Forget this link; the Cloudflare project stays"
+      unlinked={unlinkedLine(f)}
+      error={f.error ? { name: link?.name ?? "", message: f.error } : null}
+    >
+      {link && <Linked link={link} folder={f} onOpenUrl={onOpenUrl} />}
+    </FolderRow>
   );
 }
 

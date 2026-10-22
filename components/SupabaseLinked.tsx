@@ -5,8 +5,7 @@ import { migrationLine, migrationOwner, projectState, supabaseActions, type Supa
 import type { Card } from "@/lib/types";
 import SupabaseLogo from "./SupabaseLogo";
 import { external } from "./supabase-ui";
-
-const TONE = { ok: "bg-ok-soft text-ok", warn: "bg-warn-soft text-warn", bad: "bg-danger-soft text-danger", muted: "bg-sunken text-muted" } as const;
+import { TONE } from "./tone";
 
 // A Supabase drawer folder's linked project (components/SupabaseDrawer.tsx): its state, API URL, migrations (each
 // unapplied one linked to the card that wrote it, and Migrate, which starts a card to apply them: lib/supabase-migrate.ts)

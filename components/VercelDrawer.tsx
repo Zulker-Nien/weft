@@ -18,11 +18,11 @@ import {
   type VercelStatus,
 } from "@/lib/vercel-view";
 import { Note } from "./VaultParts";
+import { FolderRow } from "./FolderRow";
+import { TokenForm } from "./TokenForm";
+import { SMALL, TONE } from "./tone";
 import VercelPicker from "./VercelPicker";
 import VercelEnv from "./VercelEnv";
-
-const TONE = { ok: "bg-ok-soft text-ok", warn: "bg-warn-soft text-warn", bad: "bg-danger-soft text-danger", muted: "bg-sunken text-muted" } as const;
-const SMALL = "rounded px-1.5 py-0.5 text-[11px] text-muted hover:bg-sunken hover:text-ink disabled:opacity-40";
 
 // The ▲ drawer's body (docs/architecture/vercel.md): your Vercel token, kept by Electron main in the
 // Keychain, and each board project's link to a Vercel project, written as .vercel/project.json so the
@@ -72,6 +72,8 @@ export default function VercelDrawer({
       <TokenForm
         error={status.error}
         busy={busy}
+        provider="Vercel"
+        tokenUrl={TOKEN_URL}
         onSave={(token) =>
           change(async () => {
             const { username } = await vercel.setToken(token);
@@ -149,53 +151,6 @@ export default function VercelDrawer({
   );
 }
 
-function TokenForm({ error, busy, onSave, onForget }: { error: string | null; busy: boolean; onSave: (token: string) => Promise<void>; onForget?: () => void }) {
-  const [token, setToken] = useState("");
-  return (
-    <form
-      className="flex flex-col gap-2 px-3 py-3 text-[11.5px] leading-snug text-muted"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (token.trim()) void onSave(token).then(() => setToken(""));
-      }}
-    >
-      {error && <p className="rounded-md bg-danger-soft px-2 py-1.5 text-danger">{error}</p>}
-      <p>
-        Link this project to Vercel with a token from{" "}
-        <a
-          href={TOKEN_URL}
-          onClick={(e) => {
-            e.preventDefault();
-            window.weft?.openExternal(TOKEN_URL);
-          }}
-          className="text-accent underline"
-        >
-          vercel.com/account/tokens
-        </a>
-        . Weft keeps it in your Keychain; threads never see it.
-      </p>
-      <input
-        type="password"
-        value={token}
-        onChange={(e) => setToken(e.target.value)}
-        placeholder="Vercel token"
-        aria-label="Vercel token"
-        autoComplete="off"
-        className="rounded-md border border-line-strong bg-card px-2 py-1 text-[12px] text-ink"
-      />
-      <div className="flex gap-1.5">
-        <button type="submit" disabled={busy || !token.trim()} className="rounded-md bg-accent px-2.5 py-1 text-[11.5px] font-medium text-on-accent disabled:opacity-40">
-          {busy ? "Checking…" : "Save token"}
-        </button>
-        {onForget && (
-          <button type="button" onClick={onForget} disabled={busy} className={SMALL}>
-            Forget it
-          </button>
-        )}
-      </div>
-    </form>
-  );
-}
 
 function FolderSection({
   folder: f,
@@ -215,30 +170,19 @@ function FolderSection({
 }) {
   const link = f.link;
   return (
-    <section className="mt-2 rounded-lg border border-line bg-card px-2.5 py-2">
-      <div className="flex items-center gap-1">
-        <h3 className="min-w-0 flex-1 truncate text-[12px] font-semibold text-ink" title={f.folder}>
-          {folderName(f.folder)}
-        </h3>
-        {link ? (
-          <button onClick={onUnlink} disabled={busy} className={SMALL} title="Remove .vercel/project.json from this folder">
-            Unlink
-          </button>
-        ) : (
-          <button onClick={onLink} disabled={busy} className="rounded-md bg-accent px-2 py-0.5 text-[11px] font-medium text-on-accent disabled:opacity-40">
-            Link…
-          </button>
-        )}
-      </div>
-      {!link && <p className="mt-0.5 text-[11px] text-faint">{f.repo ? `${f.repo} · not on Vercel yet` : "Not linked to a Vercel project"}</p>}
-      {link && f.error && (
-        <p className="mt-1 text-[11px] text-danger">
-          {link.name ?? link.projectId}: {f.error}
-        </p>
-      )}
-      {link && !f.error && <Linked link={link} repo={f.repo} onOpenUrl={onOpenUrl} />}
-      {link && !f.error && <div className="mt-1 text-[11px] text-muted">{env}</div>}
-    </section>
+    <FolderRow
+      folder={f.folder}
+      linked={Boolean(link)}
+      busy={busy}
+      onLink={onLink}
+      onUnlink={onUnlink}
+      unlinkTitle="Remove .vercel/project.json from this folder"
+      unlinked={f.repo ? `${f.repo} · not on Vercel yet` : "Not linked to a Vercel project"}
+      error={f.error ? { name: link?.name ?? link?.projectId ?? "", message: f.error } : null}
+    >
+      {link && <Linked link={link} repo={f.repo} onOpenUrl={onOpenUrl} />}
+      {link && <div className="mt-1 text-[11px] text-muted">{env}</div>}
+    </FolderRow>
   );
 }
 

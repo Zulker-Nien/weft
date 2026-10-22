@@ -223,6 +223,11 @@ spends. Growth lives at `weft.zip/aimhuge/apps/growth`, open to the AimHuge work
 The fetch route rate-limits per app (`lib/app-fetch-limit.ts`), caps body size and time, and logs each
 call (host, path, status; never the value). Super-admins can switch an app's secrets off.
 
+Every one of these routes answers through `lib/app-share-reply.ts`: `NO_STORE` (they're never cached),
+`reject(status, error)` for a refusal and `rateLimited(retryAfter)` for a 429 with `Retry-After`. A page
+reads the status out of the body, so the same shape across read, fetch, env, secret and the push route
+means one error path on the page.
+
 ### What it can't do
 
 Its own server code: a `route.ts`, server rendering, a webhook endpoint, a call that needs signing logic

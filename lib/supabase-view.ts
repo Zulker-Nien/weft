@@ -1,3 +1,4 @@
+import { norm, shownFolders as pickFolders, type Tone } from "./db-picker";
 import { folderName } from "./format";
 import type { Card } from "./types";
 
@@ -135,8 +136,6 @@ export function needsRestart(hasShell: boolean, bridge: SupabaseBridge | null, e
   return (hasShell && !bridge) || (!!error && error.includes("No handler registered for 'supabase:"));
 }
 
-const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-
 // How well a project fits a folder: 2 has the repo's or folder's name, 1 a name that contains it either way, 0 none.
 export function matchScore(project: Pick<SupabaseProject, "name">, folder: Pick<SupabaseFolder, "folder" | "repo">) {
   const names = [folderName(folder.folder), folder.repo?.split("/")[1] ?? ""].map(norm).filter(Boolean);
@@ -155,7 +154,7 @@ export function pickerList(projects: SupabaseProject[], folder: Pick<SupabaseFol
     .sort((a, b) => b.score - a.score || b.project.createdAt - a.project.createdAt);
 }
 
-const STATES: Record<string, { label: string; tone: "ok" | "warn" | "bad" | "muted" }> = {
+const STATES: Record<string, { label: string; tone: Tone }> = {
   ACTIVE_HEALTHY: { label: "Healthy", tone: "ok" },
   ACTIVE_UNHEALTHY: { label: "Unhealthy", tone: "bad" },
   INACTIVE: { label: "Paused", tone: "muted" },
@@ -215,9 +214,9 @@ export function supabaseActions(ref: string): { label: string; url: string }[] {
   ];
 }
 
-// The folders the drawer shows: the top bar's project only, or every one.
+// The folders the drawer shows: the top bar's project only, or every one (lib/db-picker.ts).
 export function shownFolders(folders: SupabaseFolder[], project: string | null) {
-  return project ? folders.filter((f) => f.folder === project) : folders;
+  return pickFolders(folders, project);
 }
 
 // Who the token is, under the drawer's header.

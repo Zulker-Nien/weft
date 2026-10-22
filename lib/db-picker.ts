@@ -4,6 +4,24 @@
 // view module — this is the shared ranking engine they all call, so a fifth provider is one call, not
 // another list UI to write. BlastCP is the exception: it flattens rows across workspaces first
 // (lib/blastcp-view.ts propertyOptions) and hands the result straight to the picker.
+//
+// `norm` and `shownFolders` live here for the same reason: they were byte-identical copies in all four
+// view modules, and only the score tiers and search columns are genuinely per-provider.
+
+// The three status tones a row's state can read as. Every provider's STATES map has this shape, and
+// the components' TONE palette keys off it.
+export type Tone = "ok" | "warn" | "bad" | "muted";
+
+// How a provider compares names for the best-fit score: lowercased, punctuation dropped, so
+// "Weft Board" and "weft-board" match. Each provider's matchScore calls this on the folder and the row.
+export const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+// The drawer's folder list: the folders linked to the project the user picked, or every folder when
+// they haven't picked one. Each provider's view module re-exports this, so `folderTitle` and the
+// pending-count helpers beside it keep their existing import.
+export function shownFolders<T extends { folder: string }>(folders: T[], project: string | null): T[] {
+  return project ? folders.filter((f) => f.folder === project) : folders;
+}
 
 export interface RankOptions<T> {
   // null while the provider is still listing rows; there is nothing to rank and the picker shows a

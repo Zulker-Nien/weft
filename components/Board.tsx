@@ -62,7 +62,6 @@ import { announce, showPage, without } from "@/lib/board-helpers";
 import { cardHandlers } from "@/lib/card-handlers";
 import BoardHeader from "./BoardHeader";
 import BoardColumn, { COLUMN_LIMIT, CardSkeleton } from "./BoardColumn";
-import BoardToast from "./BoardToast";
 import StandaloneBrowserPane from "./StandaloneBrowserPane";
 
 // Each loads in its own CrashGuard (components/guarded.tsx), so a piece a thread left half-written, even one that
@@ -75,18 +74,10 @@ const RestartChip = guarded(() => import("./RestartChip"), { inline: true, what:
 const BrowserPane = guarded(() => import("./BrowserPane"), { what: "browser pane", className: "m-3 w-[360px] self-start" });
 const CardView = guarded(() => import("./CardView"), { what: "card", placeholder: <CardSkeleton /> });
 const SideRail = guarded(() => import("./LibraryRail"), { what: "rail", className: "m-3 w-[220px] self-start" });
-const TagsDialog = guarded(() => import("./TagsDialog"), { what: "tags dialog", className: "fixed left-4 top-16 z-50" });
 const PaneCardMarks = guarded(() => import("./PaneCardMarks"), { inline: true, what: "card marks" });
-const ShareCardDialog = guarded(() => import("./ShareCardDialog"), { what: "share dialog", className: "fixed left-4 top-16 z-50" });
-const ShareBoardDialog = guarded(() => import("./ShareBoardDialog"), { what: "share board dialog", className: "fixed left-4 top-16 z-50" });
 const HeaderBadges = guarded(() => import("./HeaderBadges"), { inline: true, what: "header badges" });
 const BoardFooter = guarded(() => import("./BoardFooter"), { what: "footer" });
-const ModifierHint = guarded(() => import("./ModifierHint"), { inline: true, what: "modifier hint", className: "fixed bottom-2 right-2 z-50" });
-const LoginDialog = guarded(() => import("./LoginDialog"), { what: "login dialog", className: "fixed left-4 top-16 z-50" });
-const FileDrop = guarded(() => import("./FileDrop"), { inline: true, what: "file drop", className: "fixed bottom-6 left-1/2 z-50" });
 const NewCardDialog = guarded(() => import("./NewCardDialog"), { what: "New thread dialog", className: "m-3 w-[360px] self-start" });
-const SettingsDialog = guarded(() => import("./SettingsDialog"), { what: "settings", className: "fixed left-4 top-16 z-50" });
-const ShortcutsDialog = guarded(() => import("./ShortcutsDialog"), { what: "shortcuts sheet", className: "fixed left-4 top-16 z-50" });
 const TerminalDrawer = guarded(() => import("./TerminalDrawer"), { what: "terminal", className: "m-3" });
 const ShowRail = guarded(() => import("./ShowRail"), { what: "show rail", className: "w-[72px] shrink-0" });
 const ThreadPanel = guarded(() => import("./ThreadPanel"), { what: "thread", className: "m-3 w-[360px] self-start" });
@@ -94,7 +85,9 @@ const ThreadPanel = guarded(() => import("./ThreadPanel"), { what: "thread", cla
 const CardWorkspace = guarded(() => import("./CardWorkspace"), { what: "card workspace", className: "flex-1 min-w-0" });
 // The code/markdown editor column, in its own CrashGuard so a broken editor leaves the thread and the pane.
 const EditorColumn = guarded(() => import("./EditorColumn"), { what: "editor column" });
-const CommandPalette = guarded(() => import("./CommandPalette"), { what: "command palette", className: "fixed left-4 top-16 z-50" });
+// Every dialog, sheet and overlay over the board's columns — Settings, Tags…, Share…, the palette,
+// file drop, the toast — each loading through its own guarded() import (components/BoardDialogs.tsx).
+const BoardDialogs = guarded(() => import("./BoardDialogs"), { what: "dialogs", inline: true });
 
 // The browser pane's page beside the New thread dialog (not a card's).
 const NEW_THREAD_PANE = "new-thread";
@@ -899,27 +892,35 @@ export default function Board() {
         </div>
       )}
 
-      {showSettings && <SettingsDialog onClose={() => setShowSettings(false)} />}
-      {showHelp && <ShortcutsDialog onClose={() => setShowHelp(false)} />}
-      {tagging && <TagsDialog card={tagging} all={tagCatalog.tags.map((t) => ({ tag: t.name, count: t.count }))} onChange={saveTags} onClose={closeTags} />}
-      {sharing && <ShareCardDialog card={sharing} onClose={closeShare} />}
-      {sharingBoard && <ShareBoardDialog onClose={() => setSharingBoard(false)} />}
-      <ModifierHint />
-      {showPalette && (
-        // The palette items accessor passes useCallback returns (which the type analyzer flags as
-        // ref-readers); it's invoked only when the palette is open, and the lint rule's heuristic
-        // doesn't have visibility into the conditional.
-        // eslint-disable-next-line react-hooks/refs
-        <CommandPalette initialQuery={paletteQuery} items={paletteItems()} findPrompts={findPrompts} currentProject={project ? { path: project, name: folderName(project) } : null} onClose={() => setShowPalette(false)} />
-      )}
-      {login && <LoginDialog login={login} onClose={() => setLogin(null)} />}
-      {switchAllDialog}
-
-      <FileDrop cards={cards} newOpen={showNew} onOpenCard={openCard} onOpenNew={() => openNew()} />
-
-      {toast && (
-        <BoardToast text={toast.text} action={toast.action} onDismiss={() => setToast(null)} />
-      )}
+      <BoardDialogs
+        settings={showSettings}
+        onCloseSettings={() => setShowSettings(false)}
+        help={showHelp}
+        onCloseHelp={() => setShowHelp(false)}
+        tagging={tagging}
+        tagOptions={tagCatalog.tags.map((t) => ({ tag: t.name, count: t.count }))}
+        onTagsChange={saveTags}
+        onCloseTags={closeTags}
+        sharing={sharing}
+        onCloseShare={closeShare}
+        sharingBoard={sharingBoard}
+        onCloseShareBoard={() => setSharingBoard(false)}
+        palette={showPalette}
+        paletteQuery={paletteQuery}
+        paletteItems={paletteItems}
+        findPrompts={findPrompts}
+        paletteProject={project ? { path: project, name: folderName(project) } : null}
+        onClosePalette={() => setShowPalette(false)}
+        login={login}
+        onCloseLogin={() => setLogin(null)}
+        switchAllDialog={switchAllDialog}
+        cards={cards}
+        newOpen={showNew}
+        onDropCard={openCard}
+        onDropNew={() => openNew()}
+        toast={toast}
+        onDismissToast={() => setToast(null)}
+      />
     </div>
     </TagColors.Provider>
   );

@@ -2,13 +2,13 @@
 // page, then a slimmer shape for the periodic poll: items with seq > `after`, or items with seq <
 // `before` for "Load earlier". Re-checks the access gate on every request so a revoked share stops
 // answering. No localhost guard: the gate cookie is the check (lib/share-access.ts).
+import { NO_STORE } from "@/lib/app-share-reply";
 import { shareAccess } from "@/lib/share-access";
 import { buildShareLive } from "@/lib/share-live";
 import { serviceClient } from "@/lib/web-session";
 
 // `Cache-Control: no-store` is important: a stale poll response would freeze the live view on
 // whatever the server was showing at the time, defeating the whole point of the page.
-const NO_STORE = { "Cache-Control": "no-store" } as const;
 
 function intParam(url: URL, name: string): number | undefined {
   const raw = url.searchParams.get(name);

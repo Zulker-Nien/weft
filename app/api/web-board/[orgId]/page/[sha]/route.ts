@@ -3,6 +3,7 @@
 // cookie session, so the bucket's "read as org member" policy is the gate: a non-member's download finds nothing.
 // Sent with the share viewer's sandbox (app/api/s/[id]/page/[sha]): the page's scripts run in an opaque origin and
 // can't read weft.zip's cookies.
+import { NO_STORE } from "@/lib/app-share-reply";
 import { webClient } from "@/lib/web-session";
 
 const SHA_RE = /^[0-9a-f]{64}$/;
@@ -13,8 +14,6 @@ const HEADERS = {
   "X-Content-Type-Options": "nosniff",
   "Cache-Control": "private, max-age=300",
 } as const;
-
-const NO_STORE = { "Cache-Control": "no-store" } as const;
 
 export async function GET(_req: Request, ctx: { params: Promise<{ orgId: string; sha: string }> }) {
   const { orgId, sha } = await ctx.params;

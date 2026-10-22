@@ -1,3 +1,4 @@
-// What the Supabase drawer, its picker and the New project form share.
-export const SMALL = "rounded px-1.5 py-0.5 text-[11px] text-muted hover:bg-sunken hover:text-ink disabled:opacity-40";
+// What the Supabase drawer, its picker and the New project form share. SMALL now lives in
+// components/tone.ts with the rest of the shared palette; re-exported so these importers are unchanged.
+export { SMALL } from "./tone";
 export const external = (url: string) => window.weft?.openExternal(url);

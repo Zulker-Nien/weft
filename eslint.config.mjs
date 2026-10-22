@@ -12,7 +12,7 @@ const LINE_COUNT = { skipBlankLines: true, skipComments: true };
 // (Extract Function or Module), then lower its number. Never get under it by joining lines, dropping
 // blank lines or deleting comments; that hides the smell and makes the file worse.
 const OVERSIZE = {
-  "components/Board.tsx": 930,
+  "components/Board.tsx": 815,
   "lib/runner.test.ts": 901,
   "app/api/routes.test.ts": 766,
   "lib/login.test.ts": 576,

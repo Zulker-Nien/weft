@@ -16,7 +16,9 @@ import {
 } from "@/lib/supabase-view";
 import SupabaseLinked from "./SupabaseLinked";
 import SupabasePicker from "./SupabasePicker";
-import { external, SMALL } from "./supabase-ui";
+import { FolderRow } from "./FolderRow";
+import { SMALL } from "./tone";
+import { TokenForm } from "./TokenForm";
 import { Note } from "./VaultParts";
 
 // The Supabase drawer's body (docs/architecture/supabase.md): your Supabase access token, kept by Electron main
@@ -78,6 +80,10 @@ export default function SupabaseDrawer({
       <TokenForm
         error={status.error}
         busy={busy}
+        provider="Supabase"
+        tokenUrl={TOKEN_URL}
+        placeholder="sbp_…"
+        label="Supabase access token"
         onSave={(token) =>
           change(async () => {
             const { orgs } = await supabase.setToken(token);
@@ -190,54 +196,6 @@ function Restart() {
   );
 }
 
-function TokenForm({ error, busy, onSave, onForget }: { error: string | null; busy: boolean; onSave: (token: string) => Promise<void>; onForget?: () => void }) {
-  const [token, setToken] = useState("");
-  return (
-    <form
-      className="flex flex-col gap-2 px-3 py-3 text-[11.5px] leading-snug text-muted"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (token.trim()) void onSave(token).then(() => setToken(""));
-      }}
-    >
-      {error && <p className="rounded-md bg-danger-soft px-2 py-1.5 text-danger">{error}</p>}
-      <p>
-        Link this project to Supabase with an access token from{" "}
-        <a
-          href={TOKEN_URL}
-          onClick={(e) => {
-            e.preventDefault();
-            external(TOKEN_URL);
-          }}
-          className="text-accent underline"
-        >
-          supabase.com/dashboard/account/tokens
-        </a>
-        . Weft keeps it in your Keychain; threads never see it.
-      </p>
-      <input
-        type="password"
-        value={token}
-        onChange={(e) => setToken(e.target.value)}
-        placeholder="sbp_…"
-        aria-label="Supabase access token"
-        autoComplete="off"
-        className="rounded-md border border-line-strong bg-card px-2 py-1 text-[12px] text-ink"
-      />
-      <div className="flex gap-1.5">
-        <button type="submit" disabled={busy || !token.trim()} className="rounded-md bg-accent px-2.5 py-1 text-[11.5px] font-medium text-on-accent disabled:opacity-40">
-          {busy ? "Checking…" : "Save token"}
-        </button>
-        {onForget && (
-          <button type="button" onClick={onForget} disabled={busy} className={SMALL}>
-            Forget it
-          </button>
-        )}
-      </div>
-    </form>
-  );
-}
-
 function FolderSection({
   folder: f,
   busy,
@@ -260,33 +218,27 @@ function FolderSection({
   onStart: (cwd: string, prompt: string, title: string) => void;
 }) {
   const link = f.link;
+  // A link the Supabase server made in .mcp.json isn't usable by the CLI yet, so this row offers
+  // "Link CLI…" (the shared Unlink would be wrong — nothing Weft wrote is there to remove).
+  const extra =
+    link && link.source !== "cli" ? (
+      <button onClick={onLink} disabled={busy} className={SMALL} title="Linked by the Supabase server in .mcp.json; link it for the Supabase CLI too">
+        Link CLI…
+      </button>
+    ) : undefined;
   return (
-    <section className="mt-2 rounded-lg border border-line bg-card px-2.5 py-2">
-      <div className="flex items-center gap-1">
-        <h3 className="min-w-0 flex-1 truncate text-[12px] font-semibold text-ink" title={f.folder}>
-          {folderName(f.folder)}
-        </h3>
-        {!link ? (
-          <button onClick={onLink} disabled={busy} className="rounded-md bg-accent px-2 py-0.5 text-[11px] font-medium text-on-accent disabled:opacity-40">
-            Link…
-          </button>
-        ) : link.source === "cli" ? (
-          <button onClick={onUnlink} disabled={busy} className={SMALL} title="Remove supabase/.temp/project-ref from this folder">
-            Unlink
-          </button>
-        ) : (
-          <button onClick={onLink} disabled={busy} className={SMALL} title="Linked by the Supabase server in .mcp.json; link it for the Supabase CLI too">
-            Link CLI…
-          </button>
-        )}
-      </div>
-      {!link && <p className="mt-0.5 text-[11px] text-faint">{f.migrations ? `${f.migrations} local migrations · not linked` : "Not linked to a Supabase project"}</p>}
-      {link && f.error && (
-        <p className="mt-1 text-[11px] text-danger">
-          {link.name ?? link.ref}: {f.error}
-        </p>
-      )}
-      {link && !f.error && <SupabaseLinked folder={f} link={link} busy={busy} onRestore={onRestore} onOpenUrl={onOpenUrl} cards={cards} onOpenCard={onOpenCard} onStart={onStart} />}
-    </section>
+    <FolderRow
+      folder={f.folder}
+      linked={Boolean(link)}
+      busy={busy}
+      onLink={onLink}
+      onUnlink={onUnlink}
+      unlinkTitle="Remove supabase/.temp/project-ref from this folder"
+      unlinked={f.migrations ? `${f.migrations} local migrations · not linked` : "Not linked to a Supabase project"}
+      error={f.error ? { name: link?.name ?? link?.ref ?? "", message: f.error } : null}
+      extra={extra}
+    >
+      {link && <SupabaseLinked folder={f} link={link} busy={busy} onRestore={onRestore} onOpenUrl={onOpenUrl} cards={cards} onOpenCard={onOpenCard} onStart={onStart} />}
+    </FolderRow>
   );
 }

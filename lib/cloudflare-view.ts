@@ -1,3 +1,4 @@
+import { norm, shownFolders as pickFolders, type Tone } from "./db-picker";
 import { folderName } from "./format";
 
 // What the Cloudflare drawer shows, from what Electron main's Cloudflare side (electron/cloudflare.cjs) sends.
@@ -105,8 +106,6 @@ export function needsRestart(bridge: CloudflareBridge | null, error: string | nu
   return !!error && error.includes("No handler registered for 'cloudflare:");
 }
 
-const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-
 // How well a project fits a folder: 4 its wrangler config names it, 3 builds from its GitHub repo, 2 has the
 // repo's or folder's name, 1 a name that contains it either way, 0 none.
 export function matchScore(project: Pick<CloudflareProject, "name" | "git">, folder: Pick<CloudflareFolder, "folder" | "repo" | "wrangler">) {
@@ -131,7 +130,6 @@ export function pickerList(projects: CloudflareProject[], folder: Pick<Cloudflar
 
 export const KIND_LABEL: Record<CloudflareKind, string> = { worker: "Worker", pages: "Pages" };
 
-type Tone = "ok" | "warn" | "bad" | "muted";
 const STATES: Record<string, { label: string; tone: Tone }> = {
   deployed: { label: "Deployed", tone: "ok" },
   success: { label: "Ready", tone: "ok" },
@@ -187,9 +185,9 @@ export function unlinkedLine(f: Pick<CloudflareFolder, "repo" | "wrangler">) {
   return f.repo ? `${f.repo} · not on Cloudflare yet` : "Not linked to Cloudflare";
 }
 
-// The folders the drawer shows: the top bar's project only, or every one.
+// The folders the drawer shows: the top bar's project only, or every one (lib/db-picker.ts).
 export function shownFolders(folders: CloudflareFolder[], project: string | null) {
-  return project ? folders.filter((f) => f.folder === project) : folders;
+  return pickFolders(folders, project);
 }
 
 // The rail icon's hover text.

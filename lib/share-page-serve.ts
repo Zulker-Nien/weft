@@ -3,6 +3,7 @@
 // visitor may see this blob; this streams weft-blobs/<orgId>/<sha> with a strict CSP sandbox, so the page's
 // scripts run in an opaque origin and can't read weft.zip's cookies.
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { NO_STORE } from "./app-share-reply";
 import { isTextType, pageContentType } from "./share-page";
 import { redactText } from "./share-redact";
 
@@ -19,7 +20,7 @@ const HEADERS = {
   "Cache-Control": "private, max-age=300",
 } as const;
 
-export const NO_STORE = { "Cache-Control": "no-store" } as const;
+export { NO_STORE } from "./app-share-reply";
 
 // A small map from a file extension to the Content-Type the route sets on the response. Used by
 // the folder file route, where the extension tells us what the file is (HTML's stored as text/plain

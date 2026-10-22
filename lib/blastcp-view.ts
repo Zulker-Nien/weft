@@ -1,3 +1,4 @@
+import { norm, shownFolders as pickFolders } from "./db-picker";
 import { folderName } from "./format";
 
 // What the BlastCP drawer shows, from what Electron main's BlastCP side (electron/blastcp.cjs) sends. The
@@ -82,9 +83,9 @@ export function restartWeft(wait = 1500) {
   return true;
 }
 
-// The folders the drawer shows: the top bar's project only, or every one.
+// The folders the drawer shows: the top bar's project only, or every one (lib/db-picker.ts).
 export function shownFolders(folders: BlastcpFolder[], project: string | null) {
-  return project ? folders.filter((f) => f.folder === project) : folders;
+  return pickFolders(folders, project);
 }
 
 // A linked property at a glance: what goes out next (soonest first), and what's waiting on you.
@@ -145,8 +146,6 @@ export interface PropertyOption {
   // 2 has the folder's name, 1 a name that contains it either way, 0 none.
   score: number;
 }
-
-const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 function fit(name: string, slug: string, folder: string) {
   const want = norm(folderName(folder));

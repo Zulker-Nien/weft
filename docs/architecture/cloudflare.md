@@ -72,7 +72,7 @@ the drawer then offers **Restart Weft** (`needsRestart` in `lib/cloudflare-view.
   `pagesUrl`, `workerUrl`, `pagesGit`) and the folder's wrangler config (`wranglerOf`).
 - `electron/preload.cjs`: `window.weft.cloudflare`.
 - `lib/cloudflare-view.ts`: types, the bridge, matching, labels. `lib/use-cloudflare.ts`: loading.
-- `components/CloudflareDrawer.tsx` (token form, linked folders, restart), `components/CloudflarePicker.tsx` (Link…, on the shared `components/DbSelect.tsx` with `lib/db-picker.ts` `rankItems`),
+- `components/CloudflareDrawer.tsx` (its own two-step setup-token form — it exchanges the pasted token for a narrower one, so it isn't the shared `components/TokenForm.tsx` — plus linked folders on the shared `components/FolderRow.tsx`, restart), `components/CloudflarePicker.tsx` (Link…, on the shared `components/DbSelect.tsx` with `lib/db-picker.ts` `rankItems`),
   `components/CloudflareLogo.tsx`.
 
 ## Next

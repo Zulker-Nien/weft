@@ -1,3 +1,4 @@
+import { norm, shownFolders as pickFolders, type Tone } from "./db-picker";
 import { folderName } from "./format";
 
 // What the ▲ drawer shows, from what Electron main's Vercel side (electron/vercel.cjs) sends. The token
@@ -188,8 +189,6 @@ export function vercelBridge(): VercelBridge | null {
   return (typeof window !== "undefined" && window.weft?.vercel) || null;
 }
 
-const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-
 // How well a project fits a folder: 3 deploys from its GitHub repo, 2 has the repo's or folder's name,
 // 1 a name that contains it either way, 0 none. The picker's score (components/VercelPicker.tsx) and its tests.
 export function matchScore(project: Pick<VercelProject, "name" | "git">, folder: Pick<VercelFolder, "folder" | "repo">) {
@@ -212,7 +211,7 @@ export function pickerList(projects: VercelProject[], folder: Pick<VercelFolder,
     .sort((a, b) => b.score - a.score || b.project.updatedAt - a.project.updatedAt);
 }
 
-const STATES: Record<string, { label: string; tone: "ok" | "warn" | "bad" | "muted" }> = {
+const STATES: Record<string, { label: string; tone: Tone }> = {
   READY: { label: "Ready", tone: "ok" },
   ERROR: { label: "Failed", tone: "bad" },
   BUILDING: { label: "Building", tone: "warn" },
@@ -247,9 +246,9 @@ export function vercelActions(link: Pick<VercelLink, "dashboard" | "latest">): {
   return [...actions, { label: "Dashboard", url: dashboard }];
 }
 
-// The folders the drawer shows: the top bar's project only, or every one.
+// The folders the drawer shows: the top bar's project only, or every one (lib/db-picker.ts).
 export function shownFolders(folders: VercelFolder[], project: string | null) {
-  return project ? folders.filter((f) => f.folder === project) : folders;
+  return pickFolders(folders, project);
 }
 
 // A new project's suggested name: the GitHub repo's name, else the folder's, as Vercel takes names.

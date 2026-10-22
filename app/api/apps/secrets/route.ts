@@ -8,16 +8,12 @@ import { connection } from "next/server";
 import { appShareAccess } from "@/lib/app-share-access";
 import { createAppSecretStore } from "@/lib/app-secret-store";
 import { isConfigured as secretsConfigured } from "@/lib/app-secrets";
+import { NO_STORE, reject } from "@/lib/app-share-reply";
 import { serviceClient, bearerUser } from "@/lib/web-session";
 
-const NO_STORE = { "Cache-Control": "no-store" };
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const SHARE_ID_RE = /^[A-Za-z0-9_-]{8,128}$/;
 const NAME_RE = /^[A-Z][A-Z0-9_]{0,63}$/;
-
-function reject(status: number, error: string): Response {
-  return Response.json({ error, status }, { status, headers: NO_STORE });
-}
 
 // The names the share's manifest lets an author push: from:"author" or from:undefined secrets, plus the
 // public list. Anything else in the body is silently dropped — the Mac only sends those names, but we

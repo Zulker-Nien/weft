@@ -13,7 +13,7 @@ Instagram, YouTube, email…); a property is one brand you post as, inside a wor
 | Bridge | `electron/preload.cjs` → `window.weft.blastcp` | `status`, `connect`, `forget`, `workspaces`, `link`, `createProperty`, `unlink` |
 | View | `lib/blastcp-view.ts` | Types, the queue at a glance, the property picker's order, the rail hover text |
 | Hook | `lib/use-blastcp.ts` | Loads status only while the drawer is open (and on window focus, at most every 30s); opens on the cached last status (`lib/use-linked-status.ts`) |
-| Drawer | `components/BlastcpDrawer.tsx`, wired in `components/LibraryRail.tsx` | Connect, the queue |
+| Drawer | `components/BlastcpDrawer.tsx`, wired in `components/LibraryRail.tsx` | Connect, the queue; linked folders on the shared `components/FolderRow.tsx` |
 | Picker | `components/BlastcpPicker.tsx` (on the shared `components/DbSelect.tsx`, fed by `lib/blastcp-view.ts` `propertyOptions`) | Link a property, or make a new one and link it |
 
 ## Connecting
