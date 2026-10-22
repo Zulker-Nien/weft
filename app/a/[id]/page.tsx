@@ -31,6 +31,8 @@ export const metadata: Metadata = {
 // null is returned for a missing row, so the redirect falls through to the normal /a/<id> view
 // (the share is a pre-slug link whose id is still valid).
 async function ownerSlug(share: { owner: "user" | "org"; created_by?: string; org_id: string }): Promise<string | null> {
+  // PageBody already awaited it; again here so the helper is request-bound on its own (lib/prerender-check.ts).
+  await connection();
   const service = serviceClient();
   if (!service) return null;
   if (share.owner === "user") {

@@ -38,11 +38,11 @@ describe("vaultRoutes", () => {
 
   it("adds blanks for a thread, development by default, with a short hint", async () => {
     const { routes, folder, vault } = make();
-    expect(await routes["POST /secrets/add-blank"]({ folder, names: ["A"], hint: "x".repeat(300) })).toEqual({ label: "Owner/Repo", filled: [] });
+    expect(await routes["POST /secrets/add-blank"]({ folder, names: ["A"], hint: "x".repeat(500) })).toEqual({ label: "Owner/Repo", filled: [] });
     await expect(routes["POST /secrets/add-blank"]({ folder, names: "nope", environment: "production" })).rejects.toThrow(/Name at least one/);
     const [a] = (await vault.overview([folder])).vaults[0]!.secrets as { name: string; environment: string; source: string; hint: string }[];
     expect(a).toMatchObject({ name: "A", environment: "development", source: "a thread" });
-    expect(a!.hint).toHaveLength(200);
+    expect(a!.hint).toHaveLength(400);
   });
 
   it("fills a thread's blank with a value it generated, into the right environment, after a Touch ID", async () => {
