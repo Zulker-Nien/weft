@@ -70,7 +70,7 @@ the drawer then offers **Restart Weft** (`needsRestart` in `lib/cloudflare-view.
   IPC handlers answer the board window only.
 - `electron/cloudflare-api.cjs`: request building (GET, POST, DELETE), `NARROW` and `narrowToken`, errors, reading Cloudflare's answers (`pagesDeploy`, `workerDeploy`,
   `pagesUrl`, `workerUrl`, `pagesGit`) and the folder's wrangler config (`wranglerOf`).
-- `electron/preload.cjs`: `window.weft.cloudflare`.
+- `electron/preload.cjs`: `window.weft.cloudflare`. The token's own read/persist lives in `electron/provider-token.cjs`, which Vercel, Supabase, Cloudflare and BlastCP all share.
 - `lib/cloudflare-view.ts`: types, the bridge, matching, labels. `lib/use-cloudflare.ts`: loading.
 - `components/CloudflareDrawer.tsx` (its own two-step setup-token form — it exchanges the pasted token for a narrower one, so it isn't the shared `components/TokenForm.tsx` — plus linked folders on the shared `components/FolderRow.tsx`, restart), `components/CloudflarePicker.tsx` (Link…, on the shared `components/DbSelect.tsx` with `lib/db-picker.ts` `rankItems`),
   `components/CloudflareLogo.tsx`.

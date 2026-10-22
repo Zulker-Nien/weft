@@ -55,7 +55,7 @@ Restart Weft (`needsRestart`).
 
 - `electron/supabase.cjs`: `createSupabase` (status, token, projects, orgs, create, link, unlink, restore), the folder's side
   (`readLink`, `writeLink`, `localMigrations`) and `registerSupabase`, whose IPC handlers answer the board window only.
-- `electron/preload.cjs`: `window.weft.supabase`.
+- `electron/preload.cjs`: `window.weft.supabase`. The token's own read/persist lives in `electron/provider-token.cjs`, which Vercel, Supabase, Cloudflare and BlastCP all share.
 - `lib/supabase-view.ts`: types, the bridge, matching, labels, links. `lib/use-supabase.ts`: loading, over `lib/use-linked-status.ts` (the cache).
 - `components/SupabaseDrawer.tsx` (linked folders, on the shared `components/FolderRow.tsx` — and its third "Link CLI…" button for a link the Supabase server made in `.mcp.json`; its token form is the shared `components/TokenForm.tsx`), `components/SupabaseLinked.tsx` (a linked project), `components/SupabasePicker.tsx` (Link…, on the shared `components/DbSelect.tsx` with `lib/db-picker.ts` `rankItems`),
   `components/SupabaseNewProject.tsx` (its New project form), `components/supabase-ui.ts` (the Supabase-only bits; `SMALL` is re-exported from `components/tone.ts`),

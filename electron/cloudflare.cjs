@@ -7,6 +7,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { CloudflareError, failureOf, narrowToken, pagesGit, pagesDeploy, pagesRow, pagesUrl, request, workerDeploy, workerRow, workerUrl, wranglerOf } = require("./cloudflare-api.cjs");
 const { gitRemote, mustBeFolder, repoOf } = require("./vercel-project.cjs");
+const { readToken, requireKeychain, writeToken } = require("./provider-token.cjs");
 
 const TOKEN_FILE = "cloudflare-token.json";
 const LINKS_FILE = "cloudflare-links.json";
@@ -29,9 +30,7 @@ function createCloudflare({
   const linksFile = path.join(dataDir, LINKS_FILE);
 
   function token() {
-    if (!fs.existsSync(tokenFile)) return null;
-    const saved = JSON.parse(fs.readFileSync(tokenFile, "utf8"));
-    return safeStorage.decryptString(Buffer.from(saved.token, "base64"));
+    return readToken(tokenFile, safeStorage);
   }
 
   /** @returns {Record<string, { kind: "worker" | "pages", accountId: string, name: string }>} */
@@ -180,12 +179,11 @@ function createCloudflare({
     async setToken(value) {
       const given = String(value ?? "").trim();
       if (!given) throw new Error("Paste a token from dash.cloudflare.com/profile/api-tokens.");
-      if (!safeStorage.isEncryptionAvailable()) throw new Error("The Keychain isn't available, so Weft can't keep the token safely.");
+      requireKeychain(safeStorage);
       const made = await fromSetupToken(given);
       const auth = made?.value ?? given;
       const list = made?.list ?? (await accounts(auth));
-      fs.mkdirSync(dataDir, { recursive: true });
-      fs.writeFileSync(tokenFile, JSON.stringify({ token: safeStorage.encryptString(auth).toString("base64"), savedAt: new Date().toISOString() }), { mode: 0o600 });
+      writeToken(tokenFile, safeStorage, auth);
       if (!made) return { name: accountLabel(list) };
       const setupDeleted = await call(`/user/tokens/${made.setupId}`, { auth: given, method: "DELETE" }).then(
         () => true,

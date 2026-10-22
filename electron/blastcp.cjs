@@ -5,6 +5,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { ORIGIN, signIn } = require("./blastcp-oauth.cjs");
+const { readTokenRecord, requireKeychain, writeToken } = require("./provider-token.cjs");
 
 const TOKEN_FILE = "blastcp-token.json";
 const LINKS_FILE = "blastcp-links.json";
@@ -78,9 +79,8 @@ function createBlastcp({ dataDir, safeStorage, fetch: fetchImpl = globalThis.fet
   let rpcId = 0;
 
   function saved() {
-    if (!fs.existsSync(tokenFile)) return null;
-    const data = JSON.parse(fs.readFileSync(tokenFile, "utf8"));
-    return { token: safeStorage.decryptString(Buffer.from(data.token, "base64")), expiresAt: data.expiresAt ?? null };
+    const data = readTokenRecord(tokenFile, safeStorage);
+    return data ? { token: data.token, expiresAt: data.expiresAt ?? null } : null;
   }
 
   /** @returns {Record<string, { org: string, property: string, name: string }>} */
@@ -167,11 +167,10 @@ function createBlastcp({ dataDir, safeStorage, fetch: fetchImpl = globalThis.fet
       /** @returns {Promise<{ email: string }>} */
       return () => {
         running ??= (async () => {
-          if (!safeStorage.isEncryptionAvailable()) throw new Error("The Keychain isn't available, so Weft can't keep a BlastCP sign-in safely.");
+          requireKeychain(safeStorage, "BlastCP sign-in");
           const { token, expiresAt, clientId } = await login({ fetch: fetchImpl, openExternal });
           const me = await whoami(token);
-          fs.mkdirSync(dataDir, { recursive: true });
-          fs.writeFileSync(tokenFile, JSON.stringify({ token: safeStorage.encryptString(token).toString("base64"), expiresAt, clientId, savedAt: new Date().toISOString() }), { mode: 0o600 });
+          writeToken(tokenFile, safeStorage, token, { expiresAt, clientId });
           return me;
         })().finally(() => (running = null));
         return running;

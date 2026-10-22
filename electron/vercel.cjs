@@ -5,6 +5,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { VercelError, deploymentOf, frameworkOf, gitOf, gitRemote, mustBeFolder, productionUrl, projectRow, PROJECT_NAME, readLink, repoOf, request, writeLink } = require("./vercel-project.cjs");
+const { readToken, requireKeychain, writeToken } = require("./provider-token.cjs");
 
 const TOKEN_FILE = "vercel-token.json";
 // The most projects one scope (your account or a team) lists; enough to pick from by name.
@@ -17,9 +18,7 @@ function createVercel({ dataDir, safeStorage, fetch: fetchImpl = globalThis.fetc
   let teams = null; // [{ id, name, slug }], cached for the session
 
   function token() {
-    if (!fs.existsSync(tokenFile)) return null;
-    const saved = JSON.parse(fs.readFileSync(tokenFile, "utf8"));
-    return safeStorage.decryptString(Buffer.from(saved.token, "base64"));
+    return readToken(tokenFile, safeStorage);
   }
 
   async function call(pathname, { auth = token(), ...options } = {}) {
@@ -102,10 +101,9 @@ function createVercel({ dataDir, safeStorage, fetch: fetchImpl = globalThis.fetc
     async setToken(value) {
       const auth = String(value ?? "").trim();
       if (!auth) throw new Error("Paste a token from vercel.com/account/tokens.");
-      if (!safeStorage.isEncryptionAvailable()) throw new Error("The Keychain isn't available, so Weft can't keep the token safely.");
+      requireKeychain(safeStorage);
       const data = await call("/v2/user", { auth });
-      fs.mkdirSync(dataDir, { recursive: true });
-      fs.writeFileSync(tokenFile, JSON.stringify({ token: safeStorage.encryptString(auth).toString("base64"), savedAt: new Date().toISOString() }), { mode: 0o600 });
+      writeToken(tokenFile, safeStorage, auth);
       teams = null;
       return { username: data.user?.username ?? data.user?.email ?? "you" };
     },

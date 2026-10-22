@@ -112,7 +112,7 @@ blank waiting for one) and never replaces a value.
   `vercel.envSet` / `vercel.envValue`, `vault.sendValue` and `vault.setValue`, and `envRoutes` for threads and the server.
 - `lib/vercel-relay.ts` + `app/api/vercel/webhook/route.ts`: the relay on the deployed Weft. `lib/vercel-hooks.ts` +
   `app/api/vercel/hooks/route.ts`: the switch and the Realtime listener (started from `prewarm()`).
-- `electron/preload.cjs`: `window.weft.vercel`.
+- `electron/preload.cjs`: `window.weft.vercel`. The token's own read/persist lives in `electron/provider-token.cjs`, which Vercel, Supabase, Cloudflare and BlastCP all share.
 - `lib/vercel-view.ts`: types, the bridge, matching, labels, name rules. `lib/use-vercel.ts`: loading, over `lib/use-linked-status.ts` (the cache).
 - `components/VercelDrawer.tsx` (linked folders, on the shared `components/FolderRow.tsx`; its token form is the shared `components/TokenForm.tsx`), `components/VercelEnv.tsx` (the 🔐 env rows), `components/VercelPicker.tsx` (Link…, on the shared `components/DbSelect.tsx` with `lib/db-picker.ts` `rankItems`),
   `components/VercelCreate.tsx` (+ New project).

@@ -19,7 +19,9 @@ beforeEach(() => {
 });
 
 describe("complete", () => {
-  it("runs one bare Haiku turn: no tools, settings, MCP or session file", async () => {
+  // This one pays the SDK's first import, which is ~0.3s alone but ran to 4.8s against the default 5s
+  // timeout in a full sweep on a loaded box (2026-10-22). The timeout is for that import, not the assertions.
+  it("runs one bare Haiku turn: no tools, settings, MCP or session file", { timeout: 20_000 }, async () => {
     sdk.messages = [{ type: "result", subtype: "success", result: "hi" }];
     await complete("say hi");
     expect(sdk.calls).toEqual([

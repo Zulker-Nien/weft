@@ -7,6 +7,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { gitRemote, mustBeFolder, repoOf } = require("./vercel-project.cjs");
+const { readToken, requireKeychain, writeToken } = require("./provider-token.cjs");
 
 const API = "https://api.supabase.com";
 const TOKEN_FILE = "supabase-token.json";
@@ -86,9 +87,7 @@ function createSupabase({ dataDir, safeStorage, vault = null, fetch: fetchImpl =
   let orgs = null; // [{ id, slug, name }], cached for the session
 
   function token() {
-    if (!fs.existsSync(tokenFile)) return null;
-    const saved = JSON.parse(fs.readFileSync(tokenFile, "utf8"));
-    return safeStorage.decryptString(Buffer.from(saved.token, "base64"));
+    return readToken(tokenFile, safeStorage);
   }
 
   async function call(pathname, { auth = token(), method = "GET", body } = {}) {
@@ -167,10 +166,9 @@ function createSupabase({ dataDir, safeStorage, vault = null, fetch: fetchImpl =
     async setToken(value) {
       const auth = String(value ?? "").trim();
       if (!auth) throw new Error("Paste an access token from supabase.com/dashboard/account/tokens.");
-      if (!safeStorage.isEncryptionAvailable()) throw new Error("The Keychain isn't available, so Weft can't keep the token safely.");
+      requireKeychain(safeStorage);
       const list = await organizations(auth);
-      fs.mkdirSync(dataDir, { recursive: true });
-      fs.writeFileSync(tokenFile, JSON.stringify({ token: safeStorage.encryptString(auth).toString("base64"), savedAt: new Date().toISOString() }), { mode: 0o600 });
+      writeToken(tokenFile, safeStorage, auth);
       return { orgs: list.map((o) => o.name) };
     },
 
