@@ -105,6 +105,8 @@ async function readLines(file: string, from: number, size: number, onLine: (line
   }
 }
 
+// Not lib/format.ts's clip: this one cuts a prompt stored in the search index, where a trailing "…" would
+// become part of the indexed text. No ellipsis, and the cut is at exactly MAX_PROMPT_CHARS.
 function clip(text: string) {
   return text.length > MAX_PROMPT_CHARS ? text.slice(0, MAX_PROMPT_CHARS) : text;
 }

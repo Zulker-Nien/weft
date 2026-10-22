@@ -143,6 +143,16 @@ one vault environment it asks for, and its reads by name:
   route uses, loaded through `await import()` so the Mac's startup path doesn't pull them): per-secret
   hosts/methods/paths, no redirect to another host, no SSRF (DNS refuses loopback, RFC 1918, link-local,
   `*.local`), value masked in the response if it echoed.
+- **A `supabase` read's host is checked twice, on both paths.** The manifest's `supabaseUrl` is the host the
+  env's `SUPABASE_SECRET_KEY` gets sent to, and a `weft-app.json` is untrusted input — anyone can save an app.
+  So a `supabaseUrl` that isn't an https Supabase project URL (`https://<ref>.supabase.co` or `.in`, bare
+  host, no credentials, no port) is refused at manifest load *and* again at read time, before the secret is
+  read: `safeSupabaseUrl()` in `lib/app-folder.ts`, with a CJS twin in `electron/app-data-reads.cjs` that main
+  can reach (`electron/app-data-frame.cjs` refuses the same values when it loads `weft-app.json`). The request
+  is then built on the validated *origin*, not the raw string. Two gates because a manifest, or a share row,
+  written before the rule must not be able to point the key at a host of its choosing.
+  `electron/app-data-reads.test.ts` asserts the CJS twin and the `.ts` original answer identically on every
+  case: they're one rule in two files, and that test is what keeps them one rule.
 - **Reads are functions, reviewed in a migration.** The project's `supabase/migrations/` defines what an app
   may read: `security definer`, `set search_path = ''`, executable by `service_role` only, so the anon and
   signed-in keys can't call them. Weft's own are `growth_*` (`supabase/migrations/20261018054110_growth_reads.sql`).

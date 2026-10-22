@@ -2,11 +2,11 @@
 // so the bar component and the command palette can share the same rules.
 import type { ProjectSummary } from "./board-view";
 
-// "/Users/me/dev/app/" -> "app": the chip's label, ignoring any trailing slashes.
-export function folderName(folder: string) {
-  const trimmed = folder.replace(/\/+$/, "");
-  return trimmed.slice(trimmed.lastIndexOf("/") + 1) || folder;
-}
+// "/Users/me/dev/app/" -> "app": the chip's label, ignoring any trailing slashes. Re-exported rather than
+// reimplemented — lib/format.ts's folderName is the one the provider views, services and webhooks already
+// use, and two copies of "the last path segment" is one too many. It answers identically on every input
+// (trailing slashes, relative paths, "", "/"), which lib/project-bar.test.ts asserts.
+export { folderName } from "./format";
 
 // "/Users/me/dev/app" with home "/Users/me" -> "~/dev/app"
 export function shortPath(folder: string, home: string) {

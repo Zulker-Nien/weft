@@ -4,6 +4,7 @@ import { saveImageData } from "./attachments";
 import { openInPane, paneThumb, paneUrl } from "./browser-tools";
 import { emojiPrompt, parseEmoji } from "./card-pictures";
 import { complete } from "./haiku";
+import { clip } from "./format";
 import { nameNeeds, namePrompt, parseName, tagVocabulary, titleEmoji } from "./retitle";
 import { DATA_DIR, decorateCard, getCard, listCards } from "./store";
 import { listTags } from "./tag-store";
@@ -26,10 +27,6 @@ export function showPrompt(ask: string, reply: string) {
 The user asked: ${JSON.stringify(clip(ask, MAX_ASK_CHARS))}
 The agent replied:
 ${clip(reply, MAX_REPLY_CHARS)}`;
-}
-
-function clip(text: string, max: number) {
-  return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
 // The HTML in a model's answer, without a code fence or chat around it; undefined if there's none.

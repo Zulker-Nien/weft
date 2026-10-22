@@ -96,6 +96,34 @@ function save() {
   fs.writeFileSync(FILE, JSON.stringify(settings(), null, 2));
 }
 
+// The shape almost every getter below has: read the saved value, accept it only if `valid`, else the
+// fallback. A settings.json can be hand-edited or written by an older build, so a value that no longer
+// type-checks has to fall back rather than flow into the UI. `fallback` is what an absent or invalid
+// value reads as, and it is deliberately allowed to be wider than the stored type: several of these
+// settings store their default as "" at read time but as absent on disk (see writeSetting).
+function readSetting<K extends keyof Settings, V>(key: K, valid: (v: Settings[K]) => v is NonNullable<Settings[K]>, fallback: V): NonNullable<Settings[K]> | V {
+  const saved = settings()[key];
+  return valid(saved) ? saved : fallback;
+}
+
+// The matching write: store `value`, or `undefined` when it means "the default" — so settings.json holds
+// only what differs from the default, and a setting reset to its default leaves no residue behind. The
+// empty-string case matters: several settings take "" as their explicit default (setDoneEffort takes
+// `Effort | ""`), and writing it as undefined (or the reverse) is the bug that made a reset setting look
+// like it had persisted. V is therefore allowed to be wider than the stored type; `isDefault` is what
+// narrows it, and TS needs the assertion because it can't follow that through a boolean.
+function writeSetting<V>(key: keyof Settings, value: V, isDefault: (v: V) => boolean) {
+  // Assigned as undefined rather than deleted: JSON.stringify drops an undefined property, so
+  // settings.json still records only what differs from the default.
+  const next: Settings[keyof Settings] = isDefault(value) ? undefined : (value as Settings[keyof Settings]);
+  Object.assign(settings(), { [key]: next });
+  save();
+}
+
+// The "no override" rule shared by the model and effort overrides below: "" is their default, and it's
+// stored as unset so settings.json records only what differs from the default.
+const isEmpty = (v: string) => v === "";
+
 export function threadPrompt() {
   return settings().threadPrompt?.trim() || DEFAULT_THREAD_PROMPT;
 }
@@ -118,8 +146,7 @@ export function setKeepAliveMinutes(minutes: number) {
 }
 
 export function defaultPermissionMode(): PermissionMode {
-  const saved = settings().defaultPermissionMode;
-  return saved && MODES.includes(saved) ? saved : "auto";
+  return readSetting("defaultPermissionMode", (v): v is PermissionMode => !!v && MODES.includes(v), "auto");
 }
 
 export function setDefaultPermissionMode(mode: PermissionMode) {
@@ -155,14 +182,12 @@ export function setPushOnDone(on: boolean) {
 }
 
 export function subagentModel(): SubagentModel {
-  const saved = settings().subagentModel;
-  return isSubagentModel(saved) ? saved : "choose";
+  return readSetting("subagentModel", isSubagentModel, "choose");
 }
 
 // "choose" is the default, so it's stored as unset.
 export function setSubagentModel(model: SubagentModel) {
-  settings().subagentModel = model === "choose" ? undefined : model;
-  save();
+  writeSetting("subagentModel", model, (v) => v === "choose");
 }
 
 // Any model either CLI serves; it applies to cards on that CLI (lib/automations.ts doneOverrides).
@@ -173,30 +198,27 @@ function isDoneModel(value: unknown): value is string {
 
 // "" is the default, so the setting reads as "use the card's own model".
 export function doneModel(): string {
-  const saved = settings().doneModel;
-  return isDoneModel(saved) ? saved : "";
+  return readSetting("doneModel", isDoneModel, "");
 }
 
 // Empty string restores the default (no override).
 export function setDoneModel(model: string) {
-  settings().doneModel = model === "" ? undefined : model;
-  save();
+  writeSetting("doneModel", model, isEmpty);
 }
 
-function isDoneEffort(value: unknown): value is Effort | "" {
-  if (value === "") return true;
+// The stored value is an Effort id or absent (setDoneEffort stores "" as unset), so this only has to
+// recognise a real id; "" is the read-time fallback, not something settings.json can hold.
+function isDoneEffort(value: unknown): value is Effort {
   return EFFORTS.some((e) => e.id === value);
 }
 
 // "" is the default ("use the card's own effort").
 export function doneEffort(): Effort | "" {
-  const saved = settings().doneEffort;
-  return isDoneEffort(saved) ? saved : "";
+  return readSetting("doneEffort", isDoneEffort, "");
 }
 
 export function setDoneEffort(effort: Effort | "") {
-  settings().doneEffort = effort === "" ? undefined : effort;
-  save();
+  writeSetting("doneEffort", effort, isEmpty);
 }
 
 // The copilot is one long-lived Claude Code thread (lib/copilot.ts), so its model is a Claude id only.
@@ -206,24 +228,20 @@ function isCopilotModel(value: unknown): value is string {
 }
 
 export function copilotModel(): string {
-  const saved = settings().copilotModel;
-  return isCopilotModel(saved) ? saved : "";
+  return readSetting("copilotModel", isCopilotModel, "");
 }
 
 export function setCopilotModel(model: string) {
-  settings().copilotModel = model === "" ? undefined : model;
-  save();
+  writeSetting("copilotModel", model, isEmpty);
 }
 
 // "Review all" starts a Claude Code card, so its model is a Claude id. "" means the CLI's default.
 export function reviewAllModel(): string {
-  const saved = settings().reviewAllModel;
-  return isCopilotModel(saved) ? saved : "";
+  return readSetting("reviewAllModel", isCopilotModel, "");
 }
 
 export function setReviewAllModel(model: string) {
-  settings().reviewAllModel = model === "" ? undefined : model;
-  save();
+  writeSetting("reviewAllModel", model, isEmpty);
 }
 
 // The first-message-failed banner's backup model: any model any installed CLI serves, or "" for "off".
@@ -235,13 +253,11 @@ function isBackupModel(value: unknown): value is string {
 
 // "" is the default ("no backup set"), so an unset value reads as off.
 export function backupModel(): string {
-  const saved = settings().backupModel;
-  return isBackupModel(saved) ? saved : "";
+  return readSetting("backupModel", isBackupModel, "");
 }
 
 export function setBackupModel(model: string) {
-  settings().backupModel = model === "" ? undefined : model;
-  save();
+  writeSetting("backupModel", model, isEmpty);
 }
 
 export function dismissedSessions(): string[] {

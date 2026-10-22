@@ -14,6 +14,30 @@ const TIMEOUT_MS = 15_000;
 // PostgREST's function name: a Postgres identifier (lowercase, digits, underscore; underscore allowed
 // to lead, so fns like `_helper` work too). Capped at 63 to mirror Postgres' NAMEDATALEN-1.
 const RPC_FN = /^[a-z_][a-z0-9_]{0,62}$/;
+// The only host a Supabase read may send the author's secret to: an https Supabase project URL.
+// The rule and its reasoning live in lib/app-folder.ts (safeSupabaseUrl); this is its CJS twin, because
+// main can't import a .ts module. KEEP IN STEP with that one — the two must always agree, and
+// electron/app-data-reads.test.cjs asserts the same cases lib/app-folder.test.ts does.
+const SUPABASE_HOST_RE = /^[a-z0-9][a-z0-9-]*\.supabase\.(co|in)$/i;
+
+// Whether a manifest's supabaseUrl is safe to send the author's secret to: the normalised origin, or
+// null. A weft-app.json is untrusted input (anyone can save an app), so this is checked at manifest
+// load AND again here, before the secret is read — the same two gates app/api/a/[id]/read/route.ts
+// keeps, so a row or a manifest written before the rule still can't leak.
+function safeSupabaseUrl(raw) {
+  if (typeof raw !== "string" || !raw) return null;
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:") return null;
+  // No credentials in the URL, and no port: the host must be the bare project host.
+  if (url.username || url.password || url.port) return null;
+  if (!SUPABASE_HOST_RE.test(url.hostname)) return null;
+  return url.origin;
+}
 // Manifest read names (weft-app.json's reads map keys).
 const READ_NAME = /^[a-z][a-z0-9_-]{0,39}$/;
 // A primitive arg the page may pass: string, number or boolean. Nothing else reaches the network.
@@ -82,10 +106,18 @@ function cleanArgs(declaredArgs, pageArgs) {
 // immutable function that way, so a manifest naming a function that writes gets an error, not a write.
 async function runSupabase({ supabaseUrl, fn, declaredArgs, pageArgs, values, fetch: fetchImpl }) {
   if (!RPC_FN.test(String(fn ?? ""))) reject("bad-request", `Function name ${JSON.stringify(fn)} isn't a Postgres identifier.`);
+  // The manifest's supabaseUrl decides where the author's SUPABASE_SECRET_KEY is sent, so it is checked
+  // here as well as when the manifest was reduced (app-data-frame.cjs): a weft-app.json written before
+  // that rule, or edited since, must not be able to point the key at a host of its choosing.
+  // safeSupabaseUrl returns the normalised origin or null; null refuses before the secret is read.
+  const origin = safeSupabaseUrl(supabaseUrl);
+  if (!origin) reject("manifest", "This app's supabaseUrl isn't a Supabase project URL.");
   const secret = values.SUPABASE_SECRET_KEY;
   if (!secret) reject("missing", `SUPABASE_SECRET_KEY has no value in this env yet.`);
   const cleaned = cleanArgs(declaredArgs, pageArgs);
-  const target = new URL(`/rest/v1/rpc/${fn}`, supabaseUrl);
+  // Built on the validated origin, not the raw manifest string: a URL like
+  // https://abc.supabase.co@attacker.example/ would pass a naive suffix check but must never be reachable.
+  const target = new URL(`/rest/v1/rpc/${fn}`, origin);
   for (const [key, value] of Object.entries(cleaned)) target.searchParams.set(key, String(value));
   const url = target.toString();
   const t = withTimeout(TIMEOUT_MS);
@@ -219,4 +251,4 @@ async function runGa4({ body, values, fetch: fetchImpl, now = Date.now, tokens }
   }
 }
 
-module.exports = { upstreamMessage, runSupabase, runGa4, flattenGa4, signServiceAccountJwt, exchangeToken, isPrimitive, RPC_FN, READ_NAME, ROW_LIMIT, BYTE_LIMIT, TIMEOUT_MS };
+module.exports = { upstreamMessage, runSupabase, runGa4, flattenGa4, signServiceAccountJwt, exchangeToken, isPrimitive, safeSupabaseUrl, RPC_FN, READ_NAME, ROW_LIMIT, BYTE_LIMIT, TIMEOUT_MS };

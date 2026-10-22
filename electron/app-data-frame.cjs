@@ -5,7 +5,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { RPC_FN, READ_NAME } = require("./app-data-reads.cjs");
+const { RPC_FN, READ_NAME, safeSupabaseUrl } = require("./app-data-reads.cjs");
 
 const APPS_DIR = "apps";
 const APPS_FILE = "apps.json";
@@ -140,6 +140,14 @@ function normaliseTop(parsed) {
   }
   requireString(parsed, "folder", "weft-app.json's folder must be a string path.");
   requireOptionalString(parsed, "supabaseUrl", "weft-app.json's supabaseUrl must be a string.");
+  // A supabaseUrl is only ever used to send the author's SUPABASE_SECRET_KEY, so a value that isn't an
+  // https Supabase project host is refused here — at load, so it never reaches the manifest at all —
+  // as well as at read time (runSupabase re-checks). Same rule and same reasoning as the hosted route's
+  // reducedManifest; see safeSupabaseUrl in lib/app-folder.ts. Absent or null means "fall back to the
+  // project's linked ref" (resolveSupabaseUrl), so only a value that is actually there is judged.
+  if (parsed.supabaseUrl && !safeSupabaseUrl(parsed.supabaseUrl)) {
+    throw err("manifest", "weft-app.json's supabaseUrl must be an https Supabase project URL (https://<ref>.supabase.co).");
+  }
   requireObjectMap(parsed, "reads", "weft-app.json's reads must be an object.");
   requireObjectMap(parsed, "secrets", "weft-app.json's secrets must be an object.");
   requireArray(parsed, "public", "weft-app.json's public must be an array of names.");

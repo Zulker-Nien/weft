@@ -77,6 +77,30 @@ describe("readManifest", () => {
     expect(() => readManifest(writeManifestFixture(dataDir, "rga.json", { name: "x", env: "production", reads: { a: { ga4: [1] } } }), "/")).toThrow("ga4 must be an object");
     expect(() => readManifest(writeManifestFixture(dataDir, "rnone.json", { name: "x", env: "production", reads: { a: { foo: true } } }), "/")).toThrow('must have a "supabase" or "ga4" key');
   });
+
+  // A weft-app.json is untrusted input (anyone can save an app), and supabaseUrl is the host a read
+  // sends SUPABASE_SECRET_KEY to. Refused here at load as well as at read time, matching the hosted
+  // route's reducedManifest — the fix that only ever reached one of the two copies of this code.
+  it("refuses a supabaseUrl that isn't an https Supabase project URL", () => {
+    const dataDir = makeDataDir();
+    const load = (extra: Record<string, unknown>) => () =>
+      readManifest(writeManifestFixture(dataDir, "u.json", { name: "x", env: "production", ...extra }), "/");
+    for (const supabaseUrl of [
+      "https://attacker.example",
+      "http://abc.supabase.co",
+      "https://abc.supabase.co.evil.example",
+      "https://abc.supabase.co@attacker.example",
+      "https://abc.supabase.co:8443",
+      "nonsense",
+    ]) {
+      expect(load({ supabaseUrl })).toThrow("https Supabase project URL");
+    }
+    // A real project URL loads. Absent or null means "fall back to the project's linked ref", so
+    // neither is judged here — resolveSupabaseUrl builds that host from the link instead.
+    expect(load({ supabaseUrl: "https://abc.supabase.co" })).not.toThrow();
+    expect(load({})).not.toThrow();
+    expect(load({ supabaseUrl: null })).not.toThrow();
+  });
 });
 
 describe("deriveNeeds + manifestHash + effectiveGrant", () => {

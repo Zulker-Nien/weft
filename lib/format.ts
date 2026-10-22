@@ -230,7 +230,9 @@ export function asText(value: unknown, fallback = ""): string {
   return fallback;
 }
 
-// Cuts text to max characters, ending in an ellipsis when it had to cut.
+// Cuts text to at most `max` characters, ending in an ellipsis when it had to cut — the ellipsis is
+// counted, which is why the slice is `max - 1`. This is the one clip: electron/menus.cjs holds a CJS twin
+// main can't avoid, and lib/search.ts deliberately cuts without an ellipsis (it indexes the text).
 export function clip(text: string, max: number) {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }

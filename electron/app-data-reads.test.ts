@@ -1,6 +1,13 @@
 import { generateKeyPairSync, verify } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import * as reads from "./app-data-reads.cjs";
 import { exchangeToken, flattenGa4, runGa4, runSupabase, signServiceAccountJwt, TIMEOUT_MS } from "./app-data-reads.cjs";
+import { safeSupabaseUrl as safeSupabaseUrlLib } from "../lib/app-folder";
+
+// The .cjs module's inferred exports don't carry safeSupabaseUrl (it's reached through module.exports,
+// which TypeScript can't name-resolve), so reach it off the namespace and give it the same signature as
+// the .ts original — that the two agree is the whole point of the parity test at the bottom.
+const safeSupabaseUrl = (reads as unknown as { safeSupabaseUrl: (raw: unknown) => string | null }).safeSupabaseUrl;
 
 // A real RS256 keypair so the JWT sign/verify round-trip runs; the token endpoint is faked.
 const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -104,6 +111,73 @@ describe("runSupabase", () => {
     });
     await expect(runSupabase({ supabaseUrl: URL, fn: "fn", declaredArgs: {}, pageArgs: {}, values: { SUPABASE_SECRET_KEY: "x" }, fetch })).rejects.toMatchObject({ kind: "timeout" });
     expect(TIMEOUT_MS).toBe(15_000);
+  });
+
+  // The gate the hosted route has had since dde1126 and this copy had not: a weft-app.json is untrusted
+  // input, and its supabaseUrl decides where the author's SUPABASE_SECRET_KEY goes. Without the check a
+  // saved data app could name an attacker's host and receive the key as apikey + Bearer on first read.
+  it("refuses a supabaseUrl that isn't a Supabase project host, before reading the secret or calling fetch", async () => {
+    const hostile: unknown[] = [
+      "https://attacker.example",
+      "http://lqjyravglujyizyqypxq.supabase.co",       // not https
+      "https://lqjyravglujyizyqypxq.supabase.co.evil.example",  // suffix lookalike
+      "https://abc.supabase.co@attacker.example",      // credentials in the URL: host is attacker.example
+      "https://abc.supabase.co:8443",                  // non-default port
+      "not a url",
+      "",
+      null,
+      7,
+    ];
+    for (const supabaseUrl of hostile) {
+      const { fetch, calls } = fakeFetch({});
+      // Passed through as unknown the way a real manifest value reaches it: the gate must be what
+      // refuses, not the caller's type.
+      await expect(
+        runSupabase({ supabaseUrl: supabaseUrl as string, fn: "fn", declaredArgs: {}, pageArgs: {}, values: { SUPABASE_SECRET_KEY: "leaked-key" }, fetch }),
+      ).rejects.toMatchObject({ kind: "manifest" });
+      // Nothing went out: the key never left the process.
+      expect(calls).toHaveLength(0);
+    }
+  });
+
+  it("strips the path when it builds the request, so only the validated origin is reachable", async () => {
+    const rpc = `${URL}/rest/v1/rpc/fn`;
+    const { fetch, calls } = fakeFetch({ [rpc]: () => ({ body: [] }) });
+    // A path on an otherwise-valid host is normalised away, not appended to.
+    await runSupabase({ supabaseUrl: `${URL}/some/other/path`, fn: "fn", declaredArgs: {}, pageArgs: {}, values: { SUPABASE_SECRET_KEY: "k" }, fetch });
+    expect(calls[0]?.url).toBe(rpc);
+  });
+});
+
+// The CJS copy and the .ts original are two implementations of one security rule. This is the test that
+// keeps them honest: every case the hosted route relies on is asserted against both, so a fix to one
+// copy can't silently leave the other behind (which is exactly how dde1126 happened).
+describe("safeSupabaseUrl (Electron twin, in parity with lib/app-folder.ts)", () => {
+  const cases: [unknown, string | null][] = [
+    ["https://abc.supabase.co", "https://abc.supabase.co"],
+    ["https://abc.supabase.co/rest/v1/rpc/f", "https://abc.supabase.co"],
+    ["https://abc.supabase.in", "https://abc.supabase.in"],
+    ["https://attacker.example", null],
+    ["http://abc.supabase.co", null],
+    ["https://abc.supabase.co.evil.example", null],
+    ["https://abc.supabase.co@attacker.example", null],
+    ["https://abc.supabase.co:8443", null],
+    ["https://user:pw@abc.supabase.co", null],
+    ["https://supabase.co", null],
+    ["https://evil.supabase.co.attacker.example", null],
+    ["ftp://abc.supabase.co", null],
+    ["", null],
+    [undefined, null],
+    [null, null],
+    [7, null],
+    [{}, null],
+  ];
+
+  it("answers identically to the .ts original on every case", () => {
+    for (const [input, expected] of cases) {
+      expect(safeSupabaseUrl(input), `safeSupabaseUrl(${String(input)})`).toBe(expected);
+      expect(safeSupabaseUrlLib(input), `lib safeSupabaseUrl(${String(input)})`).toBe(expected);
+    }
   });
 });
 

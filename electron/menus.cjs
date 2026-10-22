@@ -192,6 +192,9 @@ function createMenus({ APP_NAME, ASSETS, COPILOT_SHORTCUT, mac, pane, getWin, ge
     });
   }
 
+  // A CJS twin of lib/format.ts's clip, which main can't import. Keep the `max - 1` slice and the
+  // ellipsis: the rule is "at most max characters, ellipsis counted", and a tray label that renders
+  // one character over its budget is how the two copies drifted in the first place.
   function clip(text, max) {
     return text.length > max ? `${text.slice(0, max - 1)}…` : text;
   }
