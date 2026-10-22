@@ -64,5 +64,5 @@ The audit that led here (every state, drawn) is in the thread's page `~/.weft/sh
 - **One dock for every ask.** Questions, permissions, folder grants, symbol claims and secret asks inside the reply
   box's frame, one at a time, with numbered options, Enter/Esc and a note; the field stays the same Composer (never
   remounted), the frame grows upward around it, and a draft is kept with "↓ Send it after the answer".
-- **One server-side queue.** Drop ReplyBox's in-memory `queue` (and "Paused") for the runner's `afterTurn` messages.
+- **One server-side queue.** Drop ReplyBox's in-memory queue (`lib/use-reply-queue.ts`, and "Paused") for the runner's `afterTurn` messages.
 - **Fewer bands.** The task strip as a chip on the status line, one error slot, key hints in the placeholder.

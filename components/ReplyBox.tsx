@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import posthog from "posthog-js";
 import { bangCommand } from "@/lib/bang";
 import { type PlanResets } from "@/lib/schedule";
@@ -9,6 +9,7 @@ import { useReplyDraft } from "@/lib/use-reply-draft";
 import { useReplyKeys } from "@/lib/use-reply-keys";
 import { useReplySchedule } from "@/lib/use-reply-schedule";
 import { useReplyContinue } from "@/lib/use-reply-continue";
+import { useReplyQueue } from "@/lib/use-reply-queue";
 import { useNow } from "@/lib/use-now";
 import { replyBoxMode, type ReplyAction } from "@/lib/reply-mode";
 import type { Backend, CacheState, LimitWindow, ScheduledMessage } from "@/lib/types";
@@ -80,20 +81,12 @@ export default function ReplyBox({
   const [error, setError] = useState<string | null>(null);
   // "Started ‘…’" once the box handed its work to a new card.
   const [note, setNote] = useState<string | null>(null);
-  // Messages written while the thread was working; they go out together once the turn ends.
-  const [queue, setQueue] = useState<string[]>([]);
-  // Held while you edit a message pulled back out of the queue (or after a queued send failed).
-  const [paused, setPaused] = useState(false);
   const [laterOpen, setLaterOpen] = useState(false);
   // ↑ pulled your last sent message back into the box; Enter replaces it, Escape lets it be.
   const [editing, setEditingState] = useState(false);
   const now = useNow();
   const composer = useRef<ComposerHandle>(null);
   const form = useRef<QuestionFormHandle>(null);
-
-  // The queued messages on their way out, numbered so each batch is sent exactly once.
-  const [outgoing, setOutgoing] = useState<{ id: number; text: string } | null>(null);
-  const sentId = useRef(0);
 
   const setErrorWrap = (err: unknown) => setError(err instanceof Error ? err.message : String(err));
   const clearError = () => setError(null);
@@ -104,27 +97,10 @@ export default function ReplyBox({
   };
   const { initial, save: saveDraft, shell, empty } = useReplyDraft(cardId, onShell, clearError);
 
-  // The turn ended and nothing is being edited: what was queued leaves the queue as one message.
-  // Moved during render, in the same pass that sees the turn end, so it can't be picked up twice.
-  if (!live && !paused && queue.length > 0) {
-    const text = queue.join("\n\n");
-    setQueue([]);
-    setOutgoing((o) => ({ id: (o?.id ?? 0) + 1, text }));
-  }
-
-  const sendOutgoing = useEffectEvent((text: string) => {
-    onSend(text).then(captureReply).catch((err: unknown) => {
-      setQueue((q) => [text, ...q]);
-      setPaused(true);
-      setErrorWrap(err);
-    });
-  });
-
-  useEffect(() => {
-    if (!outgoing || sentId.current >= outgoing.id) return;
-    sentId.current = outgoing.id;
-    sendOutgoing(outgoing.text);
-  }, [outgoing]);
+  // Messages written while the thread was working; they go out together once the turn ends.
+  const queued = useReplyQueue({ live, busy: sending, onSend, onStop, onSent: captureReply, onError: setErrorWrap });
+  const { queue, paused, setQueue, setPaused } = queued;
+  const busy = sending || queued.sending;
 
   // What's in the box, or null once it has shown why the box can't be read.
   function readBox() {
@@ -184,24 +160,23 @@ export default function ReplyBox({
   }
 
   async function submit(now = false) {
-    if (sending) return;
+    if (busy) return;
     if (shell && !editing) return runShell();
     const text = readBox();
     if (text === null) return;
     if (editing) return sendEdit(text);
     if (!text && paused && queue.length > 0) {
-      setPaused(false);
+      queued.resume();
       return;
     }
     // Send now with an empty box sends what's queued instead.
-    if (!text && now && queue.length > 0) return sendQueuedNow();
+    if (!text && now && queue.length > 0) return queued.sendNow();
     if (!text) {
       setError("Write a message first.");
       return;
     }
     if (live && !now) {
-      setQueue((q) => [...q, text]);
-      setPaused(false);
+      queued.add(text);
       saveDraft("", true);
       composer.current?.clear();
       return;
@@ -212,32 +187,10 @@ export default function ReplyBox({
       if (live) await onStop();
       await onSend(text);
       captureReply();
-      setPaused(false);
+      queued.resume();
       saveDraft("", true);
       composer.current?.clear();
     } catch (err) {
-      setErrorWrap(err);
-    } finally {
-      setSending(false);
-    }
-  }
-
-  // Stops the running turn and sends queued messages now: the one at `index`, or the whole queue.
-  // Whatever stays queued holds until that send is out, then waits for the turn it starts.
-  async function sendQueuedNow(index?: number) {
-    if (sending) return;
-    const text = index === undefined ? queue.join("\n\n") : queue[index];
-    if (text === undefined) return;
-    setQueue((q) => (index === undefined ? [] : q.filter((_, j) => j !== index)));
-    setPaused(true);
-    setSending(true);
-    try {
-      if (live) await onStop();
-      await onSend(text);
-      captureReply();
-      setPaused(false);
-    } catch (err) {
-      setQueue((q) => [text, ...q]);
       setErrorWrap(err);
     } finally {
       setSending(false);
@@ -253,7 +206,7 @@ export default function ReplyBox({
   // Send fresh: the message (what's typed, or `text` from a button) goes to a new session of this card that starts
   // from a brief of the thread (lib/splice.ts). A button's text leaves the draft alone.
   async function sendFresh(text?: string) {
-    if (!stale || sending) return;
+    if (!stale || busy) return;
     const message = text ?? composer.current?.readText() ?? "";
     if (!message.trim()) {
       setError("Write a message first.");
@@ -360,12 +313,12 @@ export default function ReplyBox({
         queue={queue}
         paused={paused}
         live={live}
-        sending={sending}
+        sending={busy}
         now={now}
         onTakeBack={takeBackScheduled}
         onUnschedule={unschedule}
-        onSendNow={(i) => void sendQueuedNow(i)}
-        onRemove={(i) => setQueue((q) => q.filter((_, j) => j !== i))}
+        onSendNow={(i) => void queued.sendNow(i)}
+        onRemove={queued.remove}
       />
       <Composer
         ref={composer}
@@ -384,7 +337,7 @@ export default function ReplyBox({
           <ReplyBoxActions
             view={view}
             live={live}
-            sending={sending}
+            sending={busy}
             sendLater={sendLater ? { backend: sendLater.backend, resets: sendLater.resets } : undefined}
             laterOpen={laterOpen}
             setLaterOpen={setLaterOpen}
