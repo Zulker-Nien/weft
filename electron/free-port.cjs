@@ -16,6 +16,21 @@ function listeners(port) {
   }
 }
 
+function parentOf(pid) {
+  try {
+    return Number(execFileSync("ps", ["-o", "ppid=", "-p", String(pid)], { encoding: "utf8" }).trim());
+  } catch {
+    return 0;
+  }
+}
+
+// Under Vitest only the test's own children may be signalled: a test that reached the real freePort
+// on 1024 once SIGTERMed Weft's live server and deleted its .next (2026-10-22).
+function mayKill(pid) {
+  if (pid === process.pid) return false;
+  return !process.env.VITEST || parentOf(pid) === process.pid;
+}
+
 function sleep(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
@@ -25,7 +40,7 @@ function sleep(ms) {
 function freePort(port, distDir) {
   let evicted = false;
   for (const signal of ["SIGTERM", "SIGKILL"]) {
-    const pids = listeners(port).filter((pid) => pid !== process.pid);
+    const pids = listeners(port).filter(mayKill);
     if (!pids.length) break;
     evicted = true;
     for (const pid of pids) {
@@ -39,7 +54,7 @@ function freePort(port, distDir) {
   if (distDir && evicted) fs.rmSync(path.join(ROOT, distDir), { recursive: true, force: true });
 }
 
-module.exports = { freePort };
+module.exports = { freePort, mayKill };
 
 if (require.main === module) {
   const [port, distDir] = process.argv.slice(2);

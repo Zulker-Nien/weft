@@ -74,6 +74,8 @@ function makeSupervisor() {
     onNotify,
     app: fakeApp,
     spawn: fakeSpawn,
+    // The real freePort would SIGTERM whatever listens on 1024: Weft's own server.
+    freePort: vi.fn(),
   });
   return { handle, onStatus, onFatal, onMark, onNotify };
 }

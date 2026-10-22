@@ -4,7 +4,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { freePort } from "../electron/free-port.cjs";
+import { freePort, mayKill } from "../electron/free-port.cjs";
 
 function freeTcpPort(): Promise<number> {
   return new Promise((resolve) => {
@@ -42,6 +42,16 @@ describe("freePort", () => {
   it("does nothing when the port is already free", async () => {
     const port = await freeTcpPort();
     expect(() => freePort(port)).not.toThrow();
+  });
+
+  it("under Vitest, signals only the test's own children", async () => {
+    // process.ppid stands in for Weft's server: not ours, so never signalled.
+    expect(mayKill(process.ppid)).toBe(false);
+    expect(mayKill(process.pid)).toBe(false);
+    const child = await squat(await freeTcpPort());
+    expect(mayKill(child.pid!)).toBe(true);
+    child.kill();
+    await exited(child);
   });
 
   const buildFolder = () => path.relative(path.join(__dirname, ".."), fs.mkdtempSync(path.join(os.tmpdir(), "weft-dist-")));

@@ -163,15 +163,17 @@ function command(port, app) {
 // fatal — status messages carry kind:"status", fatal messages carry kind:"fatal". onMark("port")
 // times freeing the port for the startup timer. Returns { url, stop, restart, logPath, wasReady }.
 //
-// `app` and `spawn` are injected so tests can run without Electron. In production they're loaded
+// `app`, `spawn` and `freePort` are injected so tests can run without Electron, and without the real
+// freePort evicting whatever holds the port (in a test run, Weft's own live server). In production they're loaded
 // here on demand; in tests they come in through the same parameter (electron/server.test.ts).
-async function startServer({ preferredPort, env, onStatus, onFatal, onMark, onNotify, app: appArg, spawn: spawnArg }) {
+async function startServer({ preferredPort, env, onStatus, onFatal, onMark, onNotify, app: appArg, spawn: spawnArg, freePort: freePortArg }) {
   const app = appArg ?? require("electron").app;
   const spawn = spawnArg ?? require("node:child_process").spawn;
+  const evict = freePortArg ?? freePort;
   // From source the board always lives on one port: evict any stale server (and its build folder)
   // instead of wandering to another port, so two servers never share `.next`.
   if (!app.isPackaged) {
-    freePort(preferredPort, process.env.WEFT_PROD ? undefined : process.env.WEFT_DIST || ".next");
+    evict(preferredPort, process.env.WEFT_PROD ? undefined : process.env.WEFT_DIST || ".next");
   }
   const port = await pickPort(preferredPort);
   onMark?.("port");
