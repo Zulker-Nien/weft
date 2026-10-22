@@ -285,4 +285,55 @@ describe("POST /api/a/[id]/read", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(insertFetchLog).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: "READ", host: "analyticsdata.googleapis.com", status: 200 }));
   });
+  // How each failure maps to a status. Pinned before the read logic moved into electron/app-read-core.cjs,
+  // which throws kind-tagged errors that lib/app-read.ts turns back into these statuses.
+  describe("failure statuses", () => {
+    const withSecret = () => createAppSecretStore.mockReturnValue({ getValues: vi.fn().mockResolvedValue({ SUPABASE_SECRET_KEY: "sb_secret_x" }) });
+
+    it("413 when Supabase answers more than 2 MB", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("x".repeat(2 * 1024 * 1024 + 1), { status: 200 })));
+      withSecret();
+      const { POST } = await import("./route");
+      const res = await POST(post({ name: "growth_overview", args: {} }), ctx("s1"));
+      expect(res.status).toBe(413);
+    });
+
+    it("504 when the fetch is aborted on the timeout", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockRejectedValue(Object.assign(new Error("aborted"), { name: "AbortError" })));
+      withSecret();
+      const { POST } = await import("./route");
+      const res = await POST(post({ name: "growth_overview", args: {} }), ctx("s1"));
+      expect(res.status).toBe(504);
+      expect(((await res.json()) as { error: string }).error).toContain("15 s");
+    });
+
+    it("502 when Supabase can't be reached", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
+      withSecret();
+      const { POST } = await import("./route");
+      const res = await POST(post({ name: "growth_overview", args: {} }), ctx("s1"));
+      expect(res.status).toBe(502);
+      expect(((await res.json()) as { error: string }).error).toContain("ECONNREFUSED");
+    });
+
+    it("400 for a GA4 service account that isn't JSON or lacks its key", async () => {
+      vi.stubGlobal("fetch", vi.fn());
+      const { POST } = await import("./route");
+      for (const sa of ["not-json", JSON.stringify({ client_email: "a@b" })]) {
+        createAppSecretStore.mockReturnValue({ getValues: vi.fn().mockResolvedValue({ GA4_PROPERTY_ID: "1", GA4_SERVICE_ACCOUNT_JSON: sa }) });
+        const res = await POST(post({ name: "site_visits", args: {} }), ctx("s1"));
+        expect(res.status).toBe(400);
+      }
+    });
+
+    it("passes Google's token endpoint status through", async () => {
+      const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048, privateKeyEncoding: { type: "pkcs8", format: "pem" }, publicKeyEncoding: { type: "spki", format: "pem" } });
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "invalid_grant", error_description: "bad key" }), { status: 401 })));
+      createAppSecretStore.mockReturnValue({ getValues: vi.fn().mockResolvedValue({ GA4_PROPERTY_ID: "1", GA4_SERVICE_ACCOUNT_JSON: JSON.stringify({ client_email: "fresh@proj.iam.gserviceaccount.com", private_key: privateKey }) }) });
+      const { POST } = await import("./route");
+      const res = await POST(post({ name: "site_visits", args: {} }), ctx("s1"));
+      expect(res.status).toBe(401);
+      expect(((await res.json()) as { error: string }).error).toContain("bad key");
+    });
+  });
 });

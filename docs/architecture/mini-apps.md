@@ -126,7 +126,8 @@ one vault environment it asks for, and its reads by name:
   binding is a redeclaration and the browser refuses the whole script, leaving a page with no grant bar and no
   data (jsdom doesn't, so a test there won't catch it).
 - **Main runs the reads** (`electron/app-data.cjs`; which frame may ask in `electron/app-data-frame.cjs`, grants
-  in `electron/app-data-grants.cjs`, the two read kinds in `electron/app-data-reads.cjs`, the `fetch`/`env`/
+  in `electron/app-data-grants.cjs`, the two read kinds in `electron/app-read-core.cjs` through main's front door
+  `electron/app-data-reads.cjs`, the `fetch`/`env`/
   `requestSecret` half in `electron/app-data-fetch.cjs` sharing the pane-frame gate). It answers only the main
   frame of a pane page (`event.sender.mainFrame`) that is a file directly in one app's folder,
   `~/.weft/apps/<slug>/` (real path, so no symlink or `..` out, and not nested deeper), saved as an app, beside
@@ -147,12 +148,23 @@ one vault environment it asks for, and its reads by name:
   env's `SUPABASE_SECRET_KEY` gets sent to, and a `weft-app.json` is untrusted input — anyone can save an app.
   So a `supabaseUrl` that isn't an https Supabase project URL (`https://<ref>.supabase.co` or `.in`, bare
   host, no credentials, no port) is refused at manifest load *and* again at read time, before the secret is
-  read: `safeSupabaseUrl()` in `lib/app-folder.ts`, with a CJS twin in `electron/app-data-reads.cjs` that main
+  read: `safeSupabaseUrl()` in `lib/app-folder.ts`, with a CJS twin in `electron/app-read-core.cjs` that main
   can reach (`electron/app-data-frame.cjs` refuses the same values when it loads `weft-app.json`). The request
   is then built on the validated *origin*, not the raw string. Two gates because a manifest, or a share row,
   written before the rule must not be able to point the key at a host of its choosing.
   `electron/app-data-reads.test.ts` asserts the CJS twin and the `.ts` original answer identically on every
   case: they're one rule in two files, and that test is what keeps them one rule.
+- **One read implementation for both paths.** The local read (main) and the hosted read
+  (`app/api/a/[id]/read/route.ts`) used to be two copies of the same code, which is how the host check above
+  landed on one and not the other. Both now run `electron/app-read-core.cjs`: `runSupabase`, `runGa4`,
+  `cleanArgs`, `flattenGa4`, the service-account JWT and token exchange, the caps and the timeout, each taking
+  `fetch` as a parameter. It lives in `electron/` because main can't import `.ts` and only `electron/**` ships in
+  the packaged app; the route loads it through `lib/app-read.ts` with `await import()`, as the fetch route loads
+  `app-fetch-run.cjs`. A refusal throws an Error tagged `err.kind` (`bad-request`, `manifest`, `missing`,
+  `bad-args`, `upstream`, `too-large`, `timeout`, `network`; an upstream answer adds `err.status`): main hands
+  the kind to the page, and `lib/app-read.ts` `readStatus` maps it to the route's HTTP status (400, 413, 504,
+  502, or the upstream's own). The one place the two still differ is on purpose and named: the hosted read passes
+  `defaults: false`, so it sends only the page's args, while main also sends the manifest's declared defaults.
 - **Reads are functions, reviewed in a migration.** The project's `supabase/migrations/` defines what an app
   may read: `security definer`, `set search_path = ''`, executable by `service_role` only, so the anon and
   signed-in keys can't call them. Weft's own are `growth_*` (`supabase/migrations/20261018054110_growth_reads.sql`).
@@ -200,7 +212,8 @@ for its own Touch ID.
   files beyond `index.html` going up to prod, a move pushing every app's new place (only the moved one's for now),
   and reads that run on weft.zip rather than on a Mac. A shared page's own pictures and scripts by relative path don't load remotely (only the one
   file goes up), the link doesn't follow edits until the dialog opens again, and the visits list isn't shown in the app.
-- Tests: data apps `electron/app-data.test.ts`, `electron/app-data-reads.test.ts`, `electron/app-data-rules.test.ts`
+- Tests: data apps `electron/app-data.test.ts`, `electron/app-data-reads.test.ts`, `electron/app-read-core.test.ts`,
+  `lib/app-read.test.ts`, `app/api/a/[id]/read/routes.test.ts`, `electron/app-data-rules.test.ts`
   (fixtures in `electron/app-data-test-helpers.ts`), prod `lib/app-cloud.test.ts` (fakes in `lib/app-cloud.harness.ts`);
   `lib/mini-apps.test.ts`, `lib/mini-app-store.test.ts`, `lib/use-mini-apps.test.ts`, `app/api/apps-route.test.ts`,
   `components/AppsRail.test.tsx` (covers `SaveAppButton` too); sharing: `lib/app-share*.test.ts`,
