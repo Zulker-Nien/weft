@@ -36,16 +36,19 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   - the 300-line `max-lines` cap and the per-file ratchet in `eslint.config.mjs` are there to force that refactor.
     A file at its cap gets code moved out (Extract Function or Module) and its number lowered; never joined lines,
     dropped blank lines or deleted comments, which only hide the smell
-  - hotspots: components/Board.tsx (~850 lines), electron/main.cjs (~450; its control routes are `electron/pane-routes.cjs`, its splash IPC `electron/startup-ipc.cjs`), electron/vault.cjs (~390), electron/browser-pane.cjs (~345), lib/cloud-sync.ts (~365).
+  - hotspots: components/Board.tsx (~665 lines), electron/main.cjs (~450; its control routes are `electron/pane-routes.cjs`, its splash IPC `electron/startup-ipc.cjs`), electron/vault.cjs (~390), electron/browser-pane.cjs (~345), lib/cloud-sync.ts (~365).
     Everything else is under 300 (2026-10-16): big files became re-exporting fronts (`lib/types.ts` → `lib/types-*.ts`,
     `lib/import.ts` → `lib/import-*.ts`, `lib/secret-guard.ts` → `lib/secret-guard-*.ts`, `lib/client.ts` → `lib/client-*.ts`).
     Pure logic already moved out: `lib/board-view.ts` (columns, project chips, chime/unseen rules, Review's Errors/Restart filter chips drawn by `components/ReviewFilterChips.tsx`) and
     `lib/turn.ts` (how a turn's result reads, cost, limits); Board's hooks into `lib/use-*.ts` (`use-now`,
     `use-toast`, `use-desktop-bridge`, `use-copilot-card`, `use-board-actions`, `use-board-toggles`, `use-board-view`, `use-board-archive`,
-    `use-board-card-actions`, plus `lib/board-focus.ts`, `lib/board-helpers.ts`) and its JSX into `BoardHeader`, `BoardColumn`, `BoardToast` and
+    `use-board-card-actions`, plus `lib/board-focus.ts`, `lib/board-helpers.ts`), its live events into `lib/board-live.ts`, the menu/dock/tray
+    actions into `lib/board-menu-bridge.ts`, its derived values into `lib/board-derive.ts`, and its JSX into `BoardHeader`, `BoardProjectBar`,
+    `BoardColumns` (each column's extras by id), `BoardBrowserPane`, `OpenCard` (the framed window and the open card's four columns), `BoardToast` and
     `components/BoardDialogs.tsx` (the nine dialogs, sheets and overlays the board stacks over its columns, each still loaded through
     `guarded()`; `components/BoardDialogs.test.tsx` says which prop opens which panel and that each close handler fires through).
-    Next: the footer into a `BoardFrame`, the event handlers into a hook, and the prop volume (`SideRail` takes 16, `BoardHeader` 11).
+    The rail's drawers share one `RailContext` (`components/rail-context.ts`). Next: the footer and terminal into a `BoardFrame`, the palette
+    and shortcut wiring into a hook, and the prop volume (`BoardColumns` takes ~25, `BoardHeader` 11).
   - My Vitest suite (`pnpm test`, ~3,500 tests) covers every line of `lib/` and `app/api/` (98.6% of branches,
     `pnpm coverage`): a test file beside each module, routes with their libs mocked, the runner's SDK loop
     against a fake `query()` (`lib/runner.harness.ts`, shared by `lib/runner*.test.ts`), and browser code and React hooks under happy-dom +
@@ -108,8 +111,8 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   chip in the box and on its primary, with the rest in a ▾ menu, a Done button while idle and ■ Stop in its own slot (docs/architecture/composer.md).
   `lib/splice.ts` + `lib/splice-brief.ts` + `lib/splice-diff.ts`: Send fresh, a new CLI session in the same card started from a brief
   (Haiku summary pre-baked on the scheduler's tick, what's open, the diff of the thread's own edits) instead of re-sending a cold history.
-- `components/SettingsDialog.tsx` + `lib/settings-nav.ts`: Settings, full window over a scene, six pages down the left (General, Models,
-  Threads, Automations, Shortcuts, Accounts); Models holds every model pick, new threads' through `components/NewThreadDefaults.tsx`;
+- `components/SettingsDialog.tsx` + `lib/settings-nav.ts`: Settings, full window over a scene, pages down the left (General, Laptop mode, Models,
+  Threads, Automations, Shortcuts, Accounts, Teams, Sync); Laptop mode is `components/LaptopModeCard.tsx` + `LaptopModeRules.tsx` over `electron/keep-working*.cjs`; Models holds every model pick, new threads' through `components/NewThreadDefaults.tsx`;
   the four rows (NewThreadDefaults, SubagentPicker, CopilotPicker, DonePicker) share `components/Pickers.tsx`
   (`BackendPicker`, `ModelPicker`, `EffortPicker`) on top of `components/ModelSelect.tsx` (Claude / Puku / Codex optgroups driven by `MODELS` in `lib/new-thread.ts`; Copilot passes `groups=Claude` to stay Claude-only).
   General holds `components/TrustedFolders.tsx` (the folders threads may read outside their project, from `SettingsView.allowedFolders`, each revocable through `DELETE /api/folders`); Accounts holds `components/TokenExpiry.tsx` (when each saved sign-in runs out, reusing `expiryNote()`; only BlastCP expires, and only the expiry crosses from main — the tokens stay in the Keychain, and there's no silent auto-refresh).
