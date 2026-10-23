@@ -70,7 +70,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   my own Electron), which `appendToolchain()` in `electron/env.cjs` puts at the end of PATH.
 - `electron/folder-access.cjs` + `lib/folder-access-tool.ts`: `mcp__board__request_folder_access`, called by a thread that got "Operation not permitted" on
   Downloads, Documents or Desktop (never on launch): lists the folder so macOS shows its allow prompt, else a dialog with an Open Settings button.
-- `lib/folder-guard.ts` + `app/api/folders`: the folder gate, a PreToolUse hook that asks before a file tool or Bash command reaches outside the card's project (Allow once / This card / Always, `settings.allowedFolders`); in every thread via `guardedCli()` (docs/architecture/thread-guards.md).
+- `lib/folder-guard.ts` + `app/api/folders`: the folder gate, a PreToolUse hook that asks before a file tool or Bash command reaches outside the card's project (Allow once / This card / Always, `settings.allowedFolders`; `DELETE` on the same route is the revoke behind Settings → General's **Trusted folders** row, since "Always" is otherwise a one-way door); in every thread via `guardedCli()` (docs/architecture/thread-guards.md).
 - `electron/terminal.cjs` + `components/TerminalDrawer.tsx`: the terminal drawer (node-pty shell over IPC, xterm.js).
 - `lib/runner.ts`: one Agent SDK `query()` per Claude Code or puku thread, its public API (send, queue, stop, retry, login); Codex uses `lib/codex-runner.ts` with `codex exec --json` and resumes by session id. Behind it
   `lib/runner-state.ts` (sessions, shared maps, `hooks` back into runner.ts), `lib/runner-session.ts` (start and drive a CLI,
@@ -85,7 +85,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   checkout/restore or `clean -f` in the shared tree), `lib/check-guard.ts` (no `tsc` or `eslint` run directly where the
   project's `pnpm typecheck`/`pnpm lint` take turns through `scripts/one-at-a-time.mjs`; plain Claude Code sessions get it from `.claude/settings.json`), `lib/route-import-guard.ts` (refuses an edit that makes `app/**/page.tsx`,
   a layout, a `route.ts` or middleware import a module that isn't there yet, or export a segment config cacheComponents refuses; `lib/prerender-check.ts`), `lib/claim-guard.ts` (symbol claims: asks before an edit to a top-level
-  symbol another busy card is editing, with **Wait** until it lets go, `lib/permission-wait.ts`; `lib/claims.ts`, parsed by `lib/symbols.ts`; the prompt's readable diff and reason chip are `lib/edit-preview.ts` + `components/PermissionInput.tsx`) (docs/architecture/thread-guards.md).
+  symbol another busy card is editing, with **Wait** until it lets go, `lib/permission-wait.ts`; `lib/claims.ts`, parsed by `lib/symbols.ts`; the prompt's readable diff and reason chip are `lib/edit-preview.ts` + `components/PermissionInput.tsx`), and for Bash `lib/bash-claims.ts` (asks before a line that writes a claimed file, claims what Bash wrote, drops claims on files `git status` sees clean, tells a failed check which failures are another card's: `lib/bash-writes.ts`, `lib/dirty-files.ts`, `lib/failure-owners.ts`) (docs/architecture/thread-guards.md).
   Codex gets the filtered `cliEnv()` but not these per-tool hooks; `lib/codex-runner.ts` asks it not to read `.env` files. It does get
   Weft's MCP tools, over HTTP: `lib/weft-mcp.ts` builds the servers every CLI gets, `lib/mcp-bridge.ts` opens a per-turn token and
   `app/api/mcp/[server]` serves them to `codex exec --config mcp_servers.*`. Puku and Codex don't read `.claude/skills` or Codex `CLAUDE.md`,
@@ -112,6 +112,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   Threads, Automations, Shortcuts, Accounts); Models holds every model pick, new threads' through `components/NewThreadDefaults.tsx`;
   the four rows (NewThreadDefaults, SubagentPicker, CopilotPicker, DonePicker) share `components/Pickers.tsx`
   (`BackendPicker`, `ModelPicker`, `EffortPicker`) on top of `components/ModelSelect.tsx` (Claude / Puku / Codex optgroups driven by `MODELS` in `lib/new-thread.ts`; Copilot passes `groups=Claude` to stay Claude-only).
+  General holds `components/TrustedFolders.tsx` (the folders threads may read outside their project, from `SettingsView.allowedFolders`, each revocable through `DELETE /api/folders`); Accounts holds `components/TokenExpiry.tsx` (when each saved sign-in runs out, reusing `expiryNote()`; only BlastCP expires, and only the expiry crosses from main — the tokens stay in the Keychain, and there's no silent auto-refresh).
 - `components/DbSelect.tsx` + `lib/db-picker.ts` `rankItems`: the one "Link <folder> to…" picker every provider drawer shares
   (▲ Vercel, Supabase, Cloudflare, 🚀 BlastCP — `components/VercelPicker.tsx`, `SupabasePicker.tsx`, `CloudflarePicker.tsx`, `BlastcpPicker.tsx`).
   `DbSelect` draws the search box, the loading/empty notes and the row list; each picker supplies its rows, its own score
@@ -156,7 +157,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `lib/file-drop.ts` + `lib/use-file-drop.ts` + `components/FileDrop.tsx`: files dragged from Finder anywhere in the window; a composer takes
   its own drop, a card opens with them in its reply box, an open thread (`data-drop-target`) gets them, empty board opens New thread; files wait
   in the store until the target composer (`dropTarget`) mounts.
-- `lib/review.ts`: `weft-review` tour blocks. `lib/devserver.ts` + `lib/devserver-list.ts` + `lib/devserver-tools.ts` + `components/DevServersDrawer.tsx`:
+- `lib/review.ts`: `weft-review` tour blocks. `lib/devserver.ts` + `lib/devserver-list.ts` + `lib/devserver-tools.ts` + `components/ServicesDrawer.tsx`:
   dev servers Weft runs for threads (`mcp__devservers__*`) and review tours; `lib/task-stop.ts` is the task strip's per-task Stop (docs/architecture/dev-servers.md).
   `lib/services.ts` + `lib/services-snapshot.ts` + `lib/services-kill.ts` + `app/api/services` + `lib/use-services.ts` + `lib/services-view.ts` + `lib/services-prefs.ts` + `components/ServicesDrawer.tsx`:
   the rail's 🖥 Services drawer, every process Weft spawned (one `ps` of the tree under Electron, split by thread CLI, dev server, terminal and other) with CPU, memory, End and a refresh-rate cookie.
@@ -211,7 +212,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   `supabase/migrations/`, MCP server in `.mcp.json`.
 - `lib/teams.ts` + `lib/team-actions.ts` + `lib/web-session.ts` + `lib/web-auth.ts` + `proxy.ts` + `app/auth/*` + `app/team` +
   `app/[orgSlug]/*` + `app/invite/[token]` + `components/team/*`: Weft teams on weft.zip (workspaces, roles, email invites; every
-  account gets one through `supabase/migrations/20261013170000_teams.sql`), on the visitor's own cookie session. Uses `@aimhuge/teams`
+  account gets one through `supabase/migrations/20261013155754_teams.sql`), on the visitor's own cookie session. Uses `@aimhuge/teams`
   (`vendor/*.tgz`) for its helpers only: its `requireOrg` and actions pass a client into `"use cache"`, which Next 16 refuses, so the
   gate is Weft's own. Never pass the gate's `service` client to a client component (docs/architecture/teams.md, teams-vault.md).
 - `lib/profile-card.ts` + `lib/profile-card-sync.ts` + `lib/signed-in-client.ts` + `lib/public-profile.ts` + `components/profile/*` + `supabase/migrations/20261018135430_profile_cards.sql`: the public Wefter Profile at `weft.zip/@username` (`app/u/[username]`):
@@ -273,7 +274,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
 - `lib/store.ts`: storage in `~/.weft` (board.json, threads/, attachments/). `lib/attachments.ts` saves every PNG, JPEG and GIF as WebP (uploads, tool screenshots, pane thumbnails; transcript reads add one beside the original); `scripts/webp-backfill.mjs` converts the old ones (docs/architecture/threads-and-sessions.md).
 - `lib/cloud-sync.ts` + `lib/cloud-outbox.ts` + `lib/cloud-sync-start.ts` + `lib/cloud-sync-cards.ts` + `lib/cloud-sync-upload.ts` + `lib/blob-store.ts` + `lib/blob-paths.ts` + `lib/device-id.ts` + `lib/cloud-sync-types.ts`:
   server-side cards, opt-in per folder (settings `syncFolders`): an outbox in `~/.weft/sync-outbox.jsonl` uploads cards, thread items
-  and long tool outputs to Supabase (`supabase/migrations/20261015140000_card_sync.sql`), images and pages by content hash.
+  and long tool outputs to Supabase (`supabase/migrations/20261015155756_card_sync.sql`), images and pages by content hash.
   `lib/thread-page.ts` + `app/api/cards/[id]/thread/**` + `lib/use-tool-result.ts`: threads page from the newest item back and fetch
   a tool output over 2 KB when its row opens (docs/architecture/cloud-sync.md).
   `app/[orgSlug]/board` + `components/web-board/*` + `lib/web-board.ts`: the weft.zip board is the desktop's own `CardView` (`readOnly`),
@@ -281,7 +282,7 @@ If you are an agent editing this repo, you are working on me. Read README.md for
   transport (`lib/thread-transport.ts`: `localTransport` for the desktop, `components/web-board/useCloudTransport.ts` + `lib/cloud-thread-page.ts` for Supabase rows,
   Realtime and commands), not a lookalike; change the desktop card or thread and the web follows. New thread-view code reads the transport, never `fetch`/`api` directly.
   `lib/cloud-commands.ts` + `lib/cloud-inbox.ts` + `lib/new-card.ts` + `lib/web-commands.ts` + `components/web-board/WebNewCardDialog.tsx` + `components/web-board/WebReplyStatus.tsx`: **New thread**, the open card's reply box, its answers and Stop on the web board
-  insert a `cloud_commands` row (`supabase/migrations/20261016130000_card_commands.sql`; a `BEFORE INSERT` trigger
+  insert a `cloud_commands` row (`supabase/migrations/20261016065614_card_commands.sql`; a `BEFORE INSERT` trigger
   in `20261018130000_cloud_commands_device_ownership.sql` requires the row's `device_id` to be a device row
   of the same `account_id`); the Mac it names hears it over Realtime, checks it (its device, its account, a
   synced folder, its workspace), makes the card through the same `createCardFromBody` as `POST /api/cards`, starts it and reports back; the card syncs up like any other. `card_id` is set only by the receiver after `createCardFromBody` accepts the request. A `reply` goes to the card through `sendUserMessage`, as if typed on the Mac; an `answer` through `answerPermission` (by `pendingId`), a `stop` through `stop()`.
@@ -425,8 +426,9 @@ in Electron main, revealed or copied only after the user's Touch ID (docs/archit
 - The overlap warning (`lib/overlap.ts`) counts a card's edits for its whole life, committed or not. The reply box no longer
   shows it (in a busy repo it always did); the card's "+N here" chip and the New thread dialog do, and neither names the
   shared files. Symbol claims warn at the actual clash instead.
-- Symbol claims (`lib/claim-guard.ts`) drop on Done, archive and the commit walk-through, not when a thread runs
-  `git commit` itself; those stay until the card reaches Done.
+- Symbol claims drop on Done, archive, the commit walk-through and, after any Bash call, once `git status` shows the
+  file clean. Cards still see each other's half-done edits when they run tests or typecheck; a failed check is only
+  told whose they are (`lib/failure-owners.ts`). Opt-in worktrees are the planned fix.
 - The copilot learns what finished or needs you only with your next message (`lib/copilot-digest.ts`);
   it never runs a turn on its own.
 - puku-cli sessions aren't imported; a full puku thread hasn't been verified end to end.

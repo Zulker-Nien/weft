@@ -14,6 +14,7 @@ runs, in every permission mode (bypass included), and the denial's reason goes b
 | Import guard | `lib/import-check.ts` | (PostToolUse) reports an edit that breaks an import |
 | Dropped-import check | `lib/dropped-imports.ts` | (PostToolUse, with the import guard) reports an edit that drops an import the file still uses |
 | Symbol claims | `lib/claim-guard.ts` | asks (doesn't deny) before an edit to a symbol another busy card is editing |
+| Bash claims | `lib/bash-claims.ts` | asks before a Bash line that writes a claimed file; claims what Bash wrote, drops claims on clean files, tells a failed check whose failures are another card's |
 | Folder gate | `lib/folder-guard.ts` | asks (doesn't deny) before a file tool or Bash command reaches a folder outside the card's project |
 
 ## The local API's own gate
@@ -47,6 +48,10 @@ symlinks, a file not created yet by its nearest folder).
 - **After a grant**, a read-only call (Read, Glob, Grep, LS) whose paths are all in granted folders is allowed with no
   prompt at all (`grantedRead`), including the CLI's own working-directory prompt; writes and Bash in a granted folder
   follow the card's permission mode as usual.
+- **Taking it back**: Settings → General's **Trusted folders** row lists `settings.allowedFolders` (it rides along in
+  `SettingsView`) and **Remove** calls `DELETE /api/folders` → `unallowFolder`. Until that row existed, "Always" was a
+  one-way door — a folder trusted once could never be untrusted. The revoke takes effect for new work; a card already
+  holding the folder in `readScope` keeps it until that turn ends, since a permission already handed out isn't retracted.
 - **Not covered**: Codex (no per-tool hooks), the copilot, and the macOS layer. If the OS still says "Operation not
   permitted" after Weft allows it, that's `mcp__board__request_folder_access` (`electron/folder-access.cjs`), and the
   grant macOS needs is for the app that actually runs (dev Weft is `Electron.app`, not the `~/Applications/Weft.app` launcher).
@@ -106,7 +111,19 @@ into each other. Claims catch that at the moment it happens, instead of a standi
   it on `card.claims` (most recent first, last 50) once the edit has run, so a denied edit claims nothing.
 - **Dropping**: `updateCard` (`lib/store.ts`) clears a card's claims when it reaches Done or is archived;
   `lib/pile-commit.ts` calls `releaseClaims` for the paths it committed, on every card (the whole file went in).
-  A thread's own `git commit` doesn't release them yet: they stay until Done.
+  After every Bash call in a git repo, `releaseClean` (`lib/bash-claims.ts`) drops every card's claims on files
+  `git status` no longer lists, so a thread's own `git commit`, a checkout or a revert releases them too.
+- **Bash** (`lib/bash-claims.ts`, `lib/bash-writes.ts`, `lib/dirty-files.ts`, `lib/failure-owners.ts`): before a Bash
+  call, the files its line names as written (`>`/`>>` targets, `sed -i`, `perl -i`, `tee`, `cp`/`mv`/`rm`/`touch`,
+  `prettier --write`, `eslint --fix`, also through `npx`/`pnpm exec`) are checked as whole-file claims and ask on a
+  clash like an edit. After it, the repo's dirty files whose mtime is past the call's start become this card's
+  whole-file claims, except ones another busy card already claims (most likely its edit, made meanwhile); a
+  formatter or codegen run is claimed this way even though the line names no file. A failed check (`tsc`,
+  `typecheck`, `test`, `lint`, `build` in the line, an error word in the output; Bash failures arrive as
+  PostToolUseFailure, so the hook listens to both) gets `additionalContext`: the failing paths another busy card
+  claims, with "leave those to that card", or else the files other cards have open, since a signature changed
+  there can break a caller here. One `git status` per Bash call (~30–80 ms in this repo); not on the start path.
+  What it can't fix: cards still see each other's half-done edits at run time. That's what opt-in worktrees are for.
 - **Speed**: `typescript` loads on the first edit of a source file (~170 ms, once per server), never on the
   start-a-card path; parsing the 46 KB `Board.tsx` and walking it takes 5–13 ms warm, ~40 ms the first time.
 

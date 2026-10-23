@@ -121,13 +121,15 @@ describe("cliEnv", () => {
 });
 
 describe("guardedCli", () => {
-  it("starts a thread with the stripped env, the secret guard, the restart guard, the git guard, the check guard, the route import guard, the import guard, the folder gate and symbol claims", () => {
+  it("starts a thread with the stripped env, the secret guard, the restart guard, the git guard, the check guard, the route import guard, the import guard, the folder gate and symbol claims, for edits and Bash", () => {
     vi.stubEnv("WEFT_SHELL_TOKEN", "secret");
     const opts = guardedCli(() => 0, () => undefined);
     expect(opts.env).not.toHaveProperty("WEFT_SHELL_TOKEN");
     const post = opts.hooks?.PostToolUse ?? [];
     expect(post[0]).toBe(IMPORT_GUARD_MATCHER);
     expect(post[1]?.matcher).toBe("Edit|MultiEdit|Write|NotebookEdit");
+    expect(post[2]?.matcher).toBe("Bash");
+    expect(opts.hooks?.PostToolUseFailure?.[0]).toBe(post[2]);
     const pre = opts.hooks?.PreToolUse ?? [];
     expect(pre[0]).toBe(SECRET_GUARD_MATCHER);
     expect(pre[1]?.matcher).toBe("Bash");
@@ -136,6 +138,7 @@ describe("guardedCli", () => {
     expect(pre[4]).toBe(ROUTE_IMPORT_GUARD_MATCHER);
     expect(pre[5]?.matcher).toBe("Read|Edit|MultiEdit|Write|NotebookEdit|Glob|Grep|LS|Bash"); // the folder gate
     expect(pre[6]?.matcher).toBe("Edit|MultiEdit|Write|NotebookEdit");
+    expect(pre[7]?.matcher).toBe("Bash"); // Bash claims
   });
 
   it("counts other cards' turns with the function it's given", async () => {

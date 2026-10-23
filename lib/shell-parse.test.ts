@@ -29,6 +29,7 @@ describe("parseShell", () => {
     const [cmd] = parseShell("cat 2>&1 <in.txt >out.txt >>log &>all 0<&3 >| clobber README.md").commands;
     expect(cmd?.words).toEqual(["cat", "README.md"]);
     expect(cmd?.inputs).toEqual(["in.txt"]);
+    expect(cmd?.outputs).toEqual(["out.txt", "log", "all", "clobber"]); // 2>&1 and 0<&3 write no file
   });
 
   it("gives heredoc bodies and here-strings to the command they feed", () => {

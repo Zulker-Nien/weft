@@ -291,7 +291,10 @@ the edit, and so on down (`Board.tsx#Board/moveFocus`, `Board/useEffect#3`, `Boa
 85% of its file. Imports are never claimed; a Write, a non-TS/JS file or an edit spanning more than five symbols
 claims the whole file. When another busy card in the same tree goes to edit a claimed symbol, its thread
 stops on a permission prompt: "Card ‘Fix login’ is editing LoginForm in Login.tsx. Wait, or go ahead?" A card's
-claims drop when it reaches Done or is archived, and a file's when the commit walk-through commits it.
+claims drop when it reaches Done or is archived, and a file's as soon as `git status` shows it clean (the commit
+walk-through, or a thread's own `git commit`). Bash counts too: a line that writes a claimed file (`sed -i`, `> file`,
+`prettier --write`) asks the same way, and whatever a Bash call wrote becomes the card's claim. When a typecheck, test
+or lint run fails, the thread is told which failures sit in files another card is mid-edit on, so it leaves them alone.
 
 A thread works in its card's project folder. When a file tool or a Bash command reaches anywhere else (say `~/Downloads`), Weft asks first, whether or not macOS would have refused it: **Allow once**, **This card** or **Always**, with an **Outside project** chip saying which folder.
 

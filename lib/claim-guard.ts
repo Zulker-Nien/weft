@@ -27,7 +27,7 @@ function editsOf(toolName: string, input: Record<string, unknown>): EditInput[] 
 
 // The file's real path, the way git names it (/var is /private/var on macOS), so a commit's paths
 // (lib/pile-commit.ts, from the repo's root) find its claims. A file the edit creates goes by its folder's.
-function realFile(file: string) {
+export function realFile(file: string) {
   try {
     return fs.realpathSync(file);
   } catch {
@@ -74,9 +74,14 @@ export async function claimsFor(toolName: string, input: Record<string, unknown>
 const PENDING_CAP = 200;
 const pending = new Map<string, { keys: string[]; question?: string; why?: PromptReason }>();
 
-function remember(id: string, keys: string[], question?: string, why?: PromptReason) {
+export function remember(id: string, keys: string[], question?: string, why?: PromptReason) {
   pending.set(id, { keys, question, why });
   if (pending.size > PENDING_CAP) pending.delete(pending.keys().next().value as string);
+}
+
+// A Bash call that asked keeps nothing for the edit recorder: lib/bash-claims.ts drops it once it has run.
+export function forget(id: string) {
+  pending.delete(id);
 }
 
 // The clash question for a tool call the hook asked about, for the permission prompt's title.
@@ -97,7 +102,7 @@ export function claimSymbols(toolUseId: string | undefined) {
   return symbols?.length && !symbols.includes(WHOLE_FILE) ? symbols : undefined;
 }
 
-const ask = (reason: string) => ({ hookSpecificOutput: { hookEventName: "PreToolUse" as const, permissionDecision: "ask" as const, permissionDecisionReason: reason } });
+export const ask = (reason: string) => ({ hookSpecificOutput: { hookEventName: "PreToolUse" as const, permissionDecision: "ask" as const, permissionDecisionReason: reason } });
 
 export function claimGuard(cardId: () => string | undefined): HookCallback {
   return async (input, toolUseId) => {

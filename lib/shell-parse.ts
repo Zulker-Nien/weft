@@ -2,16 +2,17 @@
 // Used by the secret guard (lib/secret-guard.ts): `cat > a.md <<EOF … .env … EOF` writes a page, while
 // `sh -c 'cat .en""v'` reads a .env file, and only a parser tells the two apart.
 
-// One simple command: its words, the files it reads with `<`, what it gets on stdin from a heredoc or
-// here-string, and whether its output is piped into the next command.
+// One simple command: its words, the files it reads with `<` and writes with `>`, what it gets on stdin from
+// a heredoc or here-string, and whether its output is piped into the next command.
 export interface SimpleCommand {
   words: string[];
   inputs: string[];
+  outputs: string[];
   stdin: string[];
   pipes: boolean;
 }
 
-export const blankCommand = (): SimpleCommand => ({ words: [], inputs: [], stdin: [], pipes: false });
+export const blankCommand = (): SimpleCommand => ({ words: [], inputs: [], outputs: [], stdin: [], pipes: false });
 
 // Where the next word goes: a file read with <, a file written with >, a here-string, a heredoc tag.
 type Target = "in" | "out" | "here" | "heredoc" | "heredoc-" | null;
@@ -236,7 +237,8 @@ class ShellParser {
     if (target === "in") cmd.inputs.push(word);
     else if (target === "here") cmd.stdin.push(word);
     else if (target === "heredoc" || target === "heredoc-") this.heredocs.push({ tag: word, dash: target === "heredoc-", owner: cmd });
-    else if (target !== "out") cmd.words.push(word);
+    else if (target === "out") cmd.outputs.push(word);
+    else cmd.words.push(word);
     this.word = "";
     this.inWord = false;
     this.target = null;
