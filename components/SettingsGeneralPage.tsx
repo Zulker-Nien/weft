@@ -1,29 +1,31 @@
-// The General page: laptop mode, appearance, the Backlog and Progress toggles, your Claude Code history, and sound settings.
+// The General page: appearance, the Backlog and Progress toggles, your Claude Code history, the folders
+// threads may read without asking, and sound settings.
 import { setShowBacklog, setShowProgress } from "@/lib/board-prefs";
 import { SETTINGS_HINT, SETTINGS_TITLE } from "@/lib/settings-shared";
 import AppearancePicker from "./AppearancePicker";
 import HistorySettings from "./HistorySettings";
-import LaptopModeCard from "./LaptopModeCard";
 import { SettingsCard, SettingsSectionHeader } from "./SettingsLayout";
 import SoundSettings from "./SoundSettings";
 import SwitchRow from "./SwitchRow";
+import TrustedFolders from "./TrustedFolders";
 
 export default function SettingsGeneralPage({
   backlog,
   setBacklog,
   progress,
   setProgress,
+  allowedFolders = [],
 }: {
   backlog: boolean;
   setBacklog: (on: boolean) => void;
   progress: boolean;
   setProgress: (on: boolean) => void;
+  // From the settings view the dialog already loaded. General is one of the pages that draws before that
+  // lands (only the three that need settings wait), so this defaults to empty rather than holding the page.
+  allowedFolders?: string[];
 }) {
   return (
     <>
-      <SettingsCard>
-        <LaptopModeCard />
-      </SettingsCard>
       <SettingsCard>
         <section className="flex flex-col gap-3">
           <SettingsSectionHeader
@@ -53,6 +55,9 @@ export default function SettingsGeneralPage({
           }}
         />
         <HistorySettings />
+      </SettingsCard>
+      <SettingsCard>
+        <TrustedFolders folders={allowedFolders} />
       </SettingsCard>
       <SettingsCard>
         <SoundSettings titleClass={SETTINGS_TITLE} hintClass={SETTINGS_HINT} />

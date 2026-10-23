@@ -293,6 +293,16 @@ export function allowFolder(folder: string) {
   save();
 }
 
+// Takes a folder back out of the always-allowed list, so threads ask about it again from now on. This is the
+// way back from "Always" on a folder-guard prompt: granting was one-way until Settings → General could show
+// and revoke it, which left a folder trusted once trusted for good. A card that already holds the folder in its
+// read scope keeps it for the turn it's in — a revoke stops new work, it doesn't retract a permission handed out.
+export function unallowFolder(folder: string) {
+  const s = settings();
+  s.allowedFolders = (s.allowedFolders ?? []).filter((f) => f !== folder);
+  save();
+}
+
 // The folders whose cards sync to the cloud (lib/cloud-sync.ts), in the order they were turned on. Off by default.
 export function syncFolders(): string[] {
   return [...(settings().syncFolders ?? [])];
@@ -347,5 +357,6 @@ export function settingsView(): SettingsView {
     projects: listProjects(),
     issueFolders: issueFolders(),
     syncFolders: syncFolders(),
+    allowedFolders: allowedFolders(),
   };
 }

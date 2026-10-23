@@ -9,12 +9,13 @@ import { computeDirty, initialSettingsForm, settingsDirtyPages, settingsPatch, t
 import { SCRIM } from "@/lib/settings-shared";
 import { useScene } from "@/lib/use-scene";
 import type { SettingsView } from "@/lib/types";
-import { SettingsUnsavedDot } from "./SettingsLayout";
+import { SettingsCard, SettingsUnsavedDot } from "./SettingsLayout";
 import Icon, { Spinner } from "./Icon";
 import Modal from "./Modal";
 import SettingsAccountsPage from "./SettingsAccountsPage";
 import SettingsAutomationsPage from "./SettingsAutomationsPage";
 import SettingsGeneralPage from "./SettingsGeneralPage";
+import LaptopModeCard from "./LaptopModeCard";
 import SettingsModelsPage from "./SettingsModelsPage";
 import SettingsShortcutsPage from "./SettingsShortcutsPage";
 import SettingsThreadsPage from "./SettingsThreadsPage";
@@ -99,7 +100,14 @@ export default function SettingsDialog({ onClose }: { onClose: () => void }) {
             setBacklog={setBacklog}
             progress={progress}
             setProgress={setProgress}
+            allowedFolders={s.allowedFolders}
           />
+        );
+      case "laptop":
+        return (
+          <SettingsCard>
+            <LaptopModeCard />
+          </SettingsCard>
         );
       case "models":
         if (!form) return null;

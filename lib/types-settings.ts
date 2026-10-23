@@ -37,6 +37,9 @@ export interface SettingsView {
   // saved settings, the same shape /api/settings sends.
   issueFolders: string[];
   syncFolders: string[];
+  // Folders outside a project every thread may use without asking (lib/folder-guard.ts), granted with
+  // "Always" on a folder-guard prompt. Settings → General's trusted-folders row shows and revokes these.
+  allowedFolders: string[];
 }
 
 export type LoginState = "running" | "terminal" | "done" | "failed" | "cancelled";

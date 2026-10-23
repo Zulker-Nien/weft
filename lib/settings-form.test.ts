@@ -19,6 +19,7 @@ const BASE: SettingsView = {
   projects: [],
   issueFolders: [],
   syncFolders: [],
+  allowedFolders: [],
 };
 
 describe("initialSettingsForm", () => {

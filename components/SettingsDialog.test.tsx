@@ -16,7 +16,7 @@ vi.mock("./SubagentPicker", () => ({ default: () => <p>subagent picker</p> }));
 vi.mock("./DonePicker", () => ({ default: () => <p>done picker</p> }));
 vi.mock("./AutomationSettings", () => ({ default: () => <p>automation rules</p> }));
 // LaptopModeCard is a thin wrapper around the keep-working IPC bridge; it has its own focused test
-// (LaptopModeCard.test.tsx). Here it just needs to render on the General page.
+// (LaptopModeCard.test.tsx). Here it just needs to render on its own page.
 vi.mock("./LaptopModeCard", () => ({ default: () => <p>laptop mode card</p> }));
 // TeamSettings is a real component but reads from lib/use-team, which would need a board-side
 // data fetch. Here it just needs to be reachable without throwing.
@@ -42,6 +42,7 @@ const SETTINGS: SettingsView = {
   projects: [],
   issueFolders: [],
   syncFolders: [],
+  allowedFolders: [],
 };
 
 beforeEach(() => {
@@ -138,13 +139,13 @@ describe("SettingsDialog", () => {
     expect(screen.getByText("team settings")).toBeInTheDocument();
   });
 
-  it("puts the Laptop mode card on the General page", async () => {
+  it("gives the Laptop mode card its own page", async () => {
     render(<SettingsDialog onClose={() => {}} />);
-    // The page is whatever was last open in this test run; the card belongs on General, so go there
-    // before checking, and make sure it doesn't follow you to Threads.
-    await go("General");
+    // The page is whatever was last open in this test run; the card has its own page, so go there
+    // before checking, and make sure it isn't on General.
+    await go("Laptop mode");
     expect(screen.getByText("laptop mode card")).toBeInTheDocument();
-    await go("Threads");
+    await go("General");
     expect(screen.queryByText("laptop mode card")).not.toBeInTheDocument();
   });
 });

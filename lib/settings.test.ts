@@ -245,6 +245,23 @@ describe("settings", () => {
     expect(s.allowedFolders()).toEqual(["/Users/me/Downloads", "/Users/me/Music"]);
   });
 
+  it("takes a trusted folder back out, leaving the others in the order they were allowed", async () => {
+    let s = await load();
+    s.allowFolder("/Users/me/Downloads");
+    s.allowFolder("/Users/me/Music");
+    s.allowFolder("/Users/me/Pictures");
+    s.unallowFolder("/Users/me/Music");
+    expect(s.allowedFolders()).toEqual(["/Users/me/Downloads", "/Users/me/Pictures"]);
+    s = await load();
+    expect(s.allowedFolders()).toEqual(["/Users/me/Downloads", "/Users/me/Pictures"]);
+  });
+
+  it("is quiet revoking a folder that was never allowed", async () => {
+    const s = await load();
+    s.unallowFolder("/Users/me/Never");
+    expect(s.allowedFolders()).toEqual([]);
+  });
+
   it("turns cloud sync on and off per folder, without duplicates, and keeps it across a reload", async () => {
     let s = await load();
     expect(s.syncFolders()).toEqual([]);

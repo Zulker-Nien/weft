@@ -1,10 +1,11 @@
 import { FIRST_SCENES, SCENES, sceneOf, type Base, type Scene, type SceneId } from "./theme";
 
 // The Settings screen's pages, down the left. Each is one scrolling page of cards; no tabs.
-export type SettingsPage = "general" | "models" | "threads" | "automations" | "shortcuts" | "accounts" | "team" | "sync";
+export type SettingsPage = "general" | "laptop" | "models" | "threads" | "automations" | "shortcuts" | "accounts" | "team" | "sync";
 
 export const SETTINGS_PAGES: { id: SettingsPage; label: string; hint: string }[] = [
   { id: "general", label: "General", hint: "How the board looks and sounds." },
+  { id: "laptop", label: "Laptop mode", hint: "Keep your Mac awake with the lid shut, so threads keep running in a bag." },
   { id: "models", label: "Models", hint: "Which CLI and model each kind of work runs on." },
   { id: "threads", label: "Threads", hint: "How new threads start and what they're told." },
   { id: "automations", label: "Automations", hint: "Skills that run on their own." },
