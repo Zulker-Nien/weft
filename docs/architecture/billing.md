@@ -14,7 +14,7 @@ through one small endpoint; the manage page and Checkout live on the site.
 Weft imports its `defineCatalog`, `createBilling`, `subscription`, `balance`, `recordUsage` and `MeterBalance`
 types from it, and the package's two SQL files (`0001` subscriptions/invoices/payment methods/billing profiles/
 audit log/webhook idempotency, `0002` the metered-usage ledger) are copied verbatim into
-`supabase/migrations/20261013180000_billing.sql` (no changes; the upstream `create ... if not exists`
+`supabase/migrations/20261014010429_billing.sql` (no changes; the upstream `create ... if not exists`
 form makes it a no-op where the tables already exist). Every billing table is RLS-on with no policies,
 so only the service-role client on the deployed Weft can read or write them.
 
@@ -145,8 +145,8 @@ with **Push to Vercel** or `mcp__secrets__push_to_vercel`.
 ## Setup steps
 
 1. **Apply the migration.** The Supabase drawer's **Migrate** (or `supabase db push`) for
-   `supabase/migrations/20261013180000_billing.sql`, after the teams migration
-   (`20261013170000_teams.sql`).
+   `supabase/migrations/20261014010429_billing.sql`, after the teams migration
+   (`20261013155754_teams.sql`).
 2. **Create the Stripe product.** On the shared AimHuge Stripe account, create the product "Weft Pro"
    with two per-unit recurring prices: $20/month (`STRIPE_PRICE_PRO_MONTHLY`) and $200/year
    (`STRIPE_PRICE_PRO_YEARLY`).
@@ -179,7 +179,7 @@ with **Push to Vercel** or `mcp__secrets__push_to_vercel`.
   from the invoice's own frozen figures (lines, tax, paid, due, period), with the default card from `billing.account`, the billing profile's
   company and email as addressee, and the provider's `pdfUrl` / `hostedUrl` as the only ways out (the scan stripe is decoration). The look
   is `components/team/team.css` (`wz-sheet*`, `wz-invoice*`); `@media print` leaves the sheet alone, so the browser's Print is a PDF too.
-- `supabase/migrations/20261013180000_billing.sql` — the package's two SQL files, copied verbatim.
+- `supabase/migrations/20261014010429_billing.sql` — the package's two SQL files, copied verbatim.
 
 ## Known gaps
 

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { isFiltered } from "./run-tests.mjs";
+import { SCOPED_COVERAGE_DIR, isFiltered, scopedCoverageArgs, vitestArgs } from "./run-tests.mjs";
 
 describe("isFiltered", () => {
   it("is false for the whole suite, with or without flags", () => {
@@ -16,6 +16,29 @@ describe("isFiltered", () => {
     expect(isFiltered(["lib/x.test.ts"])).toBe(true);
     expect(isFiltered(["--coverage", "--coverage.include=lib/x.ts", "lib/x.test.ts"])).toBe(true);
     expect(isFiltered(["-t", "name", "lib"])).toBe(true);
+  });
+});
+
+describe("vitestArgs", () => {
+  it("takes out the script's own flags, which Vitest refuses as unknown options", () => {
+    expect(vitestArgs(["--coverage", "--no-memory-gate", "--no-watchdog", "-t", "x"])).toEqual(["--coverage", "-t", "x"]);
+  });
+});
+
+describe("scopedCoverageArgs", () => {
+  it("sends a named-file coverage run's report to a temp folder, so the whole-repo report survives", () => {
+    expect(scopedCoverageArgs(["lib/x.test.ts", "--coverage"])).toEqual([
+      "lib/x.test.ts",
+      "--coverage",
+      `--coverage.reportsDirectory=${SCOPED_COVERAGE_DIR}`,
+    ]);
+    expect(scopedCoverageArgs(["--coverage.include=lib/x.ts", "lib/x.test.ts"])).toContain(`--coverage.reportsDirectory=${SCOPED_COVERAGE_DIR}`);
+  });
+
+  it("leaves a run without coverage, or with its own report folder, as it is", () => {
+    expect(scopedCoverageArgs(["lib/x.test.ts"])).toEqual(["lib/x.test.ts"]);
+    const own = ["lib/x.test.ts", "--coverage", "--coverage.reportsDirectory=/tmp/mine"];
+    expect(scopedCoverageArgs(own)).toEqual(own);
   });
 });
 

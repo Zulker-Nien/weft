@@ -3,8 +3,8 @@
 Status: design. Step 4 of [secrets.md](./secrets.md) ("Supabase sync"), with the team shapes it leans on. The
 local vault, device keypair, `.env` import, Touch ID, `mcp__secrets__*` tools, `.env.local` write-back and
 redaction are already built (2026-10-12). Org tables (`orgs`, `org_memberships`, `invitations`, every account
-with a personal workspace) shipped in `supabase/migrations/20261013170000_teams.sql`; billing landed in
-`20261013180000_billing.sql`. The team pages (`/team`, `/{orgSlug}/team`, `/invite/:token`, the mailer, and the
+with a personal workspace) shipped in `supabase/migrations/20261013155754_teams.sql`; billing landed in
+`20261014010429_billing.sql`. The team pages (`/team`, `/{orgSlug}/team`, `/invite/:token`, the mailer, and the
 `lib/teams.ts` / `lib/team-actions.ts` contracts) are in flight on other cards. This card adds the shared
 🔐 vault on top.
 
@@ -220,7 +220,7 @@ $$;
 ```
 
 `security definer` so the policies don't recurse into RLS on `org_memberships`, which has no policies
-(20261013170000_teams.sql: "Access is enforced in app code on the deployed Weft"). Both are `stable` so the
+(20261013155754_teams.sql: "Access is enforced in app code on the deployed Weft"). Both are `stable` so the
 planner caches one result per row in a single query. Both are `revoke`d from `anon, authenticated` after
 `grant execute to authenticated` — they sit in the public function catalog so the planner can inline them,
 but only the policies call them.
@@ -560,8 +560,8 @@ reset`. The `private.is_org_member` and `private.is_org_role` helpers are exerci
 `psql` against a seeded `org_memberships` row.
 
 **Depends on**: nothing. The migration references `public.orgs` and `public.org_memberships` (already
-shipped in 20261013170000_teams.sql). The billing migration
-(20261013180000_billing.sql) doesn't touch any of these tables.
+shipped in 20261013155754_teams.sql). The billing migration
+(20261014010429_billing.sql) doesn't touch any of these tables.
 
 **Cards that depend on this**: every other card.
 

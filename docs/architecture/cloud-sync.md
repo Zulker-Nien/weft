@@ -74,8 +74,8 @@ is the contract between the parts:
 ## Commands: starting a card and replying from the web
 
 The web can't run a thread, so a card made there, or a reply typed there, is a request to a Mac. `public.cloud_commands`
-(`supabase/migrations/20261016130000_card_commands.sql`, contract in `lib/cloud-commands.ts`) holds one row per request:
-`kind` (`new_card` or `reply`, `supabase/migrations/20261017140000_reply_commands.sql`), `target_device` and `folder` (a `cloud_cards.owner_device`/`folder` pair of the author's own cards), a `payload`
+(`supabase/migrations/20261016065614_card_commands.sql`, contract in `lib/cloud-commands.ts`) holds one row per request:
+`kind` (`new_card` or `reply`, `supabase/migrations/20261018131849_reply_commands.sql`), `target_device` and `folder` (a `cloud_cards.owner_device`/`folder` pair of the author's own cards), a `payload`
 (a new card's `prompt`, `backend`, `model`, `effort`, never the permission mode; a reply's `cardId` and `text`) and a `status` (`pending` → `claimed` → `done`, or `failed` with an
 `error`, plus the `card_id` made).
 
@@ -98,7 +98,7 @@ The web can't run a thread, so a card made there, or a reply typed there, is a r
   the strip: `boardCommands`) until it's done; then the web deletes its row, and the `user` item, flushed at once, is the message in the
   thread. While the card runs, the reply box holds what you write and sends it when the turn ends, as on the desktop; its **Send now**
   sends a `stop` first.
-- **Answers and Stop** (`answer` / `stop`, `supabase/migrations/20261017150000_answer_stop_commands.sql`, `answerCommand`/`answerBody`,
+- **Answers and Stop** (`answer` / `stop`, `supabase/migrations/20261018132208_answer_stop_commands.sql`, `answerCommand`/`answerBody`,
   `stopCommand`/`stopBody`): the permission request or question a card waits on is answered from the web through the desktop's own
   `PermissionActions` and `QuestionForm`; the answer carries the request's `pendingId`, so the Mac's `answerPermission` refuses it once
   that request isn't waiting anymore. Stop (the reply box's ■) ends the running turn through `stop()`. Same checks as a reply.

@@ -38,7 +38,7 @@ account and admin on the repo.
 
 The 5-minute poll keeps running, so a missed event (Weft closed, Realtime reconnecting) costs at most 5 minutes.
 
-- `supabase/migrations/20261012131000_github_webhooks.sql`: `github_hooks`, `github_events`, their RLS and grants,
+- `supabase/migrations/20261012131640_github_webhooks.sql`: `github_hooks`, `github_events`, their RLS and grants,
   and `github_events` in the `supabase_realtime` publication.
 - `app/api/github/hooks`: POST `{folder}` adds, DELETE `{folder}` removes.
 - The relay ships with every push to `main` (the `weft` Vercel project builds this repo); `SUPABASE_SECRET_KEY` is a

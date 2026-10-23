@@ -84,7 +84,7 @@ merge by seq, so one that changed in place is replaced. `?before=<seq>` pages ba
 
 ## Schema
 
-`supabase/migrations/20261017130000_card_shares.sql`:
+`supabase/migrations/20261017074157_card_shares.sql`:
 
 - `cloud_shares`: one row per shared card (`unique (org_id, card_id)`, a foreign key to `cloud_cards` that cascades),
   `id`, `mode`, `password_hash`, generated `has_password`, `created_by`. Members read; only the card's owner

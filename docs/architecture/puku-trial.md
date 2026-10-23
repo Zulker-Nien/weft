@@ -81,7 +81,7 @@ nothing.
 
 ## Metering and the cap
 
-`supabase/migrations/20261013060000_puku_trial_usage.sql`: `puku_trial_usage` (one row per Weft user per UTC day:
+`supabase/migrations/20261012230739_puku_trial_usage.sql`: `puku_trial_usage` (one row per Weft user per UTC day:
 `requests`, `input_tokens` (including cache writes), `cache_read_tokens`, `output_tokens`), RLS on, users may read
 their own row, nothing else is granted to clients. `puku_trial_add(...)` adds to the day's row and returns the totals
 in one statement; execute is granted to `service_role` only. The proxy calls it through PostgREST with

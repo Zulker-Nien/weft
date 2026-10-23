@@ -48,7 +48,7 @@ import { boardShortcuts } from "./board-shortcuts";
 import { addSecret } from "@/lib/use-vault";
 import { addWebhookAsk } from "@/lib/use-webhooks";
 import { parseWebhookAsk } from "@/lib/webhooks-view";
-import Icon from "./Icon";
+import RailFilterChip from "./RailFilterChip";
 import { filterCards, isFiltering, railPinned, toggleTag, type RailFilter, type RailPanel } from "@/lib/rail-view";
 import { TagColors } from "./TagPill";
 import { useTagCatalog } from "./use-tag-catalog";
@@ -60,6 +60,7 @@ import { NO_DRAG } from "@/lib/no-drag";
 import { filterHasFocus as filterHasFocusImpl, focusFilter as focusFilterImpl, jumpToNeedsYou as jumpToNeedsYouImpl, moveFocus as moveFocusImpl, openFocused as openFocusedImpl } from "@/lib/board-focus";
 import { announce, showPage, without } from "@/lib/board-helpers";
 import { cardHandlers } from "@/lib/card-handlers";
+import { useThreadHandlers } from "@/lib/thread-handlers";
 import BoardHeader from "./BoardHeader";
 import BoardColumn, { COLUMN_LIMIT, CardSkeleton } from "./BoardColumn";
 import StandaloneBrowserPane from "./StandaloneBrowserPane";
@@ -609,6 +610,7 @@ export default function Board() {
   });
   const onTag = (tag: string) => setRailFilter((f) => toggleTag(f, tag));
   const cardCtx = { openCard, resume, onCardMenu, toggleStar, toggleArchive, onTag, notify };
+  const threadProps = useThreadHandlers(selected, { select, notify });
 
   // "Switch all to <other CLI>" on the Running and Needs you columns. Idle cards flip right
   // away; busy ones come back in `pending` and the modal polls for them.
@@ -796,7 +798,7 @@ export default function Board() {
         <div style={framed ? { ...NO_DRAG, bottom: terminalOpen ? terminalHeight + 16 : undefined } : undefined} className={framed ? "fixed inset-4 z-40 flex overflow-hidden rounded-xl border border-line-strong bg-panel shadow-2xl" : "contents"}>
         {showNew ? (
           <NewCardDialog cards={cards} home={home} defaultCwd={newCwd ?? project ?? undefined} recentCwd={[...cards].sort((a, b) => b.updatedAt - a.updatedAt).find((c) => c.cwd !== home)?.cwd} restart={restartView.restart} onClose={() => setShowNew(false)} onCreate={create} />
-        ) : selected ? (
+        ) : selected && threadProps ? (
           // The four-column workspace for an open card: thread | editor | pane | show, in order.
           // The columns remember which are open and how wide each is (lib/use-workspace-layout.ts);
           // closing the last open column is a no-op so the card always has at least its thread.
@@ -821,38 +823,10 @@ export default function Board() {
                   resets={planResets(cards)}
                   items={thread}
                   streaming={streaming}
-                  onSend={async (text) => {
-                    // /done wraps the thread up on its own, so the thread closes as it's sent.
-                    // A failed send shows on the board, since the thread isn't there to show it.
-                    if (/^\/(weft:)?done(-quick)?(\s|$)/.test(text.trim())) {
-                      select(null);
-                      api.send(selected.id, text).catch(notify);
-                      return;
-                    }
-                    await api.send(selected.id, text);
-                  }}
-                  onAnswer={(allow, answers, reply) =>
-                    api.answer(selected.id, allow, answers, selected.pending?.id, reply).catch((err: unknown) => {
-                      notify(err);
-                      throw err;
-                    })
-                  }
-                  onRelease={() => void api.release(selected.id).catch(notify)}
+                  {...threadProps}
                   onArchive={() => toggleArchive(selected)}
-                  onDelete={() => {
-                    select(null);
-                    api.remove(selected.id).catch(notify);
-                  }}
-                  // The thread is now always closeable from its own X — the pane column's X
-                  // closes the pane, not the card.
-                  onClose={() => select(null)}
-                  onRename={(title) => void api.rename(selected.id, title).catch(notify)}
-                  onMode={(mode) => void api.setMode(selected.id, mode).catch(notify)}
-                  onNewChat={() => void api.resetCopilot().then(() => select(selected.id)).catch(notify)}
                   // The first-message-error banner's "Pick a backup model" jumps to Settings → Models.
                   onOpenSettings={() => setShowSettings(true)}
-                  // The same banner's Delete closes the thread so the open card id doesn't linger.
-                  onDeleted={() => select(null)}
                   editorOpen={workspace.layout.open.editor}
                   onEditor={() => workspace.toggle("editor")}
                   editTitle={renameId === selected.id}
@@ -923,26 +897,6 @@ export default function Board() {
       />
     </div>
     </TagColors.Provider>
-  );
-}
-
-// The rail's ★ and tag filter, shown beside the filter box so it's clear why cards are missing: one click clears each.
-function RailFilterChip({ filter, onClear }: { filter: RailFilter; onClear: (filter: RailFilter) => void }) {
-  if (!isFiltering(filter)) return null;
-  const chip = "flex shrink-0 items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11.5px] font-medium text-accent hover:opacity-80";
-  return (
-    <>
-      {filter.starred && (
-        <button onClick={() => onClear({ ...filter, starred: undefined })} title="Show every card, not just starred ones" className={chip}>
-          ★ starred <Icon name="x" size={10} />
-        </button>
-      )}
-      {filter.tag && (
-        <button onClick={() => onClear({ ...filter, tag: undefined })} title={`Show every card, not just #${filter.tag}`} className={`${chip} max-w-[140px]`}>
-          <span className="truncate">#{filter.tag}</span> <Icon name="x" size={10} />
-        </button>
-      )}
-    </>
   );
 }
 

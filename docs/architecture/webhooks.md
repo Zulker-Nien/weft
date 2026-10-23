@@ -1,6 +1,6 @@
 # Webhooks
 
-Status: built 2026-10-13. The relay's migration (`supabase/migrations/20261013150000_webhook_relays.sql`) and the
+Status: built 2026-10-13. The relay's migration (`supabase/migrations/20261013155726_webhook_relays.sql`) and the
 deployed receiver go live with the next migration push and Vercel deploy.
 
 🪝 sits on the rail right under 🔐 and works like it: a list per project of the webhooks its code receives, kept by

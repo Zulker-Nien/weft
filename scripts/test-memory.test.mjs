@@ -20,8 +20,9 @@ describe("checkMemoryPressure", () => {
     expect(p.swapUsedMb).toBeGreaterThanOrEqual(0);
   });
   it("marks a machine with enough memory ok, and a starved one not ok", () => {
-    // Passing an absurd threshold can only fail; passing 0 can only pass.
-    expect(checkMemoryPressure(0).ok).toBe(true);
+    // An absurd threshold can only fail, and a hugely negative one can only pass: free memory itself goes
+    // negative when more is swapped out than free, so 0 was not a safe "always ok".
+    expect(checkMemoryPressure(-1_000_000).ok).toBe(true);
     expect(checkMemoryPressure(1_000_000).ok).toBe(false);
   });
   it("uses a sane default threshold", () => {
@@ -37,6 +38,6 @@ describe("pressureMessage", () => {
     expect(msg).toContain("16384 MB");
     expect(msg).toContain("1600 MB already swapped");
     expect(msg).toContain("2048 MB free");
-    expect(msg).toContain("MAX_WORKERS=1");
+    expect(msg).toContain("MAX_WORKERS=1 pnpm test --no-memory-gate");
   });
 });

@@ -43,7 +43,7 @@ which cacheComponents refuses during prerender on a cold lambda, and only `conne
 (`requireTeam`, `currentWorkspaceSlug`, `readSessionIdentity`) goes through it; pages that reach `serviceClient()` without
 a gate (/s, /a, /u) call `connection()` themselves (`lib/prerender-check.ts` flags the miss).
 
-- `supabase/migrations/20261013170000_teams.sql`: `orgs`, `org_memberships`, `invitations` (the package's 0001/0002
+- `supabase/migrations/20261013155754_teams.sql`: `orgs`, `org_memberships`, `invitations` (the package's 0001/0002
   schema), profile columns the package reads (`current_org_id`, `display_name` generated from `name`,
   `last_login_at`, `login_count`), and `private.create_personal_org` with the `on_auth_user_created_workspace`
   trigger and a backfill. Weft keeps its own copy because the package's 0001 replaces `on_auth_user_created`, which
@@ -125,7 +125,7 @@ service role. The checks are security-definer helpers in `private` (`is_org_memb
 
 ## Setup on the deployment
 
-- Apply `20261013170000_teams.sql` (the Supabase drawer's Migrate, or `supabase db push`).
+- Apply `20261013155754_teams.sql` (the Supabase drawer's Migrate, or `supabase db push`).
 - Supabase Auth → URL configuration: add `https://weft.zip/auth/callback` to the redirect URLs.
 - Vercel env: `SUPABASE_SECRET_KEY` and `RESEND_API_KEY` (both already used by other routes);
   `NEXT_PUBLIC_SITE_URL` is optional (`next.config.ts` defaults it to `https://weft.zip`).

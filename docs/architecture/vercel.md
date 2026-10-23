@@ -99,7 +99,7 @@ blank waiting for one) and never replaces a value.
   events need that scope), and inserts the `vercel_hooks` row with Vercel's secret (insert-only; only the relay reads it
   back with the secret key). Then it pulls the folder once. On each server start and sign-in the listener pulls every
   board folder on a hooked team once, to catch what changed while Weft wasn't listening. Off deletes the webhook and
-  the row. Migration: `supabase/migrations/20261013080000_vercel_webhooks.sql`. The relay needs `SUPABASE_SECRET_KEY`
+  the row. Migration: `supabase/migrations/20261013155658_vercel_webhooks.sql`. The relay needs `SUPABASE_SECRET_KEY`
   on the deployment (the GitHub relay already uses it); `WEFT_VERCEL_RELAY_URL` points hooks at another deployment.
 
 ## Files

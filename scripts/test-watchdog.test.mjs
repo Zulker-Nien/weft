@@ -69,11 +69,12 @@ describe("the process tree", () => {
 
 describe("startWatchdog", () => {
   it("ends a run that outgrows the ceiling, and says why", async () => {
-    // Allocate in the child past a 40 MB ceiling: Node's RSS climbs well past that in a second or two.
+    // Allocate in the child past a 40 MB ceiling: Node's RSS climbs well past that in a second or two. The buffers
+    // are filled, since macOS maps zero-filled ones lazily and they never count as resident.
     const lines = [];
     const child = execFile(
       process.execPath,
-      ["-e", "const b = []; for (let i = 0; i < 400; i++) b.push(Buffer.alloc(1024 * 1024)); setInterval(() => {}, 1000);"],
+      ["-e", "const b = []; for (let i = 0; i < 400; i++) b.push(Buffer.alloc(1024 * 1024, 1)); setInterval(() => {}, 1000);"],
     );
     const originalError = console.error;
     console.error = (...args) => lines.push(args.join(" "));

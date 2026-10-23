@@ -3,6 +3,7 @@
 // script reaches vitest too (scripts/one-at-a-time.mjs runHolding). Usage: node scripts/run-tests.mjs [vitest args...]
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
+import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { runHolding } from "./one-at-a-time.mjs";
@@ -17,9 +18,29 @@ export function isFiltered(args) {
   return args.some((arg, i) => !arg.startsWith("-") && arg !== "run" && !TAKES_VALUE.has(args[i - 1] ?? ""));
 }
 
+// Where a run of named files writes its coverage report. Vitest empties its reports folder before a coverage
+// run, so a scoped `pnpm test lib/x.test.ts --coverage` used to replace the whole-repo coverage/coverage-summary.json
+// (which the header's code quality score reads, lib/coverage.ts) with one file's numbers, or none at all.
+export const SCOPED_COVERAGE_DIR = path.join(os.tmpdir(), "weft-coverage-scoped");
+
+// A named-file run's args, its coverage report moved out of coverage/ unless it names its own folder.
+export function scopedCoverageArgs(args) {
+  const coverage = args.some((arg) => arg === "--coverage" || arg.startsWith("--coverage."));
+  if (!coverage || args.some((arg) => arg.startsWith("--coverage.reportsDirectory"))) return args;
+  return [...args, `--coverage.reportsDirectory=${SCOPED_COVERAGE_DIR}`];
+}
+
 // Vitest 4 exports only its package.json, so its bin is found beside that.
 function vitestBin() {
   return path.join(path.dirname(createRequire(import.meta.url).resolve("vitest/package.json")), "vitest.mjs");
+}
+
+// This script's own flags, which Vitest would refuse as unknown options.
+const OWN_FLAGS = ["--no-memory-gate", "--no-watchdog"];
+
+// The args with this script's own flags taken out, for Vitest.
+export function vitestArgs(args) {
+  return args.filter((arg) => !OWN_FLAGS.includes(arg));
 }
 
 export async function main(args) {
@@ -39,11 +60,11 @@ export async function main(args) {
     // single runaway file and cannot see the off-heap allocations (RSC, turbopack native buffers) that have
     // actually crashed us. Bypassed by `--no-watchdog` so a debug session can let one blow through.
     if (args.includes("--no-watchdog")) {
-      const vitest = [vitestBin(), "run", ...args];
+      const vitest = [vitestBin(), "run", ...vitestArgs(args)];
       return runHolding("test", process.execPath, { args: vitest });
     }
     const limitMb = Number(process.env.WEFT_TEST_MAX_RSS_MB) || DEFAULT_MAX_RSS_MB;
-    const vitest = [vitestBin(), "run", ...args];
+    const vitest = [vitestBin(), "run", ...vitestArgs(args)];
     return runHolding("test", process.execPath, {
       args: vitest,
       // The watchdog polls the whole process tree of the child runHolding spawned, so it sees the vitest
@@ -51,7 +72,7 @@ export async function main(args) {
       watchdog: { limitMb, start: startWatchdog },
     });
   }
-  const vitest = [vitestBin(), "run", ...args];
+  const vitest = [vitestBin(), "run", ...scopedCoverageArgs(args)];
   const child = spawn(process.execPath, vitest, { stdio: "inherit" });
   const forward = (signal) => child.kill(signal);
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.once(signal, forward);

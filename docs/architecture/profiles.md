@@ -36,7 +36,7 @@ charts) on `profile.css` and `profile-card.css`, so it ships no JS.
 
 ## Usernames
 
-`supabase/migrations/20261017161000_profile_usernames.sql` adds `profiles.username`: unique, lowercase, shaped like a GitHub
+`supabase/migrations/20261018133008_profile_usernames.sql` adds `profiles.username`: unique, lowercase, shaped like a GitHub
 login (`^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$`). `private.username_for(seed)` slugifies the GitHub login (or the email's local
 part), skips a short reserved list (`admin`, `weft`, `support`…) and adds `-2`, `-3`… on a clash. The trigger
 `on_auth_user_created_username` sets it after the profile row exists (triggers fire in name order). Accounts made before the

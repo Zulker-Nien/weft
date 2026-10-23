@@ -59,6 +59,7 @@ export function pressureMessage(p, minFreeMb) {
     `[vitest] not starting a full sweep: ~${p.freeMb} MB available of ${p.totalMb} MB ` +
     `(${p.swapUsedMb} MB already swapped), and a sweep needs ~${minFreeMb} MB free.\n` +
     `[vitest] Restart Weft's dev server (it holds ~1 GB), or close a few apps, then retry.\n` +
-    `[vitest] To run anyway: MAX_WORKERS=1 pnpm test   (one worker is ~500 MB)`
+    // The gate itself ignores MAX_WORKERS, so the flag that skips it has to be named too.
+    `[vitest] To run anyway: MAX_WORKERS=1 pnpm test --no-memory-gate   (one worker is ~500 MB)`
   );
 }
