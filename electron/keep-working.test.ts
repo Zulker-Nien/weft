@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("electron", () => ({ dialog: { showMessageBox: vi.fn() } }));
@@ -14,11 +17,8 @@ const { execFileMock, spawnMock } = vi.hoisted(() => ({
     return child;
   }),
 }));
-vi.mock("node:child_process", () => ({
-  execFile: execFileMock,
-  execFileSync: vi.fn(),
-  spawn: spawnMock,
-}));
+// vi.mock can't reach a .cjs file's require, so the factory takes these as `proc`.
+const proc = { execFile: execFileMock, execFileSync: vi.fn(), spawn: spawnMock } as never;
 
 const kw = await import("./keep-working.cjs");
 const { createKeepWorking, menuTemplate, statusText, sudoersLine, trayTitle } = kw;
@@ -70,7 +70,7 @@ describe("menuTemplate", () => {
   it("offers until threads finish first, then hours, then Off", () => {
     const m = menuTemplate({ mode: "off" }, now, actions());
     expect(m.label).toBe("Keep Working");
-    expect(items(m).map((i) => i.label).filter(Boolean).slice(1)).toEqual(["Until threads finish", "For 1 hour", "For 2 hours", "For 3 hours", "For 8 hours", "Off"]);
+    expect(items(m).map((i) => i.label).filter(Boolean).slice(1)).toEqual(["Until threads finish", "For 1 hour", "For 2 hours", "For 3 hours", "For 8 hours", "Always while threads run", "Off"]);
   });
 
   it("checks the running choice and enables Off only while on", () => {
@@ -101,7 +101,7 @@ describe("createKeepWorking", () => {
   it("starts as off and fans out onChange alongside subscribers", async () => {
     const onChange = vi.fn();
     const sub = vi.fn();
-    const kwInst = createKeepWorking({ getServer: () => null, onChange });
+    const kwInst = createKeepWorking({ getServer: () => null, onChange, proc });
     expect(kwInst.state().mode).toBe("off");
     const unsubscribe = kwInst.subscribe(sub);
     await kwInst.start("hours", 2);
@@ -118,10 +118,72 @@ describe("createKeepWorking", () => {
     expect(kwInst.state().mode).toBe("off");
   });
 
+  it("always while threads run: keeps the switch in its prefs file and starts when a card runs", async () => {
+    const prefsFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "kw-")), "keep-working.json");
+    let running = 0;
+    const cards = () => ({ cards: Array.from({ length: running }, () => ({ column: "running" })) });
+    const fetchMock = vi.fn(() => Promise.resolve({ json: () => Promise.resolve(cards()) }));
+    vi.stubGlobal("fetch", fetchMock);
+    // Only the check's interval is fake; its fetch, sudo and pmset hops land on a real macrotask.
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    const check = async () => {
+      vi.advanceTimersByTime(15_000);
+      await new Promise((r) => setTimeout(r, 5));
+    };
+    const kwInst = createKeepWorking({ getServer: () => ({ url: "http://x" }), onChange: vi.fn(), prefsFile, proc });
+    try {
+      expect(kwInst.state().auto).toBe(false);
+      await kwInst.setPrefs({ auto: true });
+      expect(JSON.parse(fs.readFileSync(prefsFile, "utf8"))).toEqual({ auto: true, minBattery: 10, onlineOnly: false });
+      expect(kwInst.state()).toMatchObject({ mode: "off", auto: true });
+      running = 1;
+      await check();
+      expect(kwInst.state()).toMatchObject({ mode: "threads", auto: true });
+      // Turned off by hand while it runs: auto waits until nothing runs.
+      await kwInst.stop();
+      await check();
+      expect(kwInst.state().mode).toBe("off");
+      running = 0;
+      await check();
+      running = 2;
+      await check();
+      expect(kwInst.state().mode).toBe("threads");
+      await kwInst.setPrefs({ auto: false });
+      expect(createKeepWorking({ getServer: () => null, onChange: vi.fn(), prefsFile, proc }).state().auto).toBe(false);
+    } finally {
+      await kwInst.stop();
+      kwInst.stopSync();
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("hands the battery floor and the online rule to the watchdog, and respawns it when they change", async () => {
+    const prefsFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "kw-")), "keep-working.json");
+    const kwInst = createKeepWorking({ getServer: () => null, onChange: vi.fn(), prefsFile, proc });
+    const lastArgs = () => (spawnMock.mock.calls.at(-1) as unknown as [string, string[]])[1].slice(3);
+    try {
+      await kwInst.start("hours", 1);
+      expect(lastArgs()[1]).toBe("10");
+      expect(lastArgs()[4]).toBe("0");
+      const spawns = spawnMock.mock.calls.length;
+      await kwInst.setPrefs({ minBattery: 30, onlineOnly: true });
+      expect(spawnMock.mock.calls.length).toBe(spawns + 1);
+      expect(lastArgs()[1]).toBe("30");
+      expect(lastArgs()[4]).toBe("1");
+      expect(kwInst.state()).toMatchObject({ mode: "hours", minBattery: 30, onlineOnly: true });
+      // Values off the list are dropped, not stored.
+      await kwInst.setPrefs({ minBattery: 3 });
+      expect(kwInst.state().minBattery).toBe(30);
+    } finally {
+      await kwInst.stop();
+    }
+  });
+
   it("subscribe's unsubscribe stops the subscriber but not onChange", async () => {
     const onChange = vi.fn();
     const sub = vi.fn();
-    const kwInst = createKeepWorking({ getServer: () => null, onChange });
+    const kwInst = createKeepWorking({ getServer: () => null, onChange, proc });
     const unsubscribe = kwInst.subscribe(sub);
     unsubscribe();
     await kwInst.start("threads");

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShellBridge } from "@/lib/client";
 import LaptopModeCard from "./LaptopModeCard";
@@ -15,6 +15,7 @@ describe("LaptopModeCard", () => {
     state: ReturnType<typeof vi.fn>;
     start: ReturnType<typeof vi.fn>;
     stop: ReturnType<typeof vi.fn>;
+    setPrefs: ReturnType<typeof vi.fn>;
     onChange: ReturnType<typeof vi.fn>;
   };
   let onChangeListeners: Array<() => void>;
@@ -25,6 +26,7 @@ describe("LaptopModeCard", () => {
       state: vi.fn().mockResolvedValue({ ...baseState }),
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn().mockResolvedValue(undefined),
+      setPrefs: vi.fn().mockResolvedValue(undefined),
       onChange: vi.fn((cb: () => void) => {
         onChangeListeners.push(cb);
         return () => {
@@ -67,6 +69,44 @@ describe("LaptopModeCard", () => {
       fireEvent.click(turnOff);
     });
     expect(kw.stop).toHaveBeenCalledOnce();
+  });
+
+  it("flips Always while threads run through setPrefs", async () => {
+    kw.state.mockResolvedValue({ mode: "off", auto: true });
+    render(<LaptopModeCard />);
+    expect(await screen.findByTestId("laptop-mode-status")).toHaveTextContent(/turns on by itself/);
+    const sw = screen.getByRole("switch", { name: "Always while threads run" });
+    expect(sw).toHaveAttribute("aria-checked", "true");
+    act(() => {
+      fireEvent.click(sw);
+    });
+    expect(kw.setPrefs).toHaveBeenCalledWith({ auto: false });
+  });
+
+  it("sets Only while online and the battery floor", async () => {
+    kw.state.mockResolvedValue({ mode: "off", minBattery: 10 });
+    render(<LaptopModeCard />);
+    const floor = await screen.findByRole("group", { name: "Battery floor" });
+    expect(within(floor).getByRole("button", { name: "10%" })).toHaveAttribute("aria-pressed", "true");
+    act(() => {
+      fireEvent.click(within(floor).getByRole("button", { name: "20%" }));
+    });
+    expect(kw.setPrefs).toHaveBeenCalledWith({ minBattery: 20 });
+    await waitFor(() => expect(screen.getByRole("switch", { name: "Only while online" })).not.toBeDisabled());
+    act(() => {
+      fireEvent.click(screen.getByRole("switch", { name: "Only while online" }));
+    });
+    expect(kw.setPrefs).toHaveBeenCalledWith({ onlineOnly: true });
+  });
+
+  it("says a restart is needed instead of throwing when main has no handler yet", async () => {
+    kw.setPrefs.mockRejectedValue(new Error("Error invoking remote method 'keep-working:prefs': Error: No handler registered for 'keep-working:prefs'"));
+    render(<LaptopModeCard />);
+    const sw = await screen.findByRole("switch", { name: "Only while online" });
+    act(() => {
+      fireEvent.click(sw);
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent("Weft needs a restart to change these settings.");
   });
 
   it("refreshes its state when main pushes a change", async () => {

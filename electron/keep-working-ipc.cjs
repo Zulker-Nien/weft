@@ -1,5 +1,5 @@
 // Keep Working IPC: bridges electron/keep-working.cjs to the renderer's window.weft.keepWorking
-// (electron/preload.cjs). The board's Settings → General → Laptop mode card is the only consumer; main
+// (electron/preload.cjs). The board's Settings → Laptop mode card is the only consumer; main
 // pushes "keep-working:changed" on every state change so the card's deadline can tick without polling.
 //
 // Every handler answers the board window only (pentest 2026-10-18, F-4), the same gate as
@@ -16,6 +16,9 @@ module.exports = function registerKeepWorkingIpc({ ipcMain, keepWorking, getBoar
   ipcMain.handle("keep-working:start", async (e, mode, hours) => {
     if (!fromBoard(e)) return;
     if (mode === "threads" || mode === "hours") await keepWorking.start(mode, hours);
+  });
+  ipcMain.handle("keep-working:prefs", (e, patch) => {
+    if (fromBoard(e)) return keepWorking.setPrefs(patch); // setPrefs keeps only known keys and values
   });
   ipcMain.handle("keep-working:stop", (e) => {
     if (fromBoard(e)) return keepWorking.stop();

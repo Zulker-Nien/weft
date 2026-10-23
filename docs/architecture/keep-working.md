@@ -10,12 +10,21 @@ Shutting the lid forces sleep whatever `caffeinate` or Electron's `powerSaveBloc
 
 ## Key files
 
-- `electron/keep-working.cjs`: state, the sudoers install, the watchdog, and the pure pieces the menu is built from
-  (`trayTitle`, `statusText`, `menuTemplate`, `sudoersLine`).
+- `electron/keep-working.cjs`: state, the sudoers install, the watchdog, and **Always while threads run** (`auto`, kept in
+  `~/.weft/keep-working.json`: every 15 s, if a card is running and it's off, it starts "Until threads finish"; it never asks for
+  the password from the background, and a hand-made Turn off pauses it until nothing runs). Takes `proc` (child_process) so
+  tests pass fakes: `vi.mock` can't reach a `.cjs` require, and before this the tests ran the real `sudo pmset`.
+- `electron/keep-working-prefs.cjs`: the settings file, `{ auto, minBattery, onlineOnly }` (floor one of 5/10/20/30/50, default 10);
+  `cleanPrefs` drops unknown keys and values, so the IPC patch can't set odd ones. The watchdog gets the floor and the online flag
+  as arguments (offline = no default route from `/sbin/route -n get default` for two 30 s checks); `setPrefs` respawns it when they
+  change while on, and auto checks the same rules (`canHold`) before it starts, so it never starts only to stop.
+- `electron/keep-working-menu.cjs`: the pure pieces the menu is built from (`trayTitle`, `statusText`, `menuTemplate`, `sudoersLine`).
+- `components/LaptopModeCard.tsx`: Settings → Laptop mode, its own page (`lib/settings-nav.ts`), over `window.weft.keepWorking`
+  (`electron/keep-working-ipc.cjs`, board window only).
 - `electron/menus.cjs`: creates it (`menus.keepWorking`), puts `☕︎` and the hours left in the tray title next to the
   needs-you count, and adds the **Keep Working ▸** submenu above Open Weft.
 - `electron/main.cjs`: calls `menus.keepWorking.stopSync()` on `will-quit`.
-- `electron/keep-working.test.ts`: the pure pieces. The process parts (sudo, osascript, the watchdog) aren't tested.
+- `electron/keep-working.test.ts`: the pure pieces and the auto loop, against fake processes.
 
 ## Modes
 

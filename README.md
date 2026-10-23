@@ -84,10 +84,12 @@ same time; Next.js allows one dev server per project folder.
   from it and clear columns. The first launch opens on Twin Suns, or Salt Flats when the Mac is in light mode
   (`lib/theme.ts`, colors in `app/globals.css`; docs/architecture/themes.md).
 - **Menu bar icon**: shows how many cards need you and lists them; click one to open it.
-- **Keep Working** (menu bar icon): your Mac stays awake with the lid shut, so threads keep running in a bag.
-  Choose **Until threads finish** (sleep comes back once no card has been running for two minutes, 8 hours at most) or 1, 2, 3 or 8 hours.
+- **Keep Working** (menu bar icon, and its own **Laptop mode** page in Settings): your Mac stays awake with the lid shut, so threads keep running in a bag.
+  Choose **Until threads finish** (sleep comes back once no card has been running for two minutes, 8 hours at most) or 1, 2, 3 or 8 hours,
+  or switch on **Always while threads run** to have it turn on by itself whenever a card is running. **Only while online** lets the Mac sleep
+  once it's been offline for a minute, and **Sleep at low battery** picks the floor (5–50%, 10% by default); all three are in `~/.weft/keep-working.json`.
   While it's on, the menu bar icon shows ☕︎ and the hours left. The first time, macOS asks for your password once, to allow only
-  `pmset -a disablesleep 0|1` (`/etc/sudoers.d/weft-keep-working`). Sleep also comes back at 10% battery, when you quit Weft, and,
+  `pmset -a disablesleep 0|1` (`/etc/sudoers.d/weft-keep-working`). Sleep also comes back at the battery floor, when you quit Weft, and,
   through a watchdog, if Weft crashes (`electron/keep-working.cjs`).
 - **Dock**: the Needs you count on the icon, and New Thread and Copilot in its menu.
 - **Links**: `weft://new?prompt=…&folder=…&start=1` creates a card (in your most recent project

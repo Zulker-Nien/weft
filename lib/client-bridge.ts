@@ -75,12 +75,22 @@ export interface ShellBridge {
   popupMenu(items: MenuItem[]): Promise<string | null>;
   // The dock badge, e.g. how many cards need the user.
   setBadge(count: number): void;
-  // Keep Working (electron/keep-working.cjs). Settings → General → Laptop mode uses this. Missing on
-  // non-macOS and in shells that don't expose it.
+  // Keep Working (electron/keep-working.cjs). Settings → Laptop mode uses this. Missing on
+  // non-macOS and in shells that don't expose it. auto: "Always while threads run"; minBattery: the % sleep
+  // comes back at; onlineOnly: sleep comes back once the Mac is offline.
   keepWorking?: {
-    state(): Promise<{ mode: "off" | "threads" | "hours"; hours?: number; until?: number; running?: number | null }>;
+    state(): Promise<{
+      mode: "off" | "threads" | "hours";
+      hours?: number;
+      until?: number;
+      running?: number | null;
+      auto?: boolean;
+      minBattery?: number;
+      onlineOnly?: boolean;
+    }>;
     start(mode: "threads" | "hours", hours?: number): Promise<void>;
     stop(): Promise<void>;
+    setPrefs?(patch: { auto?: boolean; minBattery?: number; onlineOnly?: boolean }): Promise<void>;
     onChange(callback: () => void): () => void;
   };
   copilot: {

@@ -46,12 +46,13 @@ contextBridge.exposeInMainWorld("weft", {
     onData: (callback) => listen("terminal:data", callback),
     onExit: (callback) => listen("terminal:exit", callback),
   },
-  // Keep Working (electron/keep-working.cjs): the Settings → Threads card uses this; main pushes
+  // Keep Working (electron/keep-working.cjs): Settings → Laptop mode uses this; main pushes
   // "keep-working:changed" on every state change (chip flipped, deadline ticked, watchdog restored sleep).
   keepWorking: {
     state: () => ipcRenderer.invoke("keep-working:state"),
     start: (mode, hours) => ipcRenderer.invoke("keep-working:start", mode, hours),
     stop: () => ipcRenderer.invoke("keep-working:stop"),
+    setPrefs: (patch) => ipcRenderer.invoke("keep-working:prefs", patch),
     onChange: (callback) => listen("keep-working:changed", callback),
   },
   // The secrets vault (electron/vault.cjs). Main answers only the board window, so the copilot's copy of

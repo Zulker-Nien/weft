@@ -1,10 +1,12 @@
 "use client";
 
-// Settings → General → Laptop mode: the same Keep Working feature the menu bar tray already exposes,
-// surfaced as a card in the app body. The tray still drives the same underlying state
+// Settings → Laptop mode: the same Keep Working feature the menu bar tray already exposes,
+// surfaced as its own page. The tray still drives the same underlying state
 // (electron/keep-working.cjs), so a chip here flips the cup in the menu bar and vice versa.
 import { useEffect, useState } from "react";
 import { useNow } from "@/lib/use-now";
+import ChoiceChip from "./ChoiceChip";
+import LaptopModeRules, { type KwPrefs } from "./LaptopModeRules";
 
 // Mirrors HOUR_CHOICES in electron/keep-working.cjs; keep in lockstep if either list changes.
 const HOURS = [1, 2, 3, 8] as const;
@@ -16,6 +18,9 @@ interface KwState {
   hours?: number;
   until?: number;
   running?: number | null;
+  auto?: boolean;
+  minBattery?: number;
+  onlineOnly?: boolean;
 }
 
 function leftText(until: number, now: number): string {
@@ -24,7 +29,7 @@ function leftText(until: number, now: number): string {
 }
 
 function statusText(state: KwState, now: number): string {
-  if (state.mode === "off") return "Off: shutting the lid puts the Mac to sleep.";
+  if (state.mode === "off") return state.auto ? "Off: turns on by itself when a thread runs." : "Off: shutting the lid puts the Mac to sleep.";
   if (state.mode === "threads") {
     if (state.running === null || state.running === undefined) return "On until threads finish.";
     if (state.running === 0) return "On until threads finish (nothing running).";
@@ -45,40 +50,14 @@ const CHOICES: { key: "threads" | "hours"; hours?: number; label: string }[] = [
 const TITLE = "text-[13px] font-medium text-ink";
 const HINT = "text-[12.5px] text-muted";
 
-function ChipButton({
-  active,
-  disabled,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-pressed={active}
-      className={`rounded-md border px-3 py-1.5 text-[12.5px] transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-        active
-          ? "border-accent bg-accent-soft text-ink"
-          : "border-line-strong text-muted hover:bg-sunken hover:text-ink"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
 export default function LaptopModeCard() {
   // The card is the only consumer; when the bridge is missing (Linux/Windows or a dev shell), it shows
   // a hint and disables its chips. Otherwise it reads the current state on mount and again on every
   // "keep-working:changed" event, and uses useNow for the live "1h 30m left" countdown.
   const [state, setState] = useState<KwState>({ mode: "off" });
   const [busy, setBusy] = useState(false);
+  // A board window newer than Electron main (a preload change before the restart) has no handler to call.
+  const [prefsError, setPrefsError] = useState<string | null>(null);
   const now = useNow();
   const bridge = typeof window !== "undefined" ? window.weft?.keepWorking : undefined;
   const available = Boolean(bridge);
@@ -110,6 +89,20 @@ export default function LaptopModeCard() {
     }
   }
 
+  async function setPrefs(patch: KwPrefs) {
+    if (!bridge?.setPrefs || busy) return;
+    setBusy(true);
+    setPrefsError(null);
+    try {
+      await bridge.setPrefs(patch);
+    } catch (err) {
+      const stale = /No handler registered/.test(String(err));
+      setPrefsError(stale ? "Weft needs a restart to change these settings." : `Couldn't change it: ${String(err)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function turnOff() {
     if (!bridge || busy) return;
     setBusy(true);
@@ -123,10 +116,9 @@ export default function LaptopModeCard() {
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-col gap-0.5">
-        <h3 className={TITLE}>Laptop mode</h3>
+        <h3 className={TITLE}>Keep awake now</h3>
         <p className={HINT}>
-          Keep your Mac awake with the lid shut, so threads keep running in a bag. Sleep comes back
-          at the deadline, when threads finish, or at 10% battery.
+          Sleep comes back at the deadline, when threads finish, or by the rules below.
         </p>
       </div>
       {!available ? (
@@ -137,9 +129,9 @@ export default function LaptopModeCard() {
             {CHOICES.map((c) => {
               const active = state.mode === c.key && (c.key === "threads" || state.hours === c.hours);
               return (
-                <ChipButton key={`${c.key}-${c.hours ?? 0}`} active={active} disabled={busy} onClick={() => void pick(c.key, c.hours)}>
+                <ChoiceChip key={`${c.key}-${c.hours ?? 0}`} active={active} disabled={busy} onClick={() => void pick(c.key, c.hours)}>
                   {c.key === "threads" ? c.label : `For ${c.label}`}
-                </ChipButton>
+                </ChoiceChip>
               );
             })}
           </div>
@@ -156,6 +148,12 @@ export default function LaptopModeCard() {
               </button>
             )}
           </div>
+          {bridge?.setPrefs && <LaptopModeRules prefs={state} busy={busy} onChange={(patch) => void setPrefs(patch)} />}
+          {prefsError && (
+            <p role="alert" className="text-[12.5px] text-danger">
+              {prefsError}
+            </p>
+          )}
         </>
       )}
     </section>

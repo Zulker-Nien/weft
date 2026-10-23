@@ -232,7 +232,7 @@ Tags: `Now` is being built this session; `P1` is next and high value; `P2` is cl
 - `Now` **Desktop notifications** — a native notification when a card needs you, finishes, or fails; clicking it opens the card.
 - `P1` **Dock badge** — the Needs you count on the Dock icon, so you can tell at a glance whether anything is waiting.
 - `P2` **Menu bar list** — a menu bar icon listing cards that need you, with Allow and Deny right there.
-- `Done` **Keep Working** — the menu bar icon's switch for staying awake with the lid shut (`pmset disablesleep` behind a one-time sudoers rule). It runs until threads finish or for 1/2/3/8 hours, and a watchdog puts sleep back at the deadline, at 10% battery, or if Weft dies (`electron/keep-working.cjs`).
+- `Done` **Keep Working** — the menu bar icon's switch for staying awake with the lid shut (`pmset disablesleep` behind a one-time sudoers rule). It runs until threads finish or for 1/2/3/8 hours, and a watchdog puts sleep back at the deadline, at 10% battery, or if Weft dies (`electron/keep-working.cjs`). Settings → Laptop mode has the same choices plus **Always while threads run** (turns it on whenever a card is running), **Only while online**, and a battery floor you pick.
 - `P2` **Unread dots** — a dot on cards with new output you haven't opened.
 - `P2` **Notification rules** — choose per project which events notify you, plus quiet hours.
 - `P2` **Answer from the notification** — Allow and Deny buttons on the notification itself.
