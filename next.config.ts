@@ -53,6 +53,8 @@ const nextConfig: NextConfig = {
     // its placeholder cards (vercel/next.js#94915). Off, a server file change reloads that route's server modules
     // on the next request instead; runner state lives on globalThis, so threads and sessions survive it.
     turbopackServerFastRefresh: false,
+    // Marks this app as upgraded by `next upgrade --agent=security` (16.4.0 → 16.4.2 for a published advisory).
+    agentUpgrade: "security",
   },
   turbopack: {
     rules: {
