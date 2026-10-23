@@ -51,9 +51,10 @@ symlinks, a file not created yet by its nearest folder).
 - **Taking it back**: Settings → General's **Trusted folders** row lists `settings.allowedFolders` (it rides along in
   `SettingsView`), **Add folder** opens the OS dialog (`window.weft.dialog.openFolder`, the one the project and repo
   pickers use) and grants through the same `POST /api/folders` the **Always** button calls, and **Remove** calls
-  `DELETE /api/folders` → `unallowFolder`. Until that row existed, "Always" was a
-  one-way door — a folder trusted once could never be untrusted. The revoke takes effect for new work; a card already
-  holding the folder in `readScope` keeps it until that turn ends, since a permission already handed out isn't retracted.
+  `DELETE /api/folders` → `unallowFolder`. Until that row existed, "Always" was a one-way door — a folder trusted once
+  could never be untrusted. The revoke takes effect for new work; a card already holding the folder in `readScope` keeps
+  it until that turn ends, since a permission already handed out isn't retracted. `allowFolder` dedups with a `Set`, so
+  re-adding a folder already on the list is a no-op rather than a second row.
 - **Not covered**: Codex (no per-tool hooks), the copilot, and the macOS layer. If the OS still says "Operation not
   permitted" after Weft allows it, that's `mcp__board__request_folder_access` (`electron/folder-access.cjs`), and the
   grant macOS needs is for the app that actually runs (dev Weft is `Electron.app`, not the `~/Applications/Weft.app` launcher).

@@ -296,7 +296,7 @@ walk-through, or a thread's own `git commit`). Bash counts too: a line that writ
 `prettier --write`) asks the same way, and whatever a Bash call wrote becomes the card's claim. When a typecheck, test
 or lint run fails, the thread is told which failures sit in files another card is mid-edit on, so it leaves them alone.
 
-A thread works in its card's project folder. When a file tool or a Bash command reaches anywhere else (say `~/Downloads`), Weft asks first, whether or not macOS would have refused it: **Allow once**, **This card** or **Always**, with an **Outside project** chip saying which folder.
+A thread works in its card's project folder. When a file tool or a Bash command reaches anywhere else (say `~/Downloads`), Weft asks first, whether or not macOS would have refused it: **Allow once**, **This card** or **Always**, with an **Outside project** chip saying which folder. **Always** used to be a one-way door — nothing listed those folders and nothing took one back. Settings → General now has a **Trusted folders** row: **Add folder** opens the OS folder dialog, **Remove** takes one back out, and a thread already holding the folder keeps it only until that turn ends (`lib/folder-guard.ts`, `components/TrustedFolders.tsx`).
 
 Every thread runs inside Weft's own server, so restarting Weft cuts off every running turn. A thread
 can't do that behind your back: while other cards are running, a `kill`, `pkill`, `killall` or port-freeing
@@ -588,7 +588,7 @@ Review or Done without you keeps an accent tint and a pulsing dot until you open
 ### Weft account (optional)
 
 **Sign in** in the top bar (right of Copilot) signs you in with GitHub; once you're in it shows your
-avatar, which opens Settings. Settings → Accounts → Weft account also offers Google and an email link, and Sign out. The board works the same
+avatar, which opens Settings. Settings → Accounts → Weft account also offers Google and an email link, and Sign out. Settings → Accounts also has a **Sign-in expiry** row, so a lapsing sign-in is something you find in Settings rather than when a thread trips over it: BlastCP's 30-day grant is the one that runs out and speaks up in its last week, while Vercel, Supabase and Cloudflare tokens don't expire and say so. Only the expiry crosses from Electron main — tokens stay in the Keychain — and nothing re-consents on your behalf (`components/TokenExpiry.tsx`). The board works the same
 signed out; the account is for cloud features (page sync, share links) as they land. Sign-in opens
 your default browser and comes back to Weft through a `weft://account-callback` link, so the board
 shows you signed in a moment later. The session is kept in `~/.weft/account.json`, readable only by you

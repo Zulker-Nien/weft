@@ -32,7 +32,12 @@ you sign in + approve ─► BlastCP redirects to the loopback with ?code&state
   anything until you approve it.
 - Tokens last **30 days and can't be refreshed** (BlastCP only grants `authorization_code`). The drawer says
   "Sign-in runs out in N days" in the last week and offers **Reconnect**; a refused token shows the Connect form
-  again with BlastCP's reason.
+  again with BlastCP's reason. Settings → Accounts repeats the same note in its **Sign-in expiry** row
+  (`components/TokenExpiry.tsx`), so a lapsing sign-in is found in Settings rather than when a thread trips over it;
+  it reuses this drawer's `expiryNote()` and the `expiresAt` main already sends over the bridge, so only the expiry
+  crosses from main — the token stays sealed. Vercel, Supabase and Cloudflare tokens don't expire and are listed as
+  "No expiry". Nothing re-consents quietly: with no refresh token, re-consenting behind the user's back would be worse
+  than saying it's nearly time.
 - Connect waits 5 minutes for the browser, and only one runs at a time.
 - Main keeps the code it launched with, while the board window hot-reloads. So a Weft started before BlastCP
   landed answers "No handler registered for 'blastcp:…'", and the drawer shows **Restart Weft** instead of that
